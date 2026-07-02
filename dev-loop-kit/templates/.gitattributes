@@ -1,0 +1,6 @@
+# Golden / approval fixtures: treat as binary so line-ending normalization can NEVER
+# create false diffs (critical on Windows / SQL Server). See INV-GOLDEN-01.
+*.approved.* binary
+*.received.* binary
+*.approved   binary
+*.received   binary

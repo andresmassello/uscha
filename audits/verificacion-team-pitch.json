@@ -1,0 +1,210 @@
+{
+  "summary": "Adversarial verification of the spec-loop team pitch deck: truth vs kit 1.3.0, pitch effectiveness, HTML/nav integrity",
+  "agentCount": 3,
+  "logs": [
+    "18 findings, 2 blocker/high. Verdicts: FIX-FIRST, FIX-FIRST, SHIP"
+  ],
+  "result": {
+    "verdicts": [
+      "FIX-FIRST",
+      "FIX-FIRST",
+      "SHIP"
+    ],
+    "must_fix": [
+      {
+        "severity": "high",
+        "what": "The cheapest objection to the whole story — 'just write a comment' (or 'just git blame it') — is never pre-empted. Slide 3 explicitly sets it up ('quedó un expiredAt + 24h sin comentario') and a skeptical dev will immediately say the fix is a one-line comment plus a decent commit message, not a methodology. If that lands, slides 02-04 collapse and the pitch is dead before the method appears.",
+        "where": "Slide 03 (Historia · viernes): '¿Dónde quedó documentada la regla de gracia? … En el código quedó un expiredAt + 24h sin comentario.' and Slide 04 falla 1: 'La decisión (gracia de 24 h) nunca llegó a un archivo versionado.'",
+        "fix": "Add one pre-emptive line to falla 1 (or slide 3): a comment/commit message explains but doesn't protect — nothing tests it, an agent 'normalizing' the code deletes it along with the line, and it can't block a merge. The story needs the pair 'documented WHERE the agent reads + pinned by a test that can go red'; say that explicitly so the comment objection is answered before Q&A."
+      },
+      {
+        "severity": "high",
+        "what": "'Just do code review' is also unaddressed. Falla 4 claims 'La única defensa era que Martín se diera cuenta' — but any team with PR review will object that a reviewer should catch a deleted business rule. The deck silently assumes no review happened on either merge, which reads as a rigged scenario.",
+        "where": "Slide 04 falla 4: 'La única defensa era que Martín \"se diera cuenta\". No se dio.'",
+        "fix": "One clause in falla 4: the reviewer has exactly the same zero context as Martín — the diff looks like a legitimate off-by-one fix with green tests, so review passes it for the same reason Martín's agent proposed it. This turns the objection into support for the argument (context, not diligence, is what's missing)."
+      }
+    ],
+    "all_findings": [
+      {
+        "severity": "medium",
+        "what": "Overclaim: the deck says NO data ever comes from agent self-report, but the kit's own contract has an explicit self-reported tier. dev-loop/SKILL.md states: 'The ledger contract has two tiers: measured records (snapshots, ingest-gate, log-gate...) and self-reported agent counts (log-step — narration recorded for the retrospective)'. The findings of code-review/judgment-day/improve are logged via log-step 'using counts from each tool's own summary' — they are NOT parsed from XML; only linter findings (ingest-gate), tests and coverage are. The engine mitigates (a measured red snapshot vetoes narrated green tests), but 'nunca de lo que el agente dice de sí mismo' and 'findings parseados de los XML reales' are false as stated.",
+        "where": "Slide 07 'Replay · dev-loop': lead 'Cada dato sale de un artefacto real — reportes de tests, coverage, linters — parseado por qa_ledger.py, nunca de lo que el agente dice de sí mismo' + card 'Coverage, tests y findings parseados de los XML reales. \"El agente dijo\" no es un dato.'",
+        "fix": "Reword to the kit's real two-tier contract: 'Lo que BLOQUEA sale de artefactos parseados (tests, coverage, linters, fact gates); lo que el agente reporta de sí mismo se registra como narración aparte — y un rojo medido siempre veta un verde narrado.' Change the card's 'findings parseados de los XML reales' to 'findings de linters parseados de los XML reales'."
+      },
+      {
+        "severity": "medium",
+        "what": "Setup slide omits the enforcement mechanism behind the deck's own 'agent cannot write .approved' claim. dev-loop/SKILL.md requires: 'install hooks/block-approved-writes.ps1 (or its bash twin) as a PreToolUse hook in settings.json, and add *.approved.* binary to .gitattributes (ships in templates/.gitattributes) so line endings can't lie in the byte-compare'. The hook lives at dev-loop-kit/hooks/ (NOT inside .claude/), so 'cp -r dev-loop-kit/.claude/skills/*' never carries it. Without the hook, slide 11's 'el único artefacto que el agente no puede escribir' is goodwill, not construction — CONSTITUTION.md itself hedges: 'idealmente un hook PreToolUse lo hace imposible'.",
+        "where": "Slide 13 'Cómo arrancamos' setup terminal (3 cp lines + workbench-doctor.sh) vs Slide 11 golden-diff row: 'el único artefacto que el agente no puede escribir'",
+        "fix": "Add a setup line (can be marked 'solo para trabajo de migración/legacy'): register hooks/block-approved-writes.ps1 as PreToolUse hook in settings.json + cp dev-loop-kit/templates/.gitattributes <repo>/. Or soften slide 11 to 'el agente no lo escribe (hook PreToolUse lo bloquea — se instala en el perfil migración)'."
+      },
+      {
+        "severity": "medium",
+        "what": "The 'mismas skills → el agente de cualquiera se comporta igual' claim ignores that the QA tools the loop orchestrates are not in the kit. WORKBENCH.md is explicit: 'skills de QA: code-review, judgment-day, improve — tus skills globales (el dev-loop los orquesta, no los trae)'. Copying dev-loop-kit/.claude/skills/* installs the six kit skills only; if each dev keeps their own (or missing) code-review/judgment-day/improve, the QA loop behaves differently per machine — exactly the failure mode the slide claims to eliminate.",
+        "where": "Slide 13: 'Mismo CLAUDE.md, mismas skills, misma CONSTITUTION para todos → el agente de cualquiera se comporta igual sobre este repo.'",
+        "fix": "Add a setup bullet: 'las skills de QA que el loop orquesta (code-review / judgment-day / improve) NO vienen en el kit — el equipo también tiene que compartirlas' — or scope the claim to the kit skills."
+      },
+      {
+        "severity": "low",
+        "what": "Slight overstatement of gate-check: deleting or disabling a test IS a BLOCKER (exit 1), but 'debilitarlo' (weakening — removed assertions, added suppressions) is a SOFT flag → verdict REVIEW, blocking only with --strict. qa_ledger.py: 'removed tests, disabled tests, lowered thresholds (BLOCKER, exit 1); added lint suppressions / removed assertions (soft — review, or gate with --strict)'. The slide-11 table gets this right; slide 08's prose lumps weakening into the BLOCKER.",
+        "where": "Slide 08 'Replay · el handoff': 'gate-check caza el intento de borrarlo o debilitarlo — un BLOCKER que la convergencia no deja pasar'",
+        "fix": "Change to 'gate-check caza el intento de borrarlo o deshabilitarlo — BLOCKER; debilitar los asserts queda flaggeado para revisión (--strict lo gatea)'. "
+      },
+      {
+        "severity": "low",
+        "what": "The CONSTITUTION bar can be read as by-construction enforcement, but the kit's own template disclaims it: 'El engine no lee este archivo: la obligación de detectar y registrar la violación es del agente/humano; el enforcement del registro sí es del engine' (violations enter only via flag-blocker, then cap readiness ≤65 and block convergence).",
+        "where": "Slide 05 system map: 'CONSTITUTION — invariantes que ninguna estación puede violar'",
+        "fix": "Reword the bar to 'CONSTITUTION — invariantes; una violación se registra como BLOCKER (flag-blocker) y frena convergencia' — the mechanism the deck already uses correctly elsewhere."
+      },
+      {
+        "severity": "low",
+        "what": "Minor sequencing embellishment: nothing in the skill puts the readiness KPI 'on' the PR. dev-loop/SKILL.md Phase 6 opens the PR and stops; readiness is Phase 8 ('show this after finishing ANY task') presented in-session with dimension breakdown — the PR body/content is unspecified.",
+        "where": "Slide 07 card 'Merge gate': 'El loop abre el PR con el readiness (KPI 0-100) a la vista y para.'",
+        "fix": "Reword to 'El loop abre el PR, muestra el readiness (KPI 0-100) con su desglose, y para' — or make putting readiness in the PR body an explicit team convention."
+      },
+      {
+        "severity": "high",
+        "what": "The cheapest objection to the whole story — 'just write a comment' (or 'just git blame it') — is never pre-empted. Slide 3 explicitly sets it up ('quedó un expiredAt + 24h sin comentario') and a skeptical dev will immediately say the fix is a one-line comment plus a decent commit message, not a methodology. If that lands, slides 02-04 collapse and the pitch is dead before the method appears.",
+        "where": "Slide 03 (Historia · viernes): '¿Dónde quedó documentada la regla de gracia? … En el código quedó un expiredAt + 24h sin comentario.' and Slide 04 falla 1: 'La decisión (gracia de 24 h) nunca llegó a un archivo versionado.'",
+        "fix": "Add one pre-emptive line to falla 1 (or slide 3): a comment/commit message explains but doesn't protect — nothing tests it, an agent 'normalizing' the code deletes it along with the line, and it can't block a merge. The story needs the pair 'documented WHERE the agent reads + pinned by a test that can go red'; say that explicitly so the comment objection is answered before Q&A."
+      },
+      {
+        "severity": "high",
+        "what": "'Just do code review' is also unaddressed. Falla 4 claims 'La única defensa era que Martín se diera cuenta' — but any team with PR review will object that a reviewer should catch a deleted business rule. The deck silently assumes no review happened on either merge, which reads as a rigged scenario.",
+        "where": "Slide 04 falla 4: 'La única defensa era que Martín \"se diera cuenta\". No se dio.'",
+        "fix": "One clause in falla 4: the reviewer has exactly the same zero context as Martín — the diff looks like a legitimate off-by-one fix with green tests, so review passes it for the same reason Martín's agent proposed it. This turns the objection into support for the argument (context, not diligence, is what's missing)."
+      },
+      {
+        "severity": "medium",
+        "what": "Slide 9 overclaims what gate-check catches. It promises BLOCKER on 'borrarlo o debilitarlo', but slide 11 defines gate-check as structural: 'tests borrados/deshabilitados, thresholds bajados'. An agent that REWRITES the assertion to match the new (wrong) behavior is neither deletion nor a threshold change — the gate passes. A skeptic cross-referencing the two slides will catch the gap in the 'doble defensa'.",
+        "where": "Slide 09: 'gate-check caza el intento de borrarlo o debilitarlo — un BLOCKER' vs Slide 11 gate-check row: 'tests borrados/deshabilitados, thresholds bajados o eliminados'.",
+        "fix": "Either scope the slide-9 claim to 'borrarlo o deshabilitarlo' and lean on the first defense (the agent reads the SPEC before touching the rule), or state that acceptance-pinned tests get flagged on ANY modification, and add that to the slide-11 gate-check row so the two slides agree."
+      },
+      {
+        "severity": "medium",
+        "what": "The replay resolves fallas 1, 3 and 4 with dedicated beats, but falla 2 (setups distintos → comportamiento no replicable) is resolved only by a subordinate clause. If the postmortem names four failures, a skeptic will check them off one by one and notice number 2 gets no demonstration — it's asserted, not replayed.",
+        "where": "Slide 09: 'Su agente — el mismo setup compartido, las mismas skills — lee los mismos archivos…' (the only replay mention of falla 2).",
+        "fix": "Cheapest: tag each replay act with a small pill ('resuelve falla 1', etc.) and give falla 2 its explicit tag on slide 9 plus one sentence: 'mismo CLAUDE.md + CONSTITUTION + skills = la pregunta de Martín obtiene la MISMA respuesta en cualquier máquina'. No new slide needed."
+      },
+      {
+        "severity": "medium",
+        "what": "The setup slide reintroduces falla 2 by design: 'cp -r … ~/.claude/skills/' is a one-time manual copy per machine with a pinned kit version. Six weeks later the five setups have drifted again — exactly the failure the pitch just diagnosed. A senior dev will spot that the distribution mechanism contradicts the diagnosis.",
+        "where": "Slide 13: 'cp -r dev-loop-kit/.claude/skills/* ~/.claude/skills/' + 'Mismo CLAUDE.md, mismas skills, misma CONSTITUTION para todos'.",
+        "fix": "One line: the kit is versioned and workbench-doctor.sh fails on version mismatch (or: skills are vendored in the repo, not in ~/.claude), so drift is detected, not trusted. If the doctor doesn't actually check versions, make it — the pitch's own logic demands it."
+      },
+      {
+        "severity": "low",
+        "what": "Slide 12 cites the simulated story's costs as if they were data: Martín's Monday debugging vs Vale's discovery time. Both numbers come from a fiction the presenter wrote. Skeptics notice circular evidence, and it slightly undercuts the deck's own 'lo medido vence a lo narrado' rule.",
+        "where": "Slide 12: 'Lo que perdió Martín debuggeando el lunes fue MÁS que todo el discovery de Vale.'",
+        "fix": "Hedge it into a conditional ('un lunes de debugging + el costo de Comercial cuesta más que 30 min de discovery') or anchor it to a real past incident of the team if one exists. Keep the claim, drop the fake precision."
+      },
+      {
+        "severity": "low",
+        "what": "Slide 11 is the pacing risk: six gate names (gate-check, golden-diff, simplicity-check, spec-check x2, readiness) plus qa_ledger and log-gate from slide 8 — heavy new nomenclature for a first pitch, and 'golden-diff … migraciones' references migrations never mentioned anywhere else in the deck. At ~1.4 min/slide this table will either be rushed or eat the objections slide's time. Overall 14 slides / 20 min is otherwise fine.",
+        "where": "Slide 11 table, row: 'golden-diff — bytes vs .approved (migraciones — el único artefacto que el agente no puede escribir)'.",
+        "fix": "Trim the table to the 3 gates the story used (gate-check, spec-check, readiness) and verbally mention 'hay más gates en el kit'; or keep the table but cut the golden-diff row (or add three words of context: 'migraciones de DB'). No structural change needed."
+      },
+      {
+        "severity": "low",
+        "what": "'Just ask Vale' dangles: git blame points to Vale, she's on the team, Martín could Slack her in 2 minutes. The pilot criterion even treats asking the author as method failure, but the deck never says WHY relying on the author is unacceptable (vacation, departure, your own self in 3 months, bus factor).",
+        "where": "Slide 04 quote ('el conocimiento vivía en lugares que se mueren') gestures at it; Slide 13: 'Si necesita preguntarle al autor, el método falló'.",
+        "fix": "One clause on slide 4 or 12: 'preguntarle a Vale funciona hasta que Vale está de vacaciones, se fue, o la autora sos vos hace tres meses' — it also justifies the pilot's success criterion instead of leaving it looking arbitrary. (The criterion itself is good: concrete and falsifiable.)"
+      },
+      {
+        "severity": "medium",
+        "what": "No hashchange listener: showSlide() writes location.hash on every navigation (creating a history entry per slide), but browser Back/Forward only changes the URL — the visible slide, counter, and progress bar stay stale, desyncing URL from state. A 14-slide pass also stacks 14+ history entries.",
+        "where": "Script block, line 420: `location.hash = String(idx + 1).padStart(2, '0');` — no corresponding `window.addEventListener('hashchange', ...)` anywhere",
+        "fix": "Either use `history.replaceState(null, '', '#' + String(idx+1).padStart(2,'0'))` instead of assigning location.hash (no history spam, Back leaves the page), or add a hashchange listener that calls showSlide(parseInt(hash)-1) so Back/Forward navigate slides."
+      },
+      {
+        "severity": "low",
+        "what": "Keyboard scroll is fully hijacked: ArrowRight/ArrowLeft/PageDown/PageUp/Space all call e.preventDefault(), so a slide whose content overflows (slides are `overflow-y:auto`) cannot be scrolled with the keyboard at small viewport heights — only mouse wheel works.",
+        "where": "Script block, lines 425-430 (`document.addEventListener('keydown', ...)`), combined with `.slide{...overflow-y:auto}` at line 34",
+        "fix": "Leave PageDown/PageUp (or Space) unhandled when the active slide's scrollHeight exceeds its clientHeight and it isn't at the bottom, or simply drop PageDown/PageUp from the bindings and keep arrows + space."
+      },
+      {
+        "severity": "low",
+        "what": "English leaks in Spanish prose: 'blast radius' appears untranslated in body text, and 'la próxima sprint' uses the wrong gender ('sprint' is masculine in Spanish usage).",
+        "where": "Slide 12 (kicker 11, 'Las objeciones'), line 350: 'El rigor escala con el blast radius.' — and slide 13 (kicker 12), line 377: 'elegimos UNA feature de la próxima sprint'",
+        "fix": "Replace 'blast radius' with 'radio de impacto' (or keep it styled as jargon in <code>/<em> if intentional), and change 'la próxima sprint' to 'el próximo sprint'."
+      },
+      {
+        "severity": "low",
+        "what": "Terminal prompt convention inconsistency: the three chat mockups prefix user input with '>' (class .u) and the discovery mockup adds a 'discovery>' agent prompt, but the setup terminal on slide 13 shows shell commands with no prompt marker at all — commands ('cp -r ...', 'bash ...') are visually indistinguishable from output.",
+        "where": "Slide 13 (kicker 12, 'Cómo arrancamos'), lines 366-372: bare 'cp -r dev-loop-kit/.claude/skills/* ~/.claude/skills/' etc., vs. '&gt;' user-prompt convention used in slides 3, 4, 7, 9",
+        "fix": "Prefix each shell command in the slide-13 terminal with '$ ' (e.g. '<span class=\"u\">$</span> cp -r ...') to keep a consistent prompt convention across all .term mockups."
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "verify:truth",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a38e3a921991580dd",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1783013033866,
+      "queuedAt": 1783013033824,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "FIX-FIRST",
+      "promptPreview": "TRUTH LENS. Read the new team-pitch deck at C:/Users/Usuario/Downloads/spec-loop-team-pitch.html and verify EVERY technical claim against the real kit v1.3.0: engine C:/Users/Usuario/AppData/Local/Temp/claude/C--Work-AI-REDACTED-PROJECT/f5abdc4b-b440-46ab-a12a-3c99a0b88fa5/scratchpad/kit-review/nested/dev-loop-kit/.claude/skills/dev-loop/qa_ledger.py, skills C:/Users/Usuario/AppData/Local/Temp/…",
+      "lastProgressAt": 1783013256583,
+      "tokens": 143025,
+      "toolCalls": 10,
+      "durationMs": 222716,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"what\":\"Overclaim: the deck says NO data ever comes from agent self-report, but the kit's own contract has an explicit self-reported tier. dev-loop/SKILL.md states: 'The ledger contract has two tiers: measured records (snapshots, ingest-gate, log-gate...) and self-reported agent counts (log-step — narration recorded for the retrospective)'. The findings of code-re…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:pitch",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "af3141138ca3424b6",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1783013033869,
+      "queuedAt": 1783013033825,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "FIX-FIRST",
+      "promptPreview": "PITCH LENS. Read C:/Users/Usuario/Downloads/spec-loop-team-pitch.html as a skeptical senior developer in the audience whose manager is pitching a methodology. Judge: (1) does the Vale/Martín story hold together — is the 24h-grace quirk believable, is the failure chain airtight or can a dev poke holes (\"just write a comment\", \"just do code review\")? If a cheap objection kills a slide, the slide mus…",
+      "lastProgressAt": 1783013149184,
+      "tokens": 59550,
+      "toolCalls": 2,
+      "durationMs": 115315,
+      "resultPreview": "{\"findings\":[{\"severity\":\"high\",\"what\":\"The cheapest objection to the whole story — 'just write a comment' (or 'just git blame it') — is never pre-empted. Slide 3 explicitly sets it up ('quedó un expiredAt + 24h sin comentario') and a skeptical dev will immediately say the fix is a one-line comment plus a decent commit message, not a methodology. If that lands, slides 02-04 collapse and the pitch …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "verify:integrity",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a51f163117105be07",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1783013033871,
+      "queuedAt": 1783013033825,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "SHIP",
+      "promptPreview": "INTEGRITY LENS. Read C:/Users/Usuario/Downloads/spec-loop-team-pitch.html completely and check mechanics: (1) HTML well-formed — every <section class=\"slide\"> closed, exactly one .active initially, ends </html>; (2) the nav JS: slides/hash/counter/progress logic consistent, button ids exist, no reference to missing elements; (3) slide count matches kicker numbering (01-13 kickers on 14 slides — ti…",
+      "lastProgressAt": 1783013182081,
+      "tokens": 65483,
+      "toolCalls": 6,
+      "durationMs": 148210,
+      "resultPreview": "{\"findings\":[{\"severity\":\"medium\",\"what\":\"No hashchange listener: showSlide() writes location.hash on every navigation (creating a history entry per slide), but browser Back/Forward only changes the URL — the visible slide, counter, and progress bar stay stale, desyncing URL from state. A 14-slide pass also stacks 14+ history entries.\",\"where\":\"Script block, line 420: `location.hash = String(idx +…"
+    }
+  ],
+  "totalTokens": 268058,
+  "totalToolCalls": 18
+}

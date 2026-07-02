@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  html,body{margin:0;padding:0;background:#f5f6f8}
+  svg{display:block}
+  .t{font-family:'Segoe UI',sans-serif;font-weight:700;font-size:12.5px;fill:#14171c}
+  .s{font-family:Consolas,'Courier New',monospace;font-size:10.5px;fill:#5b636d}
+  .r{font-family:Consolas,monospace;font-size:10px;fill:#b00410;font-weight:700}
+  .band{font-family:Consolas,monospace;font-size:11px;font-weight:700;letter-spacing:.08em}
+  .h{font-family:'Segoe UI',sans-serif;font-weight:900;font-size:18px;fill:#14171c}
+  .lg{font-family:Consolas,monospace;font-size:10.5px;fill:#5b636d}
+</style></head><body>
+<svg width="980" height="452" viewBox="0 0 980 452" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0L6,3L0,6Z" fill="#8b929b"/></marker>
+    <marker id="ag" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0L6,3L0,6Z" fill="#1f9d57"/></marker>
+  </defs>
+  <text x="20" y="30" class="h">reverse-discovery — migración: extraer HECHOS, no proponer forma</text>
+
+  <!-- BAND A: agent facts -->
+  <rect x="8" y="44" width="964" height="102" rx="10" fill="#f0faff" stroke="#bfe6fb"/>
+  <text x="22" y="62" class="band" fill="#0a6ea0">AGENTE · solo HECHOS  (análisis estático + byte-captura)</text>
+  <g>
+    <rect x="18" y="72" width="158" height="60" rx="8" fill="#fff" stroke="#4FC3F7"/><text x="30" y="96" class="t">Sistema existente</text><text x="30" y="113" class="s">+ corpus real</text>
+    <line x1="176" y1="102" x2="196" y2="102" stroke="#8b929b" stroke-width="1.6" marker-end="url(#a)"/>
+    <rect x="198" y="72" width="184" height="60" rx="8" fill="#fff" stroke="#4FC3F7"/><text x="210" y="94" class="t">① Map → SYSTEM-MAP</text><text x="210" y="111" class="s">endpoints · contratos</text><text x="210" y="125" class="s">grafo de dependencias</text>
+    <line x1="382" y1="102" x2="402" y2="102" stroke="#8b929b" stroke-width="1.6" marker-end="url(#a)"/>
+    <rect x="404" y="72" width="232" height="60" rx="8" fill="#fff" stroke="#4FC3F7"/><text x="416" y="92" class="t">② Characterize → golden .approved</text><text x="416" y="109" class="r">el agente NO lo authorea (hook)</text><text x="416" y="124" class="s">STOP → aprobación humana</text>
+    <line x1="636" y1="102" x2="656" y2="102" stroke="#8b929b" stroke-width="1.6" marker-end="url(#a)"/>
+    <rect x="658" y="72" width="180" height="60" rx="8" fill="#fff" stroke="#4FC3F7"/><text x="670" y="94" class="t">③ Summary</text><text x="670" y="111" class="s">mapa + cobertura</text><text x="670" y="125" class="s">del golden (facts)</text>
+  </g>
+
+  <!-- down arrow to human band -->
+  <line x1="748" y1="146" x2="748" y2="176" stroke="#8b929b" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- BAND B: human -->
+  <rect x="8" y="180" width="964" height="72" rx="10" fill="#f7f8fa" stroke="#e3e7ec"/>
+  <text x="22" y="198" class="band" fill="#14171c">HUMANO · infiere el significado + decide</text>
+  <rect x="198" y="204" width="640" height="40" rx="8" fill="#fff" stroke="#14171c"/><text x="212" y="229" class="t">Lee los HECHOS  →  escribe la SPEC (comportamiento == golden)  +  /adr-refine (decisiones forward de módulos)</text>
+
+  <!-- down arrow to build band -->
+  <line x1="518" y1="252" x2="518" y2="282" stroke="#8b929b" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- BAND C: build + ship -->
+  <rect x="8" y="286" width="964" height="92" rx="10" fill="#f0faff" stroke="#bfe6fb"/>
+  <text x="22" y="304" class="band" fill="#0a6ea0">BUILD + SHIP</text>
+  <rect x="198" y="314" width="352" height="52" rx="8" fill="#fff" stroke="#4FC3F7"/><text x="212" y="336" class="t">/dev-loop · reestructurás</text><text x="212" y="353" class="s">golden-diff + ApplicationModules.verify() verdes</text>
+  <line x1="550" y1="340" x2="572" y2="340" stroke="#1f9d57" stroke-width="1.8" marker-end="url(#ag)"/>
+  <rect x="574" y="314" width="150" height="52" rx="8" fill="#fff" stroke="#e30613" stroke-width="2"/><text x="592" y="336" class="t">human gate</text><text x="592" y="353" class="s">lee el diff · SIEMPRE</text>
+  <line x1="724" y1="340" x2="746" y2="340" stroke="#1f9d57" stroke-width="1.8" marker-end="url(#ag)"/>
+  <rect x="748" y="314" width="88" height="52" rx="8" fill="#e9f7ef" stroke="#1f9d57"/><text x="792" y="345" text-anchor="middle" font-family="'Segoe UI',sans-serif" font-weight="800" font-size="14" fill="#1f9d57">ship</text>
+
+  <!-- legend -->
+  <text x="20" y="404" class="lg">azul = HECHO (verificable) · el golden es <tspan font-weight="700" fill="#b00410">verdad de campo</tspan>: lo aprueba un HUMANO, el agente no lo toca.</text>
+  <text x="20" y="424" class="lg">el humano infiere la SPEC leyendo los hechos — no la inventa el agente.</text>
+</svg>
+</body></html>

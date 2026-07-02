@@ -1,0 +1,65 @@
+{
+  "version": "1.3.0",
+  "defaults": {
+    "coverage_threshold": 60,
+    "max_iterations": 5,
+    "tools_per_cycle": 3,
+    "severity_gate": [
+      "BLOCKER",
+      "CRITICAL",
+      "HIGH"
+    ],
+    "qa_tools_order": [
+      "code-review",
+      "judgment-day",
+      "improve"
+    ],
+    "test_command_maven": "mvn -q -DskipITs=false test",
+    "test_command_flutter": "flutter test --coverage",
+    "id_granularity": "file",
+    "acceptance_file": "ACCEPTANCE.md",
+    "readiness_weights": {
+      "adr": 30,
+      "coverage": 25,
+      "static_gate": 20,
+      "convergence": 15,
+      "integration": 10
+    },
+    "readiness_caps": {
+      "tests_red": 35,
+      "blocker_critical": 65,
+      "escalation": 75
+    },
+    "static_gate_zero_at": 10,
+    "constitution_file": "CONSTITUTION.md",
+    "rebuild": {
+      "coverage_tolerance": 5
+    },
+    "simplicity": {
+      "max_lines_added": 400,
+      "max_net_lines": 300,
+      "max_files_changed": 20,
+      "max_nesting_depth": 4,
+      "max_hunk_added": 120,
+      "max_new_abstractions": 8,
+      "max_abstraction_density": 3.0,
+      "indent_width": 4
+    }
+  },
+  "repos": [
+    {
+      "name": "backend-api",
+      "path": "../backend-api",
+      "type": "maven"
+    },
+    {
+      "name": "mobile-app",
+      "path": "../mobile-app",
+      "type": "flutter"
+    }
+  ],
+  "integration": {
+    "enabled": true,
+    "contract_tests_command": "mvn -q -pl integration-tests test"
+  }
+}

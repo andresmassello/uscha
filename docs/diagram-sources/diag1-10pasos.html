@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  html,body{margin:0;padding:0;background:#f5f6f8}
+  svg{display:block}
+  .t{font-family:'Segoe UI',sans-serif;font-weight:700;font-size:13px;fill:#14171c}
+  .s{font-family:Consolas,'Courier New',monospace;font-size:11px;fill:#5b636d}
+  .n{font-family:'Segoe UI',sans-serif;font-weight:800;font-size:13px;fill:#fff;text-anchor:middle}
+  .h{font-family:'Segoe UI',sans-serif;font-weight:900;font-size:18px;fill:#14171c}
+  .lg{font-family:Consolas,monospace;font-size:11px;fill:#5b636d}
+</style></head><body>
+<svg width="812" height="900" viewBox="0 0 812 900" xmlns="http://www.w3.org/2000/svg">
+  <text x="30" y="34" class="h">applyDiscount(monto, %) — la metodología en 10 pasos</text>
+  <text x="30" y="52" class="lg">6 de 10 pasos son falla o refinamiento: cada desvío tiene un gate que lo caza.</text>
+  <line x1="44" y1="82" x2="44" y2="800" stroke="#cdd3da" stroke-width="2"/>
+
+  <!-- helper rows: circle + card. Colors: ink #14171c, amber #e0930c, celeste #4FC3F7, red #e30613, green #1f9d57 -->
+  <!-- 1 -->
+  <g><circle cx="44" cy="82" r="15" fill="#14171c"/><text x="44" y="87" class="n">1</text>
+    <rect x="74" y="59" width="668" height="46" rx="8" fill="#fff" stroke="#e3e7ec"/><rect x="74" y="59" width="5" height="46" rx="2" fill="#14171c"/>
+    <text x="92" y="80" class="t">Discovery — modelás, no codeás</text><text x="92" y="97" class="s">/discovery  →  SPEC + ACCEPTANCE + ADR-001</text></g>
+  <!-- 2 -->
+  <g><circle cx="44" cy="160" r="15" fill="#e0930c"/><text x="44" y="165" class="n">2</text>
+    <rect x="74" y="137" width="668" height="46" rx="8" fill="#fffaf0" stroke="#e0930c"/><rect x="74" y="137" width="5" height="46" rx="2" fill="#e0930c"/>
+    <text x="92" y="158" class="t">⚠ spec-check (advisory) — refinás la SPEC</text><text x="92" y="175" class="s">criterio vago  →  lo hacés testable: "monto=100, %=20 → 80.00"</text></g>
+  <!-- 3 -->
+  <g><circle cx="44" cy="238" r="15" fill="#e0930c"/><text x="44" y="243" class="n">3</text>
+    <rect x="74" y="215" width="668" height="46" rx="8" fill="#fffaf0" stroke="#e0930c"/><rect x="74" y="215" width="5" height="46" rx="2" fill="#e0930c"/>
+    <text x="92" y="236" class="t">⚠ spec-check — falta el out-of-scope</text><text x="92" y="253" class="s">agregás "fuera de alcance: cupones, impuestos"  →  hay oráculo</text></g>
+  <!-- 4 -->
+  <g><circle cx="44" cy="316" r="15" fill="#14171c"/><text x="44" y="321" class="n">4</text>
+    <rect x="74" y="293" width="668" height="46" rx="8" fill="#fff" stroke="#e3e7ec"/><rect x="74" y="293" width="5" height="46" rx="2" fill="#14171c"/>
+    <text x="92" y="314" class="t">adr-refine — una decisión real</text><text x="92" y="331" class="s">/adr-refine  →  ADR-002: redondeo HALF_UP (con la alternativa)</text></g>
+  <!-- 5 -->
+  <g><circle cx="44" cy="394" r="15" fill="#4FC3F7"/><text x="44" y="399" class="n">5</text>
+    <rect x="74" y="371" width="668" height="46" rx="8" fill="#f0faff" stroke="#4FC3F7"/><rect x="74" y="371" width="5" height="46" rx="2" fill="#4FC3F7"/>
+    <text x="92" y="392" class="t">dev-loop — recién ahora se codea</text><text x="92" y="409" class="s">/dev-loop  →  plan · coverage · build · QA loop · happy path verde</text></g>
+  <!-- 6 -->
+  <g><circle cx="44" cy="472" r="15" fill="#e30613"/><text x="44" y="477" class="n">6</text>
+    <rect x="74" y="449" width="668" height="46" rx="8" fill="#fff0f1" stroke="#e30613"/><rect x="74" y="449" width="5" height="46" rx="2" fill="#e30613"/>
+    <text x="92" y="470" class="t">⚠ pit-check — coverage mentía</text><text x="92" y="487" class="s">mutante vivo: el test corre pero no aserta el centavo  →  lo arreglás</text></g>
+  <!-- 7 -->
+  <g><circle cx="44" cy="550" r="15" fill="#e30613"/><text x="44" y="555" class="n">7</text>
+    <rect x="74" y="527" width="668" height="46" rx="8" fill="#fff0f1" stroke="#e30613"/><rect x="74" y="527" width="5" height="46" rx="2" fill="#e30613"/>
+    <text x="92" y="548" class="t">⚠ gate-check — BLOQUEA</text><text x="92" y="565" class="s">el agente bajó un threshold para pasar  →  se revierte, se arregla de verdad</text></g>
+  <!-- 8 -->
+  <g><circle cx="44" cy="628" r="15" fill="#e30613"/><text x="44" y="633" class="n">8</text>
+    <rect x="74" y="605" width="668" height="46" rx="8" fill="#fff0f1" stroke="#e30613"/><rect x="74" y="605" width="5" height="46" rx="2" fill="#e30613"/>
+    <text x="92" y="626" class="t">⚠ rebuild DIVERGE  →  amend-spec ↩</text><text x="92" y="643" class="s">caso %=120 implícito  →  enmendás la SPEC (no el código), regenerás</text></g>
+  <!-- 9 -->
+  <g><circle cx="44" cy="706" r="15" fill="#e30613"/><text x="44" y="711" class="n">9</text>
+    <rect x="74" y="683" width="668" height="46" rx="8" fill="#fff0f1" stroke="#e30613"/><rect x="74" y="683" width="5" height="46" rx="2" fill="#e30613"/>
+    <text x="92" y="704" class="t">⚠ simplicity-check — OVERBUILT</text><text x="92" y="721" class="s">una Factory de más para 3 líneas  →  se recorta</text></g>
+  <!-- 10 -->
+  <g><circle cx="44" cy="784" r="15" fill="#1f9d57"/><text x="44" y="789" class="n">10</text>
+    <rect x="74" y="761" width="668" height="46" rx="8" fill="#e9f7ef" stroke="#1f9d57"/><rect x="74" y="761" width="5" height="46" rx="2" fill="#1f9d57"/>
+    <text x="92" y="782" class="t">readiness + human gate  →  ship</text><text x="92" y="799" class="s">88/100 RELEASE CANDIDATE · vos leés el diff · aprobás el merge (nunca auto)</text></g>
+
+  <!-- legend -->
+  <g transform="translate(74,832)">
+    <rect x="0" y="0" width="12" height="12" rx="3" fill="#14171c"/><text x="18" y="10" class="lg">avanza</text>
+    <rect x="90" y="0" width="12" height="12" rx="3" fill="#4FC3F7"/><text x="108" y="10" class="lg">build</text>
+    <rect x="170" y="0" width="12" height="12" rx="3" fill="#e0930c"/><text x="188" y="10" class="lg">refina el spec (advisory)</text>
+    <rect x="360" y="0" width="12" height="12" rx="3" fill="#e30613"/><text x="378" y="10" class="lg">gate te frena → arreglás y re-corrés</text>
+    <rect x="620" y="0" width="12" height="12" rx="3" fill="#1f9d57"/><text x="638" y="10" class="lg">ship</text>
+  </g>
+</svg>
+</body></html>

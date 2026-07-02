@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--sky:#e9eff6;--sky-2:#dde6f1;--line:#c7d3e4;--card:#f7fafd;--ink:#16203a;--ink-soft:#42506e;--mute:#7d89a3;--orange:#ff7a1a;--orange-2:#e8620a;}
+  html,body{margin:0;padding:0;background:var(--sky)}
+  .frame{width:1180px;padding:26px}
+  .mapwrap{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.5rem 1.4rem}
+  .cap{font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:.6rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--ink-soft);margin-top:.9rem}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .legend i{width:15px;height:3px;border-radius:2px;display:inline-block}
+  svg{display:block}
+</style></head>
+<body>
+<div class="frame">
+  <div class="mapwrap">
+    <div class="cap"><span>System map — the flow, its inner loop, and the frontier</span><span>human owns the terminus</span></div>
+    <svg viewBox="0 0 1080 300" width="100%" style="height:auto" role="img" aria-label="spec-loop system map">
+      <defs>
+        <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7d89a3"/></marker>
+        <marker id="ao" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff7a1a"/></marker>
+      </defs>
+      <rect x="40" y="20" width="1000" height="30" rx="8" fill="#1b2545"/>
+      <text x="540" y="40" text-anchor="middle" font-family="Outfit,sans-serif" font-weight="700" font-size="14" fill="#fff">CONSTITUTION — invariants no station may violate</text>
+      <line x1="70" y1="150" x2="1010" y2="150" stroke="#c7d3e4" stroke-width="3"/>
+      <g font-family="JetBrains Mono,monospace" font-size="11" fill="#16203a" text-anchor="middle">
+        <circle cx="80"  cy="150" r="9" fill="#ff7a1a"/><text x="80"  y="180">idea</text><text x="80" y="130" fill="#7d89a3" font-size="9">01</text>
+        <circle cx="210" cy="150" r="9" fill="#1b2545"/><text x="210" y="180">discovery</text><text x="210" y="130" fill="#7d89a3" font-size="9">02</text>
+        <circle cx="330" cy="150" r="9" fill="#1b2545"/><text x="330" y="180">ready</text><text x="330" y="130" fill="#7d89a3" font-size="9">03</text>
+        <circle cx="450" cy="150" r="9" fill="#1b2545"/><text x="450" y="180">SPEC / ADR</text><text x="450" y="130" fill="#7d89a3" font-size="9">04</text>
+        <circle cx="600" cy="150" r="9" fill="#1b2545"/><text x="600" y="180">build</text><text x="600" y="130" fill="#7d89a3" font-size="9">05</text>
+        <rect x="712" y="141" width="18" height="18" rx="3" fill="#10b78a"/><text x="721" y="180">verify</text><text x="721" y="130" fill="#7d89a3" font-size="9">06</text>
+        <rect x="832" y="141" width="18" height="18" rx="3" fill="#10b78a"/><text x="841" y="180">evidence</text><text x="841" y="130" fill="#7d89a3" font-size="9">07</text>
+        <circle cx="1000" cy="150" r="11" fill="#ff7a1a" stroke="#e8620a" stroke-width="2"/><text x="1000" y="182" font-weight="600">human gate</text><text x="1000" y="128" fill="#7d89a3" font-size="9">08</text>
+      </g>
+      <path d="M841,141 C841,90 600,90 600,141" fill="none" stroke="#7d89a3" stroke-width="2" marker-end="url(#ah)"/>
+      <text x="720" y="82" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#42506e">inner loop · converge, don't chase zero</text>
+      <path d="M1000,164 C1000,250 210,250 210,164" fill="none" stroke="#ff7a1a" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ao)"/>
+      <text x="605" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#e8620a">outer loop · heartbeat (proposal) — human still owns merge</text>
+    </svg>
+    <div class="legend">
+      <span><i style="background:#1b2545"></i> station</span>
+      <span><i style="background:#10b78a"></i> evidence gate</span>
+      <span><i style="background:#ff7a1a"></i> human-owned</span>
+      <span><i style="background:#7d89a3"></i> inner loop</span>
+      <span><i style="background:#ff7a1a;border-top:2px dashed #ff7a1a;height:0;width:16px"></i> outer loop</span>
+    </div>
+  </div>
+</div>
+</body></html>

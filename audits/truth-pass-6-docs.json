@@ -1,0 +1,614 @@
+{
+  "summary": "Truth-pass the 6 spec-loop HTML docs against the POST-P0 engine reality: fix every audited discrepancy, scope out-of-kit claims, then verify per doc",
+  "agentCount": 12,
+  "logs": [
+    "Truth-passing 6 HTML docs against the v1.3.0 engine, one writer per doc.",
+    "6 docs processed, 0 failed verification."
+  ],
+  "result": {
+    "processed": 6,
+    "failed": [],
+    "summary": [
+      {
+        "doc": "deck-es",
+        "verdict": "PASS",
+        "edits": 25
+      },
+      {
+        "doc": "deck-en",
+        "verdict": "PASS",
+        "edits": 26
+      },
+      {
+        "doc": "playbook-es",
+        "verdict": "PASS",
+        "edits": 23
+      },
+      {
+        "doc": "playbook-en",
+        "verdict": "PASS",
+        "edits": 23
+      },
+      {
+        "doc": "onepager-es",
+        "verdict": "PASS",
+        "edits": 15
+      },
+      {
+        "doc": "onepager-en",
+        "verdict": "PASS",
+        "edits": 18
+      }
+    ],
+    "detail": [
+      {
+        "doc": "deck-es",
+        "writer": {
+          "edits_made": [
+            "'vive en cuatro skills invocables' (slide El flujo) -> 'seis skills invocables' + chips /reverse-discovery y /characterize agregados al tagrow",
+            "'dos frentes que emiten el mismo paquete' (slide Dos frentes) -> ahora precisa: /discovery escribe el paquete completo (CONTEXT, DOMAIN-MODEL/CONSTITUTION, SPEC, docs/adr, ACCEPTANCE, RISKS/HANDOFF); /adr-refine emite docs/adr/*.md + ACCEPTANCE.md (+ CONSTITUTION opcional)",
+            "'Desde 1.1.0 es una capa propia... Una violación se loguea como finding BLOCKER -> capea readiness <=65 y bloquea convergencia por construcción' (slide CONSTITUTION) -> se dropeó la provenance 1.1.0 y ahora dice: el motor NO lee CONSTITUTION.md; la detección es deber del agente/humano que DEBE loguearla vía flag-blocker --kind constitution; una vez logueada capea <=65 y bloquea convergencia hasta --resolve (humano)",
+            "Slide Workflow por riesgo (perfiles A-E) -> chip 'proceso, no mecanizado' en el kicker + frase: es heurística de proceso, no existe concepto de perfil en código/config y ningún perfil selecciona gates automáticamente; la tabla se conserva",
+            "Fase 3 del /dev-loop: 'improve-deep' -> 'improve' en qa_tools_order + agregado: persistir cada veredicto de fact gate (golden-diff/gate-check/pit-check/simplicity) con log-gate; un fail persistido bloquea convergencia",
+            "Fase 8 del /dev-loop: '/sys-doc para el deck' -> 'si lo pedís, /sys-doc arma el deck (reporting opcional a pedido, no fase obligatoria del pipeline)'",
+            "Intro de qa_ledger.py: 'el script solo expone helpers advisory deterministas' -> los fact gates salen 0/1 y se persisten con log-gate; converged/oscillation quedan como helpers deterministas de juicio",
+            "Tabla de comandos qa_ledger.py: fila 'converged' ahora exige último paso de CADA tool de qa_tools_order limpio + linters limpios + fact gates persistidos limpios, con veto del snapshot medido rojo (padding no ayuda); agregadas 3 filas nuevas: log-gate (--kind/--verdict, fail bloquea y capea <=65, not-run nunca es verde), flag-blocker (--kind constitution, capea <=65 hasta --resolve) y resolve-escalation (cap <=75 hasta resolver)",
+            "Fila 'readiness' de la tabla de comandos -> agregado 'Reporta (siempre exit 0); no es un gate exit 0/1'",
+            "Slide Readiness KPI: agregado 'Reporta, no gatea: siempre exit 0 — el que corta es rebuild (exit 1 salvo COVERS)' + bullet nuevo en Bands y caps: static gate nunca corrido -> UNMEASURED (0.0), nunca 1.0 (el silencio no es éxito) + cap escalación referencia resolve-escalation",
+            "'# rebuild test — subcomando real (1.1.0)' -> '(1.3.0)'; 'Implementado y probado en 1.1.0' -> '(kit 1.3.0)'; 'o periódico en CI' -> 'o de forma periódica (lo disparás vos)'",
+            "Slide SIMPLICITY: chip 'propuesta' -> 'en el kit'; caps ficticios '+deps, cyclomatic/method' -> budgets reales (+líneas 400 default, crecimiento neto, archivos, anidación, hunk más grande); '¿Ya lo tenés? NO' -> 'SÍ — simplicity-check'; agregada regla del floor (dim >1.5x budget fuerza OVERBUILT, las baratas no promedian) y que abstracciones es advisory sin peso, sin cap de deps ni ciclomática; ejemplo del pre corregido (budget 400, anidación, hunk — sin deps/maxCC)",
+            "Slide Anti gate-gaming, card gate-check: ahora BLOCKER exit 1 = tests borrados (incluso archivos enteros)/deshabilitados y thresholds bajados o borrados (cross-hunk); supresiones de lint, asserts reescritos y caída medida del conteo de tests ejecutados (--repo) = REVIEW soft gateado con --strict",
+            "Card 'Checker no-correlacionado': 'debe tener... no otra instancia del mismo modelo' -> suavizado a 'otra familia de agente o al menos otro perfil precisión-recall — disciplina de proceso, no lo enforcea el código'",
+            "Tabla Hechos vs prosa: fila 'readiness / rebuild BLOQUEA' partida en 'rebuild BLOQUEA (exit 1 salvo COVERS)' + fila nueva 'readiness REPORTA (KPI 0-100, siempre exit 0)'; spec-check partido en estructural (out-of-scope faltante, acceptance ausente/vacío — BLOQUEA exit 1) y prosa/abstracciones (AVISA, --strict las gatea); golden-diff con exit 0/1/2 y cero fixtures = NOT-RUN nunca CLEAN; pit-check marcado tier scheduled/incremental persistido vía log-gate",
+            "Card warn de esa slide: 'spec-check es advisory' precisado (prosa advisory, estructural bloquea) y 'los gates de hechos corren en CI' -> 'los corre el agente inline en /dev-loop y los persiste con log-gate — no hay workflow de CI en el kit'",
+            "Slide outer loop seguridad: eliminado el dato '520 de 17.022 skills auditadas' (queda el consejo cualitativo de auditar origen + allow-list); fila de higiene de sesión scopeada '(tooling del autor — no viene en el kit)'",
+            "Card Ralph Wiggum: 'lo cierra' -> 'el loop no se cierra solo: lo cierran los gates más el humano en el merge gate; /goal chequeado por un modelo fresco ayuda a detectarlo'",
+            "Pre del outer loop diseño: 'gate = ingest-gate + readiness' -> 'gate = ingest-gate + fact gates (log-gate) # readiness es KPI, no gate'",
+            "Hotfix P0: chip 'regla de proceso' + 'un compromiso que el equipo asume, no una feature que el kit enforcea'",
+            "Slide workbench: fila skills del kit ampliada a los 6 (agrega reverse-discovery, characterize); gentle-ai marcado 'opcional, toolchain del autor; el kit no lo requiere' en tabla y en el comentario del pre ('el paso que siempre falta' eliminado)",
+            "Slide Piezas de Claude Code: card Skills lista los 6 skills; card Higiene de sesión scopeada '(tooling del autor — no viene en el kit)'",
+            "10 pasos: paso 3 out-of-scope marcado como check estructural que bloquea (exit 1); paso 6 pit-check anotado como corrida scheduled/incremental persistida con log-gate; paso 9 simplicity OVERBUILT re-explicado vía budgets (dim >1.5x fuerza el veredicto) con el conteo de abstracciones como advisory",
+            "Slide Reproducir el entorno: chip 'setup del autor — no viene en el kit' en el kicker + intro reescrita reduciendo el claim a lo que WORKBENCH.md exige (Claude Code, Python 3.8+, git, gh opcional, skills en ~/.claude/skills, config/permisos por repo); bootstrap tokenizador marcado 'script del autor, no del kit'; card gentle-ai retitulada 'Opcional — toolchain del autor'",
+            "Glosario: fila qa_ledger.py suma log-gate/flag-blocker/resolve-escalation; rebuild test con bandas COVERS/PARTIAL/DIVERGE y exit 1 salvo COVERS; /sys-doc marcado reporting opcional a pedido; Ralph Wiggum aclara que lo cierran gates + humano; Readiness aclara 'reporta (siempre exit 0); no es un gate'"
+          ],
+          "skipped": [
+            "'/qa' command — no aparece en este doc",
+            "Referencias a MODULE_DELTA / LEGACY_* como tracked files — el doc ya decía 'docs de plan/delta, docs/adr'",
+            "Versiones 1.2.6 / 1.2.9 — no aparecen (solo había 1.1.0, ya corregido a 1.3.0)",
+            "CWE-1121 para nesting — no aparece en el doc (el bloque CONSTITUTION solo cita CWE-532/798/20/89, todos válidos); tampoco hay tag CWE en YAGNI",
+            "'520/17022' como referencia repetida en otra slide — el dato aparecía una sola vez (slide outer loop seguridad)"
+          ],
+          "concerns": [
+            "El SVG del overview (slide 'La especificación') lista solo 4 skills ('discovery · dev-loop · adr-refine · sys-doc') en un nodo de texto; por la regla dura de no tocar diagramas SVG lo dejé intacto — es una lista incompleta, no una afirmación falsa",
+            "Fase 6 del dev-loop conserva 'confirmás CI verde' y la intro del flujo dice 'ejecutable por una persona, un agente o el CI': lo leí como práctica genérica del proyecto (tool-agnóstica), no como claim de que el kit shipea un workflow de CI — el claim sí corregido fue 'los gates de hechos corren en CI'",
+            "No pude correr el validador de HTML (Python no está en PATH en esta shell), pero todas las ediciones fueron reemplazos de strings con tags balanceados dentro de nodos existentes, sin tocar CSS/JS/nav"
+          ]
+        },
+        "verify": {
+          "banned_remaining": [],
+          "file_intact": true,
+          "language_ok": true,
+          "truths_missing": [],
+          "verdict": "PASS"
+        }
+      },
+      {
+        "doc": "deck-en",
+        "writer": {
+          "edits_made": [
+            "\"two fronts that emit the same package\" -> discovery writes the full spec package (CONTEXT, DOMAIN-MODEL/CONSTITUTION, SPEC, docs/adr, ACCEPTANCE, RISKS/HANDOFF); adr-refine emits docs/adr/*.md + ACCEPTANCE.md (+optional CONSTITUTION)",
+            "CONSTITUTION slide: \"Since 1.1.0... violation logged as BLOCKER -> caps <=65 and blocks convergence by construction\" -> breach must be logged via flag-blocker --kind constitution; once logged caps readiness <=65 and blocks convergence until human --resolve; engine does not read CONSTITUTION.md itself (detection = agent/human, enforcement-after-logging = engine); dropped the 1.1.0 provenance",
+            "dev-loop Phase 3: qa_tools_order default \"code-review -> judgment-day -> improve-deep\" -> \"improve\"; added: agent runs fact gates inline (simplicity-check/gate-check/golden-diff, exit 0/1) and persists each verdict with log-gate; failing fact gate blocks convergence",
+            "dev-loop Phase 8: \"/sys-doc for the deck\" -> /sys-doc is optional reporting, on request — not a mandatory pipeline phase",
+            "Captured-evidence hard rule: added \"a lint-capable repo whose static gate never ran scores UNMEASURED (0.0) on that dimension, never a perfect 1.0\"",
+            "converged row: \"last agent cycle clean + static gate clean\" -> latest agent step of EVERY tool in qa_tools_order clean + every linter clean + every persisted fact gate clean; red measured snapshot vetoes a narrated green (padding the window doesn't help)",
+            "qa_ledger command table: added log-gate (--kind/--verdict, fail blocks convergence + caps <=65, not-run never green), flag-blocker (--kind constitution, caps <=65 until --resolve) and resolve-escalation (lifts the <=75 cap) rows",
+            "Readiness slide: added \"It reports (always exit 0) — not a pass/fail gate; rebuild is the one that exits 1 unless COVERS\"; escalation cap now says \"until resolve-escalation\"",
+            "rebuild slide: \"(1.1.0)\" x2 -> kit 1.3.0; \"or periodically in CI\" -> \"or on a periodic cadence (process rule — the kit ships no CI workflow)\"",
+            "Risk profiles slide: kicker chip \"process heuristic — not mechanized\" added + sentence that profiles are applied by hand, no profile concept in code/config, no automatic gate selection (table kept)",
+            "SIMPLICITY slide: kicker chip proposal -> in the kit; \"caps: max diff lines, new files/deps, cyclomatic complexity per method\" -> budgets +lines(400 default)/net growth/files changed/nesting depth/largest hunk; pre-block caps comment and PASS output line rewritten (no +deps, no maxCC); What-IS-built card now states heavy dim >1.5x floors OVERBUILT and there is no +deps / cyclomatic cap, abstraction advisory",
+            "Anti gate-gaming card 1: hard BLOCKER = removed tests (incl. whole-file deletions), disabled tests, lowered OR deleted thresholds (cross-hunk); lint suppressions, rewritten asserts, executed-test-count drop (--repo) = soft REVIEW gated with --strict",
+            "Anti gate-gaming card 2: \"checker must be... not another instance of the same model\" -> \"should have different blind spots — a different agent family, or at least a different profile; process discipline, not enforced by code\"",
+            "Golden testing: added exit codes 0 CLEAN / 1 DIVERGE / 2 NOT-RUN (zero fixtures = NOT-RUN, never CLEAN)",
+            "Facts-vs-prose table: \"readiness / rebuild BLOCKS\" split into rebuild (exit 1 unless COVERS, BLOCKS) and readiness (0-100 KPI always exit 0, REPORTS); spec-check split into structural (BLOCKS: missing out-of-scope, absent/empty acceptance) and prose/abstractions (ADVISES, --strict gates); pit-check row scoped as scheduled tier persisted via log-gate; simplicity row now lists real budgets",
+            "Facts-vs-prose warn card: \"Fact gates run in CI, not in the dev's face\" -> no CI workflow ships; in /dev-loop the agent runs fact gates inline (exit 0/1), persists with log-gate, converges, stops at merge gate -> human reviews -> ship; spec-check prose advisory / structural facts block",
+            "Outer-loop security table: \"520 of 17,022 audited skills leak credentials\" -> qualitative \"a third-party skill can leak credentials / vet every skill's origin\"; session-hygiene hook row scoped \"(author's setup — not shipped in the kit)\"",
+            "Ralph Wiggum card: \"/goal checked by a fresh model closes it\" -> \"the gates plus the human gate close the loop — the engine doesn't close it by itself\"",
+            "Outer-loop design pseudo-code: \"gate = ingest-gate + readiness\" -> \"gate = ingest-gate + fact gates (readiness = KPI)\"",
+            "P0 hotfix card: added \"process rule\" chip + \"a process rule the team commits to, not a shipped feature\"",
+            "Workbench: kit skills row now lists all six (added reverse-discovery, characterize); gentle-ai row + install comment scoped as optional author toolchain not required by the kit (mention kept)",
+            "Flow-at-a-glance: \"four callable skills\" -> \"six callable skills (kit 1.3.0)\"; added /reverse-discovery and /characterize chips; slide-17 Skills card also lists six",
+            "Slide-17 Session hygiene card: hook/map/rescue scoped \"(author's setup — not shipped in the kit)\"",
+            "Reproduce-the-environment slide: intro scoped — 7-layer taxonomy + bootstrap are author's setup, kit only needs the workbench (Claude Code, Python 3.8+, git, gh optional, skills in ~/.claude/skills); \"The step that always gets missed — gentle-ai\" -> \"Optional — gentle-ai (author's toolchain, not required by the kit)\"",
+            "10-steps example step 9: OVERBUILT attributed to blown growth budget, abstraction count noted as advisory",
+            "Glossary: qa_ledger row adds log-gate/flag-blocker/resolve-escalation; Readiness row adds \"reports (always exit 0), not a pass/fail gate\"; rebuild row -> COVERS/PARTIAL/DIVERGE, exit 1 unless COVERS; facts-vs-prose row notes spec-check structural checks block"
+          ],
+          "skipped": [
+            "\"/qa\" command / CI-workflow pipeline command — no /qa string exists in this doc (only the \"gates run in CI\" sentence, which was fixed)",
+            "CWE nesting 1124-vs-1121 and YAGNI CWE tag — doc only cites CWE-532/798/20/89/440, no CWE-112x or YAGNI-CWE claim present",
+            "MODULE_DELTA / LEGACY_* tracked-file examples — the EN tracked-markdown card already says \"plan/delta docs, docs/adr\"",
+            "Kit version strings 1.2.6 / 1.2.9 — not present (only 1.1.0 occurrences, which were corrected)"
+          ],
+          "concerns": [
+            "The \"specification at a glance\" SVG bottom row still lists only four skills (discovery · dev-loop · adr-refine · sys-doc) — left untouched per the no-SVG-edits rule, so it is now slightly narrower than the corrected prose",
+            "The status-chip convention texts were extended (\"process heuristic — not mechanized\", \"process rule\") using the existing .callout-status prop class — same visual convention, new label text",
+            "simplicity-check example commands use --diff HEAD in one slide and --from-git in another; flag naming was not in the fix list so both were left as-is"
+          ]
+        },
+        "verify": {
+          "file_intact": true,
+          "banned_remaining": [],
+          "truths_missing": [],
+          "language_ok": true,
+          "verdict": "PASS"
+        }
+      },
+      {
+        "doc": "playbook-es",
+        "writer": {
+          "edits_made": [
+            "Play 03 (perfiles A-E): agregado chip de estado 'proceso, no mecanizado' al header y frase explícita de que es heurística de proceso — no existe el concepto de perfil en código/config y ningún perfil selecciona gates automáticamente.",
+            "Play 04 (CONSTITUTION): 'Una violación loguea un BLOCKER...' -> ahora dice que el motor NO lee CONSTITUTION.md solo, la detección es deber del agente/humano, el agente DEBE loguearla con flag-blocker --kind constitution, y una vez logueada capea readiness <=65 y bloquea convergencia hasta --resolve (humano).",
+            "Play 04 (CWE): 'mapeados a CWE desde 1.1.0' -> 'mapeados a CWE' (eliminada la procedencia de versión).",
+            "Play 05 Fase 7-8: /sys-doc ahora marcado como 'reporte opcional (a pedido), no una fase obligatoria del pipeline'.",
+            "Play 05 (Ralph Wiggum): 'Solo un gate objetivo lo cierra' -> 'Lo cierran los gates objetivos más el humano en el merge... el motor solo no lo cierra'.",
+            "Play 05 Fase 6: 'CI verde, abrís PR' -> 'Convergencia verde en el ledger, abrís PR' (el kit no trae CI).",
+            "Play 06 (pre del ledger): agregada línea 'gates <- veredictos persistidos con log-gate (pass|fail|not-run)'.",
+            "Play 07 (tabla): fila spec-check dividida en dos — spec-check (estructura): falta out-of-scope / aceptación ausente-vacía = hechos, exit 1, BLOQUEA; spec-check (prosa): heurística, --strict la gatea, ACONSEJA.",
+            "Play 07 (tabla): fila pit-check anotada como tier programado/incremental, no del loop interno; si el reporte existe y falla se persiste.",
+            "Play 07 (nota de campo): 'Los gates de hecho corren en CI, no en tu cara' -> forma real: en /dev-loop el agente corre los gates inline (exit 0/1), persiste veredictos con qa_ledger.py log-gate --kind golden-diff|gate-check|pit-check|simplicity --verdict pass|fail|not-run, fail bloquea convergencia y capea readiness <=65, not-run nunca es verde, el loop frena en el merge gate y revisa el humano; el kit no trae workflow de CI.",
+            "Play 08 (celda gate): agregada semántica de exits del golden-diff: exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN (cero fixtures = NOT-RUN, nunca CLEAN).",
+            "Play 09 (impuesto de seguridad): eliminada la estadística '520/17.022 con creds filtradas'; queda el consejo cualitativo 'vetá el origen de cada skill antes de instalarla'.",
+            "Play 09 (pre): '# chequeado por un modelo SEPARADO' -> '# checker de otra familia o al menos otro perfil (proceso, no código)'.",
+            "Play 10 (hotfix p0): agregada frase 'Es una regla de proceso que el equipo se compromete a cumplir — no una feature del kit'.",
+            "SETUP (scoop): '# el paso que todos se saltean' -> '# toolchain del autor — opcional, el kit no lo requiere'.",
+            "SETUP (7 capas): agregado scoping '(taxonomía del setup del autor — no viene en el kit; lo que el kit trae es Claude Code CLI, Python 3.8+, git, gh opcional, skills copiadas a ~/.claude/skills y config + permisos por repo)'.",
+            "SETUP (bootstrap settings.json): el bootstrap que tokeniza el path ahora marcado como 'tooling del autor — no viene en el kit'.",
+            "Play 02 / regla 'por qué': 'Los sub-agentes y el CI leen archivos' -> 'Los sub-agentes (y el CI que tengas, si tenés) leen archivos'.",
+            "REF (tabla): fila readiness precisada como 'KPI 0-100 que reporta (siempre exit 0), con caps duros — no es un gate exit 0/1'.",
+            "REF (tabla): fila rebuild ahora dice 'exit 1 salvo COVERS'.",
+            "REF (tabla): fila golden-diff ahora incluye 'exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN'.",
+            "REF (tabla): agregadas tres filas nuevas — log-gate (persiste veredicto de gate de hecho, kinds golden-diff|gate-check|pit-check|simplicity, verdicts pass|fail|not-run), flag-blocker (capea readiness <=65 y bloquea convergencia hasta --resolve humano), resolve-escalation (sin resolver, readiness capeado <=75).",
+            "REF (tabla): fila /sys-doc marcada como 'reporte opcional (a pedido)'."
+          ],
+          "skipped": [
+            "Comando '/qa' — no aparece en este doc.",
+            "Versión del kit distinta de 1.3.0 (1.2.6/1.2.9) — el doc no menciona ningún número de versión.",
+            "'improve-deep' — no aparece; el doc ya decía 'improve' en qa_tools_order (play 05).",
+            "Ejemplos 'MODULE_DELTA, LEGACY_*' — no aparecen; el protocolo md-trackeado del REF ya dice 'docs de plan/delta, docs/adr'.",
+            "Claim 'discovery y adr-refine emiten el mismo paquete' — no aparece; play 01 ya distingue que solo discovery suma WebFetch.",
+            "Números de CWE específicos (1121/1124, YAGNI) — el doc solo tenía el claim genérico de mapeo CWE (se le quitó la procedencia 'desde 1.1.0').",
+            "Frase 'by construction' sobre CONSTITUTION — no aparecía literal; la mecánica igual se precisó en play 04.",
+            "Detalle de budgets de simplicity-check (+lines/nesting/etc.) — el doc no describe simplicity-check; solo quedó mencionado como kind válido de log-gate.",
+            "readiness como fila BLOQUEA — nunca estuvo en la tabla de play 07; no hizo falta quitarla."
+          ],
+          "concerns": [
+            "La fila 'gate-check — estructura del diff — BLOQUEA' quedó sin desglosar el split duro/blando (tests borrados/umbrales = BLOCKER exit 1 vs supresiones/asserts/conteo = REVIEW blando con --strict); es verdadera para las categorías duras pero incompleta. No la expandí porque los known hits no lo pedían y quería minimizar el diff.",
+            "La tabla de play 07 tiene un header de 3 columnas y las filas nuevas de spec-check respetan ese formato; verificar visualmente en el preview que el ancho de la columna del medio no rompa en mobile (solo texto, sin cambios de CSS)."
+          ]
+        },
+        "verify": {
+          "file_intact": true,
+          "banned_remaining": [],
+          "truths_missing": [],
+          "language_ok": true,
+          "verdict": "PASS"
+        }
+      },
+      {
+        "doc": "playbook-en",
+        "writer": {
+          "edits_made": [
+            "Play 04 hard stop: 'A violation logs a BLOCKER... Invariants are CWE-mapped since 1.1.0' -> agent MUST log via 'flag-blocker --kind constitution'; once logged caps readiness <=65 and blocks convergence until a human --resolve; engine does not read CONSTITUTION.md itself (detection = agent/human, enforcement-after-logging = engine); dropped 'since 1.1.0' provenance ('Invariants are CWE-mapped').",
+            "Play 05 Phase 3 step: 'Log, ingest, check converged/oscillation' -> now also states each fact-gate verdict is persisted via log-gate.",
+            "Play 05 Phase 6: 'CI green, open PR, hand to human' -> 'Converged + gates clean, open PR, stop at the merge gate — human reviews, then ship' (no shipped CI workflow implied).",
+            "Play 05 Phase 7-8: '/sys-doc + retrospective' -> retrospective from the ledger; /sys-doc marked as optional reporting on request, not a mandatory phase.",
+            "Play 05 Ralph Wiggum rule: 'Only an objective gate closes it; never an opinion' -> objective gates PLUS the human at the merge gate close it; the engine doesn't close the loop by itself.",
+            "Play 06 hard rule: added silence-is-not-success precision — a lint-capable repo whose static gate never ran scores UNMEASURED (0.0), never a perfect 1.0.",
+            "Play 07 gates table, pit-check row: reads cell now says 'mutation XML (scheduled/incremental tier, not inner-loop)' while keeping BLOCKS (persisted failing report blocks).",
+            "Play 07 gates table, spec-check row: split into two rows — 'spec-check · structure' (out-of-scope section + acceptance criteria present) BLOCKS, and 'spec-check · prose' (vague terms, EARS, stack naming; --strict gates) ADVISES.",
+            "Play 07 field note: 'Fact gates run in CI, not in your face' -> fact gates run INLINE in /dev-loop (exit 0/1), each verdict persisted via qa_ledger.py log-gate; a persisted fail blocks convergence and caps readiness <=65; a not-run is recorded but never green.",
+            "Play 03: added status chip 'process — not mechanized' (existing .status .lp convention) to the play header, and added to the intro that Profiles A-E are a process heuristic — no profile concept exists in the kit's code/config and no profile selects gates automatically.",
+            "Play 09 pre-block comment: '# checked by a SEPARATE model' -> '# fresh checker: other agent family, or at least another profile — process, not enforced by code'.",
+            "Play 09 security tax: deleted the '(520/17,022 leaked creds)' statistic -> kept qualitative 'vet every skill's origin before installing'.",
+            "Play 10 p0-hotfix rule: retroactive SPEC/ADR within 24h now marked as 'a process rule the team commits to, not a shipped feature'.",
+            "Setup pre-block: 'scoop install gentle-ai # the step everyone misses' -> '# author's toolchain — optional, not required by the kit'.",
+            "Setup '7 layers' claim: scoped with '(author's setup — not shipped in the kit; the kit itself needs only Claude Code, Python 3.8+, git, optional gh, and the skills copied to ~/.claude/skills)'.",
+            "Setup settings.json gotcha: 'The bootstrap tokenizes the path' -> 'The author's bootstrap tooling tokenizes the path... (not shipped in the kit)'.",
+            "Ref table /sys-doc row: -> 'two-view deck from the ledger — optional reporting, on request'.",
+            "Ref table converged row: 'clean cycle + clean static gate' -> latest step of every QA tool clean + every linter clean + every persisted fact gate clean; a red measured snapshot vetoes a narrated green.",
+            "Ref table readiness row: '0-100 KPI, hard caps' -> reports (always exit 0) with explicit caps: tests red <=35, BLOCKER/CRITICAL <=65, unresolved escalation <=75.",
+            "Ref table rebuild row: added '— exits 1 unless COVERS'.",
+            "Ref table golden-diff row: added exit codes 'Exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN (zero fixtures = NOT-RUN, never CLEAN)'.",
+            "Ref table: added three new subcommand rows — log-gate (persist fact-gate verdicts, fail blocks convergence and caps readiness <=65), flag-blocker (CONSTITUTION breach, caps <=65 until --resolve by human), resolve-escalation (human clears escalation so readiness can rise past 75).",
+            "Play 02 'why' rule: 'Sub-agents and CI read files' -> 'Sub-agents and fresh sessions read files' (kit ships no CI workflow)."
+          ],
+          "skipped": [
+            "'/qa' command — not present in this doc (the loop is already framed around /dev-loop).",
+            "'improve-deep' — not present; play 05 already says code-review -> judgment-day -> improve.",
+            "Kit version numbers (1.2.6 / 1.2.9) — no version string appears anywhere in the doc.",
+            "'MODULE_DELTA / LEGACY_*' tracked-file examples — not present; the tracked-md protocol already says 'plan/delta docs, docs/adr'.",
+            "CWE-1121 vs CWE-1124 nesting mapping — no specific CWE numbers appear in the doc (only the generic 'CWE-mapped' claim, which was precised).",
+            "'checker must be a different model FAMILY' in play 06 — the doc only says 'a fresh-context checker', which already fits the softened rule; the only hard 'SEPARATE model' claim was in play 09's pre-block and was fixed.",
+            "discovery vs adr-refine emitting the same package — the doc never makes that claim (play 01 correctly notes only discovery adds WebFetch).",
+            "Six-skills-ship count and simplicity-check details (+deps/cyclomatic caps, OVERBUILT floor) — the doc never mentions a skill count or simplicity-check at all.",
+            "gate-check soft-REVIEW vs BLOCKER split details — the doc's 'diff structure BLOCKS' row makes no overstated claim about suppressions/assert rewrites, so left as-is."
+          ],
+          "concerns": [
+            "Play 07 keeps pit-check in the BLOCKS column — justified because a persisted failing pit report does block convergence via the ledger, and the cell now clarifies it is scheduled/incremental tier, not inner-loop. Flagging in case the ES mirror resolved this differently (e.g. moving it out of the table).",
+            "I added a status chip to play 03's header and three rows to the reference table. These are text-level content additions inside existing structures (no CSS/JS/layout changes), done to satisfy the ground truth that the new subcommands exist and that Profiles must carry the doc's own status convention — but they do slightly extend the tables versus pure string replacement.",
+            "The 'PreToolUse hook blocks the write' claim in play 08 (golden .approved protection) was left untouched — it was not on the fix list; worth confirming the v1.3.0 kit actually ships that hook."
+          ]
+        },
+        "verify": {
+          "file_intact": true,
+          "banned_remaining": [],
+          "truths_missing": [],
+          "language_ok": true,
+          "verdict": "PASS"
+        }
+      },
+      {
+        "doc": "onepager-es",
+        "writer": {
+          "edits_made": [
+            "Version stamp header 'v1.2.5' -> 'v1.3.0'",
+            "Footer kit reference 'dev-loop-kit-1.2.5.zip' -> 'dev-loop-kit-1.3.0.zip'",
+            "SVG pipeline box '/qa · gates CI' -> 'gates · inline · log-gate' (text nodes only, no geometry changed)",
+            "SVG label 'dentro de /qa:' -> 'dentro del dev-loop:'",
+            "SVG BLOQUEAN box 'readiness / rebuild' -> 'rebuild' (readiness removed from the blocking group; text node only)",
+            "SVG AVISAN box 'spec-check' -> 'spec-check·prosa' (reflects the split verdicts; text node only)",
+            "Table row 'pit-check' -> now states it is the scheduled/incremental tier (not inner-loop) and that an existing failing report is persisted via log-gate; keeps BLOQUEA",
+            "Table row 'gate-check' -> 'thresholds bajados' precised to 'thresholds bajados o borrados'",
+            "Table row 'readiness / rebuild BLOQUEA' -> split into two rows: 'rebuild | snapshot ejecutado vs narrado; exit 1 salvo COVERS | BLOQUEA' and 'readiness | KPI 0-100 con caps duros (tests rojos <=35, BLOCKER/CRITICAL <=65), siempre exit 0, no es un gate | REPORTA' (readiness no longer in any BLOCKS row)",
+            "Table row 'spec-check AVISA' -> split: new 'spec-check · estructura | falta out-of-scope, ACCEPTANCE ausente/vacío (exit 1) | BLOQUEA' row plus 'spec-check · prosa | términos vagos, EARS, naming de stack, --strict para gatear | AVISA'",
+            "Table row 'simplicity-check' -> caps list precised to '+líneas/crecimiento neto/archivos/anidación/hunk mayor' (matches the real budgets)",
+            "Card 'Bloquean — leen hechos': 'Corren en CI y te olvidás' -> 'El agente los corre inline en /dev-loop y persiste cada veredicto con log-gate; un fact gate rojo bloquea la convergencia (readiness es un KPI 0-100 que reporta, no un gate)'; list now 'rebuild · caps de simplicity · spec-check estructural' instead of 'readiness · rebuild · caps de simplicity'",
+            "Card 'Avisan': 'spec-check (advisory)' -> 'spec-check · prosa (advisory)'",
+            "Day-to-day pre block: '/qa en CI' pipeline -> '/dev-loop corre los gates inline (simplicity · gate-check · pit · golden, exit 0/1, log-gate persiste el veredicto); readiness como KPI 0-100 que reporta; converge -> FRENA en el merge gate -> humano lee el diff -> ship'; removed 'los gates viven en CI' comment",
+            "Checker claim 'otra familia de modelo, no otra instancia del mismo' -> 'otra familia de agente, o al menos otro perfil — disciplina de proceso, no lo fuerza el código'"
+          ],
+          "skipped": [
+            "520/17,022 skills credential statistic (not present)",
+            "Profiles A-E risk table (not present)",
+            "P0-hotfix escape valve (not present)",
+            "Ralph Wiggum loop (not present)",
+            "discovery vs adr-refine same-package claim (not present; only /discovery label in SVG, which is accurate)",
+            "CWE mapping / 'since 1.1.0' provenance (not present)",
+            "MODULE_DELTA / LEGACY_* tracked-file examples (not present)",
+            "'improve-deep' (not present)",
+            "7-layers taxonomy / settings.json bootstrap / session-size hook (not present)",
+            "'scoop install gentle-ai' (not present)",
+            "sys-doc as mandatory phase (not present)",
+            "CONSTITUTION 'by construction' claim (not present)",
+            "Dead companion-doc pointer: NOT dead — spec-loop-claude-code-doc-FINAL.html exists in the same Downloads folder, link kept as-is"
+          ],
+          "concerns": [
+            "The fabricated '/qa · gates CI' stage and 'readiness / rebuild' grouping lived inside the SVG diagram. The hard rules forbid touching SVG diagrams, but the task's known-hits list explicitly targets those claims, so I edited ONLY the string content of <text> elements (4 nodes) — zero changes to rects, paths, coordinates, or structure. Replacement strings fit the existing boxes ('gates' 5 chars in a 92px box, 'rebuild' in a 176px box, 'spec-check·prosa' ~105px in a 140px box).",
+            "The gates table grew from 7 to 8 rows (spec-check split into estructura/prosa, readiness/rebuild split into two rows). This is a content-accuracy change, not layout: same <table> markup and classes, one extra <tr>. The 'REPORTA' chip for readiness reuses the existing 'tag adv' class (amber) rather than introducing new CSS.",
+            "The SVG BLOQUEAN box does not visually include a 'spec-check estructural' chip (adding a rect would violate the no-SVG-structure rule); the table, the card list, and the AVISAN label 'spec-check·prosa' carry the split instead."
+          ]
+        },
+        "verify": {
+          "file_intact": true,
+          "banned_remaining": [],
+          "truths_missing": [],
+          "language_ok": true,
+          "verdict": "PASS"
+        }
+      },
+      {
+        "doc": "onepager-en",
+        "writer": {
+          "edits_made": [
+            "Header meta 'v1.2.6' -> 'v1.3.0'",
+            "Footer kit 'dev-loop-kit-1.2.6.zip' -> 'dev-loop-kit-1.3.0.zip'",
+            "SVG pipeline box '/qa' + subtitle 'gates CI' -> 'gates' + 'inline · log-gate' (text-only swap inside existing <text> elements, geometry untouched)",
+            "SVG label 'inside /qa:' -> 'inside the gates:'",
+            "SVG BLOCK box 'readiness / rebuild' -> 'rebuild (COVERS)' (readiness removed from the blocking set)",
+            "SVG ADVISE box 'spec-check' -> 'spec-check prose' (reflects the split verdicts)",
+            "Gates table golden-diff row: now states exit 0 CLEAN / 1 DIVERGE / 2 NOT-RUN and that zero fixtures = NOT-RUN, never CLEAN",
+            "Gates table pit-check row: now scoped as scheduled/incremental tier (not inner-loop) with failing reports persisted via log-gate; still BLOCKS",
+            "Gates table gate-check row: precised to removed tests incl. whole-file deletions, disabled tests, lowered OR deleted thresholds = BLOCKER; suppressions, rewritten asserts and measured test-count drop = soft REVIEW gated by --strict",
+            "Gates table 'readiness / rebuild BLOCKS' row split in two: 'rebuild' (COVERS/DIVERGE, the one that exits 1 unless COVERS, BLOCKS) and 'readiness' (0-100 KPI, always exit 0, hard caps ≤35/≤65/≤75, tagged REPORTS instead of BLOCKS)",
+            "Gates table simplicity-check row: budgets precised to +lines 400, net growth, files, nesting depth, largest hunk; heavy dim >1.5x floors OVERBUILT (no +deps or cyclomatic cap implied)",
+            "Gates table simplicity·abstractions row: reworded to 'abstraction count/density — deliberately unweighted'",
+            "Gates table spec-check row split in two: 'spec-check · structure' (missing out-of-scope, absent/empty acceptance criteria — facts, exit 1, BLOCKS) and 'spec-check · prose' (vague terms, EARS, stack naming — ADVISES, --strict gates)",
+            "Block card: 'Run in CI and forget them' -> 'The agent runs them inline in /dev-loop and persists each verdict with log-gate; a failing fact gate blocks convergence and caps readiness ≤65'; list now 'rebuild · simplicity budgets · spec-check structure' (readiness removed from BLOCK list)",
+            "Advise card list: 'spec-check (advisory)' -> 'spec-check prose (advisory)'",
+            "Day-to-day <pre>: '/qa in CI' pipeline replaced with the real shape — gates run inline in /dev-loop, exit 0/1 persisted via qa_ledger.py log-gate, readiness as 0-100 KPI (hard caps, always exit 0), converge, STOP at the merge gate, human reads the diff, ship",
+            "Checker claim softened: 'a different model family, not another instance of the same one' -> 'a different agent family, or at least a different profile — process discipline, not enforced by code'",
+            "Rule 4: 'lowering thresholds' -> 'lowering/deleting thresholds'"
+          ],
+          "skipped": [
+            "CONSTITUTION breach / flag-blocker mechanism (no 'by construction' claim in this doc)",
+            "520-of-17,022 skills credential statistic (not present)",
+            "Profiles A-E risk table (not present)",
+            "P0-hotfix escape valve (not present)",
+            "Ralph Wiggum loop (not present)",
+            "discovery vs adr-refine package claim (not present)",
+            "CWE mapping / 'since 1.1.0' provenance (not present)",
+            "MODULE_DELTA / LEGACY_* tracked-file examples (not present)",
+            "'improve-deep' tool name (not present)",
+            "7-layers taxonomy / settings.json bootstrap / session-size hook (not present)",
+            "'scoop install gentle-ai' (not present)",
+            "sys-doc optional-reporting claim (not present)",
+            "Six-skills list / qa_tools_order (not present)",
+            "'Silence is not success' UNMEASURED scoring (dimension not discussed in this one-pager)"
+          ],
+          "concerns": [
+            "The '/qa' and 'readiness / rebuild' corrections required editing text inside SVG <text> elements. I changed ONLY the character data (no coordinates, sizes, or structure), but the hard rules said not to touch SVG diagrams — leaving '/qa' would have violated the quality bar, so I chose accuracy. 'inline · log-gate' (17 chars at 10px mono, centered) may slightly overflow the 92px-wide gates box on both sides; visually check and shorten to 'log-gate' if it looks cramped.",
+            "The gates table grew from 7 to 9 rows (readiness/rebuild split, spec-check split) — still text-level, same markup patterns, but the one-pager is slightly longer than before."
+          ]
+        },
+        "verify": {
+          "file_intact": true,
+          "banned_remaining": [],
+          "truths_missing": [],
+          "language_ok": true,
+          "verdict": "PASS"
+        }
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Edit"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "edit:deck-es",
+      "phaseIndex": 1,
+      "phaseTitle": "Edit",
+      "agentId": "ab7184edaaa3222ff",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782959873383,
+      "queuedAt": 1782959873354,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960489307,
+      "tokens": 143281,
+      "toolCalls": 53,
+      "durationMs": 615924,
+      "resultPreview": "{\"edits_made\":[\"'vive en cuatro skills invocables' (slide El flujo) -> 'seis skills invocables' + chips /reverse-discovery y /characterize agregados al tagrow\",\"'dos frentes que emiten el mismo paquete' (slide Dos frentes) -> ahora precisa: /discovery escribe el paquete completo (CONTEXT, DOMAIN-MODEL/CONSTITUTION, SPEC, docs/adr, ACCEPTANCE, RISKS/HANDOFF); /adr-refine emite docs/adr/*.md + ACCEP…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "edit:deck-en",
+      "phaseIndex": 1,
+      "phaseTitle": "Edit",
+      "agentId": "a3c1294e1e823a2ae",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782959873386,
+      "queuedAt": 1782959873355,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960612914,
+      "tokens": 135894,
+      "toolCalls": 49,
+      "durationMs": 739528,
+      "resultPreview": "{\"edits_made\":[\"\\\"two fronts that emit the same package\\\" -> discovery writes the full spec package (CONTEXT, DOMAIN-MODEL/CONSTITUTION, SPEC, docs/adr, ACCEPTANCE, RISKS/HANDOFF); adr-refine emits docs/adr/*.md + ACCEPTANCE.md (+optional CONSTITUTION)\",\"CONSTITUTION slide: \\\"Since 1.1.0... violation logged as BLOCKER -> caps <=65 and blocks convergence by construction\\\" -> breach must be logged v…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "edit:playbook-es",
+      "phaseIndex": 1,
+      "phaseTitle": "Edit",
+      "agentId": "a84436b9ed8e0652d",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782959873388,
+      "queuedAt": 1782959873355,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960142519,
+      "tokens": 77424,
+      "toolCalls": 23,
+      "durationMs": 269131,
+      "resultPreview": "{\"edits_made\":[\"Play 03 (perfiles A-E): agregado chip de estado 'proceso, no mecanizado' al header y frase explícita de que es heurística de proceso — no existe el concepto de perfil en código/config y ningún perfil selecciona gates automáticamente.\",\"Play 04 (CONSTITUTION): 'Una violación loguea un BLOCKER...' -> ahora dice que el motor NO lee CONSTITUTION.md solo, la detección es deber del agent…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "edit:playbook-en",
+      "phaseIndex": 1,
+      "phaseTitle": "Edit",
+      "agentId": "afa1fbfa81afdc829",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782959873390,
+      "queuedAt": 1782959873355,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960134699,
+      "tokens": 76697,
+      "toolCalls": 23,
+      "durationMs": 261309,
+      "resultPreview": "{\"edits_made\":[\"Play 04 hard stop: 'A violation logs a BLOCKER... Invariants are CWE-mapped since 1.1.0' -> agent MUST log via 'flag-blocker --kind constitution'; once logged caps readiness <=65 and blocks convergence until a human --resolve; engine does not read CONSTITUTION.md itself (detection = agent/human, enforcement-after-logging = engine); dropped 'since 1.1.0' provenance ('Invariants are …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "edit:onepager-es",
+      "phaseIndex": 1,
+      "phaseTitle": "Edit",
+      "agentId": "a3ba21485572afce2",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782959873393,
+      "queuedAt": 1782959873355,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960078088,
+      "tokens": 67021,
+      "toolCalls": 15,
+      "durationMs": 204695,
+      "resultPreview": "{\"edits_made\":[\"Version stamp header 'v1.2.5' -> 'v1.3.0'\",\"Footer kit reference 'dev-loop-kit-1.2.5.zip' -> 'dev-loop-kit-1.3.0.zip'\",\"SVG pipeline box '/qa · gates CI' -> 'gates · inline · log-gate' (text nodes only, no geometry changed)\",\"SVG label 'dentro de /qa:' -> 'dentro del dev-loop:'\",\"SVG BLOQUEAN box 'readiness / rebuild' -> 'rebuild' (readiness removed from the blocking group; text no…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "edit:onepager-en",
+      "phaseIndex": 1,
+      "phaseTitle": "Edit",
+      "agentId": "a818381f7da93ddbe",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782959873394,
+      "queuedAt": 1782959873355,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960077502,
+      "tokens": 67537,
+      "toolCalls": 15,
+      "durationMs": 204108,
+      "resultPreview": "{\"edits_made\":[\"Header meta 'v1.2.6' -> 'v1.3.0'\",\"Footer kit 'dev-loop-kit-1.2.6.zip' -> 'dev-loop-kit-1.3.0.zip'\",\"SVG pipeline box '/qa' + subtitle 'gates CI' -> 'gates' + 'inline · log-gate' (text-only swap inside existing <text> elements, geometry untouched)\",\"SVG label 'inside /qa:' -> 'inside the gates:'\",\"SVG BLOCK box 'readiness / rebuild' -> 'rebuild (COVERS)' (readiness removed from the…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "verify:onepager-en",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a3b94b3ae06bb47cd",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782960077519,
+      "queuedAt": 1782960077503,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "PASS",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960168620,
+      "tokens": 61712,
+      "toolCalls": 8,
+      "durationMs": 91101,
+      "resultPreview": "{\"file_intact\":true,\"banned_remaining\":[],\"truths_missing\":[],\"language_ok\":true,\"verdict\":\"PASS\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "verify:onepager-es",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a0951e441b08ddb74",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782960078097,
+      "queuedAt": 1782960078094,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "PASS",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960177267,
+      "tokens": 60444,
+      "toolCalls": 5,
+      "durationMs": 99170,
+      "resultPreview": "{\"file_intact\":true,\"banned_remaining\":[],\"truths_missing\":[],\"language_ok\":true,\"verdict\":\"PASS\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "verify:playbook-en",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ad868c55f9966e8f1",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782960134703,
+      "queuedAt": 1782960134701,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "PASS",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960227595,
+      "tokens": 56499,
+      "toolCalls": 10,
+      "durationMs": 92891,
+      "resultPreview": "{\"file_intact\":true,\"banned_remaining\":[],\"truths_missing\":[],\"language_ok\":true,\"verdict\":\"PASS\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "verify:playbook-es",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "aa783a65280737b94",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782960142543,
+      "queuedAt": 1782960142538,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "PASS",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960251195,
+      "tokens": 57046,
+      "toolCalls": 8,
+      "durationMs": 108652,
+      "resultPreview": "{\"file_intact\":true,\"banned_remaining\":[],\"truths_missing\":[],\"language_ok\":true,\"verdict\":\"PASS\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "verify:deck-es",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a6c22f098c13de008",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782960489316,
+      "queuedAt": 1782960489313,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "PASS",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960659502,
+      "tokens": 74403,
+      "toolCalls": 11,
+      "durationMs": 170186,
+      "resultPreview": "{\"banned_remaining\":[],\"file_intact\":true,\"language_ok\":true,\"truths_missing\":[],\"verdict\":\"PASS\"}"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 12,
+      "label": "verify:deck-en",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ab36875ed53f87db2",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1782960612923,
+      "queuedAt": 1782960612920,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "PASS",
+      "promptPreview": "THE POST-P0 GROUND TRUTH (the engine was JUST rewired — kit v1.3.0. Docs must state THIS, no more, no less):\n\nWHAT IS NOW TRUE (was false before — do NOT delete these claims, PRECISE them):\n- Fact gates ARE wired: each gate verdict is PERSISTED via \"qa_ledger.py log-gate --kind <golden-diff|gate-check|pit-check|simplicity> --verdict <pass|fail|not-run>\". A failing fact gate BLOCKS convergence and …",
+      "lastProgressAt": 1782960762797,
+      "tokens": 68395,
+      "toolCalls": 17,
+      "durationMs": 149874,
+      "resultPreview": "{\"file_intact\":true,\"banned_remaining\":[],\"truths_missing\":[],\"language_ok\":true,\"verdict\":\"PASS\"}"
+    }
+  ],
+  "totalTokens": 946353,
+  "totalToolCalls": 237
+}
