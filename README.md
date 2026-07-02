@@ -48,7 +48,7 @@ SpecLoop/
   JaCoCo/lcov/JUnit/checkstyle reusados; detekt + SwiftLint). Smoke suite 63/63 verde. Licencia: MIT. El principio "facts block, guesses advise" es propiedad
   enforced, no slogan.
 - **Docs** — pasados por truth-pass contra el engine real: cada claim describe lo que
-  v1.9.0 hace; el anexo de referencias tiene **links verificados por fetch** a las 9
+  v1.9.0 hace; el anexo de referencias tiene **links verificados por fetch** a las 10
   fuentes. Convención de estado en los docs: `en el kit` / `nuevo` / `propuesta`.
 - **En curso** — dogfooding en caso real (proyecto piloto, Python): el adapter 1.4.0 lo desbloqueó;
   queda el dry-run de solo lectura (criterio 2 del HANDOFF python-adapter) y el on-ramp.
