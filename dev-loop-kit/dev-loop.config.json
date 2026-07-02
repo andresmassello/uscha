@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
+  "version": "1.5.0",
   "defaults": {
     "coverage_threshold": 60,
     "max_iterations": 5,
@@ -17,6 +17,7 @@
     "test_command_maven": "mvn -q -DskipITs=false test",
     "test_command_flutter": "flutter test --coverage",
     "test_command_python": "pytest --cov --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml",
+    "test_command_node": "npx jest --coverage --reporters=default --reporters=jest-junit",
     "id_granularity": "file",
     "acceptance_file": "ACCEPTANCE.md",
     "readiness_weights": {
@@ -62,6 +63,11 @@
       "name": "data-lib",
       "path": "../data-lib",
       "type": "python"
+    },
+    {
+      "name": "web-app",
+      "path": "../web-app",
+      "type": "node"
     }
   ],
   "integration": {

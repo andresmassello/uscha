@@ -88,6 +88,18 @@ ANTES de tocar nada.
   `ingest-gate` los encuentra solo por type del repo, o con `--ruff/--mypy` explícitos.
   Contrato idéntico al Java: reporte ausente = el gate no corrió (jamás acredita fixes).
 
+  TypeScript/JS (`type: node`, kit 1.5.0):
+
+  | dato        | comando                                           | archivo |
+  |-------------|---------------------------------------------------|---------|
+  | coverage    | `jest --coverage` (o vitest con reporter lcov)    | `coverage/lcov.info` (mismo parser que Flutter) |
+  | test count  | `jest-junit` / `vitest --reporter=junit`          | `reports/junit.xml` o `junit.xml` (root envuelto soportado) |
+  | eslint      | `eslint . --format json > reports/eslint.json`    | `reports/eslint.json` (error→HIGH · warn→MEDIUM · `security/*` floor HIGH · ruleId null→HIGH) |
+  | tsc         | `tsc --noEmit > reports/tsc.txt`                  | `reports/tsc.txt` (error TS → HIGH) |
+
+  `ingest-gate` los encuentra por type del repo, o con `--eslint/--tsc` explícitos.
+  Mismo contrato de ausencia.
+
 ## Instalación
 
 **Opción A — por proyecto** (recomendado para suites multi-repo): copiá `.claude/` al
@@ -112,7 +124,7 @@ cp -r dev-loop-kit/.claude/skills/sys-doc   ~/.claude/skills/
 
 Editá `dev-loop.config.json`:
 
-- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`|`python`).
+- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`|`python`|`node`).
 - `defaults.coverage_threshold`: dispara la fase de characterization si está por debajo.
 - `defaults.severity_gate`: qué severidades bloquean (default BLOCKER/CRITICAL/HIGH).
 - `defaults.id_granularity`: `line` o `file` (default `file`: más estable si refactorizás mucho).

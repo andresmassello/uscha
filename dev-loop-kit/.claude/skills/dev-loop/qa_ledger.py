@@ -64,13 +64,15 @@ SKIP_DIRS = {
     "target", "build", ".git", ".idea", ".gradle", "node_modules",
     ".dart_tool", "out", "bin", "dist", ".mvn", "generated", "generated-sources",
     ".venv", "venv", ".tox", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
+    "coverage", ".next", ".turbo",
 }
 
 SOURCE_EXT = {
     "maven": {".java", ".kt"},
     "flutter": {".dart"},
     "python": {".py"},
-    "generic": {".java", ".kt", ".dart", ".py"},
+    "node": {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"},
+    "generic": {".java", ".kt", ".dart", ".py", ".ts", ".js"},
 }
 
 
@@ -150,7 +152,8 @@ def maven_coverage(repo_path):
 
 
 def flutter_coverage(repo_path):
-    """Parse coverage/lcov.info — sum LF (found) / LH (hit)."""
+    """Parse coverage/lcov.info — sum LF (found) / LH (hit).
+    Shared by flutter AND node (jest/vitest --coverage emit the same lcov)."""
     lcov = glob.glob(os.path.join(repo_path, "**", "coverage", "lcov.info"),
                      recursive=True)
     found = hit = 0
@@ -202,7 +205,7 @@ def coverage(repo_path, repo_type):
         return maven_coverage(repo_path)
     if repo_type == "python":
         return python_coverage(repo_path)
-    return flutter_coverage(repo_path)
+    return flutter_coverage(repo_path)  # flutter + node: both emit lcov
 
 
 # --------------------------------------------------------------------------- #
@@ -261,11 +264,11 @@ def flutter_test_count(repo_path):
             "approximate": True}
 
 
-def python_test_count(repo_path):
-    """JUnit XML from `pytest --junitxml=...`. Modern pytest (xunit2 family)
-    WRAPS the root: <testsuites><testsuite tests=...>. Older/other emitters use
-    <testsuite> as the root. Handle both — reading attrs off a <testsuites>
-    root would silently count 0."""
+def junit_test_count(repo_path):
+    """JUnit-family XML: `pytest --junitxml=...` (python) and jest-junit /
+    vitest --reporter=junit (node). Modern emitters WRAP the root:
+    <testsuites><testsuite tests=...>; older ones use <testsuite> as the root.
+    Handle both — reading attrs off a <testsuites> root would silently count 0."""
     # first LOCATION wins (mirrors python_coverage): each junit.xml is a FULL-run
     # report — summing locations would double-count, and a stale root junit.xml
     # next to a fresh reports/junit.xml could permanently veto convergence.
@@ -305,8 +308,8 @@ def python_test_count(repo_path):
 def test_count(repo_path, repo_type):
     if repo_type == "maven":
         return maven_test_count(repo_path)
-    if repo_type == "python":
-        return python_test_count(repo_path)
+    if repo_type in ("python", "node"):
+        return junit_test_count(repo_path)
     return flutter_test_count(repo_path)
 
 
@@ -315,12 +318,18 @@ def test_count(repo_path, repo_type):
 # --------------------------------------------------------------------------- #
 def _is_test_path(rel, repo_type):
     parts = rel.replace("\\", "/").split("/")
+    fn = parts[-1]
     if repo_type == "flutter":
         return parts and parts[0] == "test"
     if repo_type == "python":
-        fn = parts[-1]
         return ("tests" in parts or "test" in parts
                 or fn.startswith("test_") or fn.endswith("_test.py"))
+    if repo_type == "node":
+        base = fn.lower()
+        return ("__tests__" in parts or "tests" in parts or "test" in parts
+                or any(base.endswith(suf) for suf in
+                       (".test.ts", ".test.tsx", ".test.js", ".test.jsx",
+                        ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx")))
     return "test" in parts and "src" in parts  # src/test/...
 
 
@@ -328,8 +337,8 @@ def _is_prod_path(rel, repo_type):
     parts = rel.replace("\\", "/").split("/")
     if repo_type == "flutter":
         return parts and parts[0] == "lib"
-    if repo_type == "python":
-        # src layout or root package — anything .py that isn't a test
+    if repo_type in ("python", "node"):
+        # src layout or root package — any source file that isn't a test
         return not _is_test_path(rel, repo_type)
     return "main" in parts and "src" in parts  # src/main/...
 
@@ -561,6 +570,97 @@ def parse_mypy(path, granularity):
     return out
 
 
+def _mk_id_rel(tool, rule, rel, line, granularity):
+    """Like _mk_id but PRESERVES a repo-relative path. Node layouts often have no
+    src/ anchor and dozens of same-named files (page.tsx, route.ts, index.ts) —
+    collapsing to basename would collide finding IDs across directories."""
+    loc = (rel or "?").replace("\\", "/")
+    if granularity == "file":
+        return f"{tool}:{rule}:{loc}"
+    return f"{tool}:{rule}:{loc}:{line}"
+
+
+def _node_rel(fname, base):
+    if fname and base and os.path.isabs(fname):
+        try:
+            return os.path.relpath(fname, base)
+        except ValueError:  # different drive on Windows
+            return fname
+    return fname or "?"
+
+
+def parse_eslint(path, granularity, base=None):
+    """`eslint --format json` — array of {filePath, messages:[{ruleId, severity,
+    line, fatal}]}. fatal:true (parse error) -> HIGH always. ruleId null WITHOUT
+    fatal (e.g. unused eslint-disable directives in ESLint 9) follows the message
+    severity — never a false blocker. severity 2 -> HIGH, 1 -> MEDIUM; rules from
+    security plugins ('security/...') floored to HIGH."""
+    out = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return out
+    if not isinstance(data, list):
+        return out
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        fname = _node_rel(entry.get("filePath"), base)
+        for msg in entry.get("messages") or []:
+            if not isinstance(msg, dict):
+                continue
+            rule = msg.get("ruleId")
+            if msg.get("fatal"):
+                sev, rule = "HIGH", "syntax-error"
+            elif rule is None:
+                sev = "HIGH" if msg.get("severity") == 2 else "MEDIUM"
+                rule = "unused-directive"
+            else:
+                sev = "HIGH" if msg.get("severity") == 2 else "MEDIUM"
+                if rule.startswith("security/"):
+                    sev = _bump(sev, "HIGH")
+            out.append((_mk_id_rel("eslint", rule, fname, msg.get("line", 0),
+                                   granularity), sev, "eslint"))
+    return out
+
+
+_TSC_LINE = re.compile(
+    r"^(?P<file>(?:[A-Za-z]:)?[^(\n]+\.(?:ts|tsx|js|jsx|mts|cts))"
+    r"\((?P<line>\d+),\d+\):\s*(?P<kind>error|warning)\s+(?P<code>TS\d+):")
+# config-level/global tsc errors carry NO file prefix (TS18003 no inputs,
+# TS5023 unknown option, TS2688 missing types) — dropping them would make a
+# broken tsconfig (that checked NOTHING) read as a clean green gate.
+_TSC_GLOBAL = re.compile(r"^(?P<kind>error|warning)\s+(?P<code>TS\d+):")
+
+
+def parse_tsc(path, granularity, base=None):
+    """tsc --noEmit text output (`file(line,col): error TSxxxx: msg`):
+    error -> HIGH (a type error is real breakage), warning -> MEDIUM.
+    File-less global errors (broken tsconfig) -> HIGH with location '?'."""
+    out = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            for raw in fh:
+                s = raw.strip()
+                m = _TSC_LINE.match(s)
+                if m:
+                    sev = "HIGH" if m.group("kind") == "error" else "MEDIUM"
+                    out.append((_mk_id_rel("tsc", m.group("code"),
+                                           _node_rel(m.group("file"), base),
+                                           m.group("line"), granularity),
+                                sev, "tsc"))
+                    continue
+                g = _TSC_GLOBAL.match(s)
+                if g:
+                    sev = "HIGH" if g.group("kind") == "error" else "MEDIUM"
+                    out.append((_mk_id_rel("tsc", g.group("code"), "?", 0,
+                                           granularity), sev, "tsc"))
+    except OSError:
+        return out
+    return out
+
+
 def _prev_finding_ids(node, tool):
     for s in reversed(node["iterations"]):
         if s.get("tool") == tool and s.get("finding_ids") is not None:
@@ -715,6 +815,19 @@ def cmd_ingest_gate(args):
             collected += parse_mypy(path, gran)
         if mypy_files:
             present.add("mypy")
+    elif rtype == "node":
+        es_files = _find_all(base, [os.path.join("reports", "eslint.json"),
+                                    "eslint.json"], args.eslint)
+        for path in es_files:
+            collected += parse_eslint(path, gran, base)
+        if es_files:
+            present.add("eslint")
+        tsc_files = _find_all(base, [os.path.join("reports", "tsc.txt"),
+                                     "tsc.txt"], args.tsc)
+        for path in tsc_files:
+            collected += parse_tsc(path, gran, base)
+        if tsc_files:
+            present.add("tsc")
     else:
         cs_files = _find_all(base, ["**/target/checkstyle-result.xml",
                                     "**/checkstyle-result.xml"], args.checkstyle)
@@ -734,7 +847,8 @@ def cmd_ingest_gate(args):
         if sb_files:
             present.update({"spotbugs", "findsecbugs"})
 
-    combined_name = "python-qa-gate" if rtype == "python" else "java-qa-gate"
+    combined_name = {"python": "python-qa-gate",
+                     "node": "node-qa-gate"}.get(rtype, "java-qa-gate")
     by_tool = {}
     for fid, sev, tool in collected:
         by_tool.setdefault(tool, []).append((fid, sev))
@@ -785,8 +899,8 @@ def cmd_ingest_gate(args):
     _save(args.ledger, ledger)
 
     if not results:
-        flags = ("--ruff/--mypy" if rtype == "python"
-                 else "--checkstyle/--pmd/--spotbugs")
+        flags = {"python": "--ruff/--mypy", "node": "--eslint/--tsc"}.get(
+            rtype, "--checkstyle/--pmd/--spotbugs")
         print(f"[qa_ledger] ingest-gate {args.repo}: no linter reports found under "
               f"'{base}'. Run the linters first, or pass explicit {flags} paths.")
         return
@@ -1191,10 +1305,11 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
     cov = coverage(cfg.get("path", "."), rtype)
     cov_dim = min(cov["pct"] / threshold, 1.0) if threshold else 0.0
     gated_open, sev = _gate_open_and_sev(node)
-    # silence is not success: for a lint-capable repo (maven/python — the types the
-    # ingest parsers support) with NO static-gate record ever logged, the dimension is
-    # UNMEASURED (0.0), not a perfect 1.0. A tool that didn't run is never green.
-    static_unmeasured = rtype in ("maven", "python") and not _latest_static_by_tool(node)
+    # silence is not success: for a lint-capable repo (maven/python/node — the types
+    # the ingest parsers support) with NO static-gate record ever logged, the dimension
+    # is UNMEASURED (0.0), not a perfect 1.0. A tool that didn't run is never green.
+    static_unmeasured = (rtype in ("maven", "python", "node")
+                         and not _latest_static_by_tool(node))
     if static_unmeasured:
         static_dim = 0.0
     else:
@@ -2416,9 +2531,13 @@ def build_parser():
                     help="(type: python) explicit ruff JSON report path")
     pg.add_argument("--mypy", default=None,
                     help="(type: python) explicit mypy text report path")
+    pg.add_argument("--eslint", default=None,
+                    help="(type: node) explicit eslint JSON report path")
+    pg.add_argument("--tsc", default=None,
+                    help="(type: node) explicit tsc text report path")
     pg.add_argument("--combined", action="store_true",
-                    help="log one combined 'java-qa-gate'/'python-qa-gate' step "
-                         "instead of one per linter")
+                    help="log one combined 'java-qa-gate'/'python-qa-gate'/"
+                         "'node-qa-gate' step instead of one per linter")
     pg.add_argument("--id-granularity", default=None, choices=["line", "file"],
                     help="finding-ID granularity for fixed/oscillation diffing")
     pg.add_argument("--note", default=None)

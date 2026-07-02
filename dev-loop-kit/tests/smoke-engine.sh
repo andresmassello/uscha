@@ -2,8 +2,9 @@
 # smoke-engine.sh — suite de smoke del motor qa_ledger.py contra un ledger SINTÉTICO.
 # Valida el cableado de los fact gates (v1.3.0): log-gate, flag-blocker,
 # resolve-escalation, UNMEASURED, convergencia per-tool, gate-check, golden-diff,
-# spec-check estructural, simplicity floor, oscillation — y el adapter python
-# (v1.4.0): coverage Cobertura, junit envuelto, LOC, ruff/mypy, UNMEASURED python.
+# spec-check estructural, simplicity floor, oscillation — el adapter python
+# (v1.4.0): coverage Cobertura, junit envuelto, LOC, ruff/mypy, UNMEASURED python —
+# y el adapter node (v1.5.0): lcov, jest-junit, LOC ts, eslint/tsc, UNMEASURED node.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -23,7 +24,7 @@ if [ -z "$PY" ]; then
   done
 fi
 [ -n "$PY" ] || { echo "FAIL: no hay Python funcional en PATH"; exit 1; }
-SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b" "$SB/repo-c"
+SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b" "$SB/repo-c" "$SB/repo-d"
 cd "$SB"
 
 PASS=0; FAIL=0
@@ -43,7 +44,8 @@ cat > dev-loop.config.json <<'EOF'
     "acceptance_file": "ACCEPTANCE.md" },
   "repos": [ {"name":"repo-a","path":"repo-a","type":"maven"},
              {"name":"repo-b","path":"repo-b","type":"flutter"},
-             {"name":"repo-c","path":"repo-c","type":"python"} ],
+             {"name":"repo-c","path":"repo-c","type":"python"},
+             {"name":"repo-d","path":"repo-d","type":"node"} ],
   "integration": {"enabled": false} }
 EOF
 printf -- "# ACCEPTANCE\n\n- [x] criterio uno\n- [ ] criterio dos\n" > ACCEPTANCE.md
@@ -150,6 +152,39 @@ echo "$ING" | grep -q "repo-c/mypy: reported=1 gated=1" && { PASS=$((PASS+1)); e
 run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-c" \
   && { FAIL=$((FAIL+1)); echo "  FAIL repo-c sigue UNMEASURED tras ingest"; } \
   || { PASS=$((PASS+1)); echo "  ok   repo-c ya no es UNMEASURED tras ingest"; }
+
+echo "== T15 adapter node: lcov + junit envuelto + LOC ts =="
+mkdir -p repo-d/src repo-d/reports repo-d/coverage
+printf 'export function f(): number {\n  return 1;\n}\nexport const X = 2;\n' > repo-d/src/app.ts
+printf 'import { f } from "./app";\ntest("f", () => expect(f()).toBe(1));\n' > repo-d/src/app.test.ts
+printf 'SF:src/app.ts\nLF:10\nLH:9\nend_of_record\n' > repo-d/coverage/lcov.info
+cat > repo-d/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="jest" tests="7" failures="0" errors="0" skipped="0"/></testsuites>
+EOF
+SNAPD=$(run snapshot --repo repo-d 2>&1)
+echo "$SNAPD" | grep -q "coverage=90.0%" && { PASS=$((PASS+1)); echo "  ok   coverage lcov 9/10 -> 90.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL coverage node ($SNAPD)"; }
+echo "$SNAPD" | grep -q "tests=7" && { PASS=$((PASS+1)); echo "  ok   junit envuelto (jest-junit) -> 7 tests"; } || { FAIL=$((FAIL+1)); echo "  FAIL test count node ($SNAPD)"; }
+echo "$SNAPD" | grep -q "prod_loc=4, test_loc=2" && { PASS=$((PASS+1)); echo "  ok   LOC prod=4 (.ts) / test=2 (.test.ts) bien clasificado"; } || { FAIL=$((FAIL+1)); echo "  FAIL LOC node ($SNAPD)"; }
+
+echo "== T16 node UNMEASURED pre-ingest / eslint+tsc post-ingest =="
+run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-d" \
+  && { PASS=$((PASS+1)); echo "  ok   repo-d UNMEASURED antes del ingest"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL repo-d no aparece como UNMEASURED"; }
+cat > repo-d/reports/eslint.json <<'EOF'
+[{"filePath":"src/app.ts","messages":[
+  {"ruleId":"security/detect-eval-with-expression","severity":1,"line":2},
+  {"ruleId":"prefer-const","severity":1,"line":4},
+  {"ruleId":null,"severity":1,"line":5},
+  {"ruleId":null,"severity":2,"line":9,"fatal":true}]}]
+EOF
+printf 'src/app.ts(2,3): error TS2322: Type mismatch.\nerror TS18003: No inputs were found in config file.\n' > repo-d/reports/tsc.txt
+INGD=$(run ingest-gate --repo repo-d --iteration 1 2>&1)
+echo "$INGD" | grep -q "repo-d/eslint: reported=4 gated=2" && { PASS=$((PASS+1)); echo "  ok   eslint: security floor + fatal = HIGH; null NO-fatal (ESLint 9) = MEDIUM, no bloquea"; } || { FAIL=$((FAIL+1)); echo "  FAIL eslint ($INGD)"; }
+echo "$INGD" | grep -q "repo-d/tsc: reported=2 gated=2" && { PASS=$((PASS+1)); echo "  ok   tsc: error con archivo + error GLOBAL sin archivo (tsconfig roto) = HIGH"; } || { FAIL=$((FAIL+1)); echo "  FAIL tsc ($INGD)"; }
+run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-d" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL repo-d sigue UNMEASURED tras ingest"; } \
+  || { PASS=$((PASS+1)); echo "  ok   repo-d ya no es UNMEASURED tras ingest"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
