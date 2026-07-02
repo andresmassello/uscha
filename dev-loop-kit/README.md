@@ -100,7 +100,17 @@ ANTES de tocar nada.
   `ingest-gate` los encuentra por type del repo, o con `--eslint/--tsc` explícitos.
   Mismo contrato de ausencia.
 
-## Instalación
+  Go (`type: go`, kit 1.6.0):
+
+  | dato        | comando                                           | archivo |
+  |-------------|---------------------------------------------------|---------|
+  | coverage    | `go test -coverprofile=coverage.out ./...`        | `coverage.out` (cover profile nativo — % por SENTENCIAS, la convención Go) |
+  | test count  | `gotestsum --junitfile reports/junit.xml -- ./...`| `reports/junit.xml` (JUnit envuelto soportado) |
+  | golangci    | `golangci-lint run --out-format checkstyle > reports/golangci.xml` | `reports/golangci.xml` (formato checkstyle: error→HIGH · warning→MEDIUM; incluye gosec si está habilitado) |
+
+  `ingest-gate` lo encuentra por type del repo, o con `--golangci` explícito. Los tests
+  `_test.go` viven junto al código (convención Go) — el LOC los clasifica por sufijo.
+  `vendor/` y `testdata/` quedan fuera del LOC. Mismo contrato de ausencia.
 
 **Opción A — por proyecto** (recomendado para suites multi-repo): copiá `.claude/` al
 repo primario y `dev-loop.config.json` a la raíz de ese repo.
@@ -124,7 +134,7 @@ cp -r dev-loop-kit/.claude/skills/sys-doc   ~/.claude/skills/
 
 Editá `dev-loop.config.json`:
 
-- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`|`python`|`node`).
+- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`|`python`|`node`|`go`).
 - `defaults.coverage_threshold`: dispara la fase de characterization si está por debajo.
 - `defaults.severity_gate`: qué severidades bloquean (default BLOCKER/CRITICAL/HIGH).
 - `defaults.id_granularity`: `line` o `file` (default `file`: más estable si refactorizás mucho).

@@ -65,6 +65,7 @@ SKIP_DIRS = {
     ".dart_tool", "out", "bin", "dist", ".mvn", "generated", "generated-sources",
     ".venv", "venv", ".tox", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
     "coverage", ".next", ".turbo",
+    "vendor", "testdata",
 }
 
 SOURCE_EXT = {
@@ -72,7 +73,8 @@ SOURCE_EXT = {
     "flutter": {".dart"},
     "python": {".py"},
     "node": {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"},
-    "generic": {".java", ".kt", ".dart", ".py", ".ts", ".js"},
+    "go": {".go"},
+    "generic": {".java", ".kt", ".dart", ".py", ".ts", ".js", ".go"},
 }
 
 
@@ -200,11 +202,49 @@ def python_coverage(repo_path):
             "report_found": True}
 
 
+def go_coverage(repo_path):
+    """Go cover profile (`go test -coverprofile=coverage.out ./...`): lines of the
+    form `import/path/file.go:S.C,E.C numStatements hitCount` — STATEMENT coverage,
+    the Go convention. First match wins: coverage.out, cover.out,
+    reports/coverage.out. An empty profile (mode line only) scores 0.0 — fail-closed,
+    never an invented green."""
+    path = next((p for p in (os.path.join(repo_path, "coverage.out"),
+                             os.path.join(repo_path, "cover.out"),
+                             os.path.join(repo_path, "reports", "coverage.out"))
+                 if os.path.isfile(p)), None)
+    if not path:
+        return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
+    covered = total = 0
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                s = line.strip()
+                if not s or s.startswith("mode:"):
+                    continue
+                parts = s.split()
+                if len(parts) != 3:
+                    continue
+                try:
+                    n, hits = int(parts[1]), int(parts[2])
+                except ValueError:
+                    continue
+                total += n
+                if hits > 0:
+                    covered += n
+    except OSError:
+        return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
+    pct = round(covered / total * 100, 2) if total else 0.0
+    return {"covered": covered, "missed": total - covered, "pct": pct,
+            "report_found": True}
+
+
 def coverage(repo_path, repo_type):
     if repo_type == "maven":
         return maven_coverage(repo_path)
     if repo_type == "python":
         return python_coverage(repo_path)
+    if repo_type == "go":
+        return go_coverage(repo_path)
     return flutter_coverage(repo_path)  # flutter + node: both emit lcov
 
 
@@ -308,8 +348,8 @@ def junit_test_count(repo_path):
 def test_count(repo_path, repo_type):
     if repo_type == "maven":
         return maven_test_count(repo_path)
-    if repo_type in ("python", "node"):
-        return junit_test_count(repo_path)
+    if repo_type in ("python", "node", "go"):
+        return junit_test_count(repo_path)  # go: gotestsum --junitfile
     return flutter_test_count(repo_path)
 
 
@@ -330,6 +370,8 @@ def _is_test_path(rel, repo_type):
                 or any(base.endswith(suf) for suf in
                        (".test.ts", ".test.tsx", ".test.js", ".test.jsx",
                         ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx")))
+    if repo_type == "go":
+        return fn.endswith("_test.go")  # the Go convention: tests live next to code
     return "test" in parts and "src" in parts  # src/test/...
 
 
@@ -337,7 +379,7 @@ def _is_prod_path(rel, repo_type):
     parts = rel.replace("\\", "/").split("/")
     if repo_type == "flutter":
         return parts and parts[0] == "lib"
-    if repo_type in ("python", "node"):
+    if repo_type in ("python", "node", "go"):
         # src layout or root package — any source file that isn't a test
         return not _is_test_path(rel, repo_type)
     return "main" in parts and "src" in parts  # src/main/...
@@ -442,7 +484,9 @@ def _find_all(base, patterns, explicit):
     return sorted(set(found))
 
 
-def parse_checkstyle(path, granularity):
+def parse_checkstyle(path, granularity, tool="checkstyle"):
+    """Checkstyle-format XML. Also emitted by golangci-lint (--out-format
+    checkstyle) — pass tool="golangci" so findings/IDs carry the real gate name."""
     out = []
     try:
         root = ET.parse(path).getroot()
@@ -453,8 +497,8 @@ def parse_checkstyle(path, granularity):
         for e in _iter_local(f, "error"):
             sev = CHECKSTYLE_SEVERITY.get((e.get("severity") or "warning").lower(), "MEDIUM")
             rule = (e.get("source") or "?").split(".")[-1]
-            out.append((_mk_id("checkstyle", rule, fname, e.get("line", "0"), granularity),
-                        sev, "checkstyle"))
+            out.append((_mk_id(tool, rule, fname, e.get("line", "0"), granularity),
+                        sev, tool))
     return out
 
 
@@ -828,6 +872,13 @@ def cmd_ingest_gate(args):
             collected += parse_tsc(path, gran, base)
         if tsc_files:
             present.add("tsc")
+    elif rtype == "go":
+        gl_files = _find_all(base, [os.path.join("reports", "golangci.xml"),
+                                    "golangci.xml"], args.golangci)
+        for path in gl_files:
+            collected += parse_checkstyle(path, gran, tool="golangci")
+        if gl_files:
+            present.add("golangci")
     else:
         cs_files = _find_all(base, ["**/target/checkstyle-result.xml",
                                     "**/checkstyle-result.xml"], args.checkstyle)
@@ -848,7 +899,8 @@ def cmd_ingest_gate(args):
             present.update({"spotbugs", "findsecbugs"})
 
     combined_name = {"python": "python-qa-gate",
-                     "node": "node-qa-gate"}.get(rtype, "java-qa-gate")
+                     "node": "node-qa-gate",
+                     "go": "go-qa-gate"}.get(rtype, "java-qa-gate")
     by_tool = {}
     for fid, sev, tool in collected:
         by_tool.setdefault(tool, []).append((fid, sev))
@@ -899,8 +951,8 @@ def cmd_ingest_gate(args):
     _save(args.ledger, ledger)
 
     if not results:
-        flags = {"python": "--ruff/--mypy", "node": "--eslint/--tsc"}.get(
-            rtype, "--checkstyle/--pmd/--spotbugs")
+        flags = {"python": "--ruff/--mypy", "node": "--eslint/--tsc",
+                 "go": "--golangci"}.get(rtype, "--checkstyle/--pmd/--spotbugs")
         print(f"[qa_ledger] ingest-gate {args.repo}: no linter reports found under "
               f"'{base}'. Run the linters first, or pass explicit {flags} paths.")
         return
@@ -1305,10 +1357,11 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
     cov = coverage(cfg.get("path", "."), rtype)
     cov_dim = min(cov["pct"] / threshold, 1.0) if threshold else 0.0
     gated_open, sev = _gate_open_and_sev(node)
-    # silence is not success: for a lint-capable repo (maven/python/node — the types
-    # the ingest parsers support) with NO static-gate record ever logged, the dimension
-    # is UNMEASURED (0.0), not a perfect 1.0. A tool that didn't run is never green.
-    static_unmeasured = (rtype in ("maven", "python", "node")
+    # silence is not success: for a lint-capable repo (maven/python/node/go — the
+    # types the ingest parsers support) with NO static-gate record ever logged, the
+    # dimension is UNMEASURED (0.0), not a perfect 1.0. A tool that didn't run is
+    # never green.
+    static_unmeasured = (rtype in ("maven", "python", "node", "go")
                          and not _latest_static_by_tool(node))
     if static_unmeasured:
         static_dim = 0.0
@@ -2535,6 +2588,8 @@ def build_parser():
                     help="(type: node) explicit eslint JSON report path")
     pg.add_argument("--tsc", default=None,
                     help="(type: node) explicit tsc text report path")
+    pg.add_argument("--golangci", default=None,
+                    help="(type: go) explicit golangci-lint checkstyle XML path")
     pg.add_argument("--combined", action="store_true",
                     help="log one combined 'java-qa-gate'/'python-qa-gate'/"
                          "'node-qa-gate' step instead of one per linter")

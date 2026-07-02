@@ -1,6 +1,6 @@
 # ADDENDUM al HANDOFF del adapter Python (revisión verificada contra el engine real)
 
-**Contexto:** la sesión PILOT-PROJECT escribe (o escribió) el diseño del adapter `type: python`
+**Contexto:** la sesión del proyecto piloto escribe (o escribió) el diseño del adapter `type: python`
 en `docs/HANDOFF_python-adapter_dev-loop-kit.md`. Esta revisión se hizo desde una sesión
 con contexto profundo del engine (la que cableó v1.3.0) verificando cada claim contra
 `dev-loop-kit/.claude/skills/dev-loop/qa_ledger.py` en HEAD. **La sesión ejecutora debe

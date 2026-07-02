@@ -1,15 +1,15 @@
 # HANDOFF: Adapter `type: python` para el engine de spec-loop (qa_ledger.py)
 
-> Diseño generado en la sesión PILOT-PROJECT (2026-07-02), persistido acá por la sesión SpecLoop
+> Diseño generado en la sesión del proyecto piloto (2026-07-02), persistido acá por la sesión SpecLoop
 > que lo ejecuta. **Leer junto con `HANDOFF_python-adapter_ADDENDUM.md`** (revisión
 > verificada contra el engine: 2 bugs A1/A2 + ya-cubierto A3 + CLI A4 + SKIP_DIRS A5).
 
 ## Contexto
 
-PILOT-PROJECT va a ser el caso de dogfooding real de spec-loop (el pendiente declarado del README
+El proyecto piloto (Python) va a ser el caso de dogfooding real de spec-loop (el pendiente declarado del README
 de SpecLoop). Bloqueante: `qa_ledger.py` v1.3.0 solo soporta `type: maven|flutter` —
-PILOT-PROJECT es Python (pytest + ruff + mypy + coverage.py). Sin adapter, `snapshot`/
-`check-coverage`/`ingest-gate` no pueden medir PILOT-PROJECT y el loop no tiene evidencia.
+el piloto es Python (pytest + ruff + mypy + coverage.py). Sin adapter, `snapshot`/
+`check-coverage`/`ingest-gate` no pueden medir el repo piloto y el loop no tiene evidencia.
 
 ## Diseño del adapter
 
@@ -77,14 +77,14 @@ Target: `dev-loop-kit/.claude/skills/dev-loop/qa_ledger.py` (stdlib-only, Python
 ## Criterios de éxito (definidos ANTES de correr — pueden dar que NO)
 
 1. `bash dev-loop-kit/tests/smoke-engine.sh` exit 0, incluyendo los checks python nuevos.
-2. Dry-run contra PILOT-PROJECT real (solo lectura, desde la sesión PILOT-PROJECT): `init` + `snapshot
-   --repo faro` + `check-coverage` + `ingest-gate` + `summary` producen datos correctos
+2. Dry-run contra el repo piloto real (solo lectura, desde la sesión del proyecto piloto): `init` + `snapshot
+   --repo <repo-piloto>` + `check-coverage` + `ingest-gate` + `summary` producen datos correctos
    — coverage % coincide con el reporte de pytest-cov (±0.1), test count = el real
-   (hoy 177), findings de ruff/mypy = 0 (repo limpio) sin marcar UNMEASURED.
+   (el conteo real de la suite del piloto), findings de ruff/mypy = 0 (repo limpio) sin marcar UNMEASURED.
 3. Reporte ausente ⇒ UNMEASURED, jamás 0 inventado (verificado por check de smoke).
 4. Ningún cambio rompe maven/flutter: los checks existentes del smoke siguen verdes.
 
-## Después de esto (fases separadas, sesión PILOT-PROJECT)
+## Después de esto (fases separadas, sesión del proyecto piloto)
 
 Consumir el kit 1.4.0 — copiar skills + config con `type: python`, generar los reportes
 y correr el dry-run del criterio 2. Recién entonces: on-ramp (CONSTITUTION desde los

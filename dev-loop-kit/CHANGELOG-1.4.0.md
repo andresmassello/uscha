@@ -56,11 +56,11 @@ incorporados). Smoke suite: 24/24 (17 existentes maven/flutter intactos + 7 pyth
   junit ENVUELTO → 5 tests, LOC prod=3/test=2, ruff 2 findings (1 gateado),
   mypy 1 error (gateado), UNMEASURED pre-ingest → medido post-ingest.
 
-## Criterio pendiente (fase PILOT-PROJECT)
+## Criterio pendiente (fase piloto)
 
-Criterio 2 del HANDOFF — dry-run de solo lectura contra el repo PILOT-PROJECT real
+Criterio 2 del HANDOFF — dry-run de solo lectura contra el repo piloto real
 (coverage ±0.1 vs pytest-cov, test count exacto, ruff/mypy en 0 sin UNMEASURED).
-Se corre desde la sesión PILOT-PROJECT consumiendo este kit.
+Se corre desde la sesión del proyecto piloto consumiendo este kit.
 
 ## Diferido consciente (sin cambios desde 1.3.0)
 

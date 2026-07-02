@@ -4,7 +4,8 @@
 # resolve-escalation, UNMEASURED, convergencia per-tool, gate-check, golden-diff,
 # spec-check estructural, simplicity floor, oscillation — el adapter python
 # (v1.4.0): coverage Cobertura, junit envuelto, LOC, ruff/mypy, UNMEASURED python —
-# y el adapter node (v1.5.0): lcov, jest-junit, LOC ts, eslint/tsc, UNMEASURED node.
+# el adapter node (v1.5.0): lcov, jest-junit, LOC ts, eslint/tsc, UNMEASURED node —
+# y el adapter go (v1.6.0): cover profile, gotestsum, LOC _test.go, golangci.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -24,7 +25,7 @@ if [ -z "$PY" ]; then
   done
 fi
 [ -n "$PY" ] || { echo "FAIL: no hay Python funcional en PATH"; exit 1; }
-SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b" "$SB/repo-c" "$SB/repo-d"
+SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b" "$SB/repo-c" "$SB/repo-d" "$SB/repo-e"
 cd "$SB"
 
 PASS=0; FAIL=0
@@ -45,7 +46,8 @@ cat > dev-loop.config.json <<'EOF'
   "repos": [ {"name":"repo-a","path":"repo-a","type":"maven"},
              {"name":"repo-b","path":"repo-b","type":"flutter"},
              {"name":"repo-c","path":"repo-c","type":"python"},
-             {"name":"repo-d","path":"repo-d","type":"node"} ],
+             {"name":"repo-d","path":"repo-d","type":"node"},
+             {"name":"repo-e","path":"repo-e","type":"go"} ],
   "integration": {"enabled": false} }
 EOF
 printf -- "# ACCEPTANCE\n\n- [x] criterio uno\n- [ ] criterio dos\n" > ACCEPTANCE.md
@@ -185,6 +187,43 @@ echo "$INGD" | grep -q "repo-d/tsc: reported=2 gated=2" && { PASS=$((PASS+1)); e
 run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-d" \
   && { FAIL=$((FAIL+1)); echo "  FAIL repo-d sigue UNMEASURED tras ingest"; } \
   || { PASS=$((PASS+1)); echo "  ok   repo-d ya no es UNMEASURED tras ingest"; }
+
+echo "== T17 adapter go: cover profile nativo + gotestsum junit + LOC _test.go =="
+mkdir -p repo-e/pkg repo-e/reports
+printf 'package pkg\nfunc F() int {\nreturn 1\n}\n' > repo-e/pkg/mod.go
+printf 'package pkg\nfunc TestF(t *T) {}\n' > repo-e/pkg/mod_test.go
+cat > repo-e/coverage.out <<'EOF'
+mode: set
+example.com/m/pkg/mod.go:2.15,4.2 3 1
+example.com/m/pkg/mod.go:6.2,8.3 2 0
+EOF
+cat > repo-e/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="gotestsum" tests="4" failures="0" errors="0" skipped="0"/></testsuites>
+EOF
+SNAPE=$(run snapshot --repo repo-e 2>&1)
+echo "$SNAPE" | grep -q "coverage=60.0%" && { PASS=$((PASS+1)); echo "  ok   cover profile 3/5 stmts -> 60.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL coverage go ($SNAPE)"; }
+echo "$SNAPE" | grep -q "tests=4" && { PASS=$((PASS+1)); echo "  ok   gotestsum junit envuelto -> 4 tests"; } || { FAIL=$((FAIL+1)); echo "  FAIL test count go ($SNAPE)"; }
+echo "$SNAPE" | grep -q "prod_loc=4, test_loc=2" && { PASS=$((PASS+1)); echo "  ok   LOC prod=4 (mod.go) / test=2 (_test.go junto al codigo)"; } || { FAIL=$((FAIL+1)); echo "  FAIL LOC go ($SNAPE)"; }
+
+echo "== T18 go UNMEASURED pre-ingest / golangci (checkstyle reusado) post-ingest =="
+run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-e" \
+  && { PASS=$((PASS+1)); echo "  ok   repo-e UNMEASURED antes del ingest"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL repo-e no aparece como UNMEASURED"; }
+cat > repo-e/reports/golangci.xml <<'EOF'
+<?xml version="1.0"?>
+<checkstyle version="5.0">
+  <file name="pkg/mod.go">
+    <error line="3" severity="error" message="G104: unhandled error" source="gosec"/>
+    <error line="7" severity="warning" message="var x is unused" source="unused"/>
+  </file>
+</checkstyle>
+EOF
+INGE=$(run ingest-gate --repo repo-e --iteration 1 2>&1)
+echo "$INGE" | grep -q "repo-e/golangci: reported=2 gated=1" && { PASS=$((PASS+1)); echo "  ok   golangci via parse_checkstyle: error=HIGH gateado, warning=MEDIUM"; } || { FAIL=$((FAIL+1)); echo "  FAIL golangci ($INGE)"; }
+run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-e" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL repo-e sigue UNMEASURED tras ingest"; } \
+  || { PASS=$((PASS+1)); echo "  ok   repo-e ya no es UNMEASURED tras ingest"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
