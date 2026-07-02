@@ -17,8 +17,9 @@ mismo.
 4. **Cero referencias a proyectos/clientes**: el kit y los docs son genéricos
    (repos de ejemplo: `backend-api`/`mobile-app`). Verificar con grep antes de commitear
    (ojo: `rg` necesita `--hidden` para ver `.claude/`).
-5. **Cambios al engine llevan smoke test**: los subcomandos nuevos o tocados se prueban
-   contra un ledger sintético ANTES de commitear (ver CHANGELOG-1.3.0 §smokes).
+5. **Cambios al engine llevan smoke test**: `bash dev-loop-kit/tests/smoke-engine.sh`
+   tiene que salir 0 ANTES de commitear cualquier cambio a `qa_ledger.py`. Si el cambio
+   agrega comportamiento, se agrega su check a la suite en el mismo commit.
 6. **Versionado**: bump de `VERSION` + `dev-loop.config.json` + `CHANGELOG-X.Y.Z.md`
    en el mismo commit. Los tres tienen que coincidir.
 7. **Commits convencionales** (`feat:`, `fix:`, `docs:`…), chicos y atómicos.
