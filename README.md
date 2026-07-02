@@ -22,7 +22,8 @@ SpecLoop/
 │   ├── spec-loop-claude-code-doc-EN.html      # deck largo EN
 │   ├── spec-loop-playbook{,-EN}.html          # Manual del Operador (trigger/move/gate)
 │   ├── spec-loop-onepager{,-EN}.html          # ficha de una página
-│   ├── spec-loop-team-pitch.html              # pitch de adopción para el equipo (historia Vale/Martín)
+│   ├── spec-loop-team-pitch.html              # pitch de adopción para el equipo (historia Vale/Martín, 14 slides)
+│   ├── spec-loop-team-pitch-extended.html     # pitch extendido: + día-tipo, KPI readiness, ledger 2 pisos, piloto (22 slides)
 │   ├── *.png                                  # mapa del sistema · 10 pasos · reverse-discovery
 │   └── diagram-sources/                       # HTML fuente de los PNG (re-renderizables)
 ├── formats/               # 6 exploraciones de formato (A-F); se adoptaron playbook + atlas-map
