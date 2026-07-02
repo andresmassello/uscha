@@ -545,7 +545,7 @@ body::before{content:"";position:fixed;inset:0;background:
   <h2><code class="in" style="font-size:.7em">/dev-loop</code> <span class="accent">fase por fase.</span></h2>
   <p>El <code class="in">dev-loop</code> es un orquestador spec-driven multi-repo. Toma el ADR set + <code class="in">ACCEPTANCE.md</code> como input, construye, y corre un loop de review severity-gated que <strong>converge en vez de loopear para siempre</strong>, con los tests como guardrail entre pasos. Para en el merge gate. Tres principios no-negociables lo gobiernan: convergé no persigas el cero; los tests son guardrail no finale; generar tests no es correr tests.</p>
   <ol class="steps">
-    <li><strong>Setup.</strong> <code class="in">qa_ledger.py init --config dev-loop.config.json</code>. La config lista cada repo y su tipo (maven/flutter/python). En multi-repo, los otros repos se montan con <code class="in">--add-dir</code>.</li>
+    <li><strong>Setup.</strong> <code class="in">qa_ledger.py init --config dev-loop.config.json</code>. La config lista cada repo y su tipo (maven/flutter/python/node). En multi-repo, los otros repos se montan con <code class="in">--add-dir</code>.</li>
     <li><strong>Fase 0 — Plan (ADR-first).</strong> El ADR set + ACCEPTANCE son el input. Si faltan criterios de aceptación, para y corré <code class="in">/adr-refine</code> primero. Los acceptance criteria se vuelven los contract tests de la fase 1.</li>
     <li><strong>Fase 1 — Coverage gate → characterization condicional (por repo).</strong> <code class="in">snapshot --phase pre</code> + <code class="in">check-coverage</code>. Si coverage ≥ umbral, la suite existente es el guardrail. Si está por debajo (o no hay reporte): escribís characterization/contract tests <em>en el borde</em> (API pública, endpoints) — que el humano revise antes de confiar en ellos.</li>
     <li><strong>Fase 2 — Build.</strong> Implementás por el plan, commit por paso lógico (conventional commits). Aplica la disciplina de ADR: consultá antes de tocar áreas gobernadas; pará y proponé ADR ante una dependencia nueva, patrón nuevo, alternativa no obvia o contradicción de un ADR aceptado.</li>
@@ -648,7 +648,7 @@ python3 $QL converged --repo backend-api --tools-per-cycle 3</pre>
   <h2>El <span class="accent">rebuild test.</span></h2>
   <p>El ledger prueba <strong>corrección</strong> (este build pasó). El rebuild test prueba <strong>completitud</strong> (la SPEC es suficiente para volver a generar el sistema). Dos preguntas distintas. Es el benchmark de completitud que se está estandarizando en el SOTA.</p>
   <p>La mecánica: en un árbol limpio, una sesión <em>fresca</em> apunta solo al paquete (SPEC/ADR/ACCEPTANCE — no al chat) y regenera. Si reconstruye y pasa acceptance + tests → la SPEC cubre. Si diverge → la SPEC tiene huecos: casi siempre decisiones implícitas (códigos de error, estrategia de cache, elección de librería) que vivían en tu cabeza y nunca llegaron a la SPEC.</p>
-  <pre><span class="c"># rebuild test — subcomando real (1.4.0)</span>
+  <pre><span class="c"># rebuild test — subcomando real (1.4.0+)</span>
 <span class="c"># 1) tree ORIGINAL: capturá la firma</span>
 $ python3 $QL rebuild --mode baseline --config dev-loop.config.json
   → REBUILD-BASELINE.json
@@ -659,7 +659,7 @@ $ python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json
   <span class="o">REBUILD: 72.2/100 — PARTIAL</span>
   ! 1 test(s) fail on regenerated code — behavior the SPEC left implicit
   ! coverage 45.0% vs baseline 80.0% (tolerance 5)</pre>
-  <div class="card good"><h3>Estado real en el kit <span class="callout-status real">en el kit</span></h3><p>Implementado y probado (kit 1.4.0). Pesos: <strong>tests 60 · acceptance 20 · coverage 15 · surface 5</strong>. Veredictos: <code class="in">COVERS ≥90 · PARTIAL ≥70 · DIVERGE &lt;70</code> (exit 0 solo si COVERS; <code class="in">--json</code> lo consume <code class="in">/sys-doc</code>). La señal dominante es la suite preservada: un test que pasaba y falla en el código regenerado = comportamiento que la SPEC dejó implícito. Cuándo correrlo: perfil C+ y E, o de forma periódica (lo disparás vos) — es el QA del <em>output del Discovery</em>.</p></div>
+  <div class="card good"><h3>Estado real en el kit <span class="callout-status real">en el kit</span></h3><p>Implementado y probado (kit 1.4.0+). Pesos: <strong>tests 60 · acceptance 20 · coverage 15 · surface 5</strong>. Veredictos: <code class="in">COVERS ≥90 · PARTIAL ≥70 · DIVERGE &lt;70</code> (exit 0 solo si COVERS; <code class="in">--json</code> lo consume <code class="in">/sys-doc</code>). La señal dominante es la suite preservada: un test que pasaba y falla en el código regenerado = comportamiento que la SPEC dejó implícito. Cuándo correrlo: perfil C+ y E, o de forma periódica (lo disparás vos) — es el QA del <em>output del Discovery</em>.</p></div>
 </section>
 
 <section class="slide" data-section="Change budget + escalación">
@@ -1090,15 +1090,15 @@ scoop install gentle-ai</pre>
   <table>
     <thead><tr><th>Persona / fuente</th><th>Aporte a esta metodología</th></tr></thead>
     <tbody>
-      <tr><td class="t">Birgitta Böckeler <span class="small">· martinfowler.com</span></td><td>"Maintainability sensors for coding agents" — el marco de sensores (timing × naturaleza), coverage vs mutation testing, computacional vs inferencial.</td></tr>
-      <tr><td class="t">Addy Osmani</td><td>"The New SDLC", "Agentic Code Review", "Loop Engineering" — anti gate-gaming (red-flags), checker no-correlacionado (93,4% = 1 de 4 tools), leer diffs de test más estricto, aislamiento por git worktree, fan-out ≤ review bandwidth.</td></tr>
-      <tr><td class="t">Martin Fowler</td><td>Technical Debt Quadrant (deuda inadvertida vs deliberada); su sitio es el hogar de buena parte de estas ideas.</td></tr>
-      <tr><td class="t">Vlad Khononov</td><td><em>Learning Domain-Driven Design</em> — el marco de modularidad que fundamenta el review de modularidad.</td></tr>
-      <tr><td class="t">Andrej Karpathy</td><td>"Simplicity First" — KISS operacionalizado (mínimo código, cambios quirúrgicos, goal-driven).</td></tr>
-      <tr><td class="t">John Maeda</td><td><em>The Laws of Simplicity</em> — la Ley 1 (Reduce), norte de la invariante SIMPLICITY.</td></tr>
-      <tr><td class="t">Geoffrey Huntley</td><td>El "Ralph Wiggum loop": la falla silenciosa del token de "listo" prematuro.</td></tr>
-      <tr><td class="t">Anthropic</td><td>Evaluator-optimizer (maker ≠ checker, dic 2024); Claude Code; el skill <code class="in">simplify</code>.</td></tr>
-      <tr><td class="t">Gentleman Programming</td><td>Tooling del entorno: <code class="in">engram</code> (memoria persistente) y <code class="in">gentle-ai</code>.</td></tr>
+      <tr><td class="t">Birgitta Böckeler <span class="small">· martinfowler.com</span></td><td><a href="https://martinfowler.com/articles/sensors-for-coding-agents.html" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Maintainability sensors for coding agents"</a> — el marco de sensores (timing × naturaleza), coverage vs mutation testing, computacional vs inferencial.</td></tr>
+      <tr><td class="t">Addy Osmani</td><td><a href="https://addyosmani.com/blog/new-sdlc-vibe-coding/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"The New SDLC"</a>, <a href="https://addyosmani.com/blog/agentic-code-review/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Agentic Code Review"</a>, <a href="https://addyosmani.com/blog/loop-engineering/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Loop Engineering"</a> — anti gate-gaming (red-flags), checker no-correlacionado (93,4% = 1 de 4 tools), leer diffs de test más estricto, aislamiento por git worktree, fan-out ≤ review bandwidth.</td></tr>
+      <tr><td class="t">Martin Fowler</td><td><a href="https://martinfowler.com/bliki/TechnicalDebtQuadrant.html" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">Technical Debt Quadrant</a> (deuda inadvertida vs deliberada); su sitio es el hogar de buena parte de estas ideas.</td></tr>
+      <tr><td class="t">Vlad Khononov</td><td><a href="https://www.oreilly.com/library/view/learning-domain-driven-design/9781098100124/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)"><em>Learning Domain-Driven Design</em></a> — el marco de modularidad que fundamenta el review de modularidad.</td></tr>
+      <tr><td class="t">Andrej Karpathy</td><td><a href="https://github.com/forrestchang/andrej-karpathy-skills" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Simplicity First"</a> — KISS operacionalizado (mínimo código, cambios quirúrgicos, goal-driven).</td></tr>
+      <tr><td class="t">John Maeda</td><td><a href="https://lawsofsimplicity.com/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)"><em>The Laws of Simplicity</em></a> — la Ley 1 (Reduce), norte de la invariante SIMPLICITY.</td></tr>
+      <tr><td class="t">Geoffrey Huntley</td><td>El <a href="https://ghuntley.com/ralph" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Ralph Wiggum loop"</a>: la falla silenciosa del token de "listo" prematuro.</td></tr>
+      <tr><td class="t">Anthropic</td><td><a href="https://www.anthropic.com/engineering/building-effective-agents" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">Evaluator-optimizer</a> (maker ≠ checker, dic 2024); Claude Code; el skill <code class="in">simplify</code>.</td></tr>
+      <tr><td class="t">Gentleman Programming</td><td>Tooling del entorno: <a href="https://github.com/Gentleman-Programming/engram" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)"><code class="in">engram</code></a> (memoria persistente) y <code class="in">gentle-ai</code>.</td></tr>
     </tbody>
   </table>
   <p class="small">Crédito honesto: la técnica de <em>mutation testing</em> se populariza con Stryker (JS) / PIT (Java); "Simplicity First" se operacionalizó públicamente en el repo de Forrest Chang (ene 2026), no lo endosó Karpathy. Atribuir de menos empobrece; atribuir de más miente.</p>
