@@ -42,7 +42,7 @@ SpecLoop/
   propiedad enforced, no slogan.
 - **Docs** — pasados por truth-pass contra el engine real: cada claim describe lo que
   v1.3.0 hace. Convención de estado en los docs: `en el kit` / `nuevo` / `propuesta`.
-- **Pendiente** — dogfooding en caso real (criterios falsables ANTES de correr);
+- **Pendiente** — dogfooding en caso real (criterios de éxito definidos ANTES de correr, que también puedan dar que NO);
   diferidos conscientes en CHANGELOG-1.3.0 (densidad de asserts en rebuild, perfiles A-E
   mecanizados).
 
