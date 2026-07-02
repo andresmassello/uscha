@@ -1,5 +1,5 @@
 {
-  "version": "1.6.0",
+  "version": "1.9.0",
   "defaults": {
     "coverage_threshold": 60,
     "max_iterations": 5,
@@ -19,6 +19,11 @@
     "test_command_python": "pytest --cov --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml",
     "test_command_node": "npx jest --coverage --reporters=default --reporters=jest-junit",
     "test_command_go": "gotestsum --junitfile reports/junit.xml -- -coverprofile=coverage.out ./...",
+    "test_command_rust": "cargo llvm-cov nextest --cobertura --output-path reports/coverage.xml && cp target/nextest/default/junit.xml reports/junit.xml",
+    "test_command_dotnet": "dotnet test --logger \"junit;LogFilePath=$PWD/reports/junit.xml\" /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=$PWD/reports/coverage.xml",
+    "test_command_cpp": "ctest --test-dir build --output-junit ../reports/junit.xml && gcovr --cobertura reports/coverage.xml",
+    "test_command_gradle": "./gradlew test jacocoTestReport",
+    "test_command_swift": "swift test --enable-code-coverage --xunit-output reports/junit.xml",
     "id_granularity": "file",
     "acceptance_file": "ACCEPTANCE.md",
     "readiness_weights": {
@@ -74,6 +79,31 @@
       "name": "api-svc",
       "path": "../api-svc",
       "type": "go"
+    },
+    {
+      "name": "core-lib",
+      "path": "../core-lib",
+      "type": "rust"
+    },
+    {
+      "name": "erp-svc",
+      "path": "../erp-svc",
+      "type": "dotnet"
+    },
+    {
+      "name": "native-core",
+      "path": "../native-core",
+      "type": "cpp"
+    },
+    {
+      "name": "jvm-service",
+      "path": "../jvm-service",
+      "type": "gradle"
+    },
+    {
+      "name": "mobile-kit",
+      "path": "../mobile-kit",
+      "type": "swift"
     }
   ],
   "integration": {

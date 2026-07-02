@@ -5,7 +5,11 @@
 # spec-check estructural, simplicity floor, oscillation — el adapter python
 # (v1.4.0): coverage Cobertura, junit envuelto, LOC, ruff/mypy, UNMEASURED python —
 # el adapter node (v1.5.0): lcov, jest-junit, LOC ts, eslint/tsc, UNMEASURED node —
-# y el adapter go (v1.6.0): cover profile, gotestsum, LOC _test.go, golangci.
+# el adapter go (v1.6.0): cover profile, gotestsum, LOC _test.go, golangci —
+# los adapters rust/dotnet (v1.7.0): Cobertura reusada, clippy JSONL, SARIF —
+# el adapter cpp (v1.8.0): gcovr Cobertura, ctest junit plano, clang-tidy —
+# y los adapters gradle/swift (v1.9.0): JaCoCo/lcov/junit/checkstyle reusados
+# en paths nuevos (detekt, swiftlint) + fixes de los reviews 1.7.0/1.8.0.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -25,7 +29,7 @@ if [ -z "$PY" ]; then
   done
 fi
 [ -n "$PY" ] || { echo "FAIL: no hay Python funcional en PATH"; exit 1; }
-SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b" "$SB/repo-c" "$SB/repo-d" "$SB/repo-e"
+SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b" "$SB/repo-c" "$SB/repo-d" "$SB/repo-e" "$SB/repo-f" "$SB/repo-g" "$SB/repo-h" "$SB/repo-i" "$SB/repo-j"
 cd "$SB"
 
 PASS=0; FAIL=0
@@ -47,7 +51,12 @@ cat > dev-loop.config.json <<'EOF'
              {"name":"repo-b","path":"repo-b","type":"flutter"},
              {"name":"repo-c","path":"repo-c","type":"python"},
              {"name":"repo-d","path":"repo-d","type":"node"},
-             {"name":"repo-e","path":"repo-e","type":"go"} ],
+             {"name":"repo-e","path":"repo-e","type":"go"},
+             {"name":"repo-f","path":"repo-f","type":"rust"},
+             {"name":"repo-g","path":"repo-g","type":"dotnet"},
+             {"name":"repo-h","path":"repo-h","type":"cpp"},
+             {"name":"repo-i","path":"repo-i","type":"gradle"},
+             {"name":"repo-j","path":"repo-j","type":"swift"} ],
   "integration": {"enabled": false} }
 EOF
 printf -- "# ACCEPTANCE\n\n- [x] criterio uno\n- [ ] criterio dos\n" > ACCEPTANCE.md
@@ -224,6 +233,198 @@ echo "$INGE" | grep -q "repo-e/golangci: reported=2 gated=1" && { PASS=$((PASS+1
 run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-e" \
   && { FAIL=$((FAIL+1)); echo "  FAIL repo-e sigue UNMEASURED tras ingest"; } \
   || { PASS=$((PASS+1)); echo "  ok   repo-e ya no es UNMEASURED tras ingest"; }
+
+echo "== T19 adapter rust: Cobertura (cargo llvm-cov) + nextest junit + LOC tests/ =="
+mkdir -p repo-f/src repo-f/tests repo-f/reports
+printf 'pub fn f() -> i32 {\n    1\n}\n' > repo-f/src/lib.rs
+printf 'use core_lib::f;\n#[test] fn it_works() { assert_eq!(f(), 1); }\n' > repo-f/tests/it_test.rs
+cat > repo-f/reports/coverage.xml <<'EOF'
+<?xml version="1.0"?>
+<coverage lines-valid="10" lines-covered="7" line-rate="0.7"></coverage>
+EOF
+cat > repo-f/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="nextest" tests="3" failures="0" errors="0" skipped="0"/></testsuites>
+EOF
+SNAPF=$(run snapshot --repo repo-f 2>&1)
+echo "$SNAPF" | grep -q "coverage=70.0%" && { PASS=$((PASS+1)); echo "  ok   Cobertura reusada (cargo llvm-cov) 7/10 -> 70.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL coverage rust ($SNAPF)"; }
+echo "$SNAPF" | grep -q "tests=3" && { PASS=$((PASS+1)); echo "  ok   nextest junit -> 3 tests"; } || { FAIL=$((FAIL+1)); echo "  FAIL test count rust ($SNAPF)"; }
+echo "$SNAPF" | grep -q "prod_loc=3, test_loc=2" && { PASS=$((PASS+1)); echo "  ok   LOC prod=3 (src/) / test=2 (tests/)"; } || { FAIL=$((FAIL+1)); echo "  FAIL LOC rust ($SNAPF)"; }
+
+echo "== T20 rust: clippy JSONL (error/warning/compile-error/summary/dup) =="
+# el '1 warning emitted' de rustc es un diagnostico REAL (level warning, code
+# null, spans []) — sin el skip por span, cada corrida con warnings crece un
+# HIGH fantasma y el gate no converge jamas. El duplicado (lib + test target)
+# debe dedupearse por finding ID.
+cat > repo-f/reports/clippy.json <<'EOF'
+{"reason":"compiler-message","message":{"level":"error","code":{"code":"clippy::unwrap_used"},"spans":[{"file_name":"src/lib.rs","line_start":2,"is_primary":true}]}}
+{"reason":"compiler-message","message":{"level":"warning","code":{"code":"clippy::needless_return"},"spans":[{"file_name":"src/lib.rs","line_start":3,"is_primary":true}]}}
+{"reason":"compiler-message","message":{"level":"warning","code":{"code":"clippy::needless_return"},"spans":[{"file_name":"src/lib.rs","line_start":3,"is_primary":true}]}}
+{"reason":"compiler-message","message":{"level":"error","code":null,"spans":[{"file_name":"src/lib.rs","line_start":1,"is_primary":true}]}}
+{"reason":"compiler-message","message":{"level":"warning","code":null,"spans":[],"message":"1 warning emitted"}}
+{"reason":"compiler-message","message":{"level":"error","code":null,"spans":[],"message":"aborting due to 1 previous error"}}
+{"reason":"build-finished","success":false}
+EOF
+INGF=$(run ingest-gate --repo repo-f --iteration 1 2>&1)
+echo "$INGF" | grep -q "repo-f/clippy: reported=3 gated=2" && { PASS=$((PASS+1)); echo "  ok   clippy: 3 reales (summaries sin span NO cuentan, dup dedupeado)"; } || { FAIL=$((FAIL+1)); echo "  FAIL clippy ($INGF)"; }
+
+echo "== T21 adapter dotnet: Cobertura (coverlet) + junit logger + LOC .Tests =="
+mkdir -p repo-g/src repo-g/Svc.Tests repo-g/reports
+printf 'namespace Svc;\npublic class Api {\npublic int F() => 1;\n}\n' > repo-g/src/Api.cs
+printf 'namespace Svc.Tests;\npublic class ApiTests { }\n' > repo-g/Svc.Tests/ApiTests.cs
+cat > repo-g/reports/coverage.xml <<'EOF'
+<?xml version="1.0"?>
+<coverage lines-valid="12" lines-covered="9" line-rate="0.75"></coverage>
+EOF
+cat > repo-g/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="dotnet" tests="6" failures="0" errors="0" skipped="0"/></testsuites>
+EOF
+SNAPG=$(run snapshot --repo repo-g 2>&1)
+echo "$SNAPG" | grep -q "coverage=75.0%" && { PASS=$((PASS+1)); echo "  ok   Cobertura reusada (coverlet) 9/12 -> 75.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL coverage dotnet ($SNAPG)"; }
+echo "$SNAPG" | grep -q "tests=6" && { PASS=$((PASS+1)); echo "  ok   junit logger -> 6 tests"; } || { FAIL=$((FAIL+1)); echo "  FAIL test count dotnet ($SNAPG)"; }
+echo "$SNAPG" | grep -q "prod_loc=4, test_loc=2" && { PASS=$((PASS+1)); echo "  ok   LOC prod=4 (src/) / test=2 (Svc.Tests/)"; } || { FAIL=$((FAIL+1)); echo "  FAIL LOC dotnet ($SNAPG)"; }
+
+echo "== T22 dotnet: SARIF (Roslyn ErrorLog) error/warning/note =="
+cat > repo-g/reports/analysis.sarif <<'EOF'
+{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Roslyn"}},"results":[
+ {"ruleId":"CA2100","level":"error","locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/Api.cs"},"region":{"startLine":3}}}]},
+ {"ruleId":"CA1822","level":"warning","locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/Api.cs"},"region":{"startLine":2}}}]},
+ {"ruleId":"IDE0005","level":"note","locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/Api.cs"},"region":{"startLine":1}}}]}]}]}
+EOF
+INGG=$(run ingest-gate --repo repo-g --iteration 1 2>&1)
+echo "$INGG" | grep -q "repo-g/roslyn: reported=3 gated=1" && { PASS=$((PASS+1)); echo "  ok   SARIF: error=HIGH gateado; warning=MEDIUM; note=INFO"; } || { FAIL=$((FAIL+1)); echo "  FAIL sarif ($INGG)"; }
+
+echo "== T23 adapter cpp: gcovr Cobertura + ctest junit (root PLANO) + LOC tests/ =="
+mkdir -p repo-h/src repo-h/tests repo-h/reports
+printf '#include "core.h"\nint f() {\nreturn 1;\n}\n' > repo-h/src/core.cpp
+printf '#include "core.h"\nTEST(Core, F) { EXPECT_EQ(f(), 1); }\n' > repo-h/tests/core_test.cpp
+cat > repo-h/reports/coverage.xml <<'EOF'
+<?xml version="1.0"?>
+<coverage lines-valid="8" lines-covered="6" line-rate="0.75"></coverage>
+EOF
+cat > repo-h/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuite name="ctest" tests="5" failures="0" errors="0" skipped="0"/>
+EOF
+SNAPH=$(run snapshot --repo repo-h 2>&1)
+echo "$SNAPH" | grep -q "coverage=75.0%" && { PASS=$((PASS+1)); echo "  ok   gcovr Cobertura 6/8 -> 75.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL coverage cpp ($SNAPH)"; }
+echo "$SNAPH" | grep -q "tests=5" && { PASS=$((PASS+1)); echo "  ok   ctest junit root PLANO (testsuite) -> 5 tests"; } || { FAIL=$((FAIL+1)); echo "  FAIL test count cpp ($SNAPH)"; }
+echo "$SNAPH" | grep -q "prod_loc=4, test_loc=2" && { PASS=$((PASS+1)); echo "  ok   LOC prod=4 (src/) / test=2 (tests/ + _test.cpp)"; } || { FAIL=$((FAIL+1)); echo "  FAIL LOC cpp ($SNAPH)"; }
+
+echo "== T24 cpp: clang-tidy (error/warning/cert floor/.tpp) =="
+cat > repo-h/reports/clang-tidy.txt <<'EOF'
+src/core.cpp:3:1: error: use of undeclared identifier 'x' [clang-diagnostic-error]
+src/core.cpp:2:5: warning: function 'f' should be marked const [readability-make-member-function-const]
+src/core.cpp:3:8: warning: calling 'system' uses a command processor [cert-env33-c]
+src/impl.tpp:4:2: warning: repeated branch body [bugprone-branch-clone]
+2 warnings generated.
+EOF
+INGH=$(run ingest-gate --repo repo-h --iteration 1 2>&1)
+echo "$INGH" | grep -q "repo-h/clang-tidy: reported=4 gated=2" && { PASS=$((PASS+1)); echo "  ok   clang-tidy: error+cert floor=HIGH; readability+.tpp=MEDIUM; ruido stderr ignorado"; } || { FAIL=$((FAIL+1)); echo "  FAIL clang-tidy ($INGH)"; }
+
+echo "== T25 fixes 1.7.0: junit root-max (gotestsum) + go dedupe + backtest.cpp prod =="
+# (a) gotestsum reporta errors solo en el ROOT <testsuites> — el max(root, hijos)
+# tiene que leer los atributos del root, no solo sumar hijos.
+cat > repo-e/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites tests="9" failures="0" errors="1" skipped="0"><testsuite name="gotestsum" tests="4" failures="0" errors="0" skipped="0"/></testsuites>
+EOF
+SNAPE2=$(run snapshot --repo repo-e 2>&1)
+echo "$SNAPE2" | grep -q "tests=9" && { PASS=$((PASS+1)); echo "  ok   junit root-attrs mandan: tests=9 (hijos sumaban 4)"; } || { FAIL=$((FAIL+1)); echo "  FAIL junit root-max ($SNAPE2)"; }
+# (b) -coverpkg repite bloques entre targets: dedupe por bloque con max(hits).
+# El bloque de 2 stmts (0 hits) reaparece con 1 hit -> 5/5 stmts = 100%.
+printf 'example.com/m/pkg/mod.go:6.2,8.3 2 1\n' >> repo-e/coverage.out
+SNAPE3=$(run snapshot --repo repo-e 2>&1)
+echo "$SNAPE3" | grep -q "coverage=100.0%" && { PASS=$((PASS+1)); echo "  ok   cover profile dedupeado por bloque con max(hits) -> 100.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL go dedupe ($SNAPE3)"; }
+# (c) sufijo bare 'test.cpp' NO debe tragar backtest.cpp como test LOC.
+printf 'int backtest() {\nreturn 2;\n}\n' > repo-h/src/backtest.cpp
+SNAPH2=$(run snapshot --repo repo-h 2>&1)
+echo "$SNAPH2" | grep -q "prod_loc=7, test_loc=2" && { PASS=$((PASS+1)); echo "  ok   backtest.cpp cuenta como PROD (CamelCase Test.cpp es el patron de test)"; } || { FAIL=$((FAIL+1)); echo "  FAIL backtest.cpp ($SNAPH2)"; }
+
+echo "== T26 adapter gradle: JaCoCo en paths gradle + test-results + LOC source sets =="
+mkdir -p repo-i/src/main/kotlin repo-i/src/test/kotlin repo-i/src/integrationTest/kotlin repo-i/build/reports/jacoco/test repo-i/build/test-results/test repo-i/build/reports/detekt
+printf 'package app\nfun f(): Int {\nreturn 1\n}\n' > repo-i/src/main/kotlin/App.kt
+printf 'package app\nclass AppTest { }\n' > repo-i/src/test/kotlin/AppTest.kt
+printf 'package app\nclass AppIT { }\n' > repo-i/src/integrationTest/kotlin/AppIT.kt
+cat > repo-i/build/reports/jacoco/test/jacocoTestReport.xml <<'EOF'
+<?xml version="1.0"?>
+<report name="jvm-service"><counter type="LINE" missed="3" covered="9"/></report>
+EOF
+cat > repo-i/build/test-results/test/TEST-app.AppTest.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuite name="app.AppTest" tests="8" failures="0" errors="0" skipped="0"/>
+EOF
+SNAPI=$(run snapshot --repo repo-i 2>&1)
+echo "$SNAPI" | grep -q "coverage=75.0%" && { PASS=$((PASS+1)); echo "  ok   JaCoCo en build/reports/jacoco 9/12 -> 75.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL coverage gradle ($SNAPI)"; }
+echo "$SNAPI" | grep -q "tests=8" && { PASS=$((PASS+1)); echo "  ok   build/test-results TEST-*.xml -> 8 tests"; } || { FAIL=$((FAIL+1)); echo "  FAIL test count gradle ($SNAPI)"; }
+echo "$SNAPI" | grep -q "prod_loc=4, test_loc=4" && { PASS=$((PASS+1)); echo "  ok   LOC src/main=4 prod / src/test + src/integrationTest=4 test (source sets custom)"; } || { FAIL=$((FAIL+1)); echo "  FAIL LOC gradle ($SNAPI)"; }
+
+echo "== T27 gradle: detekt (checkstyle reusado, paths ABSOLUTOS como el default real) =="
+ABSI="$("$PY" -c "import os;print(os.path.abspath('repo-i/src/main/kotlin/App.kt'))")"
+cat > repo-i/build/reports/detekt/detekt.xml <<EOF
+<?xml version="1.0"?>
+<checkstyle version="4.3">
+  <file name="$ABSI">
+    <error line="2" severity="error" message="ForbiddenCall" source="detekt.ForbiddenCall"/>
+    <error line="3" severity="warning" message="MagicNumber" source="detekt.MagicNumber"/>
+  </file>
+</checkstyle>
+EOF
+INGI=$(run ingest-gate --repo repo-i --iteration 1 2>&1)
+echo "$INGI" | grep -q "repo-i/detekt: reported=2 gated=1" && { PASS=$((PASS+1)); echo "  ok   detekt via parse_checkstyle: error=HIGH gateado, warning=MEDIUM"; } || { FAIL=$((FAIL+1)); echo "  FAIL detekt ($INGI)"; }
+"$PY" -c "
+import json, sys
+node = json.load(open('QA-LEDGER.json'))['repos']['repo-i']
+ids = [i for s in node['iterations'] if s.get('finding_ids') for i in s['finding_ids']]
+ok = any(x.startswith('detekt:') and 'src/main/kotlin/App.kt' in x.replace(chr(92), '/') and not x.replace(chr(92), '/').count(':/') for x in ids)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   IDs detekt repo-relativos (path absoluto relativizado)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL IDs detekt no relativizados"; }
+run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-i" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL repo-i sigue UNMEASURED tras ingest"; } \
+  || { PASS=$((PASS+1)); echo "  ok   repo-i ya no es UNMEASURED tras ingest"; }
+
+echo "== T28 adapter swift: lcov + xunit + LOC Sources/Tests + swiftlint =="
+mkdir -p repo-j/Sources/Kit repo-j/Tests/KitTests repo-j/coverage repo-j/reports
+printf 'public func f() -> Int {\nreturn 1\n}\n' > repo-j/Sources/Kit/Kit.swift
+printf 'import XCTest\nfinal class KitTests: XCTestCase { }\n' > repo-j/Tests/KitTests/KitTests.swift
+printf 'SF:Sources/Kit/Kit.swift\nLF:16\nLH:12\nend_of_record\n' > repo-j/coverage/lcov.info
+cat > repo-j/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="KitTests" tests="7" failures="0" errors="0" skipped="0"/></testsuites>
+EOF
+# Swift 6 / Swift Testing: --xunit-output escribe un SEGUNDO archivo con los
+# resultados de Swift Testing — el engine debe SUMAR ambos (sets disjuntos);
+# si lo ignorara, este failure real seria invisible (fail-open).
+cat > repo-j/reports/junit-swift-testing.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="SwiftTesting" tests="2" failures="1" errors="0" skipped="0"/></testsuites>
+EOF
+SNAPJ=$(run snapshot --repo repo-j 2>&1)
+echo "$SNAPJ" | grep -q "coverage=75.0%" && { PASS=$((PASS+1)); echo "  ok   lcov reusado (llvm-cov export) 12/16 -> 75.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL coverage swift ($SNAPJ)"; }
+echo "$SNAPJ" | grep -q "tests=9" && { PASS=$((PASS+1)); echo "  ok   XCTest (7) + Swift Testing (2) SUMADOS -> 9 tests (failure real visible)"; } || { FAIL=$((FAIL+1)); echo "  FAIL test count swift dual-file ($SNAPJ)"; }
+echo "$SNAPJ" | grep -q "prod_loc=3, test_loc=2" && { PASS=$((PASS+1)); echo "  ok   LOC Sources/=3 / Tests/=2 (convencion SwiftPM)"; } || { FAIL=$((FAIL+1)); echo "  FAIL LOC swift ($SNAPJ)"; }
+ABSJ="$("$PY" -c "import os;print(os.path.abspath('repo-j/Sources/Kit/Kit.swift'))")"
+cat > repo-j/reports/swiftlint.xml <<EOF
+<?xml version="1.0"?>
+<checkstyle version="4.3">
+  <file name="$ABSJ">
+    <error line="1" severity="error" message="Force Cast Violation" source="swiftlint.force_cast"/>
+    <error line="2" severity="warning" message="Line Length Violation" source="swiftlint.line_length"/>
+  </file>
+</checkstyle>
+EOF
+INGJ=$(run ingest-gate --repo repo-j --iteration 1 2>&1)
+echo "$INGJ" | grep -q "repo-j/swiftlint: reported=2 gated=1" && { PASS=$((PASS+1)); echo "  ok   swiftlint via parse_checkstyle: error=HIGH gateado, warning=MEDIUM"; } || { FAIL=$((FAIL+1)); echo "  FAIL swiftlint ($INGJ)"; }
+"$PY" -c "
+import json, sys
+node = json.load(open('QA-LEDGER.json'))['repos']['repo-j']
+ids = [i for s in node['iterations'] if s.get('finding_ids') for i in s['finding_ids']]
+ok = any(x.startswith('swiftlint:') and 'Sources/Kit/Kit.swift' in x.replace(chr(92), '/') and not x.replace(chr(92), '/').count(':/') for x in ids)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   IDs swiftlint repo-relativos (sin colision por basename)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL IDs swiftlint no relativizados"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"

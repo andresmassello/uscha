@@ -106,11 +106,100 @@ ANTES de tocar nada.
   |-------------|---------------------------------------------------|---------|
   | coverage    | `go test -coverprofile=coverage.out ./...`        | `coverage.out` (cover profile nativo — % por SENTENCIAS, la convención Go) |
   | test count  | `gotestsum --junitfile reports/junit.xml -- ./...`| `reports/junit.xml` (JUnit envuelto soportado) |
-  | golangci    | `golangci-lint run --out-format checkstyle > reports/golangci.xml` | `reports/golangci.xml` (formato checkstyle: error→HIGH · warning→MEDIUM; incluye gosec si está habilitado) |
+  | golangci    | `golangci-lint run --output.checkstyle.path=reports/golangci.xml` (v2; en v1: `--out-format checkstyle > ...`) | `reports/golangci.xml` (formato checkstyle: error→HIGH · warning→MEDIUM; incluye gosec si está habilitado) |
 
   `ingest-gate` lo encuentra por type del repo, o con `--golangci` explícito. Los tests
   `_test.go` viven junto al código (convención Go) — el LOC los clasifica por sufijo.
   `vendor/` y `testdata/` quedan fuera del LOC. Mismo contrato de ausencia.
+  **Ojo severidades**: golangci-lint emite `severity=error` para TODO salvo que
+  configures reglas `severity:` — sin eso, hasta los nits de estilo gatean como HIGH;
+  configurá severidades (o un set de linters magro) para que MEDIUM exista de verdad.
+
+  Rust (`type: rust`, kit 1.7.0):
+
+  | dato        | comando                                           | archivo |
+  |-------------|---------------------------------------------------|---------|
+  | coverage    | `cargo llvm-cov --cobertura --output-path reports/coverage.xml` | `reports/coverage.xml` (Cobertura — mismo parser que Python) |
+  | test count  | `cargo nextest run` + copy (ver nota)             | `reports/junit.xml` (JUnit envuelto soportado) |
+  | clippy      | `cargo clippy --message-format=json > reports/clippy.json` | `reports/clippy.json` (JSONL: error→HIGH · warning→MEDIUM · `code:null` compile-error→HIGH; summaries sin span ignorados) |
+
+  `ingest-gate` con `--clippy` explícito o por type. Los tests inline `#[cfg(test)]`
+  cuentan como LOC prod (limitación documentada); `tests/` = integración.
+  **Ojo junit**: nextest NO emite JUnit por default — hay que habilitarlo en
+  `.config/nextest.toml` (`[profile.default.junit] path = "junit.xml"`) y el archivo
+  cae en `target/nextest/default/junit.xml`; copialo a `reports/junit.xml`
+  (`cp target/nextest/default/junit.xml reports/junit.xml`, ya incluido en el
+  `test_command_rust` de ejemplo).
+
+  C#/.NET (`type: dotnet`, kit 1.7.0):
+
+  | dato        | comando                                           | archivo |
+  |-------------|---------------------------------------------------|---------|
+  | coverage    | coverlet.msbuild: `/p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=$PWD/reports/coverage.xml` | `reports/coverage.xml` (Cobertura) |
+  | test count  | `dotnet test --logger "junit;LogFilePath=$PWD/reports/junit.xml"` (paquete JUnitXml.TestLogger) | `reports/junit.xml` |
+  | roslyn      | `dotnet build /p:ErrorLog="reports/analysis.sarif,version=2"` | `reports/analysis.sarif` (SARIF: error→HIGH · warning→MEDIUM · note→INFO; suprimidos ignorados) |
+
+  `ingest-gate` con `--sarif` explícito o por type. SARIF es el formato universal de
+  análisis estático — el parser sirve para cualquier tool que lo emita.
+  **Ojo paths**: `LogFilePath` y `CoverletOutput` relativos resuelven contra el
+  directorio del PROYECTO DE TEST, no la raíz del repo — por eso los `$PWD`
+  (anclaje absoluto). Con varios proyectos de test, mergeá (`/p:MergeWith`) o un
+  reporte por proyecto. `ErrorLog` sin `,version=2` emite SARIF **v1**; el parser
+  tiene fallback v1, pero pedí v2 (la coma requiere las comillas).
+
+  C++ (`type: cpp`, kit 1.8.0):
+
+  | dato        | comando                                           | archivo |
+  |-------------|---------------------------------------------------|---------|
+  | coverage    | `gcovr --cobertura reports/coverage.xml` (sobre gcov) | `reports/coverage.xml` (Cobertura — mismo parser) |
+  | test count  | `ctest --test-dir build --output-junit ../reports/junit.xml` (CMake ≥3.21) o `--gtest_output=xml:...` | `reports/junit.xml` (root plano Y envuelto soportados) |
+  | clang-tidy  | `clang-tidy <files> > reports/clang-tidy.txt`     | `reports/clang-tidy.txt` (error→HIGH · warning→MEDIUM · `cert-*`/security floor HIGH) |
+
+  `ingest-gate` con `--clang-tidy` explícito o por type. El build system (CMake/
+  Bazel/make) es del adapter por-repo — el kit solo pide que los reportes existan.
+  `cmake-build-*` (cualquier perfil de CLion) y `_deps` quedan fuera del LOC.
+
+  Kotlin/JVM con Gradle (`type: gradle`, kit 1.9.0) — **Kotlin sobre Maven ya
+  funciona con `type: maven`** (`.kt` cuenta desde siempre; JaCoCo/Surefire no
+  distinguen lenguaje JVM). Este type es para el caso común Gradle:
+
+  | dato        | comando                                           | archivo |
+  |-------------|---------------------------------------------------|---------|
+  | coverage    | `./gradlew test jacocoTestReport`                 | `build/reports/jacoco/test/jacocoTestReport.xml` (JaCoCo — mismo parser que maven) |
+  | test count  | (mismo `./gradlew test`)                          | `build/test-results/**/TEST-*.xml` (per-clase, como surefire) |
+  | detekt      | `./gradlew detekt` **por separado** (ver nota)    | `build/reports/detekt/detekt.xml` (formato checkstyle: error→HIGH · warning→MEDIUM; paths absolutos relativizados) |
+
+  `ingest-gate` con `--detekt` explícito o por type. Sirve igual para Java-sobre-
+  Gradle. LOC: `src/main` = prod; `src/test` Y source sets custom (`src/
+  integrationTest`, `src/functionalTest` — cualquier `src/*Test`) = test
+  (`.kt`/`.kts`/`.java`). El requisito JaCoCo: `jacoco` plugin +
+  `jacocoTestReport { reports { xml.required = true } }`.
+  **Ojo detekt**: NO lo encadenes al test command — su default es `maxIssues: 0`,
+  o sea que UN finding corta el build y la corrida de tests leería roja aunque
+  los tests pasen. Corré `./gradlew detekt` aparte, antes del `ingest-gate`
+  (el gate de lint tiene su propio canal).
+
+  Swift (`type: swift`, kit 1.9.0):
+
+  | dato        | comando                                           | archivo |
+  |-------------|---------------------------------------------------|---------|
+  | coverage    | `swift test --enable-code-coverage` + `llvm-cov export -format=lcov ... > coverage/lcov.info` | `coverage/lcov.info` (lcov — mismo parser que Flutter/node) |
+  | test count  | `swift test --xunit-output reports/junit.xml`     | `reports/junit.xml` **+ `reports/junit-swift-testing.xml`** (se SUMAN — ver nota) |
+  | swiftlint   | `swiftlint lint --reporter checkstyle > reports/swiftlint.xml` | `reports/swiftlint.xml` (formato checkstyle: error→HIGH · warning→MEDIUM; paths absolutos relativizados) |
+
+  `ingest-gate` con `--swiftlint` explícito o por type. LOC: convención SwiftPM
+  (`Sources/` = prod, `Tests/` + `*Tests.swift` = test). El export lcov necesita
+  el paso `llvm-cov export` contra el binario de tests (el `.profdata` solo no
+  alcanza) — dejalo en el `test_command_swift` de tu repo; en macOS es
+  `xcrun llvm-cov`, en Linux `llvm-cov` pelado (y el binario vive en
+  `.build/debug/<Pkg>PackageTests.xctest`).
+  **Ojo Swift Testing**: `--xunit-output` escribe los resultados de XCTest en
+  `junit.xml` y los de **Swift Testing** (el default de Swift 6) en un SEGUNDO
+  archivo `junit-swift-testing.xml` — el engine suma AMBOS; si solo leyera el
+  primero, un paquete Swift 6 mediría `tests=0` y un failure real quedaría
+  invisible (fail-open).
+
+## Instalación
 
 **Opción A — por proyecto** (recomendado para suites multi-repo): copiá `.claude/` al
 repo primario y `dev-loop.config.json` a la raíz de ese repo.
@@ -134,7 +223,7 @@ cp -r dev-loop-kit/.claude/skills/sys-doc   ~/.claude/skills/
 
 Editá `dev-loop.config.json`:
 
-- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`|`python`|`node`|`go`).
+- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`|`python`|`node`|`go`|`rust`|`dotnet`|`cpp`|`gradle`|`swift`).
 - `defaults.coverage_threshold`: dispara la fase de characterization si está por debajo.
 - `defaults.severity_gate`: qué severidades bloquean (default BLOCKER/CRITICAL/HIGH).
 - `defaults.id_granularity`: `line` o `file` (default `file`: más estable si refactorizás mucho).

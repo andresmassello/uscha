@@ -443,7 +443,7 @@ body::before{content:"";position:fixed;inset:0;background:
     <span class="node">Evidence</span><span class="ar">→</span>
     <span class="node red">Human gate</span>
   </div>
-  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en seis skills invocables y un motor de medición en Python.</p>
+  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en seis skills invocables (kit 1.9.0) y un motor de medición en Python.</p>
   <div class="tagrow">
     <span class="chip red">/discovery</span><span class="chip red">/adr-refine</span><span class="chip red">/dev-loop</span><span class="chip red">/sys-doc</span><span class="chip red">/reverse-discovery</span><span class="chip red">/characterize</span><span class="chip">qa_ledger.py</span>
   </div>
@@ -545,7 +545,7 @@ body::before{content:"";position:fixed;inset:0;background:
   <h2><code class="in" style="font-size:.7em">/dev-loop</code> <span class="accent">fase por fase.</span></h2>
   <p>El <code class="in">dev-loop</code> es un orquestador spec-driven multi-repo. Toma el ADR set + <code class="in">ACCEPTANCE.md</code> como input, construye, y corre un loop de review severity-gated que <strong>converge en vez de loopear para siempre</strong>, con los tests como guardrail entre pasos. Para en el merge gate. Tres principios no-negociables lo gobiernan: convergé no persigas el cero; los tests son guardrail no finale; generar tests no es correr tests.</p>
   <ol class="steps">
-    <li><strong>Setup.</strong> <code class="in">qa_ledger.py init --config dev-loop.config.json</code>. La config lista cada repo y su tipo (maven/flutter/python/node/go). En multi-repo, los otros repos se montan con <code class="in">--add-dir</code>.</li>
+    <li><strong>Setup.</strong> <code class="in">qa_ledger.py init --config dev-loop.config.json</code>. La config lista cada repo y su tipo (maven/flutter/python/node/go/rust/dotnet/cpp/gradle/swift). En multi-repo, los otros repos se montan con <code class="in">--add-dir</code>.</li>
     <li><strong>Fase 0 — Plan (ADR-first).</strong> El ADR set + ACCEPTANCE son el input. Si faltan criterios de aceptación, para y corré <code class="in">/adr-refine</code> primero. Los acceptance criteria se vuelven los contract tests de la fase 1.</li>
     <li><strong>Fase 1 — Coverage gate → characterization condicional (por repo).</strong> <code class="in">snapshot --phase pre</code> + <code class="in">check-coverage</code>. Si coverage ≥ umbral, la suite existente es el guardrail. Si está por debajo (o no hay reporte): escribís characterization/contract tests <em>en el borde</em> (API pública, endpoints) — que el humano revise antes de confiar en ellos.</li>
     <li><strong>Fase 2 — Build.</strong> Implementás por el plan, commit por paso lógico (conventional commits). Aplica la disciplina de ADR: consultá antes de tocar áreas gobernadas; pará y proponé ADR ante una dependencia nueva, patrón nuevo, alternativa no obvia o contradicción de un ADR aceptado.</li>

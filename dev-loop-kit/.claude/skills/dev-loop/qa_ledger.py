@@ -66,6 +66,8 @@ SKIP_DIRS = {
     ".venv", "venv", ".tox", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
     "coverage", ".next", ".turbo",
     "vendor", "testdata",
+    "obj", "TestResults",
+    "cmake-build-debug", "cmake-build-release", "_deps",
 }
 
 SOURCE_EXT = {
@@ -74,7 +76,13 @@ SOURCE_EXT = {
     "python": {".py"},
     "node": {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"},
     "go": {".go"},
-    "generic": {".java", ".kt", ".dart", ".py", ".ts", ".js", ".go"},
+    "rust": {".rs"},
+    "dotnet": {".cs"},
+    "cpp": {".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".hh", ".hxx"},
+    "gradle": {".kt", ".kts", ".java"},
+    "swift": {".swift"},
+    "generic": {".java", ".kt", ".dart", ".py", ".ts", ".js", ".go", ".rs", ".cs",
+                ".cpp", ".swift"},
 }
 
 
@@ -174,11 +182,12 @@ def flutter_coverage(repo_path):
             "report_found": bool(lcov)}
 
 
-def python_coverage(repo_path):
-    """Cobertura coverage.xml (as emitted by `pytest --cov --cov-report=xml`).
-    Root attributes: lines-covered / lines-valid. First match wins:
-    coverage.xml, reports/coverage.xml. An unreadable report is NOT measured
-    (report_found False) — absence is never invented as a number."""
+def cobertura_coverage(repo_path):
+    """Cobertura coverage.xml — emitted by `pytest --cov --cov-report=xml` (python),
+    `cargo llvm-cov --cobertura` (rust) and coverlet (dotnet). Root attributes:
+    lines-covered / lines-valid. First match wins: coverage.xml,
+    reports/coverage.xml. An unreadable report is NOT measured (report_found
+    False) — absence is never invented as a number."""
     path = next((p for p in (os.path.join(repo_path, "coverage.xml"),
                              os.path.join(repo_path, "reports", "coverage.xml"))
                  if os.path.isfile(p)), None)
@@ -214,7 +223,10 @@ def go_coverage(repo_path):
                  if os.path.isfile(p)), None)
     if not path:
         return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
-    covered = total = 0
+    # dedupe by block: with -coverpkg=./... the merged profile repeats a block
+    # once per test binary — `go tool cover` ORs the hits; counting occurrences
+    # would understate pct vs `go tool cover -func`.
+    blocks = {}
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as fh:
             for line in fh:
@@ -228,35 +240,57 @@ def go_coverage(repo_path):
                     n, hits = int(parts[1]), int(parts[2])
                 except ValueError:
                     continue
-                total += n
-                if hits > 0:
-                    covered += n
+                prev_n, prev_hits = blocks.get(parts[0], (n, 0))
+                blocks[parts[0]] = (n, max(prev_hits, hits))
     except OSError:
         return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
+    total = sum(n for n, _ in blocks.values())
+    covered = sum(n for n, hits in blocks.values() if hits > 0)
     pct = round(covered / total * 100, 2) if total else 0.0
     return {"covered": covered, "missed": total - covered, "pct": pct,
             "report_found": True}
 
 
+def gradle_coverage(repo_path):
+    """JaCoCo XML at Gradle paths (Kotlin/JVM + Java-on-Gradle):
+    build/reports/jacoco/test/jacocoTestReport.xml. Same report format as maven —
+    only the location differs."""
+    files = glob.glob(os.path.join(repo_path, "**", "build", "reports", "jacoco",
+                                   "test", "jacocoTestReport.xml"), recursive=True)
+    if not files:
+        files = glob.glob(os.path.join(repo_path, "**", "build", "reports",
+                                       "jacoco", "jacoco.xml"), recursive=True)
+    missed = covered = 0
+    for f in files:
+        m, c = _jacoco_line_counter(f)
+        missed += m
+        covered += c
+    total = missed + covered
+    pct = round(covered / total * 100, 2) if total else 0.0
+    return {"covered": covered, "missed": missed, "pct": pct,
+            "report_found": bool(files)}
+
+
 def coverage(repo_path, repo_type):
     if repo_type == "maven":
         return maven_coverage(repo_path)
-    if repo_type == "python":
-        return python_coverage(repo_path)
+    if repo_type == "gradle":
+        return gradle_coverage(repo_path)
+    if repo_type in ("python", "rust", "dotnet", "cpp"):
+        return cobertura_coverage(repo_path)  # cpp: gcovr --cobertura
     if repo_type == "go":
         return go_coverage(repo_path)
-    return flutter_coverage(repo_path)  # flutter + node: both emit lcov
+    # flutter + node + swift: all emit lcov (swift: llvm-cov export -format=lcov)
+    return flutter_coverage(repo_path)
 
 
 # --------------------------------------------------------------------------- #
 # measurement: test counts
 # --------------------------------------------------------------------------- #
-def maven_test_count(repo_path):
+def _perclass_xml_count(patterns):
+    """Sum per-class JUnit XML files (surefire/failsafe/gradle test-results):
+    each file's root is a <testsuite> carrying the counters."""
     tests = failures = errors = skipped = 0
-    patterns = [
-        os.path.join(repo_path, "**", "target", "surefire-reports", "TEST-*.xml"),
-        os.path.join(repo_path, "**", "target", "failsafe-reports", "TEST-*.xml"),
-    ]
     seen = set()
     for pat in patterns:
         for f in glob.glob(pat, recursive=True):
@@ -277,6 +311,19 @@ def maven_test_count(repo_path):
             "report_found": bool(seen)}
 
 
+def maven_test_count(repo_path):
+    return _perclass_xml_count([
+        os.path.join(repo_path, "**", "target", "surefire-reports", "TEST-*.xml"),
+        os.path.join(repo_path, "**", "target", "failsafe-reports", "TEST-*.xml"),
+    ])
+
+
+def gradle_test_count(repo_path):
+    return _perclass_xml_count([
+        os.path.join(repo_path, "**", "build", "test-results", "**", "TEST-*.xml"),
+    ])
+
+
 def flutter_test_count(repo_path):
     """
     Best-effort: counts `test(` / `testWidgets(` declarations under test/.
@@ -286,7 +333,8 @@ def flutter_test_count(repo_path):
     count = 0
     test_root = os.path.join(repo_path, "test")
     for dirpath, dirnames, filenames in os.walk(test_root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS
+                    and not d.startswith("cmake-build-")]
         for fn in filenames:
             if not fn.endswith(".dart"):
                 continue
@@ -304,12 +352,12 @@ def flutter_test_count(repo_path):
             "approximate": True}
 
 
-def junit_test_count(repo_path):
+def junit_test_count(repo_path, extra_files=None):
     """JUnit-family XML: `pytest --junitxml=...` (python) and jest-junit /
     vitest --reporter=junit (node). Modern emitters WRAP the root:
     <testsuites><testsuite tests=...>; older ones use <testsuite> as the root.
     Handle both — reading attrs off a <testsuites> root would silently count 0."""
-    # first LOCATION wins (mirrors python_coverage): each junit.xml is a FULL-run
+    # first LOCATION wins (mirrors cobertura_coverage): each junit.xml is a FULL-run
     # report — summing locations would double-count, and a stale root junit.xml
     # next to a fresh reports/junit.xml could permanently veto convergence.
     # (The TEST-*.xml set legitimately sums: those are per-class files.)
@@ -324,6 +372,13 @@ def junit_test_count(repo_path):
         if found:
             files = found
             break
+    # extra_files are ADDITIONAL full-run reports of a DISJOINT test set (swift:
+    # --xunit-output writes XCTest to junit.xml and Swift Testing results to a
+    # SECOND junit-swift-testing.xml) — summing them is correct, and skipping
+    # them would let real failures read as green (fail-open).
+    for f in (extra_files or []):
+        if os.path.isfile(f) and f not in files:
+            files.append(f)
     tests = failures = errors = skipped = 0
     for f in files:
         try:
@@ -334,11 +389,24 @@ def junit_test_count(repo_path):
             suites = [root]
         else:
             suites = list(_iter_local(root, "testsuite"))
+        t = fl = er = sk = 0
         for s in suites:
-            tests += int(s.get("tests", 0))
-            failures += int(s.get("failures", 0))
-            errors += int(s.get("errors", 0))
-            skipped += int(s.get("skipped", 0))
+            t += int(s.get("tests", 0))
+            fl += int(s.get("failures", 0))
+            er += int(s.get("errors", 0))
+            sk += int(s.get("skipped", 0))
+        if _local(root.tag) == "testsuites":
+            # gotestsum puts `errors` ONLY on the <testsuites> root (a package
+            # that fails to BUILD has root errors>0 and no suite) — take the max
+            # of root attrs vs child sums so a broken build never reads green.
+            t = max(t, int(root.get("tests", 0)))
+            fl = max(fl, int(root.get("failures", 0)))
+            er = max(er, int(root.get("errors", 0)))
+            sk = max(sk, int(root.get("skipped", 0)))
+        tests += t
+        failures += fl
+        errors += er
+        skipped += sk
     executed = tests - skipped
     return {"total": tests, "executed": executed, "failures": failures,
             "errors": errors, "skipped": skipped,
@@ -348,8 +416,18 @@ def junit_test_count(repo_path):
 def test_count(repo_path, repo_type):
     if repo_type == "maven":
         return maven_test_count(repo_path)
-    if repo_type in ("python", "node", "go"):
-        return junit_test_count(repo_path)  # go: gotestsum --junitfile
+    if repo_type == "gradle":
+        return gradle_test_count(repo_path)
+    if repo_type == "swift":
+        # SwiftPM writes Swift Testing results to a SEPARATE file next to the
+        # XCTest one — both must count or a Swift-6 package reads tests=0.
+        return junit_test_count(repo_path, extra_files=[
+            os.path.join(repo_path, "reports", "junit-swift-testing.xml"),
+            os.path.join(repo_path, "junit-swift-testing.xml")])
+    if repo_type in ("python", "node", "go", "rust", "dotnet", "cpp"):
+        # go: gotestsum · rust: cargo-nextest · dotnet: JUnit logger ·
+        # cpp: ctest --output-junit / gtest
+        return junit_test_count(repo_path)
     return flutter_test_count(repo_path)
 
 
@@ -372,17 +450,49 @@ def _is_test_path(rel, repo_type):
                         ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx")))
     if repo_type == "go":
         return fn.endswith("_test.go")  # the Go convention: tests live next to code
-    return "test" in parts and "src" in parts  # src/test/...
+    if repo_type == "rust":
+        # tests/ = integration tests. Inline #[cfg(test)] unit tests count as prod
+        # LOC — a known, documented limitation of path-based classification.
+        return "tests" in parts
+    if repo_type == "dotnet":
+        return (any(p.lower() in ("test", "tests") or p.endswith(".Tests")
+                    for p in parts[:-1])
+                or fn.endswith(("Test.cs", "Tests.cs")))
+    if repo_type == "cpp":
+        base = fn.lower()
+        # gtest CamelCase (FooTest.cpp) matched CASE-SENSITIVE on purpose:
+        # a lowered bare 'test.cpp' suffix would swallow backtest.cpp/protest.cpp
+        # as test LOC (same trap the dotnet rule avoids with Test.cs/Tests.cs).
+        return ("test" in parts or "tests" in parts
+                or base.startswith("test_")
+                or any(base.endswith(suf) for suf in
+                       ("_test.cpp", "_test.cc", "_test.cxx", "_tests.cpp"))
+                or fn.endswith(("Test.cpp", "Test.cc", "Test.cxx", "Tests.cpp")))
+    if repo_type == "swift":
+        # SwiftPM convention: Sources/ + Tests/; XCTest classes end in Tests.swift
+        return ("Tests" in parts or "tests" in parts
+                or fn.endswith(("Tests.swift", "Test.swift")))
+    if repo_type == "gradle":
+        # Gradle source sets: src/test/ plus CUSTOM ones (src/integrationTest/,
+        # src/functionalTest/ — the convention Gradle's own docs promote): any
+        # source-set dir directly under src/ named test or *Test is test LOC.
+        for i, p in enumerate(parts[:-1]):
+            if p == "src":
+                nxt = parts[i + 1]
+                if nxt == "test" or nxt.endswith("Test"):
+                    return True
+        return False
+    return "test" in parts and "src" in parts  # src/test/... (maven)
 
 
 def _is_prod_path(rel, repo_type):
     parts = rel.replace("\\", "/").split("/")
     if repo_type == "flutter":
         return parts and parts[0] == "lib"
-    if repo_type in ("python", "node", "go"):
+    if repo_type in ("python", "node", "go", "rust", "dotnet", "cpp", "swift"):
         # src layout or root package — any source file that isn't a test
         return not _is_test_path(rel, repo_type)
-    return "main" in parts and "src" in parts  # src/main/...
+    return "main" in parts and "src" in parts  # src/main/... (maven + gradle)
 
 
 def count_loc(repo_path, repo_type):
@@ -390,7 +500,8 @@ def count_loc(repo_path, repo_type):
     prod = test = 0
     prod_files = test_files = 0
     for dirpath, dirnames, filenames in os.walk(repo_path):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS
+                    and not d.startswith("cmake-build-")]
         for fn in filenames:
             if os.path.splitext(fn)[1] not in exts:
                 continue
@@ -484,9 +595,15 @@ def _find_all(base, patterns, explicit):
     return sorted(set(found))
 
 
-def parse_checkstyle(path, granularity, tool="checkstyle"):
-    """Checkstyle-format XML. Also emitted by golangci-lint (--out-format
-    checkstyle) — pass tool="golangci" so findings/IDs carry the real gate name."""
+def parse_checkstyle(path, granularity, tool="checkstyle", base=None):
+    """Checkstyle-format XML. Also emitted by golangci-lint (v2:
+    --output.checkstyle.path=...; v1: --out-format checkstyle), detekt and
+    SwiftLint — pass tool="golangci"/"detekt"/"swiftlint" so findings/IDs
+    carry the real gate name. For non-java tools the repo-relative path is
+    PRESERVED in the ID (idiomatic Go repos have same-named files in every
+    package — basename would collide across packages/modules); absolute
+    paths (detekt and SwiftLint print absolute BY DEFAULT) are relativized
+    against the repo first, same discipline as eslint/tsc/clang-tidy."""
     out = []
     try:
         root = ET.parse(path).getroot()
@@ -497,8 +614,12 @@ def parse_checkstyle(path, granularity, tool="checkstyle"):
         for e in _iter_local(f, "error"):
             sev = CHECKSTYLE_SEVERITY.get((e.get("severity") or "warning").lower(), "MEDIUM")
             rule = (e.get("source") or "?").split(".")[-1]
-            out.append((_mk_id(tool, rule, fname, e.get("line", "0"), granularity),
-                        sev, tool))
+            if tool != "checkstyle":
+                fid = _mk_id_rel(tool, rule, _node_rel(fname, base),
+                                 e.get("line", "0"), granularity)
+            else:
+                fid = _mk_id(tool, rule, fname, e.get("line", "0"), granularity)
+            out.append((fid, sev, tool))
     return out
 
 
@@ -625,12 +746,22 @@ def _mk_id_rel(tool, rule, rel, line, granularity):
 
 
 def _node_rel(fname, base):
-    if fname and base and os.path.isabs(fname):
+    """Relativize fname against the repo base when it lives inside it —
+    linters print ABSOLUTE paths by default (eslint, detekt, swiftlint,
+    clang-tidy) and finding IDs must survive machine/worktree moves. Paths
+    outside the base, already-relative paths, or cross-drive paths come back
+    untouched. Deliberately NOT gated on os.path.isabs: its verdict for
+    '/posix/style' paths on Windows changed across Python versions."""
+    if not fname:
+        return "?"
+    if base:
         try:
-            return os.path.relpath(fname, base)
+            rp = os.path.relpath(fname, base)
+            if not rp.startswith(".."):
+                return rp
         except ValueError:  # different drive on Windows
             return fname
-    return fname or "?"
+    return fname
 
 
 def parse_eslint(path, granularity, base=None):
@@ -702,6 +833,157 @@ def parse_tsc(path, granularity, base=None):
                                            granularity), sev, "tsc"))
     except OSError:
         return out
+    return out
+
+
+def parse_clippy(path, granularity):
+    """`cargo clippy --message-format=json` — JSON Lines; each compiler-message
+    carries message.level (error/warning), message.code.code (e.g. 'clippy::x';
+    null for plain rustc compile errors — real breakage, HIGH always) and spans.
+    error -> HIGH, warning -> MEDIUM; note/help lines are skipped.
+    Diagnostics WITHOUT a primary span are rustc's end-of-run summaries
+    ('N warnings emitted', 'aborting due to ...') — real compile errors always
+    carry a span, so span-less lines are skipped BEFORE the code-null check
+    (else every warning run grows a phantom HIGH 'compile-error' and the gate
+    can never converge). Repeats across compilation targets (lib/bin/test)
+    are deduped by finding ID."""
+    out = []
+    seen = set()
+    try:
+        fh = open(path, "r", encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    with fh:
+        for raw in fh:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except ValueError:
+                continue
+            if not isinstance(obj, dict) or obj.get("reason") != "compiler-message":
+                continue
+            msg = obj.get("message") or {}
+            level = msg.get("level")
+            if level not in ("error", "warning"):
+                continue
+            span = next((s for s in (msg.get("spans") or [])
+                         if isinstance(s, dict) and s.get("is_primary")), None)
+            if span is None:
+                continue  # span-less = summary diagnostic, not a finding
+            code = (msg.get("code") or {}).get("code") if msg.get("code") else None
+            if code is None:
+                sev, rule = "HIGH", "compile-error"
+            else:
+                sev = "HIGH" if level == "error" else "MEDIUM"
+                rule = code
+            fname = span.get("file_name") or "?"
+            line = span.get("line_start", 0)
+            fid = _mk_id_rel("clippy", rule, fname, line, granularity)
+            if fid in seen:
+                continue
+            seen.add(fid)
+            out.append((fid, sev, "clippy"))
+    return out
+
+
+def _sarif_rel(uri, base):
+    """SARIF uris arrive as file:///C:/repo/src/A.cs (Roslyn emits absolute,
+    percent-encoded) — strip scheme, unquote, and relativize against the repo
+    so finding IDs survive machine/worktree moves (same job as _node_rel)."""
+    from urllib.parse import unquote
+    p = unquote(uri).replace("file:///", "").replace("file://", "")
+    if base:
+        try:
+            rp = os.path.relpath(p, base)
+            if not rp.startswith(".."):
+                p = rp
+        except ValueError:
+            pass  # different drive on Windows — keep as-is
+    return p.replace("\\", "/")
+
+
+def parse_sarif(path, granularity, tool="sarif", base=None):
+    """SARIF (the universal static-analysis format — Roslyn analyzers via
+    MSBuild /p:ErrorLog="...,version=2", and many other tools). results[].level:
+    error -> HIGH, warning -> MEDIUM, note -> INFO (absent defaults to warning).
+    Suppressed results (#pragma / [SuppressMessage] — 'suppressions' in v2,
+    'suppressionStates' in v1) are skipped: a suppressed diagnostic must not
+    phantom-gate a build that compiles clean. v1 location shape
+    (resultFile/analysisTarget) supported as fallback — Roslyn's ErrorLog
+    emits v1 unless ',version=2' is requested."""
+    sev_map = {"error": "HIGH", "warning": "MEDIUM", "note": "INFO", "none": "INFO"}
+    out = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return out
+    if not isinstance(data, dict):
+        return out
+    for run in data.get("runs") or []:
+        if not isinstance(run, dict):
+            continue
+        for res in run.get("results") or []:
+            if not isinstance(res, dict):
+                continue
+            if res.get("suppressions") or res.get("suppressionStates"):
+                continue
+            sev = sev_map.get((res.get("level") or "warning").lower(), "MEDIUM")
+            rule = res.get("ruleId") or "?"
+            fname, line = "?", 0
+            locs = res.get("locations") or []
+            if locs and isinstance(locs[0], dict):
+                loc = locs[0]
+                phys = loc.get("physicalLocation") or {}
+                art = phys.get("artifactLocation") or {}
+                uri = art.get("uri")
+                region = phys.get("region") or {}
+                if not uri:  # SARIF v1 fallback
+                    v1 = loc.get("resultFile") or loc.get("analysisTarget") or {}
+                    uri = v1.get("uri")
+                    region = v1.get("region") or {}
+                if uri:
+                    fname = _sarif_rel(uri, base)
+                line = region.get("startLine", 0)
+            out.append((_mk_id_rel(tool, rule, fname, line, granularity), sev, tool))
+    return out
+
+
+_CLANG_TIDY_LINE = re.compile(
+    r"^(?P<file>(?:[A-Za-z]:)?[^:\n]+\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|tpp|ipp|inl|mm|cu)):"
+    r"(?P<line>\d+):\d+:\s*(?P<kind>error|warning):\s*.*?"
+    r"(?:\[(?P<checks>[\w.,-]+)\])?\s*$")
+
+
+def parse_clang_tidy(path, granularity, base=None):
+    """clang-tidy text output (`file:line:col: warning: msg [check-a,check-b]`):
+    error -> HIGH, warning -> MEDIUM; security-flavored checks (cert-*, or any
+    check containing 'security') floored to HIGH — same discipline as
+    findsecbugs/eslint-security. Lines without a [check] tag (raw compiler
+    diagnostics passed through) are kept as rule 'diagnostic'. clang-tidy
+    prints ABSOLUTE paths — relativize against the repo so finding IDs
+    survive machine/worktree moves (same job as tsc's _node_rel)."""
+    out = []
+    try:
+        fh = open(path, "r", encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    with fh:
+        for raw in fh:
+            m = _CLANG_TIDY_LINE.match(raw.strip())
+            if not m:
+                continue
+            checks = m.group("checks") or "diagnostic"
+            rule = checks.split(",")[0]
+            sev = "HIGH" if m.group("kind") == "error" else "MEDIUM"
+            if rule.startswith("cert-") or "security" in rule:
+                sev = _bump(sev, "HIGH")
+            out.append((_mk_id_rel("clang-tidy", rule,
+                                   _node_rel(m.group("file"), base),
+                                   m.group("line"), granularity),
+                        sev, "clang-tidy"))
     return out
 
 
@@ -876,9 +1158,45 @@ def cmd_ingest_gate(args):
         gl_files = _find_all(base, [os.path.join("reports", "golangci.xml"),
                                     "golangci.xml"], args.golangci)
         for path in gl_files:
-            collected += parse_checkstyle(path, gran, tool="golangci")
+            collected += parse_checkstyle(path, gran, tool="golangci", base=base)
         if gl_files:
             present.add("golangci")
+    elif rtype == "rust":
+        cl_files = _find_all(base, [os.path.join("reports", "clippy.json"),
+                                    "clippy.json"], args.clippy)
+        for path in cl_files:
+            collected += parse_clippy(path, gran)
+        if cl_files:
+            present.add("clippy")
+    elif rtype == "dotnet":
+        sa_files = _find_all(base, [os.path.join("reports", "analysis.sarif"),
+                                    "analysis.sarif"], args.sarif)
+        for path in sa_files:
+            collected += parse_sarif(path, gran, tool="roslyn", base=base)
+        if sa_files:
+            present.add("roslyn")
+    elif rtype == "cpp":
+        ct_files = _find_all(base, [os.path.join("reports", "clang-tidy.txt"),
+                                    "clang-tidy.txt"], args.clang_tidy)
+        for path in ct_files:
+            collected += parse_clang_tidy(path, gran, base=base)
+        if ct_files:
+            present.add("clang-tidy")
+    elif rtype == "gradle":
+        dk_files = _find_all(base, ["**/build/reports/detekt/detekt.xml",
+                                    os.path.join("reports", "detekt.xml"),
+                                    "detekt.xml"], args.detekt)
+        for path in dk_files:
+            collected += parse_checkstyle(path, gran, tool="detekt", base=base)
+        if dk_files:
+            present.add("detekt")
+    elif rtype == "swift":
+        sl_files = _find_all(base, [os.path.join("reports", "swiftlint.xml"),
+                                    "swiftlint.xml"], args.swiftlint)
+        for path in sl_files:
+            collected += parse_checkstyle(path, gran, tool="swiftlint", base=base)
+        if sl_files:
+            present.add("swiftlint")
     else:
         cs_files = _find_all(base, ["**/target/checkstyle-result.xml",
                                     "**/checkstyle-result.xml"], args.checkstyle)
@@ -900,7 +1218,12 @@ def cmd_ingest_gate(args):
 
     combined_name = {"python": "python-qa-gate",
                      "node": "node-qa-gate",
-                     "go": "go-qa-gate"}.get(rtype, "java-qa-gate")
+                     "go": "go-qa-gate",
+                     "rust": "rust-qa-gate",
+                     "dotnet": "dotnet-qa-gate",
+                     "cpp": "cpp-qa-gate",
+                     "gradle": "gradle-qa-gate",
+                     "swift": "swift-qa-gate"}.get(rtype, "java-qa-gate")
     by_tool = {}
     for fid, sev, tool in collected:
         by_tool.setdefault(tool, []).append((fid, sev))
@@ -952,7 +1275,9 @@ def cmd_ingest_gate(args):
 
     if not results:
         flags = {"python": "--ruff/--mypy", "node": "--eslint/--tsc",
-                 "go": "--golangci"}.get(rtype, "--checkstyle/--pmd/--spotbugs")
+                 "go": "--golangci", "rust": "--clippy", "dotnet": "--sarif",
+                 "cpp": "--clang-tidy", "gradle": "--detekt",
+                 "swift": "--swiftlint"}.get(rtype, "--checkstyle/--pmd/--spotbugs")
         print(f"[qa_ledger] ingest-gate {args.repo}: no linter reports found under "
               f"'{base}'. Run the linters first, or pass explicit {flags} paths.")
         return
@@ -1357,11 +1682,11 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
     cov = coverage(cfg.get("path", "."), rtype)
     cov_dim = min(cov["pct"] / threshold, 1.0) if threshold else 0.0
     gated_open, sev = _gate_open_and_sev(node)
-    # silence is not success: for a lint-capable repo (maven/python/node/go — the
-    # types the ingest parsers support) with NO static-gate record ever logged, the
-    # dimension is UNMEASURED (0.0), not a perfect 1.0. A tool that didn't run is
-    # never green.
-    static_unmeasured = (rtype in ("maven", "python", "node", "go")
+    # silence is not success: for a lint-capable repo (every type the ingest
+    # parsers support) with NO static-gate record ever logged, the dimension is
+    # UNMEASURED (0.0), not a perfect 1.0. A tool that didn't run is never green.
+    static_unmeasured = (rtype in ("maven", "python", "node", "go", "rust",
+                                   "dotnet", "cpp", "gradle", "swift")
                          and not _latest_static_by_tool(node))
     if static_unmeasured:
         static_dim = 0.0
@@ -1621,7 +1946,8 @@ def _test_file_set(repo_path, repo_type):
     exts = SOURCE_EXT.get(repo_type, SOURCE_EXT["generic"])
     files = []
     for dirpath, dirnames, filenames in os.walk(repo_path):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS
+                    and not d.startswith("cmake-build-")]
         for fn in filenames:
             if os.path.splitext(fn)[1] not in exts:
                 continue
@@ -2590,9 +2916,19 @@ def build_parser():
                     help="(type: node) explicit tsc text report path")
     pg.add_argument("--golangci", default=None,
                     help="(type: go) explicit golangci-lint checkstyle XML path")
+    pg.add_argument("--clippy", default=None,
+                    help="(type: rust) explicit cargo-clippy JSON-lines report path")
+    pg.add_argument("--sarif", default=None,
+                    help="(type: dotnet) explicit SARIF report path (Roslyn ErrorLog)")
+    pg.add_argument("--clang-tidy", dest="clang_tidy", default=None,
+                    help="(type: cpp) explicit clang-tidy text report path")
+    pg.add_argument("--detekt", default=None,
+                    help="(type: gradle) explicit detekt checkstyle XML path")
+    pg.add_argument("--swiftlint", default=None,
+                    help="(type: swift) explicit swiftlint checkstyle XML path")
     pg.add_argument("--combined", action="store_true",
-                    help="log one combined 'java-qa-gate'/'python-qa-gate'/"
-                         "'node-qa-gate' step instead of one per linter")
+                    help="log one combined '<type>-qa-gate' step "
+                         "(java-qa-gate for maven) instead of one per linter")
     pg.add_argument("--id-granularity", default=None, choices=["line", "file"],
                     help="finding-ID granularity for fixed/oscillation diffing")
     pg.add_argument("--note", default=None)
