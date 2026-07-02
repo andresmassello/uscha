@@ -76,6 +76,18 @@ ANTES de tocar nada.
   Flutter: coverage de `coverage/lcov.info` (`flutter test --coverage`);
   el test count es aproximado (cuenta `test(`/`testWidgets(`).
 
+  Python (`type: python`, kit 1.4.0):
+
+  | dato        | comando                                           | archivo |
+  |-------------|---------------------------------------------------|---------|
+  | coverage    | `pytest --cov --cov-report=xml:reports/coverage.xml` | `coverage.xml` o `reports/coverage.xml` (Cobertura) |
+  | test count  | `pytest --junitxml=reports/junit.xml`             | `reports/junit.xml` (root envuelto `<testsuites>` soportado) |
+  | ruff        | `ruff check --output-format=json > reports/ruff.json` | `reports/ruff.json` (S*/E9*/F82*→HIGH · B*→MEDIUM · resto→LOW) |
+  | mypy        | `mypy src > reports/mypy.txt`                     | `reports/mypy.txt` (error→HIGH · warning→MEDIUM · note→INFO) |
+
+  `ingest-gate` los encuentra solo por type del repo, o con `--ruff/--mypy` explícitos.
+  Contrato idéntico al Java: reporte ausente = el gate no corrió (jamás acredita fixes).
+
 ## Instalación
 
 **Opción A — por proyecto** (recomendado para suites multi-repo): copiá `.claude/` al
@@ -100,7 +112,7 @@ cp -r dev-loop-kit/.claude/skills/sys-doc   ~/.claude/skills/
 
 Editá `dev-loop.config.json`:
 
-- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`).
+- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`|`python`).
 - `defaults.coverage_threshold`: dispara la fase de characterization si está por debajo.
 - `defaults.severity_gate`: qué severidades bloquean (default BLOCKER/CRITICAL/HIGH).
 - `defaults.id_granularity`: `line` o `file` (default `file`: más estable si refactorizás mucho).

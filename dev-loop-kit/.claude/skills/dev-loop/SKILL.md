@@ -33,7 +33,8 @@ recorded for the retrospective; a measured red always overrides a narrated green
    below goes to `ISSUES-DEFERRED.md`, never into the loop. Polishing Medium/Low
    findings forever is the failure mode this skill exists to prevent.
 2. **Tests are a guardrail, not a finale.** Run the repo's test command (`mvn test` /
-   `flutter test`) after every tool pass that changed code. A red suite stops the loop.
+   `flutter test` / `pytest`) after every tool pass that changed code. A red suite
+   stops the loop.
 3. **Generating tests is not running tests.** `/improve test` (writing coverage) runs
    ONCE at the end against stabilized code — never inside the loop. Inside the loop you
    only *run* the existing suite.
@@ -54,7 +55,7 @@ QL="./.claude/skills/dev-loop/qa_ledger.py"
 python3 $QL init --config dev-loop.config.json
 ```
 
-The config lists every repo and its type (maven|flutter). In a multi-repo session the
+The config lists every repo and its type (maven|flutter|python). In a multi-repo session the
 other repos must be mounted via `--add-dir` or `additionalDirectories`; the `path`
 fields in the config are relative to where you run `init`.
 

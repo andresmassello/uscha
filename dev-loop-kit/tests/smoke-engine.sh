@@ -2,7 +2,8 @@
 # smoke-engine.sh — suite de smoke del motor qa_ledger.py contra un ledger SINTÉTICO.
 # Valida el cableado de los fact gates (v1.3.0): log-gate, flag-blocker,
 # resolve-escalation, UNMEASURED, convergencia per-tool, gate-check, golden-diff,
-# spec-check estructural, simplicity floor, oscillation.
+# spec-check estructural, simplicity floor, oscillation — y el adapter python
+# (v1.4.0): coverage Cobertura, junit envuelto, LOC, ruff/mypy, UNMEASURED python.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -22,7 +23,7 @@ if [ -z "$PY" ]; then
   done
 fi
 [ -n "$PY" ] || { echo "FAIL: no hay Python funcional en PATH"; exit 1; }
-SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b"
+SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b" "$SB/repo-c"
 cd "$SB"
 
 PASS=0; FAIL=0
@@ -41,7 +42,8 @@ cat > dev-loop.config.json <<'EOF'
     "qa_tools_order": ["code-review","judgment-day","improve"],
     "acceptance_file": "ACCEPTANCE.md" },
   "repos": [ {"name":"repo-a","path":"repo-a","type":"maven"},
-             {"name":"repo-b","path":"repo-b","type":"flutter"} ],
+             {"name":"repo-b","path":"repo-b","type":"flutter"},
+             {"name":"repo-c","path":"repo-c","type":"python"} ],
   "integration": {"enabled": false} }
 EOF
 printf -- "# ACCEPTANCE\n\n- [x] criterio uno\n- [ ] criterio dos\n" > ACCEPTANCE.md
@@ -114,6 +116,40 @@ mkdir -p repo-a/target/surefire-reports
 printf '<testsuite name="F" tests="6" failures="2" errors="0" skipped="0"/>\n' > repo-a/target/surefire-reports/TEST-F.xml
 run snapshot --repo repo-a >/dev/null
 chk "snapshot rojo -> NOT converged" 1 run converged --repo repo-a
+
+echo "== T13 adapter python: coverage Cobertura + junit ENVUELTO + LOC =="
+mkdir -p repo-c/src/pkg repo-c/tests repo-c/reports
+printf 'def f():\n    return 1\nX = 2\n' > repo-c/src/pkg/mod.py
+printf 'from src.pkg import mod\ndef test_f(): assert mod.f() == 1\n' > repo-c/tests/test_mod.py
+cat > repo-c/coverage.xml <<'EOF'
+<?xml version="1.0"?>
+<coverage lines-valid="10" lines-covered="8" line-rate="0.8" version="7.4"></coverage>
+EOF
+cat > repo-c/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="pytest" tests="5" failures="0" errors="0" skipped="1"/></testsuites>
+EOF
+SNAP=$(run snapshot --repo repo-c 2>&1)
+echo "$SNAP" | grep -q "coverage=80.0%" && { PASS=$((PASS+1)); echo "  ok   coverage Cobertura 8/10 -> 80.0%"; } || { FAIL=$((FAIL+1)); echo "  FAIL coverage python ($SNAP)"; }
+echo "$SNAP" | grep -q "tests=5" && { PASS=$((PASS+1)); echo "  ok   junit ENVUELTO (testsuites>testsuite) -> 5 tests"; } || { FAIL=$((FAIL+1)); echo "  FAIL test count python ($SNAP)"; }
+echo "$SNAP" | grep -q "prod_loc=3, test_loc=2" && { PASS=$((PASS+1)); echo "  ok   LOC prod=3 / test=2 bien clasificado"; } || { FAIL=$((FAIL+1)); echo "  FAIL LOC python ($SNAP)"; }
+
+echo "== T14 python UNMEASURED pre-ingest / medido post-ingest =="
+run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-c" \
+  && { PASS=$((PASS+1)); echo "  ok   repo-c UNMEASURED antes del ingest"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL repo-c no aparece como UNMEASURED"; }
+cat > repo-c/reports/ruff.json <<'EOF'
+[{"code":"S101","filename":"src/pkg/mod.py","location":{"row":3}},
+ {"code":"E501","filename":"src/pkg/mod.py","location":{"row":1}},
+ {"code":null,"filename":"src/pkg/mod.py","location":{"row":9}}]
+EOF
+printf 'src/pkg/mod.py:2: error: Incompatible return value type (got "int", expected "str")  [return-value]\n' > repo-c/reports/mypy.txt
+ING=$(run ingest-gate --repo repo-c --iteration 1 2>&1)
+echo "$ING" | grep -q "repo-c/ruff: reported=3 gated=2" && { PASS=$((PASS+1)); echo "  ok   ruff: 3 findings, 2 gateados (S101 + code:null syntax = HIGH; E501 = LOW)"; } || { FAIL=$((FAIL+1)); echo "  FAIL ruff ($ING)"; }
+echo "$ING" | grep -q "repo-c/mypy: reported=1 gated=1" && { PASS=$((PASS+1)); echo "  ok   mypy: error -> HIGH gateado"; } || { FAIL=$((FAIL+1)); echo "  FAIL mypy ($ING)"; }
+run readiness 2>/dev/null | grep "NEVER ran" | grep -q "repo-c" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL repo-c sigue UNMEASURED tras ingest"; } \
+  || { PASS=$((PASS+1)); echo "  ok   repo-c ya no es UNMEASURED tras ingest"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"

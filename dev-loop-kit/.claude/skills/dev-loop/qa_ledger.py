@@ -31,6 +31,8 @@ Usage (see `--help` on each subcommand):
   qa_ledger.py summary     [--json]
   qa_ledger.py readiness   [--acceptance ACCEPTANCE.md] [--json]
   qa_ledger.py ingest-gate --repo backend-api --iteration 1 [--combined]
+  qa_ledger.py ingest-gate --repo data-lib --iteration 1 \
+                           [--ruff reports/ruff.json --mypy reports/mypy.txt]
   qa_ledger.py log-gate    --repo backend-api --iteration 1 --kind golden-diff \
                            --verdict pass|fail|not-run [--count N] [--note "..."]
   qa_ledger.py flag-blocker --repo backend-api --kind constitution --note "INV-XX breached" \
@@ -61,12 +63,14 @@ DEFAULT_LEDGER = "QA-LEDGER.json"
 SKIP_DIRS = {
     "target", "build", ".git", ".idea", ".gradle", "node_modules",
     ".dart_tool", "out", "bin", "dist", ".mvn", "generated", "generated-sources",
+    ".venv", "venv", ".tox", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache",
 }
 
 SOURCE_EXT = {
     "maven": {".java", ".kt"},
     "flutter": {".dart"},
-    "generic": {".java", ".kt", ".dart"},
+    "python": {".py"},
+    "generic": {".java", ".kt", ".dart", ".py"},
 }
 
 
@@ -165,8 +169,40 @@ def flutter_coverage(repo_path):
             "report_found": bool(lcov)}
 
 
+def python_coverage(repo_path):
+    """Cobertura coverage.xml (as emitted by `pytest --cov --cov-report=xml`).
+    Root attributes: lines-covered / lines-valid. First match wins:
+    coverage.xml, reports/coverage.xml. An unreadable report is NOT measured
+    (report_found False) — absence is never invented as a number."""
+    path = next((p for p in (os.path.join(repo_path, "coverage.xml"),
+                             os.path.join(repo_path, "reports", "coverage.xml"))
+                 if os.path.isfile(p)), None)
+    if not path:
+        return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError):
+        return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
+    lc, lv = root.get("lines-covered"), root.get("lines-valid")
+    if lc is None or lv is None:
+        # parseable XML but NOT a Cobertura root (wrong format dropped here) —
+        # a report that measured nothing must never yield an invented 0.0%.
+        return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
+    try:
+        covered, valid = int(float(lc)), int(float(lv))
+    except ValueError:
+        return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
+    pct = round(covered / valid * 100, 2) if valid else 0.0
+    return {"covered": covered, "missed": max(0, valid - covered), "pct": pct,
+            "report_found": True}
+
+
 def coverage(repo_path, repo_type):
-    return maven_coverage(repo_path) if repo_type == "maven" else flutter_coverage(repo_path)
+    if repo_type == "maven":
+        return maven_coverage(repo_path)
+    if repo_type == "python":
+        return python_coverage(repo_path)
+    return flutter_coverage(repo_path)
 
 
 # --------------------------------------------------------------------------- #
@@ -225,8 +261,53 @@ def flutter_test_count(repo_path):
             "approximate": True}
 
 
+def python_test_count(repo_path):
+    """JUnit XML from `pytest --junitxml=...`. Modern pytest (xunit2 family)
+    WRAPS the root: <testsuites><testsuite tests=...>. Older/other emitters use
+    <testsuite> as the root. Handle both — reading attrs off a <testsuites>
+    root would silently count 0."""
+    # first LOCATION wins (mirrors python_coverage): each junit.xml is a FULL-run
+    # report — summing locations would double-count, and a stale root junit.xml
+    # next to a fresh reports/junit.xml could permanently veto convergence.
+    # (The TEST-*.xml set legitimately sums: those are per-class files.)
+    groups = [
+        [os.path.join(repo_path, "reports", "junit.xml")],
+        [os.path.join(repo_path, "junit.xml")],
+        sorted(glob.glob(os.path.join(repo_path, "reports", "TEST-*.xml"))),
+    ]
+    files = []
+    for group in groups:
+        found = [f for f in group if os.path.isfile(f)]
+        if found:
+            files = found
+            break
+    tests = failures = errors = skipped = 0
+    for f in files:
+        try:
+            root = ET.parse(f).getroot()
+        except (ET.ParseError, OSError):
+            continue
+        if _local(root.tag) == "testsuite":
+            suites = [root]
+        else:
+            suites = list(_iter_local(root, "testsuite"))
+        for s in suites:
+            tests += int(s.get("tests", 0))
+            failures += int(s.get("failures", 0))
+            errors += int(s.get("errors", 0))
+            skipped += int(s.get("skipped", 0))
+    executed = tests - skipped
+    return {"total": tests, "executed": executed, "failures": failures,
+            "errors": errors, "skipped": skipped,
+            "passed": executed - failures - errors, "report_found": bool(files)}
+
+
 def test_count(repo_path, repo_type):
-    return maven_test_count(repo_path) if repo_type == "maven" else flutter_test_count(repo_path)
+    if repo_type == "maven":
+        return maven_test_count(repo_path)
+    if repo_type == "python":
+        return python_test_count(repo_path)
+    return flutter_test_count(repo_path)
 
 
 # --------------------------------------------------------------------------- #
@@ -236,6 +317,10 @@ def _is_test_path(rel, repo_type):
     parts = rel.replace("\\", "/").split("/")
     if repo_type == "flutter":
         return parts and parts[0] == "test"
+    if repo_type == "python":
+        fn = parts[-1]
+        return ("tests" in parts or "test" in parts
+                or fn.startswith("test_") or fn.endswith("_test.py"))
     return "test" in parts and "src" in parts  # src/test/...
 
 
@@ -243,6 +328,9 @@ def _is_prod_path(rel, repo_type):
     parts = rel.replace("\\", "/").split("/")
     if repo_type == "flutter":
         return parts and parts[0] == "lib"
+    if repo_type == "python":
+        # src layout or root package — anything .py that isn't a test
+        return not _is_test_path(rel, repo_type)
     return "main" in parts and "src" in parts  # src/main/...
 
 
@@ -321,6 +409,8 @@ def _rel_src(fname):
     if not fname:
         return "?"
     fname = fname.replace("\\", "/")
+    if fname.startswith("src/"):
+        return fname  # already repo-relative (mypy/ruff emit these as given on the CLI)
     i = fname.find("/src/")
     if i >= 0:
         return fname[i + 1:]
@@ -406,6 +496,68 @@ def parse_spotbugs(path, granularity):
             sev = _bump(sev, "HIGH")
         tool = "findsecbugs" if is_sec else "spotbugs"
         out.append((_mk_id(tool, btype, fname, line, granularity), sev, tool))
+    return out
+
+
+# Ruff rule-code -> common scale: S* (flake8-bandit / security) and E9* / F82*
+# (syntax errors / undefined names — real breakage) -> HIGH; B* (bugbear,
+# likely bugs) -> MEDIUM; everything else (style/format) -> LOW.
+def _ruff_severity(code):
+    c = (code or "").upper()
+    # digit-anchored: bare "S"/"B" prefixes over-match SIM/SLF/SLOT/BLE style rules
+    if re.match(r"S\d", c) or c.startswith("E9") or c.startswith("F82"):
+        return "HIGH"
+    if re.match(r"B\d", c):
+        return "MEDIUM"
+    return "LOW"
+
+
+def parse_ruff(path, granularity):
+    """`ruff check --output-format=json` — a JSON array of finding objects."""
+    out = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return out
+    if not isinstance(data, list):
+        return out
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        code = item.get("code")
+        fname = item.get("filename") or "?"
+        line = (item.get("location") or {}).get("row", 0)
+        # modern ruff (>=0.5) emits "code": null for SYNTAX errors — real breakage,
+        # always HIGH (the legacy E9* branch only covers older ruff versions).
+        sev = "HIGH" if code is None else _ruff_severity(code)
+        out.append((_mk_id("ruff", code or "syntax-error", fname, line, granularity),
+                    sev, "ruff"))
+    return out
+
+
+_MYPY_LINE = re.compile(
+    r"^(?P<file>(?:[A-Za-z]:)?[^:\n]+\.pyi?):(?P<line>\d+)(?::\d+)?:\s*"
+    r"(?P<kind>error|warning|note):\s*.*?(?:\s+\[(?P<code>[\w-]+)\])?\s*$")
+
+
+def parse_mypy(path, granularity):
+    """mypy text output (`file:line: error: msg [code]`):
+    error -> HIGH, warning -> MEDIUM, note -> INFO."""
+    sev_map = {"error": "HIGH", "warning": "MEDIUM", "note": "INFO"}
+    out = []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            for raw in fh:
+                m = _MYPY_LINE.match(raw.strip())
+                if not m:
+                    continue
+                code = m.group("code") or "misc"
+                out.append((_mk_id("mypy", code, m.group("file"), m.group("line"),
+                                   granularity),
+                            sev_map.get(m.group("kind"), "MEDIUM"), "mypy"))
+    except OSError:
+        return out
     return out
 
 
@@ -547,33 +699,49 @@ def cmd_ingest_gate(args):
     gate = defaults.get("severity_gate", ["BLOCKER", "CRITICAL", "HIGH"])
     gran = args.id_granularity or defaults.get("id_granularity", "line")
 
+    rtype = cfg.get("type", "maven")
     collected = []
     present = set()  # tools whose report file actually existed this run
-    cs_files = _find_all(base, ["**/target/checkstyle-result.xml",
-                                "**/checkstyle-result.xml"], args.checkstyle)
-    for path in cs_files:
-        collected += parse_checkstyle(path, gran)
-    if cs_files:
-        present.add("checkstyle")
-    pmd_files = _find_all(base, ["**/target/pmd.xml", "**/pmd.xml"], args.pmd)
-    for path in pmd_files:
-        collected += parse_pmd(path, gran)
-    if pmd_files:
-        present.add("pmd")
-    sb_files = _find_all(base, ["**/target/spotbugsXml.xml",
-                                "**/spotbugsXml.xml"], args.spotbugs)
-    for path in sb_files:
-        collected += parse_spotbugs(path, gran)
-    if sb_files:
-        present.update({"spotbugs", "findsecbugs"})
+    if rtype == "python":
+        ruff_files = _find_all(base, [os.path.join("reports", "ruff.json"),
+                                      "ruff.json"], args.ruff)
+        for path in ruff_files:
+            collected += parse_ruff(path, gran)
+        if ruff_files:
+            present.add("ruff")
+        mypy_files = _find_all(base, [os.path.join("reports", "mypy.txt"),
+                                      "mypy.txt"], args.mypy)
+        for path in mypy_files:
+            collected += parse_mypy(path, gran)
+        if mypy_files:
+            present.add("mypy")
+    else:
+        cs_files = _find_all(base, ["**/target/checkstyle-result.xml",
+                                    "**/checkstyle-result.xml"], args.checkstyle)
+        for path in cs_files:
+            collected += parse_checkstyle(path, gran)
+        if cs_files:
+            present.add("checkstyle")
+        pmd_files = _find_all(base, ["**/target/pmd.xml", "**/pmd.xml"], args.pmd)
+        for path in pmd_files:
+            collected += parse_pmd(path, gran)
+        if pmd_files:
+            present.add("pmd")
+        sb_files = _find_all(base, ["**/target/spotbugsXml.xml",
+                                    "**/spotbugsXml.xml"], args.spotbugs)
+        for path in sb_files:
+            collected += parse_spotbugs(path, gran)
+        if sb_files:
+            present.update({"spotbugs", "findsecbugs"})
 
+    combined_name = "python-qa-gate" if rtype == "python" else "java-qa-gate"
     by_tool = {}
     for fid, sev, tool in collected:
         by_tool.setdefault(tool, []).append((fid, sev))
     if args.combined:
         merged = [item for items in by_tool.values() for item in items]
-        by_tool = {"java-qa-gate": merged} if (merged or present) else {}
-        seed = {"java-qa-gate"} if present else set()
+        by_tool = {combined_name: merged} if (merged or present) else {}
+        seed = {combined_name} if present else set()
     else:
         seed = present
 
@@ -617,9 +785,10 @@ def cmd_ingest_gate(args):
     _save(args.ledger, ledger)
 
     if not results:
+        flags = ("--ruff/--mypy" if rtype == "python"
+                 else "--checkstyle/--pmd/--spotbugs")
         print(f"[qa_ledger] ingest-gate {args.repo}: no linter reports found under "
-              f"'{base}'. Run the java-qa-gate first, or pass explicit "
-              f"--checkstyle/--pmd/--spotbugs paths.")
+              f"'{base}'. Run the linters first, or pass explicit {flags} paths.")
         return
     for tool, total, gated, resolved, new, below in results:
         print(f"[qa_ledger] {args.repo}/{tool}: reported={total} gated={gated} "
@@ -1022,10 +1191,10 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
     cov = coverage(cfg.get("path", "."), rtype)
     cov_dim = min(cov["pct"] / threshold, 1.0) if threshold else 0.0
     gated_open, sev = _gate_open_and_sev(node)
-    # silence is not success: for a lint-capable repo (maven — the type the ingest
-    # parsers support) with NO static-gate record ever logged, the dimension is
+    # silence is not success: for a lint-capable repo (maven/python — the types the
+    # ingest parsers support) with NO static-gate record ever logged, the dimension is
     # UNMEASURED (0.0), not a perfect 1.0. A tool that didn't run is never green.
-    static_unmeasured = rtype == "maven" and not _latest_static_by_tool(node)
+    static_unmeasured = rtype in ("maven", "python") and not _latest_static_by_tool(node)
     if static_unmeasured:
         static_dim = 0.0
     else:
@@ -2243,8 +2412,13 @@ def build_parser():
     pg.add_argument("--checkstyle", default=None, help="explicit checkstyle-result.xml path")
     pg.add_argument("--pmd", default=None, help="explicit pmd.xml path")
     pg.add_argument("--spotbugs", default=None, help="explicit spotbugsXml.xml path")
+    pg.add_argument("--ruff", default=None,
+                    help="(type: python) explicit ruff JSON report path")
+    pg.add_argument("--mypy", default=None,
+                    help="(type: python) explicit mypy text report path")
     pg.add_argument("--combined", action="store_true",
-                    help="log one 'java-qa-gate' step instead of one per linter")
+                    help="log one combined 'java-qa-gate'/'python-qa-gate' step "
+                         "instead of one per linter")
     pg.add_argument("--id-granularity", default=None, choices=["line", "file"],
                     help="finding-ID granularity for fixed/oscillation diffing")
     pg.add_argument("--note", default=None)

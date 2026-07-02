@@ -439,7 +439,7 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(1300px
     <span class="node">Evidence</span><span class="ar">→</span>
     <span class="node red">Human gate</span>
   </div>
-  <p>Two things the flow guarantees: <strong>lowering the cost of entry</strong> (you don't have to design the system to be able to start — Discovery proposes that) and <strong>raising the certainty of the output</strong> (an honest state, with evidence and blockers, tells you how ready it truly is). In Claude Code all of this lives in six callable skills (kit 1.3.0) and a measurement engine in Python.</p>
+  <p>Two things the flow guarantees: <strong>lowering the cost of entry</strong> (you don't have to design the system to be able to start — Discovery proposes that) and <strong>raising the certainty of the output</strong> (an honest state, with evidence and blockers, tells you how ready it truly is). In Claude Code all of this lives in six callable skills (kit 1.4.0) and a measurement engine in Python.</p>
   <div class="tagrow">
     <span class="chip red">/discovery</span><span class="chip red">/adr-refine</span><span class="chip red">/dev-loop</span><span class="chip red">/sys-doc</span><span class="chip red">/reverse-discovery</span><span class="chip red">/characterize</span><span class="chip">qa_ledger.py</span>
   </div>
@@ -541,7 +541,7 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(1300px
   <h2><code class="in" style="font-size:.7em">/dev-loop</code> <span class="accent">phase by phase.</span></h2>
   <p>The <code class="in">dev-loop</code> is a multi-repo, spec-driven orchestrator. It takes the ADR set + <code class="in">ACCEPTANCE.md</code> as input, builds, and runs a severity-gated review loop that <strong>converges instead of looping forever</strong>, with the tests as a guardrail between steps. It stops at the merge gate. Three non-negotiable principles govern it: converge, don't chase zero; tests are a guardrail, not the finale; generating tests is not running tests.</p>
   <ol class="steps">
-    <li><strong>Setup.</strong> <code class="in">qa_ledger.py init --config dev-loop.config.json</code>. The config lists each repo and its type (maven/flutter). In multi-repo, the other repos are mounted with <code class="in">--add-dir</code>.</li>
+    <li><strong>Setup.</strong> <code class="in">qa_ledger.py init --config dev-loop.config.json</code>. The config lists each repo and its type (maven/flutter/python). In multi-repo, the other repos are mounted with <code class="in">--add-dir</code>.</li>
     <li><strong>Phase 0 — Plan (ADR-first).</strong> The ADR set + ACCEPTANCE are the input. If acceptance criteria are missing, stop and run <code class="in">/adr-refine</code> first. The acceptance criteria become the contract tests of phase 1.</li>
     <li><strong>Phase 1 — Coverage gate → conditional characterization (per repo).</strong> <code class="in">snapshot --phase pre</code> + <code class="in">check-coverage</code>. If coverage ≥ threshold, the existing suite is the guardrail. If below (or no report): you write characterization/contract tests <em>at the edge</em> (public API, endpoints) — and let the human review them before trusting them.</li>
     <li><strong>Phase 2 — Build.</strong> You implement per the plan, one commit per logical step (conventional commits). Apply ADR discipline: consult before touching governed areas; stop and propose an ADR on a new dependency, a new pattern, a non-obvious alternative, or a contradiction of an accepted ADR.</li>
@@ -644,7 +644,7 @@ python3 $QL converged --repo backend-api --tools-per-cycle 3</pre>
   <h2>The <span class="accent">rebuild test.</span></h2>
   <p>The ledger proves <strong>correctness</strong> (this build passed). The rebuild test proves <strong>completeness</strong> (the SPEC is sufficient to regenerate the system). Two different questions. It's the completeness benchmark being standardized in the SOTA.</p>
   <p>The mechanic: on a clean tree, a <em>fresh</em> session points only at the package (SPEC/ADR/ACCEPTANCE — not the chat) and regenerates. If it rebuilds and passes acceptance + tests → the SPEC covers. If it diverges → the SPEC has gaps: almost always implicit decisions (error codes, cache strategy, library choice) that lived in your head and never made it into the SPEC.</p>
-  <pre><span class="c"># rebuild test — real subcommand (kit 1.3.0)</span>
+  <pre><span class="c"># rebuild test — real subcommand (kit 1.4.0)</span>
 <span class="c"># 1) ORIGINAL tree: capture the signature</span>
 $ python3 $QL rebuild --mode baseline --config dev-loop.config.json
   → REBUILD-BASELINE.json
@@ -655,7 +655,7 @@ $ python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json
   <span class="o">REBUILD: 72.2/100 — PARTIAL</span>
   ! 1 test(s) fail on regenerated code — behavior the SPEC left implicit
   ! coverage 45.0% vs baseline 80.0% (tolerance 5)</pre>
-  <div class="card good"><h3>Real state in the kit <span class="callout-status real">in the kit</span></h3><p>Implemented and tested (kit 1.3.0). Weights: <strong>tests 60 · acceptance 20 · coverage 15 · surface 5</strong>. Verdicts: <code class="in">COVERS ≥90 · PARTIAL ≥70 · DIVERGE &lt;70</code> (exit 0 only if COVERS; <code class="in">--json</code> is consumed by <code class="in">/sys-doc</code>). The dominant signal is the preserved suite: a test that passed and now fails on the regenerated code = behavior the SPEC left implicit. When to run it: profile C+ and E, or on a periodic cadence (process rule — the kit ships no CI workflow) — it's the QA of the <em>Discovery output</em>.</p></div>
+  <div class="card good"><h3>Real state in the kit <span class="callout-status real">in the kit</span></h3><p>Implemented and tested (kit 1.4.0). Weights: <strong>tests 60 · acceptance 20 · coverage 15 · surface 5</strong>. Verdicts: <code class="in">COVERS ≥90 · PARTIAL ≥70 · DIVERGE &lt;70</code> (exit 0 only if COVERS; <code class="in">--json</code> is consumed by <code class="in">/sys-doc</code>). The dominant signal is the preserved suite: a test that passed and now fails on the regenerated code = behavior the SPEC left implicit. When to run it: profile C+ and E, or on a periodic cadence (process rule — the kit ships no CI workflow) — it's the QA of the <em>Discovery output</em>.</p></div>
 </section>
 
 <section class="slide" data-section="Change budget + escalation">
