@@ -2709,6 +2709,27 @@ _GC_ASSERT = re.compile(r"\bassert\w*|\bverify\s*\(|\bexpect\s*\(", re.I)
 _GC_CONFIG = re.compile(
     r"pom\.xml$|\.gradle$|\.eslintrc|checkstyle|pmd|ruleset|jacoco|sonar-project|"
     r"dev-loop\.config\.json$", re.I)
+# secret-scan (kit 1.12.0, Topic 43 'Stay Safe Out There'): patrones de ALTA
+# precision bloquean como hecho (un PEM privado o una AKIA agregada no tiene
+# lectura inocente); los literales genericos (password = "...") y los JWT son
+# advisory — en fixtures de test abundan placeholders y bloquearlos seria
+# castigar escribir tests. Solo se escanean lineas AGREGADAS: sacar un secreto
+# del codigo es bueno y no debe frenar el diff que lo saca.
+_GC_SECRETS_HARD = [
+    ("clave privada PEM", re.compile(
+        r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY")),
+    ("AWS access key id", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("GitHub token", re.compile(
+        r"\bgh[pousr]_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{22,}\b")),
+    ("Slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b")),
+    ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
+]
+_GC_SECRET_SOFT = re.compile(
+    r"(?i)\b(?:password|passwd|pwd|secret|api[_-]?key|token|credential)\s*[:=]\s*"
+    r"[\"'][^\"']{8,}[\"']|\beyJ[A-Za-z0-9_\-]{20,}\.eyJ")
+# contenedores de material de clave: AGREGARLOS al repo es un hecho bloqueante
+# (borrarlos no — el lado b/ del diff es /dev/null y no matchea).
+_GC_KEYFILE = re.compile(r"\.(?:p12|pfx|jks|keystore|key)$", re.I)
 _GC_THRESH = re.compile(
     r"coverage|threshold|min[-_]?score|minimum|mutation|line-rate|branch-rate", re.I)
 _GC_NUM = re.compile(r"\d+(?:\.\d+)?")
@@ -2733,6 +2754,7 @@ def _gc_is_test_file(path):
 def cmd_gate_check(args):
     diff = _read_diff(args)
     removed_tests, disabled_tests, suppressions, thresholds = [], [], [], []
+    secrets, secret_literals = [], []
     assertions_removed = 0
     path = None
     minus_path = None
@@ -2761,6 +2783,13 @@ def cmd_gate_check(args):
                     path = minus_path
                 else:
                     path = p[2:] if p[:2] in ("a/", "b/") else p
+                    if _GC_KEYFILE.search(path):
+                        secrets.append(f"{path}: contenedor de claves agregado/modificado")
+            elif raw.startswith("Binary files "):
+                # los .p12/.jks binarios no traen +++ — el lado b/ vive en esta linea
+                m = re.search(r" and b/(.+) differ$", raw)
+                if m and _GC_KEYFILE.search(m.group(1)):
+                    secrets.append(f"{m.group(1)}: contenedor de claves agregado/modificado (binario)")
             continue
         if not path:
             continue
@@ -2770,6 +2799,11 @@ def cmd_gate_check(args):
                 disabled_tests.append(path)
             if _GC_SUPPRESS.search(body):
                 suppressions.append(path)
+            for label, rx in _GC_SECRETS_HARD:
+                if rx.search(body):
+                    secrets.append(f"{path}: {label}")
+            if _GC_SECRET_SOFT.search(body):
+                secret_literals.append(path)
             if _GC_CONFIG.search(path) and _GC_THRESH.search(body) and _GC_NUM.search(body):
                 thresh_added.setdefault(path, []).append(body)
         elif raw.startswith("-"):
@@ -2820,9 +2854,10 @@ def cmd_gate_check(args):
         except Exception:
             pass  # the ledger cross-check is optional; its absence must not break the diff gate
 
-    hard = len(removed_tests) + len(disabled_tests) + len(thresholds)
+    hard = (len(removed_tests) + len(disabled_tests) + len(thresholds)
+            + len(secrets))
     soft = (len(suppressions) + (1 if assertions_removed else 0)
-            + (1 if test_count_drop else 0))
+            + (1 if test_count_drop else 0) + len(secret_literals))
     blocker = hard > 0 or (args.strict and soft > 0)
     verdict = "BLOCKER" if blocker else ("REVIEW" if soft else "CLEAN")
 
@@ -2832,6 +2867,8 @@ def cmd_gate_check(args):
             "removed_tests": sorted(set(removed_tests)),
             "disabled_tests": sorted(set(disabled_tests)),
             "thresholds_lowered": thresholds,
+            "secrets_added": sorted(set(secrets)),
+            "secret_literals": sorted(set(secret_literals)),
             "suppressions_added": sorted(set(suppressions)),
             "assertions_removed": assertions_removed,
             "test_count_drop": test_count_drop,
@@ -2850,6 +2887,9 @@ def cmd_gate_check(args):
     _show("tests deshabilitados (BLOCKER)", disabled_tests)
     if thresholds:
         print(f"  ! thresholds bajados/borrados (BLOCKER): {'; '.join(thresholds)}")
+    if secrets:
+        print(f"  ! secretos agregados (BLOCKER): {'; '.join(sorted(set(secrets)))}")
+    _show("literales tipo password/token agregados (revisar)", secret_literals)
     _show("supresiones de lint agregadas (revisar)", suppressions)
     if assertions_removed:
         print(f"  ~ asserts removidos en tests: {assertions_removed} (revisar)")
@@ -3346,13 +3386,15 @@ def build_parser():
 
     pgc = sub.add_parser(
         "gate-check",
-        help="gate integrity: flag a diff that WEAKENS the test/lint/coverage apparatus")
+        help="gate integrity: flag a diff that WEAKENS the test/lint/coverage apparatus "
+             "or ADDS secrets (private keys / cloud tokens / key containers block as facts)")
     pgc.add_argument("--diff", help="path to a unified diff (else --from-git or stdin)")
     pgc.add_argument("--from-git", action="store_true",
                      help="run `git diff --unified=0 <base>` for the diff")
     pgc.add_argument("--base", default=None, help="git base ref (default HEAD)")
     pgc.add_argument("--strict", action="store_true",
-                     help="also fail (exit 1) on soft flags: suppressions / removed assertions")
+                     help="also fail (exit 1) on soft flags: suppressions / removed "
+                          "assertions / generic password-token literals")
     pgc.add_argument("--ledger", default=DEFAULT_LEDGER,
                      help="(with --repo) ledger for the measured test-count cross-check")
     pgc.add_argument("--repo", default=None,

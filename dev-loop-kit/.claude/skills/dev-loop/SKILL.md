@@ -174,9 +174,11 @@ python3 $QL log-step --repo <REPO> --tool <code-review|judgment-day|improve> \
 ```
 
 3b. **Fact gates — on every pass that changed code**, run gate-check (did the change
-weaken the measuring apparatus?) and, for migration work, golden-diff (does behavior
-still match the human-approved baseline?). Then PERSIST each verdict with `log-gate`
-— a failing fact gate blocks convergence and caps readiness ≤65 through the ledger:
+weaken the measuring apparatus? did it ADD a secret? — private keys, cloud tokens and
+key-container files block as facts, kit 1.12.0; generic password/token literals advise)
+and, for migration work, golden-diff (does behavior still match the human-approved
+baseline?). Then PERSIST each verdict with `log-gate` — a failing fact gate blocks
+convergence and caps readiness ≤65 through the ledger:
 
 ```bash
 python3 $QL gate-check --from-git --base <base> --repo <REPO>   # exit 1 = BLOCKER

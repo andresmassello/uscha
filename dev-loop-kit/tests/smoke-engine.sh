@@ -13,7 +13,8 @@
 # y acceptance trazable (v1.10.0): AC-n cierra por testcase medido, spec-check
 # --acceptance como FACT estructural —
 # y tests fuera del presupuesto de simplicity (v1.11.0): escribir tests no
-# penaliza el gate (Topic 51) + edges 1.10.0 (falsos positivos, flaky).
+# penaliza el gate (Topic 51) + edges 1.10.0 (falsos positivos, flaky) —
+# y secret-scan en gate-check (v1.12.0): secretos agregados bloquean como hecho.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -533,6 +534,19 @@ printf -- "diff --git a/Api.Tests/CalcTests.cs b/Api.Tests/CalcTests.cs\n--- a/A
 chk "delete de Api.Tests/*.cs (xunit [Fact]) -> BLOCKER" 1 run gate-check --diff del-cs.diff
 printf -- "diff --git a/__tests__/flow.test.ts b/__tests__/flow.test.ts\n--- a/__tests__/flow.test.ts\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-it('valida el flujo', () => {\n-  expect(flow()).toBe(true);\n" > del-ts.diff
 chk "delete de __tests__/*.test.ts (it/expect) -> BLOCKER" 1 run gate-check --diff del-ts.diff
+
+echo "== T34 gate-check: secret-scan (Topic 43) — secretos agregados bloquean como hecho =="
+printf -- "diff --git a/src/cfg.py b/src/cfg.py\n--- a/src/cfg.py\n+++ b/src/cfg.py\n@@ -0,0 +1,1 @@\n+AWS_KEY = \"AKIAIOSFODNN7EXAMPLE\"\n" > sec-akia.diff
+chk "AWS access key agregada -> BLOCKER" 1 run gate-check --diff sec-akia.diff
+printf -- "diff --git a/deploy/id_rsa b/deploy/id_rsa\n--- /dev/null\n+++ b/deploy/id_rsa\n@@ -0,0 +1,1 @@\n+-----BEGIN PRIVATE KEY-----\n" > sec-pem.diff
+chk "clave privada PEM agregada -> BLOCKER" 1 run gate-check --diff sec-pem.diff
+printf -- "diff --git a/certs/client.p12 b/certs/client.p12\nindex 0000000..1111111 100644\nBinary files a/certs/client.p12 and b/certs/client.p12 differ\n" > sec-p12.diff
+chk "contenedor .p12 binario agregado -> BLOCKER" 1 run gate-check --diff sec-p12.diff
+printf -- "diff --git a/certs/old.p12 b/certs/old.p12\ndeleted file mode 100644\nindex 1111111..0000000\nBinary files a/certs/old.p12 and /dev/null differ\n" > sec-del.diff
+chk "BORRAR un .p12 no bloquea (sacar secretos es bueno)" 0 run gate-check --diff sec-del.diff
+printf -- "diff --git a/src/cfg.py b/src/cfg.py\n--- a/src/cfg.py\n+++ b/src/cfg.py\n@@ -0,0 +1,1 @@\n+password = \"hunter2secreto\"\n" > sec-lit.diff
+chk "literal password generico -> REVIEW exit 0 (advisory)" 0 run gate-check --diff sec-lit.diff
+chk "literal password generico + --strict -> exit 1" 1 run gate-check --diff sec-lit.diff --strict
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"

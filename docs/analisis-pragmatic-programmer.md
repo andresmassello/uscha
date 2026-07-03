@@ -142,7 +142,9 @@ Spike formal: en discovery, cada item de RISKS con incertidumbre alta dispara la
 
 **M2 IMPLEMENTADA en kit 1.10.0** (acceptance-check trazable — ver
 CHANGELOG-1.10.0). **M9 IMPLEMENTADA en kit 1.11.0** (tests fuera del
-presupuesto de simplicity — ver CHANGELOG-1.11.0). El resto sigue siendo
-backlog, nada más está implementado. Prioridad sugerida al retomarse:
-M8 (secret-scan — barato y fail-closed puro), M3 (ledger atómico — todo el
-edificio se apoya en ese archivo).
+presupuesto de simplicity — ver CHANGELOG-1.11.0). **M8 IMPLEMENTADA en kit
+1.12.0** (secret-scan en gate-check — ver CHANGELOG-1.12.0). El resto sigue
+siendo backlog. Prioridad sugerida al retomarse: M3 (ledger atómico — todo el
+edificio se apoya en ese archivo), M6 (plateau/stop-signal — advisory puro).
+M5/M4/M10/M1 requieren decisión humana de diseño (caps advisory-por-default,
+FSM del workflow, convención de ramas spike, schema de cierre de findings).
