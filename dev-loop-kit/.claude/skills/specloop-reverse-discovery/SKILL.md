@@ -1,5 +1,5 @@
 ---
-name: reverse-discovery
+name: specloop-reverse-discovery
 description: >
   Brownfield front of the methodology, for migrating/modernizing an EXISTING system. The
   inverse of discovery: the system already exists and its behavior IS the truth, so you
@@ -14,7 +14,7 @@ disable-model-invocation: false
 
 # reverse-discovery — extract the facts of an existing system before migrating it
 
-`discovery` is greenfield: you only have an idea, so you PROPOSE the shape. This is the
+`specloop-discovery` is greenfield: you only have an idea, so you PROPOSE the shape. This is the
 opposite. The system already runs; its observable behavior is the ground truth. **You do
 not invent anything — you characterize what is already there, as facts.**
 
@@ -28,7 +28,7 @@ is field truth; a SPEC the agent writes about legacy code is a claim. So this sk
 facts, and the human infers meaning from them.
 
 If you catch yourself writing a requirement or a rationale, stop: that belongs to the human
-(and to `/adr-refine` for the FORWARD decisions), not here.
+(and to `/specloop-adr-refine` for the FORWARD decisions), not here.
 
 ## Phase 1 — Map (fact)
 
@@ -44,7 +44,7 @@ Everything here must be traceable to code. No "this seems to…", no guessed int
 ## Phase 2 — Characterize (fact)
 
 Capture the golden at the system boundaries by running the ORIGINAL code with REAL inputs.
-Delegate to the `characterize` skill; if it is not installed, follow its contract inline:
+Delegate to the `specloop-characterize` skill; if it is not installed, follow its contract inline:
 - Write a deterministic capture harness (you MAY author the harness).
 - Normalize every non-determinism source before serializing: timestamps, seeds, map/set
   iteration order, GUIDs/auto-increment, concurrency, **the target locale**, and use
@@ -68,7 +68,7 @@ to write the migration SPEC. Do not editorialize.
 - Do NOT write a SPEC of the old system's behavior — the golden IS the executable spec.
 - Do NOT write ADRs of the old system's implicit decisions.
 - Do NOT decide the NEW structure (module boundaries, shared kernel, sync vs events). Those
-  are forward decisions → `/adr-refine`.
+  are forward decisions → `/specloop-adr-refine`.
 
 ## Guardrails
 
@@ -87,11 +87,11 @@ what is covered vs PARTIAL. State plainly that the facts are ready, then hand of
 
 > "Read SYSTEM-MAP.md and DISCOVERY-SUMMARY.md, and inspect the approved golden. These are
 > FACTS about the current system. Now write the migration SPEC — behavior == golden,
-> structure == the new module boundaries — and take the partition decisions via /adr-refine.
+> structure == the new module boundaries — and take the partition decisions via /specloop-adr-refine.
 > Do not treat any of my output as a requirement or a rationale; those are yours to decide."
 
-Flow (migration): `reverse-discovery` (facts) → human writes SPEC + `/adr-refine` (forward
-module decisions) → `/dev-loop` (restructure; `golden-diff` + `ApplicationModules.verify()`
+Flow (migration): `specloop-reverse-discovery` (facts) → human writes SPEC + `/specloop-adr-refine` (forward
+module decisions) → `/specloop-devloop` (restructure; `golden-diff` + `ApplicationModules.verify()`
 stay green the whole way) → readiness + human gate.
 
 ## Relationship to the other skills

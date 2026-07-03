@@ -166,7 +166,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
   <section class="play" id="p1">
     <div class="top"><span class="pn">01</span><span class="pt">Open with a grilling, not a briefing</span><span class="status lk">in the kit</span></div>
     <div class="body">
-      <p>Run <code>/discovery</code> when you have an idea but not a shape; run <code>/adr-refine</code> when the shape is known and only the edges need drawing. Neither writes code — they run on <code>Read, Write, Glob, Grep</code> (discovery adds <code>WebFetch</code>).</p>
+      <p>Run <code>/specloop-discovery</code> when you have an idea but not a shape; run <code>/specloop-adr-refine</code> when the shape is known and only the edges need drawing. Neither writes code — they run on <code>Read, Write, Glob, Grep</code> (discovery adds <code>WebFetch</code>).</p>
       <div class="tmg">
         <div class="cell trg"><div class="k">trigger</div><div class="v">Vague idea, or a feature whose edges aren't pinned.</div></div>
         <div class="cell mov"><div class="k">move</div><div class="v">Let it interrogate you: contradictions, fuzzy terms, missing failure modes.</div></div>
@@ -233,17 +233,17 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
   <!-- 05 -->
   <section class="play" id="p5">
-    <div class="top"><span class="pn">05</span><span class="pt">Run /dev-loop and let it converge</span><span class="status lk">in the kit</span></div>
+    <div class="top"><span class="pn">05</span><span class="pt">Run /specloop-devloop and let it converge</span><span class="status lk">in the kit</span></div>
     <div class="body">
       <p>The orchestrator takes the ADRs + <code>ACCEPTANCE.md</code>, builds, and runs a severity-gated review loop that stops. Three laws: <em>converge, don't chase zero · tests are a guardrail, not the finale · generating tests ≠ running them.</em></p>
       <ol class="steps">
-        <li><strong>Setup + Phase 0.</strong> <code>qa_ledger.py init</code>; ADRs + acceptance in. No acceptance → run <code>/adr-refine</code> first.</li>
+        <li><strong>Setup + Phase 0.</strong> <code>qa_ledger.py init</code>; ADRs + acceptance in. No acceptance → run <code>/specloop-adr-refine</code> first.</li>
         <li><strong>Phase 1 — coverage gate.</strong> Above threshold, existing suite guards. Below → write characterization tests at the edge; human reviews them.</li>
         <li><strong>Phase 2 — build.</strong> One commit per logical step. Stop and propose an ADR on a new dep/pattern/contradiction.</li>
         <li><strong>Phase 3 — QA loop.</strong> code-review → judgment-day → improve. Apply fixes ≥ gate; defer the rest. Log, ingest, persist each fact-gate verdict via <code>log-gate</code>, check converged/oscillation.</li>
         <li><strong>Phase 4–5 — integration + verify.</strong> Cross-repo contract tests; then the deferred fine-grained coverage.</li>
         <li><strong>Phase 6 — PR, then STOP.</strong> Converged + gates clean, open PR, stop at the merge gate — human reviews, then ship.</li>
-        <li><strong>Phase 7–8 — smoke + docs.</strong> Manual smoke list; retrospective from the ledger. <code>/sys-doc</code> is optional reporting on request, not a mandatory phase.</li>
+        <li><strong>Phase 7–8 — smoke + docs.</strong> Manual smoke list; retrospective from the ledger. <code>/specloop-sysdoc</code> is optional reporting on request, not a mandatory phase.</li>
       </ol>
       <div class="rule stop"><div class="rk">watch for</div><p>The <strong>Ralph Wiggum loop</strong> — the agent fires the "done" token too early. Only the objective gates plus the human at the merge gate close it; never the agent's own opinion — the engine doesn't close the loop by itself.</p></div>
     </div>
@@ -282,7 +282,7 @@ LOC       ← its own count (stdlib)</pre>
           <tr><td>spec-check · prose</td><td>vague terms, EARS, stack naming (<code>--strict</code> gates)</td><td class="no">ADVISES</td></tr>
         </tbody>
       </table>
-      <div class="rule"><div class="rk">field note</div><p>One uncorrelated checker caught 93.4% of what four caught (Osmani). Stack <em>different</em> opinions, not four similar linters. Fact gates run <em>inline</em> in <code>/dev-loop</code> (exit 0/1) and each verdict is persisted via <code>qa_ledger.py log-gate</code> — a persisted fail blocks convergence and caps readiness ≤65; a not-run is recorded but never green.</p></div>
+      <div class="rule"><div class="rk">field note</div><p>One uncorrelated checker caught 93.4% of what four caught (Osmani). Stack <em>different</em> opinions, not four similar linters. Fact gates run <em>inline</em> in <code>/specloop-devloop</code> (exit 0/1) and each verdict is persisted via <code>qa_ledger.py log-gate</code> — a persisted fail blocks convergence and caps readiness ≤65; a not-run is recorded but never green.</p></div>
     </div>
   </section>
 
@@ -319,12 +319,12 @@ LOC       ← its own count (stdlib)</pre>
         <li><strong>Budget absorbs waste</strong> — it re-reads and retries; it burns tokens either way.</li>
         <li><strong>Senior tools</strong> — logs, repro env, runs what it writes.</li>
       </ul>
-      <pre><span class="c"># heartbeat wrapping /dev-loop</span>
+      <pre><span class="c"># heartbeat wrapping /specloop-devloop</span>
 &gt; /loop 0 3 * * *              <span class="c"># nightly cadence</span>
   /goal readiness ≥ 80 AND tests green
         AND 0 CRITICAL         <span class="y"># fresh checker: other agent family, or at least</span>
                                <span class="y"># another profile — process, not enforced by code</span>
-  &gt; run /dev-loop over &lt;machine-checkable scope&gt;
+  &gt; run /specloop-devloop over &lt;machine-checkable scope&gt;
     stop    = /goal met (fresh checker) OR budget out
     on-done = draft PR · escalate CONSTITUTION touches
     <span class="g">human   = merge/deploy ALWAYS with approval</span></pre>
@@ -369,10 +369,10 @@ claude --version &amp;&amp; claude doctor</pre>
     <div class="body">
       <table>
         <tbody>
-          <tr><td>/discovery</td><td>idea→shape grill; proposes entities/endpoints.</td></tr>
-          <tr><td>/adr-refine</td><td>polish a decision's edges.</td></tr>
-          <tr><td>/dev-loop</td><td>plan → coverage → build → QA loop → integration.</td></tr>
-          <tr><td>/sys-doc</td><td>two-view deck from the ledger — optional reporting, on request.</td></tr>
+          <tr><td>/specloop-discovery</td><td>idea→shape grill; proposes entities/endpoints.</td></tr>
+          <tr><td>/specloop-adr-refine</td><td>polish a decision's edges.</td></tr>
+          <tr><td>/specloop-devloop</td><td>plan → coverage → build → QA loop → integration.</td></tr>
+          <tr><td>/specloop-sysdoc</td><td>two-view deck from the ledger — optional reporting, on request.</td></tr>
           <tr><td>qa_ledger init</td><td>build ledger from dev-loop.config.json.</td></tr>
           <tr><td>snapshot</td><td>coverage/tests/LOC (--phase pre|post).</td></tr>
           <tr><td>check-coverage</td><td>exit 0 if ≥ threshold (phase-1 gate).</td></tr>

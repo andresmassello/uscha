@@ -1,5 +1,5 @@
 ---
-name: adr-refine
+name: specloop-adr-refine
 description: >
   Turn a rough idea into a development-ready ADR set + ACCEPTANCE.md by INTERROGATING
   before generating. Runs a structured Socratic interview (problem, implicit decisions,
@@ -139,7 +139,7 @@ Close with the handoff prompt so the build phase starts by planning, not improvi
 > archivos a crear/modificar, 2) confirmame qué decisiones quedaron implícitas, 3)
 > mostrame el primer test que escribirías."
 
-Two-command flow end to end: `/adr-refine` → (ADR set + ACCEPTANCE.md) → `/dev-loop`.
+Two-command flow end to end: `/specloop-adr-refine` → (ADR set + ACCEPTANCE.md) → `/specloop-devloop`.
 
 ## Anti-patterns (do not do)
 

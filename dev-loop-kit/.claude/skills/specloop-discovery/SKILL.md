@@ -1,5 +1,5 @@
 ---
-name: discovery
+name: specloop-discovery
 description: >
   Front of the methodology for greenfield work. From a general idea (plus optional
   reference docs, URLs, PDFs, or an existing codebase), grill the user ONE question at
@@ -139,12 +139,12 @@ End with the implementation handoff (works for a human, an agent, or CI):
 > 3) proponé plan de archivos + tests. Implementá solo el scope de la SPEC. No cambies
 > contratos fuera de SPEC ni edites la SPEC para que tu implementación parezca correcta."
 
-Flow: `/discovery` (idea → package) → `/dev-loop` (build + QA + evidence) → human gate.
+Flow: `/specloop-discovery` (idea → package) → `/specloop-devloop` (build + QA + evidence) → human gate.
 
 ## Relationship to adr-refine
 
-`discovery` is the greenfield front: you only have an idea, so the skill PROPOSES the
-shape. `adr-refine` is the same interview applied to a KNOWN feature where the shape is
+`specloop-discovery` is the greenfield front: you only have an idea, so the skill PROPOSES the
+shape. `specloop-adr-refine` is the same interview applied to a KNOWN feature where the shape is
 already clear and you only need precision. Both emit the same package; pick by starting
 point.
 

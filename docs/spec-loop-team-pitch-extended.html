@@ -247,11 +247,11 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font
           <circle cx="100" cy="105" r="8" fill="#ff6b4a"/>
           <text x="100" y="75" fill="#638079">10:00</text><text x="100" y="135" fill="#dbe8e6" font-size="11" font-weight="600">idea</text>
           <circle cx="280" cy="105" r="8" fill="#dbe8e6"/>
-          <text x="280" y="75" fill="#638079">10:05 · ~30-40 min</text><text x="280" y="135" fill="#dbe8e6" font-size="11" font-weight="600">/discovery te grilla</text><text x="280" y="152" fill="#9db3b0">contradicciones · bordes</text>
+          <text x="280" y="75" fill="#638079">10:05 · ~30-40 min</text><text x="280" y="135" fill="#dbe8e6" font-size="11" font-weight="600">/specloop-discovery te grilla</text><text x="280" y="152" fill="#9db3b0">contradicciones · bordes</text>
           <circle cx="470" cy="105" r="8" fill="#dbe8e6"/>
           <text x="470" y="75" fill="#638079">10:45</text><text x="470" y="135" fill="#dbe8e6" font-size="11" font-weight="600">SPEC + ADR al repo</text><text x="470" y="152" fill="#9db3b0">commiteados, no en el chat</text>
           <circle cx="670" cy="105" r="8" fill="#4fd6c9"/>
-          <text x="670" y="75" fill="#638079">resto del día</text><text x="670" y="135" fill="#dbe8e6" font-size="11" font-weight="600">/dev-loop construye</text><text x="670" y="152" fill="#9db3b0">gates inline · log-gate</text>
+          <text x="670" y="75" fill="#638079">resto del día</text><text x="670" y="135" fill="#dbe8e6" font-size="11" font-weight="600">/specloop-devloop construye</text><text x="670" y="152" fill="#9db3b0">gates inline · log-gate</text>
           <circle cx="860" cy="105" r="8" fill="#4ddb95"/>
           <text x="860" y="75" fill="#638079">al cerrar</text><text x="860" y="135" fill="#dbe8e6" font-size="11" font-weight="600">PR + readiness</text><text x="860" y="152" fill="#9db3b0">estado medido, no sensación</text>
           <circle cx="990" cy="105" r="10" fill="#ff6b4a" stroke="#e8552f" stroke-width="2"/>
@@ -268,10 +268,10 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font
 <section class="slide" data-section="Replay · discovery">
   <div class="inner">
     <div class="kicker"><span class="n">07</span> la misma historia, con método — acto 1</div>
-    <h2>Replay: Vale arranca con <span class="a">/discovery.</span></h2>
+    <h2>Replay: Vale arranca con <span class="a">/specloop-discovery.</span></h2>
     <p>Antes de tocar código, el interrogatorio. El skill no acuerda con todo — <strong>pregunta hasta que la forma queda clara</strong>: contradicciones, términos difusos, modos de falla. Una pregunta a la vez.</p>
     <div class="term">
-      <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; claude — /discovery · viernes 10:00</div>
+      <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; claude — /specloop-discovery · viernes 10:00</div>
       <div class="body">
 <span class="cy">discovery&gt;</span> <span class="a">¿Qué pasa exactamente con un cupón vencido hace una hora? ¿Rechazo</span><br>
 <span class="a">duro, o hay tolerancia de negocio?</span><br>
@@ -307,7 +307,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font
 <section class="slide" data-section="Replay · dev-loop">
   <div class="inner">
     <div class="kicker"><span class="n">09</span> la misma historia, con método — acto 2</div>
-    <h2>Vale construye con <span class="a">/dev-loop:</span><br>evidencia, no narración.</h2>
+    <h2>Vale construye con <span class="a">/specloop-devloop:</span><br>evidencia, no narración.</h2>
     <p>El orquestador toma la SPEC + ACCEPTANCE, construye, y corre un loop de QA que <strong>mide en vez de creer</strong>. Lo que BLOQUEA sale de artefactos reales parseados por <code>qa_ledger.py</code> — tests, coverage, linters, fact gates. Lo que el agente reporta de sí mismo se registra aparte, como narración — y <strong>un rojo medido siempre veta un verde narrado</strong>.</p>
     <div class="grid3">
       <div class="card good"><span class="pill good">medido</span><h3>Ledger</h3><p>Coverage, tests y findings de linters parseados de los XML reales. Lo auto-reportado queda registrado aparte: narración, no dato.</p></div>
@@ -488,9 +488,9 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font
       <div class="card good">
         <span class="pill good">cambia — 4 hábitos</span>
         <ul class="v">
-          <li><strong>Antes de codear algo no-trivial:</strong> <code>/discovery</code> (idea nueva) o <code>/adr-refine</code> (feature conocida). Dejate interrogar.</li>
+          <li><strong>Antes de codear algo no-trivial:</strong> <code>/specloop-discovery</code> (idea nueva) o <code>/specloop-adr-refine</code> (feature conocida). Dejate interrogar.</li>
           <li><strong>Las decisiones van al repo</strong> en el momento: SPEC, ADR, ACCEPTANCE. No al final, no al chat.</li>
-          <li><strong>El QA lo corre el loop y lo persiste</strong>: <code>/dev-loop</code> mide con el ledger; los fact gates se registran con <code>log-gate</code>.</li>
+          <li><strong>El QA lo corre el loop y lo persiste</strong>: <code>/specloop-devloop</code> mide con el ledger; los fact gates se registran con <code>log-gate</code>.</li>
           <li><strong>El PR para en el merge.</strong> Mergea un humano leyendo el diff — nunca el agente.</li>
         </ul>
       </div>
@@ -514,7 +514,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font
     <h2>Legacy y migraciones:<br>el <span class="a">golden</span> es el ancla.</h2>
     <p>Cuando tocás código viejo que nadie entiende del todo, el riesgo no es romper lo que sabés que hace — es <strong>perder el comportamiento que nadie sabía que era intencional</strong> (la "gracia de 24h" de otro, de hace cinco años).</p>
     <div class="grid3">
-      <div class="card"><span class="pill info">1 · capturar</span><p><code>/characterize</code> ejecuta el código ORIGINAL con corpus real y emite fixtures <code>.received</code> — comportamiento observado, no razonado. <strong>Y PARA.</strong></p></div>
+      <div class="card"><span class="pill info">1 · capturar</span><p><code>/specloop-characterize</code> ejecuta el código ORIGINAL con corpus real y emite fixtures <code>.received</code> — comportamiento observado, no razonado. <strong>Y PARA.</strong></p></div>
       <div class="card"><span class="pill warn">2 · humano aprueba</span><p>Un humano revisa y los consagra como <code>.approved</code>. El agente <strong>no puede escribirlos</strong>: un hook PreToolUse le bloquea la escritura. Es el único artefacto fuera de su alcance — y esa es su razón de existir.</p></div>
       <div class="card"><span class="pill good">3 · migrar con red</span><p>Cada pass corre <code>golden-diff</code>: byte a byte contra lo aprobado. DIVERGE = se frena. Sin fixtures = NOT-RUN, <em>nunca</em> "pasó".</p></div>
     </div>
@@ -544,11 +544,11 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font
     <div class="term">
       <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; setup — una vez por máquina, 5 minutos</div>
       <div class="body">
-<span class="dim"># 1. skills del kit (dev-loop-kit 1.19.0) al Claude Code de cada uno</span><br>
+<span class="dim"># 1. skills del kit (dev-loop-kit 1.21.0) al Claude Code de cada uno</span><br>
 cp -r dev-loop-kit/.claude/skills/* ~/.claude/skills/<br>
 <span class="dim"># 2. el repo queda methodology-ready: protocolo + invariantes</span><br>
 cp dev-loop-kit/templates/CLAUDE.md dev-loop-kit/templates/CONSTITUTION.md &lt;repo&gt;/<br>
-cp dev-loop-kit/dev-loop.config.json &lt;repo&gt;/   <span class="dim"># repos, umbrales, gates</span><br>
+cp dev-loop-kit/specloop-devloop.config.json &lt;repo&gt;/   <span class="dim"># repos, umbrales, gates</span><br>
 <span class="dim"># 3. (migraciones) el golden queda protegido: gitattributes + hook</span><br>
 cp dev-loop-kit/templates/.gitattributes &lt;repo&gt;/  <span class="dim"># + registrar hooks/block-approved-writes.ps1 como PreToolUse en settings.json</span><br>
 <span class="dim"># 4. verificar</span><br>
@@ -586,7 +586,7 @@ bash dev-loop-kit/workbench-doctor.sh
     <h2>No es para que codees distinto.<br><span class="a">Es para que el equipo recuerde.</span></h2>
     <p class="lead">Cada uno sigue usando Claude Code — con toda su potencia. Lo que cambia es dónde vive la verdad: <strong>en archivos versionados que cualquier agente y cualquier persona pueden leer</strong>, con evidencia medida en vez de narrada, y con un humano dueño de cada merge.</p>
     <div class="quote" style="font-size:1.5rem;margin-top:2rem">La herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</div>
-    <p class="foot-sign" style="margin-top:2.5rem">spec-loop · instanciado en Claude Code vía dev-loop-kit 1.19.0 · preguntas → ahora</p>
+    <p class="foot-sign" style="margin-top:2.5rem">spec-loop · instanciado en Claude Code vía dev-loop-kit 1.21.0 · preguntas → ahora</p>
   </div>
 </section>
 

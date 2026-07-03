@@ -1,8 +1,8 @@
 # dev-loop kit
 
 Orquestador spec-driven + QA multi-repo para Claude Code, con ledger determinístico.
-**Seis skills** (`discovery`, `adr-refine`, `dev-loop`, `sys-doc`, `reverse-discovery`,
-`characterize`) y un motor de medición (`qa_ledger.py`).
+**Seis skills** (`specloop-discovery`, `specloop-adr-refine`, `specloop-devloop`, `specloop-sysdoc`, `specloop-reverse-discovery`,
+`specloop-characterize`) y un motor de medición (`qa_ledger.py`).
 
 **Para quién:** un operador solo llevando UN cambio no-trivial o con riesgo, mantenido
 honesto por un ledger determinístico y un human gate en el merge. NO es para cambios
@@ -21,40 +21,40 @@ dev-loop-kit/
 │  ├─ .gitattributes               # *.approved.* binary — que los fin-de-línea no mientan
 │  └─ docs/adr/                    # scaffold ADR
 └─ .claude/skills/
-   ├─ discovery/                   # idea vaga → grilla 1x1 → CONSTITUTION/SPEC/ADR/ACCEPTANCE…
-   ├─ adr-refine/                  # feature conocido: entrevista de precisión → ADR + ACCEPTANCE
-   ├─ reverse-discovery/           # brownfield: mapa de HECHOS del sistema existente (no propone forma)
-   ├─ characterize/                # captura el golden ejecutando el código ORIGINAL (para en la aprobación humana)
-   ├─ dev-loop/
+   ├─ specloop-discovery/                   # idea vaga → grilla 1x1 → CONSTITUTION/SPEC/ADR/ACCEPTANCE…
+   ├─ specloop-adr-refine/                  # feature conocido: entrevista de precisión → ADR + ACCEPTANCE
+   ├─ specloop-reverse-discovery/           # brownfield: mapa de HECHOS del sistema existente (no propone forma)
+   ├─ specloop-characterize/                # captura el golden ejecutando el código ORIGINAL (para en la aprobación humana)
+   ├─ specloop-devloop/
    │  ├─ SKILL.md                  # orquestador: plan → build → QA loop → PR
    │  └─ qa_ledger.py              # medición + ledger + gates (ingest/log-gate/golden-diff/gate-check/pit/simplicity/rebuild)
-   └─ sys-doc/                     # (opcional) deck HTML de dos vistas desde el ledger
+   └─ specloop-sysdoc/                     # (opcional) deck HTML de dos vistas desde el ledger
 ```
 
 ## Flujo punta a punta
 
-`discovery` es el frente para algo nuevo (solo tenés la idea); `adr-refine` es el frente
-para un feature conocido; `dev-loop` construye y verifica. Se tocan en el `ACCEPTANCE.md`.
+`specloop-discovery` es el frente para algo nuevo (solo tenés la idea); `specloop-adr-refine` es el frente
+para un feature conocido; `specloop-devloop` construye y verifica. Se tocan en el `ACCEPTANCE.md`.
 
 ```
-/discovery     # solo idea + material de referencia → grilla 1x1 (propone, vos decidís)
+/specloop-discovery     # solo idea + material de referencia → grilla 1x1 (propone, vos decidís)
    ↓           #   escribe CONTEXT.md, CONSTITUTION.md, SPEC.md, docs/adr/*.md, ACCEPTANCE.md, RISKS.md, HANDOFF.md
-/dev-loop      # plan → build → QA loop (fact gates al ledger) → PR (para en el merge)
+/specloop-devloop      # plan → build → QA loop (fact gates al ledger) → PR (para en el merge)
    ↓
-/sys-doc       # (opcional, a pedido) documenta el sistema desde el ledger
+/specloop-sysdoc       # (opcional, a pedido) documenta el sistema desde el ledger
 ```
 
-(Para un feature ya conocido, en vez de `/discovery` usás `/adr-refine`.)
+(Para un feature ya conocido, en vez de `/specloop-discovery` usás `/specloop-adr-refine`.)
 
 **On-ramp de migración/legacy (perfil E):** el golden es la verdad de campo y se captura
 ANTES de tocar nada.
 
 ```
-/reverse-discovery   # mapa de HECHOS del sistema viejo (endpoints, contratos, dependencias)
+/specloop-reverse-discovery   # mapa de HECHOS del sistema viejo (endpoints, contratos, dependencias)
    ↓
-/characterize        # ejecuta el código ORIGINAL con corpus real → .received → PARA:
+/specloop-characterize        # ejecuta el código ORIGINAL con corpus real → .received → PARA:
    ↓                 #   un HUMANO aprueba los .approved (el agente jamás los escribe — hook)
-/dev-loop            # migra; golden-diff byte-compara contra el .approved en cada pass
+/specloop-devloop            # migra; golden-diff byte-compara contra el .approved en cada pass
 ```
 
 ## Requisitos
@@ -206,18 +206,18 @@ repo primario y `dev-loop.config.json` a la raíz de ese repo.
 
 ```bash
 cp -r dev-loop-kit/.claude  <repo-primario>/
-cp dev-loop-kit/dev-loop.config.json  <repo-primario>/
-chmod +x <repo-primario>/.claude/skills/dev-loop/qa_ledger.py
+cp dev-loop-kit/specloop-devloop.config.json  <repo-primario>/
+chmod +x <repo-primario>/.claude/skills/specloop-devloop/qa_ledger.py
 ```
 
 **Opción B — global** (kit 1.20.0: para todos tus repos, existentes y nuevos): copiá
 las SEIS skills a `~/.claude/skills/` y el hook a `~/.claude/hooks/` + registralo en
 `~/.claude/settings.json` (snippet en el header del .ps1) — así INV-GOLDEN-01 rige en
 todos los proyectos. Las skills resuelven el engine primero en el proyecto y caen a
-`~/.claude/skills/dev-loop/qa_ledger.py` si no hay instalación local.
+`~/.claude/skills/specloop-devloop/qa_ledger.py` si no hay instalación local.
 
 ```bash
-for s in discovery adr-refine reverse-discovery characterize dev-loop sys-doc; do
+for s in specloop-discovery specloop-adr-refine specloop-reverse-discovery specloop-characterize specloop-devloop specloop-sysdoc; do
   cp -r "dev-loop-kit/.claude/skills/$s" ~/.claude/skills/
 done
 mkdir -p ~/.claude/hooks && cp dev-loop-kit/hooks/block-approved-writes.ps1 ~/.claude/hooks/
@@ -270,7 +270,7 @@ El skill maneja las fases solo: plan → coverage gate → (characterization si 
 vos) → smoke list. Loguea cada paso en `QA-LEDGER.json`. Al final:
 
 ```
-/sys-doc        # genera docs/system-deck.html (CEO + técnico, navegable)
+/specloop-sysdoc        # genera docs/system-deck.html (CEO + técnico, navegable)
 ```
 
 ## Verificación rápida (dry run del motor, sin el skill)
@@ -279,7 +279,7 @@ Para confirmar que el engine parsea bien tus reportes ANTES de confiarle el loop
 
 ```bash
 cd <repo-primario>
-QL=".claude/skills/dev-loop/qa_ledger.py"
+QL=".claude/skills/specloop-devloop/qa_ledger.py"
 
 python3 $QL --help                                  # ver subcomandos
 python3 $QL init --config dev-loop.config.json      # crea QA-LEDGER.json
@@ -422,5 +422,5 @@ Dentro de Claude Code, pedile:
 Listá las reglas activas del CLAUDE.md y los skills disponibles.
 ```
 
-Deberían aparecer las reglas del protocolo y los comandos /discovery /adr-refine
-/dev-loop /sys-doc. (Para el toolchain de la máquina: `bash dev-loop-kit/workbench-doctor.sh`.)
+Deberían aparecer las reglas del protocolo y los comandos /specloop-discovery /specloop-adr-refine
+/specloop-devloop /specloop-sysdoc. (Para el toolchain de la máquina: `bash dev-loop-kit/workbench-doctor.sh`.)

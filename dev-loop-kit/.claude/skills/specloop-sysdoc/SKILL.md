@@ -1,5 +1,5 @@
 ---
-name: sys-doc
+name: specloop-sysdoc
 description: >
   Generate a single self-contained, navigable HTML deck (PowerPoint-style, keyboard +
   click navigation) documenting a system in two parallel tracks: a commercial/CEO view
@@ -27,8 +27,8 @@ switch between at any time:
    never invent figures.
 
 ```bash
-QL="./.claude/skills/dev-loop/qa_ledger.py"                      # instalacion por proyecto
-[ -f "$QL" ] || QL="$HOME/.claude/skills/dev-loop/qa_ledger.py"  # instalacion global (kit 1.20.0)
+QL="./.claude/skills/specloop-devloop/qa_ledger.py"                      # instalacion por proyecto
+[ -f "$QL" ] || QL="$HOME/.claude/skills/specloop-devloop/qa_ledger.py"  # instalacion global (kit 1.20.0)
 python3 $QL summary --json > /tmp/qa-summary.json
 python3 $QL readiness --json > /tmp/qa-readiness.json
 ```

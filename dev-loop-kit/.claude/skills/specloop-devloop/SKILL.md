@@ -1,5 +1,5 @@
 ---
-name: dev-loop
+name: specloop-devloop
 description: >
   Spec-driven, multi-repo development + QA orchestrator. Plans from an ADR, builds,
   then runs a severity-gated review loop (code-review / judgment-day / improve) that
@@ -16,10 +16,10 @@ disable-model-invocation: false
 **Who this is for:** a single operator driving one non-trivial or risk-bearing change,
 kept honest by a deterministic ledger and a human merge gate. **NOT for trivial or
 throwaway work** — a one-file fix or config tweak runs build+test only and skips
-discovery/ADR/sys-doc entirely (see the risk-profile table in the playbook, play 03).
+discovery/ADR/specloop-sysdoc entirely (see the risk-profile table in the playbook, play 03).
 
 You are running a disciplined development + QA cycle across one or more repositories.
-The measurement engine is `./.claude/skills/dev-loop/qa_ledger.py` (stdlib Python 3).
+The measurement engine is `./.claude/skills/specloop-devloop/qa_ledger.py` (stdlib Python 3).
 **All metrics come from the ledger — never estimate counts from memory.** Run every
 QA tool through the ledger so the final retrospective is real. The ledger contract has
 two tiers: **measured** records (snapshots, ingest-gate, log-gate — parsed from real
@@ -51,8 +51,8 @@ recorded for the retrospective; a measured red always overrides a narrated green
 ## Setup (once per run)
 
 ```bash
-QL="./.claude/skills/dev-loop/qa_ledger.py"                      # instalacion por proyecto
-[ -f "$QL" ] || QL="$HOME/.claude/skills/dev-loop/qa_ledger.py"  # instalacion global (kit 1.20.0)
+QL="./.claude/skills/specloop-devloop/qa_ledger.py"                      # instalacion por proyecto
+[ -f "$QL" ] || QL="$HOME/.claude/skills/specloop-devloop/qa_ledger.py"  # instalacion global (kit 1.20.0)
 python3 $QL init --config dev-loop.config.json
 ```
 
@@ -71,11 +71,11 @@ install `hooks/block-approved-writes.ps1` (or its bash twin) as a `PreToolUse` h
   or ADR may violate. A change that would breach an invariant is a BLOCKER — escalate, do
   not work around it. The CONSTITUTION constrains the whole build.
 - The ADR set + `ACCEPTANCE.md` are the input to this loop. They typically come from the
-  `adr-refine` skill (the front-half counterpart): `/adr-refine` → ADR set → `/dev-loop`.
+  `specloop-adr-refine` skill (the front-half counterpart): `/specloop-adr-refine` → ADR set → `/specloop-devloop`.
 - Confirm or write the ADR + PLAN. The plan must state **acceptance criteria** (the
   `ACCEPTANCE.md` checkboxes) and the **severity gate / coverage threshold** up front.
   The loop targets the plan, not "no issues". If acceptance criteria are missing, stop
-  and run `adr-refine` first (or ask the human).
+  and run `specloop-adr-refine` first (or ask the human).
 - Acceptance criteria become the contract tests in Phase 1.
 
 ## Phase 1 — Coverage gate → conditional characterization (per repo)
@@ -94,7 +94,7 @@ python3 $QL check-coverage --repo <REPO>     # exit 0 = OK, exit 1 = BELOW thres
   **Have the human review these tests before trusting them as a gate** — a test that
   passes for the wrong reason poisons the whole loop.
 - **Migration/legacy (profile E): capture the golden BEFORE touching anything.** Run
-  the `characterize` skill (or `reverse-discovery` for a whole-system map first): it
+  the `specloop-characterize` skill (or `specloop-reverse-discovery` for a whole-system map first): it
   executes the ORIGINAL code against a real input corpus, emits `.received` fixtures,
   and STOPS for the human to approve them as `.approved`. No approved golden = no
   migration build. This is the baseline `golden-diff` gates against in Phase 3.
@@ -353,7 +353,7 @@ dimension. Always present the headline WITH the dimension breakdown AND the capp
 blocker, so it's clear what's missing, not just the number. Cycles/regressions are churn
 (process health) and are reported separately — they never raise readiness.
 
-Optionally (on request — reporting, not part of the verified build) invoke the `sys-doc`
+Optionally (on request — reporting, not part of the verified build) invoke the `specloop-sysdoc`
 skill to generate the two-view HTML deck. Finish with a retrospective drawn FROM the
 ledger summary: total steps, %fixed per tool, coverage, prod LOC vs test LOC, test
 count, tests/kLOC, plus concrete methodology improvements.

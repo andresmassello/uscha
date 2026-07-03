@@ -9,7 +9,7 @@ cada cambio vive en `SPEC.md` / `docs/adr/` / `ACCEPTANCE.md`, no acá.
 ## Reglas innegociables
 
 1. **No codear desde una idea vaga.** Si no hay `SPEC.md` + `ACCEPTANCE.md`, primero
-   modelar: `/discovery` (sistema nuevo) o `/adr-refine` (feature conocido). Recién con el
+   modelar: `/specloop-discovery` (sistema nuevo) o `/specloop-adr-refine` (feature conocido). Recién con el
    paquete escrito se construye.
 2. **La verdad vive en archivos, no en el chat.** Antes de tocar código, leé `SPEC.md`,
    `ACCEPTANCE.md` y `docs/adr/*.md`. No dependas de la conversación: el contexto se
@@ -35,14 +35,14 @@ cada cambio vive en `SPEC.md` / `docs/adr/` / `ACCEPTANCE.md`, no acá.
 
 ## Jerarquía de la verdad
 
-`CONSTITUTION.md` (qué nunca es aceptable) ▸ `SPEC.md` (qué debe pasar) ▸ `docs/adr/` (por qué esta forma). La CONSTITUTION está por encima de los ADR: ningún ADR ni SPEC puede violarla. La leen `/discovery`, `/adr-refine` y `/dev-loop` antes de proponer o tocar nada.
+`CONSTITUTION.md` (qué nunca es aceptable) ▸ `SPEC.md` (qué debe pasar) ▸ `docs/adr/` (por qué esta forma). La CONSTITUTION está por encima de los ADR: ningún ADR ni SPEC puede violarla. La leen `/specloop-discovery`, `/specloop-adr-refine` y `/specloop-devloop` antes de proponer o tocar nada.
 
 ## Comandos (skills)
 
-- `/discovery` — idea → CONTEXT/DOMAIN-MODEL/CONSTITUTION/SPEC/ADR/ACCEPTANCE/RISKS/HANDOFF
-- `/adr-refine` — feature conocido → SPEC + ADR + ACCEPTANCE
-- `/dev-loop` — plan → build → QA loop → PR (para en el merge)
-- `/sys-doc` — documenta el sistema desde el ledger
+- `/specloop-discovery` — idea → CONTEXT/DOMAIN-MODEL/CONSTITUTION/SPEC/ADR/ACCEPTANCE/RISKS/HANDOFF
+- `/specloop-adr-refine` — feature conocido → SPEC + ADR + ACCEPTANCE
+- `/specloop-devloop` — plan → build → QA loop → PR (para en el merge)
+- `/specloop-sysdoc` — documenta el sistema desde el ledger
 
 ## Adapter del proyecto (COMPLETAR por repo)
 

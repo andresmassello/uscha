@@ -95,7 +95,7 @@ code.in{font-family:var(--mono);font-size:.85em;background:#eceef1;padding:1px 5
     <g font-family="'Inter Tight',sans-serif">
       <rect x="10" y="40" width="150" height="50" rx="8" fill="#fff" stroke="#14171c" stroke-width="1.5"/>
       <text x="85" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="#14171c">SPEC + ACCEPTANCE</text>
-      <text x="85" y="79" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#8b929b">/discovery</text>
+      <text x="85" y="79" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#8b929b">/specloop-discovery</text>
       <rect x="182" y="40" width="110" height="50" rx="8" fill="#fff" stroke="#14171c" stroke-width="1.5"/>
       <text x="237" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="#14171c">dev-loop</text>
       <text x="237" y="79" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#8b929b">build + tests</text>
@@ -172,13 +172,13 @@ code.in{font-family:var(--mono);font-size:.85em;background:#eceef1;padding:1px 5
   </table>
 
   <div class="grid2">
-    <div class="card block"><h3>Bloquean — leen hechos</h3><p>Exit 1 duro, cortan la cadena. Objetivos, baratos, sin opinión. El agente los corre inline en <code class="in">/dev-loop</code> y persiste cada veredicto con <code class="in">log-gate</code>; un fact gate rojo bloquea la convergencia (readiness es un KPI 0-100 que reporta, no un gate).</p><ul><li>golden-diff · pit-check · gate-check</li><li>rebuild · caps de simplicity · spec-check estructural</li></ul></div>
+    <div class="card block"><h3>Bloquean — leen hechos</h3><p>Exit 1 duro, cortan la cadena. Objetivos, baratos, sin opinión. El agente los corre inline en <code class="in">/specloop-devloop</code> y persiste cada veredicto con <code class="in">log-gate</code>; un fact gate rojo bloquea la convergencia (readiness es un KPI 0-100 que reporta, no un gate).</p><ul><li>golden-diff · pit-check · gate-check</li><li>rebuild · caps de simplicity · spec-check estructural</li></ul></div>
     <div class="card adv"><h3>Avisan — adivinan sobre prosa</h3><p>Reportan, no bloquean (salvo <code class="in">--strict</code>). Un heurístico sobre lenguaje natural que bloquea genera falsos positivos → el dev lo desactiva → gate muerto.</p><ul><li>spec-check · prosa (advisory)</li><li>abstracciones de simplicity</li></ul></div>
   </div>
 
   <h2>El día a día del developer</h2>
-  <pre><span class="c"># los gates de hechos corren INLINE en /dev-loop y se persisten con log-gate</span>
-spec → código (agente) → /dev-loop corre los gates inline:
+  <pre><span class="c"># los gates de hechos corren INLINE en /specloop-devloop y se persisten con log-gate</span>
+spec → código (agente) → /specloop-devloop corre los gates inline:
    <span class="o">simplicity · gate-check · pit · golden</span>  <span class="c"># exit 0/1, log-gate persiste el veredicto</span>
    readiness  <span class="c"># KPI 0-100: reporta con caps duros, no es exit 0/1</span>
 → converge → FRENA en el merge gate → el humano LEE el diff → <span class="o">ship</span>
@@ -188,7 +188,7 @@ spec → código (agente) → /dev-loop corre los gates inline:
   <p class="lead" style="font-size:.95rem;margin-bottom:.6rem">Lo que una regex no puede juzgar (¿cláusulas contradictorias? ¿está sobre-arquitecturado?) NO se finge determinístico: va al <strong>checker no-correlacionado</strong> (otra familia de agente, o al menos otro perfil — disciplina de proceso, no lo fuerza el código). Computacional adentro del archivo; inferencial cross-file.</p>
 
   <div class="foot">
-    <strong>Apéndice:</strong> el detalle completo — historia, sensores (Böckeler), anti gate-gaming (Osmani), golden testing, glosario y referencias — está en el doc largo: <a href="spec-loop-claude-code-doc-FINAL.html">spec-loop-claude-code-doc-FINAL.html</a>. · Kit: <code class="in">dev-loop-kit-1.19.0.zip</code> (qa_ledger + CONSTITUTION). · Gobierno: la IA ejecuta, la metodología gobierna, la evidencia decide, el humano aprueba.
+    <strong>Apéndice:</strong> el detalle completo — historia, sensores (Böckeler), anti gate-gaming (Osmani), golden testing, glosario y referencias — está en el doc largo: <a href="spec-loop-claude-code-doc-FINAL.html">spec-loop-claude-code-doc-FINAL.html</a>. · Kit: <code class="in">dev-loop-kit-1.21.0.zip</code> (qa_ledger + CONSTITUTION). · Gobierno: la IA ejecuta, la metodología gobierna, la evidencia decide, el humano aprueba.
   </div>
 
 </div>

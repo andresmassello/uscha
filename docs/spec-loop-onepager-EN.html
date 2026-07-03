@@ -95,7 +95,7 @@ code.in{font-family:var(--mono);font-size:.85em;background:#eceef1;padding:1px 5
     <g font-family="'Inter Tight',sans-serif">
       <rect x="10" y="40" width="150" height="50" rx="8" fill="#fff" stroke="#14171c" stroke-width="1.5"/>
       <text x="85" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="#14171c">SPEC + ACCEPTANCE</text>
-      <text x="85" y="79" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#8b929b">/discovery</text>
+      <text x="85" y="79" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#8b929b">/specloop-discovery</text>
       <rect x="182" y="40" width="110" height="50" rx="8" fill="#fff" stroke="#14171c" stroke-width="1.5"/>
       <text x="237" y="62" text-anchor="middle" font-size="12.5" font-weight="700" fill="#14171c">dev-loop</text>
       <text x="237" y="79" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="10" fill="#8b929b">build + tests</text>
@@ -172,13 +172,13 @@ code.in{font-family:var(--mono);font-size:.85em;background:#eceef1;padding:1px 5
   </table>
 
   <div class="grid2">
-    <div class="card block"><h3>Block — read facts</h3><p>Hard exit 1, break the chain. Objective, cheap, no opinion. The agent runs them inline in /dev-loop and persists each verdict with <code class="in">log-gate</code>; a failing fact gate blocks convergence and caps readiness ≤65.</p><ul><li>golden-diff · pit-check · gate-check</li><li>rebuild · simplicity budgets · spec-check structure</li></ul></div>
+    <div class="card block"><h3>Block — read facts</h3><p>Hard exit 1, break the chain. Objective, cheap, no opinion. The agent runs them inline in /specloop-devloop and persists each verdict with <code class="in">log-gate</code>; a failing fact gate blocks convergence and caps readiness ≤65.</p><ul><li>golden-diff · pit-check · gate-check</li><li>rebuild · simplicity budgets · spec-check structure</li></ul></div>
     <div class="card adv"><h3>Advise — guess over prose</h3><p>They report, they don't block (except <code class="in">--strict</code>). A heuristic over natural language that blocks generates false positives → the dev disables it → dead gate.</p><ul><li>spec-check prose (advisory)</li><li>simplicity abstractions</li></ul></div>
   </div>
 
   <h2>The developer's day-to-day</h2>
-  <pre><span class="c"># the agent runs the fact gates INLINE in /dev-loop and persists them with log-gate</span>
-spec → code (agent) → /dev-loop gates inline:
+  <pre><span class="c"># the agent runs the fact gates INLINE in /specloop-devloop and persists them with log-gate</span>
+spec → code (agent) → /specloop-devloop gates inline:
    <span class="o">golden-diff · pit-check · gate-check · simplicity</span>  <span class="c"># exit 0/1 → qa_ledger.py log-gate</span>
 → readiness = 0-100 KPI (hard caps, always exit 0) → converge → STOP at the merge gate
 → the human READS the diff → <span class="o">ship</span>
@@ -188,7 +188,7 @@ spec → code (agent) → /dev-loop gates inline:
   <p class="lead" style="font-size:.95rem;margin-bottom:.6rem">What a regex can't judge (contradictory clauses? over-architected?) is NOT faked as deterministic: it goes to the <strong>non-correlated checker</strong> (a different agent family, or at least a different profile — process discipline, not enforced by code). Computational within the file; inferential cross-file.</p>
 
   <div class="foot">
-    <strong>Appendix:</strong> the full detail — history, sensors (Böckeler), anti gate-gaming (Osmani), golden testing, glossary and references — is in the long doc: <a href="spec-loop-claude-code-doc-EN.html">spec-loop-claude-code-doc-EN.html</a>. · Kit: <code class="in">dev-loop-kit-1.19.0.zip</code> (qa_ledger + CONSTITUTION). · Governance: the AI executes, the methodology governs, the evidence decides, the human approves.
+    <strong>Appendix:</strong> the full detail — history, sensors (Böckeler), anti gate-gaming (Osmani), golden testing, glossary and references — is in the long doc: <a href="spec-loop-claude-code-doc-EN.html">spec-loop-claude-code-doc-EN.html</a>. · Kit: <code class="in">dev-loop-kit-1.21.0.zip</code> (qa_ledger + CONSTITUTION). · Governance: the AI executes, the methodology governs, the evidence decides, the human approves.
   </div>
 
 </div>

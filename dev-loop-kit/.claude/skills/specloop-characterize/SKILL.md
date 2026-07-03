@@ -1,5 +1,5 @@
 ---
-name: characterize
+name: specloop-characterize
 description: >
   Capture a golden / approval suite of a module's CURRENT behavior — the one artifact the
   agent must NOT author. Run the ORIGINAL code with real inputs through a deterministic
@@ -113,7 +113,7 @@ covered.
 - **reverse-discovery** orchestrates this skill as its Phase 2 (golden capture at the
   boundaries).
 - The captured `.approved` is the arbiter that `qa_ledger.py golden-diff` byte-compares
-  against during `/dev-loop`.
+  against during `/specloop-devloop`.
 
 ## Tracked-markdown / tracked-golden protocol
 

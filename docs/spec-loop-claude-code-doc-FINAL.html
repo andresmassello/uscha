@@ -443,19 +443,19 @@ body::before{content:"";position:fixed;inset:0;background:
     <span class="node">Evidence</span><span class="ar">→</span>
     <span class="node red">Human gate</span>
   </div>
-  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en seis skills invocables (kit 1.19.0) y un motor de medición en Python.</p>
+  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en seis skills invocables (kit 1.21.0) y un motor de medición en Python.</p>
   <div class="tagrow">
-    <span class="chip red">/discovery</span><span class="chip red">/adr-refine</span><span class="chip red">/dev-loop</span><span class="chip red">/sys-doc</span><span class="chip red">/reverse-discovery</span><span class="chip red">/characterize</span><span class="chip">qa_ledger.py</span>
+    <span class="chip red">/specloop-discovery</span><span class="chip red">/specloop-adr-refine</span><span class="chip red">/specloop-devloop</span><span class="chip red">/specloop-sysdoc</span><span class="chip red">/specloop-reverse-discovery</span><span class="chip red">/specloop-characterize</span><span class="chip">qa_ledger.py</span>
   </div>
 </section>
 
 <section class="slide" data-section="Dos frentes: discovery / adr-refine">
   <div class="kicker"><span class="n">02</span> el método tiene dos modos de conversación</div>
   <h2>Dos frentes: <span class="accent">discovery vs adr-refine.</span></h2>
-  <p>El error clásico es pedirte que escribas entidades, endpoints y casos de error desde el inicio. Pero un sistema nuevo arranca antes: solo sabés <em>qué querés lograr</em>. Por eso hay dos frentes, cada uno con su paquete: <code class="in">/discovery</code> escribe el paquete completo (CONTEXT, DOMAIN-MODEL/CONSTITUTION, SPEC, docs/adr, ACCEPTANCE, RISKS/HANDOFF); <code class="in">/adr-refine</code> emite <code class="in">docs/adr/*.md</code> + <code class="in">ACCEPTANCE.md</code> (y opcionalmente extiende la CONSTITUTION). Elegís por punto de partida.</p>
+  <p>El error clásico es pedirte que escribas entidades, endpoints y casos de error desde el inicio. Pero un sistema nuevo arranca antes: solo sabés <em>qué querés lograr</em>. Por eso hay dos frentes, cada uno con su paquete: <code class="in">/specloop-discovery</code> escribe el paquete completo (CONTEXT, DOMAIN-MODEL/CONSTITUTION, SPEC, docs/adr, ACCEPTANCE, RISKS/HANDOFF); <code class="in">/specloop-adr-refine</code> emite <code class="in">docs/adr/*.md</code> + <code class="in">ACCEPTANCE.md</code> (y opcionalmente extiende la CONSTITUTION). Elegís por punto de partida.</p>
   <div class="grid2">
-    <div class="card accent"><h3><code class="in">/discovery</code> — "no sé el cómo"</h3><p>Greenfield. Traés idea + restricciones + material de referencia. El asistente <strong>propone</strong> dominio, superficie de API y opciones de arquitectura; vos reaccionás y decidís. La inversión clave: <em>vos no autorás la estructura, la aprobás</em>. Una pregunta a la vez, cada una con su respuesta recomendada.</p></div>
-    <div class="card accent"><h3><code class="in">/adr-refine</code> — "sé el qué, falta precisión"</h3><p>Feature dentro de un sistema existente. La forma ya se conoce; la entrevista adversarial pinta los bordes: casos sucios, errores, idempotencia, restricciones inviolables, out-of-scope. No emite artefactos hasta converger.</p></div>
+    <div class="card accent"><h3><code class="in">/specloop-discovery</code> — "no sé el cómo"</h3><p>Greenfield. Traés idea + restricciones + material de referencia. El asistente <strong>propone</strong> dominio, superficie de API y opciones de arquitectura; vos reaccionás y decidís. La inversión clave: <em>vos no autorás la estructura, la aprobás</em>. Una pregunta a la vez, cada una con su respuesta recomendada.</p></div>
+    <div class="card accent"><h3><code class="in">/specloop-adr-refine</code> — "sé el qué, falta precisión"</h3><p>Feature dentro de un sistema existente. La forma ya se conoce; la entrevista adversarial pinta los bordes: casos sucios, errores, idempotencia, restricciones inviolables, out-of-scope. No emite artefactos hasta converger.</p></div>
   </div>
   <p class="small">Ambos skills tienen <code class="in">allowed-tools: Read, Write, Glob, Grep</code> (discovery suma <code class="in">WebFetch</code> para leer manuales/PDFs/URLs). Ninguno de los dos toca código: generan claridad, no implementación.</p>
   <div class="card note"><h3>El principio que los define</h3><p>Grill, don't agree. Un discovery donde estuviste de acuerdo con todo, falló — un entrevistador complaciente hereda tus puntos ciegos y te los devuelve formateados como plan. El valor está en las preguntas — contradicciones, términos difusos, modos de falla faltantes, restricciones no dichas — no en validar. La falla cara que esto evita: un <strong>build confiado de la forma equivocada</strong>.</p></div>
@@ -520,7 +520,7 @@ body::before{content:"";position:fixed;inset:0;background:
 <span class="c"># Operación</span>
 - Sin migration destructiva sin rollback explícito
 - Ningún merge sin human gate</pre>
-  <div class="card good"><h3>Estado real en el kit <span class="callout-status real">en el kit</span></h3><p>Es una capa propia: <code class="in">templates/CONSTITUTION.md</code> versionada con invariantes mapeados a CWE. <code class="in">/discovery</code> y <code class="in">/adr-refine</code> la escriben/extienden (un ADR no puede contradecirla: se escala, no se aprueba); <code class="in">/dev-loop</code> la lee en Fase 0 y la consulta antes de tocar áreas gobernadas. El motor <strong>no</strong> lee CONSTITUTION.md solo: detectar la violación es deber del agente/humano, que <strong>debe</strong> loguearla vía <code class="in">flag-blocker --kind constitution</code>; una vez logueada, capea readiness ≤65 y bloquea convergencia hasta <code class="in">--resolve</code> (humano).</p></div>
+  <div class="card good"><h3>Estado real en el kit <span class="callout-status real">en el kit</span></h3><p>Es una capa propia: <code class="in">templates/CONSTITUTION.md</code> versionada con invariantes mapeados a CWE. <code class="in">/specloop-discovery</code> y <code class="in">/specloop-adr-refine</code> la escriben/extienden (un ADR no puede contradecirla: se escala, no se aprueba); <code class="in">/specloop-devloop</code> la lee en Fase 0 y la consulta antes de tocar áreas gobernadas. El motor <strong>no</strong> lee CONSTITUTION.md solo: detectar la violación es deber del agente/humano, que <strong>debe</strong> loguearla vía <code class="in">flag-blocker --kind constitution</code>; una vez logueada, capea readiness ≤65 y bloquea convergencia hasta <code class="in">--resolve</code> (humano).</p></div>
   <div class="card good"><h3>Por qué es el patrón correcto</h3><p>No es un agregado suelto: es donde aterrizó el SOTA. Spec Kit tiene <code class="in">/speckit.constitution</code>; el OSS <code class="in">dpolivaev/spec-loop</code> (mismo nombre que el tuyo) define sus reglas en <code class="in">CONSTITUTION.md</code> con gates de aprobación humana. Formalizarlo te alinea con la convergencia del campo.</p></div>
 </section>
 
@@ -540,13 +540,13 @@ body::before{content:"";position:fixed;inset:0;background:
   </table>
 </section>
 
-<section class="slide" data-section="/dev-loop fase por fase">
+<section class="slide" data-section="/specloop-devloop fase por fase">
   <div class="kicker"><span class="n">07</span> el orquestador <span class="callout-status real">en el kit</span></div>
-  <h2><code class="in" style="font-size:.7em">/dev-loop</code> <span class="accent">fase por fase.</span></h2>
-  <p>El <code class="in">dev-loop</code> es un orquestador spec-driven multi-repo. Toma el ADR set + <code class="in">ACCEPTANCE.md</code> como input, construye, y corre un loop de review severity-gated que <strong>converge en vez de loopear para siempre</strong>, con los tests como guardrail entre pasos. Para en el merge gate. Tres principios no-negociables lo gobiernan: convergé no persigas el cero; los tests son guardrail no finale; generar tests no es correr tests.</p>
+  <h2><code class="in" style="font-size:.7em">/specloop-devloop</code> <span class="accent">fase por fase.</span></h2>
+  <p>El <code class="in">specloop-devloop</code> es un orquestador spec-driven multi-repo. Toma el ADR set + <code class="in">ACCEPTANCE.md</code> como input, construye, y corre un loop de review severity-gated que <strong>converge en vez de loopear para siempre</strong>, con los tests como guardrail entre pasos. Para en el merge gate. Tres principios no-negociables lo gobiernan: convergé no persigas el cero; los tests son guardrail no finale; generar tests no es correr tests.</p>
   <ol class="steps">
     <li><strong>Setup.</strong> <code class="in">qa_ledger.py init --config dev-loop.config.json</code>. La config lista cada repo y su tipo (maven/flutter/python/node/go/rust/dotnet/cpp/gradle/swift). En multi-repo, los otros repos se montan con <code class="in">--add-dir</code>.</li>
-    <li><strong>Fase 0 — Plan (ADR-first).</strong> El ADR set + ACCEPTANCE son el input. Si faltan criterios de aceptación, para y corré <code class="in">/adr-refine</code> primero. Los acceptance criteria se vuelven los contract tests de la fase 1.</li>
+    <li><strong>Fase 0 — Plan (ADR-first).</strong> El ADR set + ACCEPTANCE son el input. Si faltan criterios de aceptación, para y corré <code class="in">/specloop-adr-refine</code> primero. Los acceptance criteria se vuelven los contract tests de la fase 1.</li>
     <li><strong>Fase 1 — Coverage gate → characterization condicional (por repo).</strong> <code class="in">snapshot --phase pre</code> + <code class="in">check-coverage</code>. Si coverage ≥ umbral, la suite existente es el guardrail. Si está por debajo (o no hay reporte): escribís characterization/contract tests <em>en el borde</em> (API pública, endpoints) — que el humano revise antes de confiar en ellos.</li>
     <li><strong>Fase 2 — Build.</strong> Implementás por el plan, commit por paso lógico (conventional commits). Aplica la disciplina de ADR: consultá antes de tocar áreas gobernadas; pará y proponé ADR ante una dependencia nueva, patrón nuevo, alternativa no obvia o contradicción de un ADR aceptado.</li>
     <li><strong>Fase 3 — QA loop (por repo).</strong> Corré las tools de <code class="in">qa_tools_order</code> (default: code-review → judgment-day → improve). Un pase de todas = un ciclo. Tras cada tool: aplicá solo fixes ≥ severity gate (el resto a <code class="in">ISSUES-DEFERRED.md</code>), corré los tests, logueá con <code class="in">log-step</code>, ingestá el static gate con <code class="in">ingest-gate</code>, y persistí cada veredicto de fact gate (golden-diff / gate-check / pit-check / simplicity) con <code class="in">log-gate</code> — un fail persistido bloquea convergencia. Chequeos advisory de fin de ciclo: <code class="in">converged</code> y <code class="in">oscillation</code>.</li>
@@ -554,7 +554,7 @@ body::before{content:"";position:fixed;inset:0;background:
     <li><strong>Fase 5 — Verify (coverage, una vez).</strong> Con el código estable, <code class="in">/improve test</code> escribe el coverage fino que diferiste. Suite completa verde + coverage ≥ umbral antes de seguir.</li>
     <li><strong>Fase 6 — PR (para en el merge).</strong> Abrís el PR, confirmás CI verde, y <strong>parás</strong>. El humano hace el merge.</li>
     <li><strong>Fase 7 — Smoke list.</strong> Producís un checklist de smoke manual (rutas reales, endpoints, flujos de device).</li>
-    <li><strong>Fase 8 — Docs + retrospectiva.</strong> <code class="in">summary</code> + <code class="in">readiness</code>; si lo pedís, <code class="in">/sys-doc</code> arma el deck (reporting opcional a pedido, no fase obligatoria del pipeline). Retrospectiva sacada del ledger.</li>
+    <li><strong>Fase 8 — Docs + retrospectiva.</strong> <code class="in">summary</code> + <code class="in">readiness</code>; si lo pedís, <code class="in">/specloop-sysdoc</code> arma el deck (reporting opcional a pedido, no fase obligatoria del pipeline). Retrospectiva sacada del ledger.</li>
   </ol>
 </section>
 
@@ -588,7 +588,7 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">resolve-escalation</td><td>Cierra una escalación registrada; hasta entonces readiness queda capeado ≤75.</td></tr>
       <tr><td class="t">oscillation</td><td>Advisory. Detecta que el fingerprint de findings de una tool se repite con período 2 (pase N == pase N-2).</td></tr>
       <tr><td class="t">escalate</td><td>Registra un evento de escalación humana con razón.</td></tr>
-      <tr><td class="t">summary</td><td>Métricas retrospectivas (<code class="in">--json</code> lo consume <code class="in">/sys-doc</code>).</td></tr>
+      <tr><td class="t">summary</td><td>Métricas retrospectivas (<code class="in">--json</code> lo consume <code class="in">/specloop-sysdoc</code>).</td></tr>
       <tr><td class="t">readiness</td><td>El KPI de estado del proyecto: score 0–100 con pesos y caps duros. <strong>Reporta</strong> (siempre exit 0); no es un gate exit 0/1.</td></tr>
       <tr><td class="t">rebuild</td><td>El rebuild test: completitud de la SPEC. <code class="in">--mode baseline</code> firma el sistema; <code class="in">--mode compare</code> puntúa la regeneración (COVERS/PARTIAL/DIVERGE).</td></tr>
       <tr><td class="t">regression-check</td><td>Find Bugs Once (1.16.0): findings cerrados sin línea nueva de test = NARRATED — avisa; <code class="in">--strict</code> gatea; se persiste con <code class="in">log-gate --kind regression</code>.</td></tr>
@@ -596,7 +596,7 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
     </tbody>
   </table>
   <pre><span class="c"># un pase típico del loop</span>
-QL=./.claude/skills/dev-loop/qa_ledger.py
+QL=./.claude/skills/specloop-devloop/qa_ledger.py
 python3 $QL init --config dev-loop.config.json
 python3 $QL snapshot --repo backend-api --phase pre
 python3 $QL check-coverage --repo backend-api          <span class="c"># exit 0/1</span>
@@ -662,7 +662,7 @@ $ python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json
   <span class="o">REBUILD: 72.2/100 — PARTIAL</span>
   ! 1 test(s) fail on regenerated code — behavior the SPEC left implicit
   ! coverage 45.0% vs baseline 80.0% (tolerance 5)</pre>
-  <div class="card good"><h3>Estado real en el kit <span class="callout-status real">en el kit</span></h3><p>Implementado y probado (kit 1.4.0+). Pesos: <strong>tests 60 · acceptance 20 · coverage 15 · surface 5</strong>. Veredictos: <code class="in">COVERS ≥90 · PARTIAL ≥70 · DIVERGE &lt;70</code> (exit 0 solo si COVERS; <code class="in">--json</code> lo consume <code class="in">/sys-doc</code>). La señal dominante es la suite preservada: un test que pasaba y falla en el código regenerado = comportamiento que la SPEC dejó implícito. Cuándo correrlo: perfil C+ y E, o de forma periódica (lo disparás vos) — es el QA del <em>output del Discovery</em>.</p></div>
+  <div class="card good"><h3>Estado real en el kit <span class="callout-status real">en el kit</span></h3><p>Implementado y probado (kit 1.4.0+). Pesos: <strong>tests 60 · acceptance 20 · coverage 15 · surface 5</strong>. Veredictos: <code class="in">COVERS ≥90 · PARTIAL ≥70 · DIVERGE &lt;70</code> (exit 0 solo si COVERS; <code class="in">--json</code> lo consume <code class="in">/specloop-sysdoc</code>). La señal dominante es la suite preservada: un test que pasaba y falla en el código regenerado = comportamiento que la SPEC dejó implícito. Cuándo correrlo: perfil C+ y E, o de forma periódica (lo disparás vos) — es el QA del <em>output del Discovery</em>.</p></div>
 </section>
 
 <section class="slide" data-section="Change budget + escalación">
@@ -697,10 +697,10 @@ $ python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json
   </table>
   <div class="grid2">
     <div class="card good"><h3>Lo que SÍ se construye</h3><ul class="clean"><li>Invariante <code class="in">SIMPLICITY</code> en la CONSTITUTION: presupuesto de complejidad con caps duros.</li><li>Subcomando <code class="in">qa_ledger.py simplicity-check</code> que puntúa y frena — determinístico, cero opinión. Una dimensión pesada &gt;1.5× su budget fuerza el veredicto a OVERBUILT: las dimensiones baratas no la promedian.</li><li>El conteo/densidad de abstracciones es <strong>advisory</strong> (deliberadamente sin peso en el score). No hay cap de deps nuevas ni de complejidad ciclomática/largo de método.</li><li>Normalizado a la misma escala de severidad que el static gate.</li></ul></div>
-    <div class="card warn"><h3>Lo que NO se construye</h3><ul class="clean"><li>El mapeo de las 10 leyes → invariantes: <strong>branding, no enforcement</strong>. ~70% renombra lo que la CONSTITUTION + dev-loop ya hacen.</li><li>Un "simplicity-check" subjetivo: ya es <code class="in">simplify</code> (skill oficial, post-diff) + el checker separado.</li></ul></div>
+    <div class="card warn"><h3>Lo que NO se construye</h3><ul class="clean"><li>El mapeo de las 10 leyes → invariantes: <strong>branding, no enforcement</strong>. ~70% renombra lo que la CONSTITUTION + specloop-devloop ya hacen.</li><li>Un "simplicity-check" subjetivo: ya es <code class="in">simplify</code> (skill oficial, post-diff) + el checker separado.</li></ul></div>
   </div>
   <pre><span class="c"># la invariante como gate objetivo, no como filosofía</span>
-$ python3 .claude/skills/dev-loop/qa_ledger.py simplicity-check --diff HEAD
+$ python3 .claude/skills/specloop-devloop/qa_ledger.py simplicity-check --diff HEAD
   <span class="c"># budgets: +lines (400), net growth, files, nesting, largest hunk</span>
   <span class="o">SIMPLICITY: PASS</span> · diff 47L / budget 400 · anidación 3 · hunk mayor 22L</pre>
   <div class="card note"><h3>Maeda, donde rinde: una línea, no un framework</h3><p>La Ley 10 vale más que las otras nueve juntas. Va como norte arriba de la CONSTITUTION, no como checklist:</p><p style="font-weight:600;color:var(--ink)">"Simplicity is about subtracting the obvious and adding the meaningful."</p></div>
@@ -748,7 +748,7 @@ $ python3 .claude/skills/dev-loop/qa_ledger.py simplicity-check --diff HEAD
     <div class="card"><h3>INV-GOLDEN-01 (CWE-440)</h3><p>Ningún módulo entra en migración/modernización sin golden capturado y commiteado ANTES de tocarlo. La spec de la migración se escribe <em>contra</em> ese golden.</p></div>
     <div class="card note"><h3>Determinismo o el diff miente</h3><p>Congelá reloj, seeds, orden de maps, GUIDs, y sobre todo <strong>el locale objetivo</strong> (separador decimal, formato de fecha — alto riesgo entre máquinas con locale distinto). La foto sale byte a byte idéntica cuando el comportamiento es idéntico.</p></div>
   </div>
-  <p class="small">Directamente aplicable a cualquier migración de un sistema legacy con caminos críticos (byte-equivalence), donde la pérdida silenciosa de lógica es el riesgo real. <strong>Ya en el kit:</strong> front brownfield <code class="in">reverse-discovery</code> (mapa + hechos), skill <code class="in">characterize</code> (captura), gate <code class="in">golden-diff</code>, hook <code class="in">block-approved-writes.ps1</code> (bloquea que el agente toque un <code class="in">.approved</code>) y <code class="in">.gitattributes</code>.</p>
+  <p class="small">Directamente aplicable a cualquier migración de un sistema legacy con caminos críticos (byte-equivalence), donde la pérdida silenciosa de lógica es el riesgo real. <strong>Ya en el kit:</strong> front brownfield <code class="in">specloop-reverse-discovery</code> (mapa + hechos), skill <code class="in">specloop-characterize</code> (captura), gate <code class="in">golden-diff</code>, hook <code class="in">block-approved-writes.ps1</code> (bloquea que el agente toque un <code class="in">.approved</code>) y <code class="in">.gitattributes</code>.</p>
 </section>
 
 <section class="slide" data-section="Destilación: hechos vs prosa">
@@ -771,7 +771,7 @@ $ python3 .claude/skills/dev-loop/qa_ledger.py simplicity-check --diff HEAD
       <tr><td class="t">spec-check · prosa / abstracciones</td><td>heurística sobre prosa (términos vagos, EARS) / "tipos nuevos" — <code class="in">--strict</code> las gatea</td><td class="no">AVISA</td></tr>
     </tbody>
   </table>
-  <div class="card warn"><p>Un heurístico sobre lenguaje natural que <strong>bloquea</strong> tira falsos positivos → el dev lo apaga → gate muerto (la erosión que gate-check combate). Por eso los heurísticos de prosa de <code class="in">spec-check</code> son advisory (sus dos checks estructurales — out-of-scope faltante, acceptance ausente/vacío — son hechos y bloquean) y las abstracciones salieron del score. <strong>Los gates de hechos los corre el agente inline en <code class="in">/dev-loop</code> y los persiste con <code class="in">log-gate</code> — no hay workflow de CI en el kit.</strong></p></div>
+  <div class="card warn"><p>Un heurístico sobre lenguaje natural que <strong>bloquea</strong> tira falsos positivos → el dev lo apaga → gate muerto (la erosión que gate-check combate). Por eso los heurísticos de prosa de <code class="in">spec-check</code> son advisory (sus dos checks estructurales — out-of-scope faltante, acceptance ausente/vacío — son hechos y bloquean) y las abstracciones salieron del score. <strong>Los gates de hechos los corre el agente inline en <code class="in">/specloop-devloop</code> y los persiste con <code class="in">log-gate</code> — no hay workflow de CI en el kit.</strong></p></div>
 </section>
 
 <section class="slide" data-section="El libro pasó por el kit">
@@ -813,7 +813,7 @@ $ python3 .claude/skills/dev-loop/qa_ledger.py simplicity-check --diff HEAD
     </tbody>
   </table>
   <div class="grid2">
-    <div class="card good"><h3>Los 4 costos del loop engineering, neutralizados</h3><ul class="clean"><li><strong>verification debt</strong> → evidence ledger</li><li><strong>comprehension rot</strong> → repo + /sys-doc</li><li><strong>token blowout</strong> → change budget + max_iterations</li><li><strong>cognitive surrender</strong> → human gate</li></ul></div>
+    <div class="card good"><h3>Los 4 costos del loop engineering, neutralizados</h3><ul class="clean"><li><strong>verification debt</strong> → evidence ledger</li><li><strong>comprehension rot</strong> → repo + /specloop-sysdoc</li><li><strong>token blowout</strong> → change budget + max_iterations</li><li><strong>cognitive surrender</strong> → human gate</li></ul></div>
     <div class="card accent"><h3>El veredicto</h3><p>No solo lo alcanzamos: llegamos a la misma forma por separado, y en integridad de verificación (maker ≠ checker) lo articulamos tan filoso como cualquiera. La única diferencia es que el loop lo dispara una persona, no un cron — y eso es <em>la decisión</em>, no la carencia.</p></div>
   </div>
 </section>
@@ -843,12 +843,12 @@ $ python3 .claude/skills/dev-loop/qa_ledger.py simplicity-check --diff HEAD
   <div class="kicker"><span class="n">↻</span> outer loop · el diseño <span class="callout-status prop">propuesta</span></div>
   <h2>El outer loop de spec-loop: <span class="accent">el latido que le falta.</span></h2>
   <p>spec-loop es hoy <em>human-triggered</em>: lo disparás vos. El playbook aporta el <strong>heartbeat</strong> — lo que convierte "una corrida" en un loop. La síntesis: spec-loop es el <em>payload</em> ideal de ese latido, porque ya trae el gate, el estado, los skills y el maker ≠ checker. Solo falta el disparador.</p>
-  <pre><span class="c"># outer loop = schedule + /goal, envolviendo /dev-loop</span>
+  <pre><span class="c"># outer loop = schedule + /goal, envolviendo /specloop-devloop</span>
 &gt; /loop 0 3 * * *                 <span class="c"># cadencia: cada noche</span>
   /goal  readiness ≥ 80 AND tests verdes en módulos tocados
          AND 0 findings CRITICAL   <span class="c"># lo chequea un modelo aparte</span>
   /guard 4-condition-test          <span class="c"># tarea repetitiva + verificación automática</span>
-  &gt; ejecutá /dev-loop sobre &lt;scope machine-checkable&gt;
+  &gt; ejecutá /specloop-devloop sobre &lt;scope machine-checkable&gt;
     gate     = qa_ledger.py ingest-gate + fact gates (log-gate)  <span class="c"># YA existe · readiness es KPI, no gate</span>
     state    = QA-LEDGER.json + paquete en repo         <span class="c"># YA existe</span>
     stop     = /goal cumplido (checker fresco) o change budget agotado
@@ -909,8 +909,8 @@ $ python3 .claude/skills/dev-loop/qa_ledger.py simplicity-check --diff HEAD
       <tr><td class="t">Python 3.8+</td><td>corre qa_ledger.py (stdlib pura)</td><td><code class="in">python3</code> en PATH</td></tr>
       <tr><td class="t">git</td><td>versionado</td><td>2.x con user.name/email</td></tr>
       <tr><td class="t">gh</td><td>crear repo / abrir PR</td><td>opcional, recomendado</td></tr>
-      <tr><td class="t">skills del kit</td><td>discovery, adr-refine, dev-loop, sys-doc, reverse-discovery, characterize</td><td>en <code class="in">~/.claude/skills/</code></td></tr>
-      <tr><td class="t">skills de QA</td><td>code-review, judgment-day, improve</td><td>tus skills globales (el dev-loop los <strong>orquesta</strong>, no los trae)</td></tr>
+      <tr><td class="t">skills del kit</td><td>specloop-discovery, specloop-adr-refine, specloop-devloop, specloop-sysdoc, specloop-reverse-discovery, specloop-characterize</td><td>en <code class="in">~/.claude/skills/</code></td></tr>
+      <tr><td class="t">skills de QA</td><td>code-review, judgment-day, improve</td><td>tus skills globales (el specloop-devloop los <strong>orquesta</strong>, no los trae)</td></tr>
       <tr><td class="t">engram (plugin)</td><td>memoria persistente entre sesiones</td><td>marketplace <code class="in">Gentleman-Programming/engram</code></td></tr>
       <tr><td class="t">sonarqube (plugin)</td><td>static gate hosteado (alternativa al java-qa-gate)</td><td>marketplace <code class="in">claude-plugins-official</code></td></tr>
       <tr><td class="t">gentle-ai (CLI)</td><td>hook <code class="in">skill-registry</code> (refresca el índice de skills) — opcional, toolchain del autor; el kit no lo requiere</td><td>scoop, bucket <code class="in">gentleman</code></td></tr>
@@ -934,13 +934,13 @@ claude --version &amp;&amp; claude doctor                     <span class="c"># 
   <h2>Las piezas de Claude Code <span class="accent">que lo sostienen.</span></h2>
   <div class="grid2">
     <div class="card"><h3>CLAUDE.md / AGENTS.md</h3><p>Protocolo estable del repo: comandos, no-go zones, DoD, cómo registrar evidencia. Lo permanente vive acá; lo puntual en SPEC/ADR.</p></div>
-    <div class="card"><h3>Skills (/comando)</h3><p>discovery, adr-refine, dev-loop, sys-doc, reverse-discovery, characterize en <code class="in">.claude/skills/</code>. Invocables, versionables, compartibles con el equipo.</p></div>
+    <div class="card"><h3>Skills (/comando)</h3><p>specloop-discovery, specloop-adr-refine, specloop-devloop, specloop-sysdoc, specloop-reverse-discovery, specloop-characterize en <code class="in">.claude/skills/</code>. Invocables, versionables, compartibles con el equipo.</p></div>
     <div class="card"><h3>Sub-agentes</h3><p>Paralelizan las tools de QA (review, security, mejoras) sin ensuciar el contexto principal.</p></div>
     <div class="card"><h3>Hooks</h3><p>Corren gates solos: tests post-edit, lint pre-commit. La evidencia se captura por ejecución, no se narra.</p></div>
     <div class="card"><h3>Multi-repo (--add-dir)</h3><p>Montás varios repos en una sesión para QA de integración/contratos (multi-repo).</p></div>
     <div class="card"><h3>Remote Control</h3><p>Seguís y manejás la sesión desde el celular mientras corre el loop. Sumá <code class="in">plan mode</code>, <code class="in">settings.local.json</code> para permisos, y <code class="in">ccusage</code> para monitorear uso.</p></div>
     <div class="card"><h3>Memoria persistente (engram + MEMORY.md)</h3><p>La verdad sobrevive al cierre de la sesión: <code class="in">engram</code> guarda hechos y decisiones LLM-oriented por proyecto; <code class="in">MEMORY.md</code> es la auto-memoria en archivos. Es la regla <em>"la verdad vive en archivos"</em> extendida <strong>entre</strong> sesiones, no solo dentro del repo.</p></div>
-    <div class="card"><h3>Higiene de sesión</h3><p>Los <code class="in">/dev-loop</code> largos inflan el transcript hasta colgar la app — visto en vivo: <strong>77 MB = sesión perdida</strong>. Un hook que avisa por tamaño, un mapa con semáforo y un rescate del <code class="in">.jsonl</code> a Markdown legible (tooling del autor — no viene en el kit). Regla: rotá de sesión antes del umbral.</p></div>
+    <div class="card"><h3>Higiene de sesión</h3><p>Los <code class="in">/specloop-devloop</code> largos inflan el transcript hasta colgar la app — visto en vivo: <strong>77 MB = sesión perdida</strong>. Un hook que avisa por tamaño, un mapa con semáforo y un rescate del <code class="in">.jsonl</code> a Markdown legible (tooling del autor — no viene en el kit). Regla: rotá de sesión antes del umbral.</p></div>
   </div>
 </section>
 
@@ -949,7 +949,7 @@ claude --version &amp;&amp; claude doctor                     <span class="c"># 
   <h2>CLAUDE.md — <span class="accent">las reglas innegociables.</span></h2>
   <p>Reglas permanentes que Claude Code lee en cada sesión. Lo puntual de cada cambio vive en SPEC/ADR/ACCEPTANCE, no acá. (Si usás otros agentes, copiá este archivo como <code class="in">AGENTS.md</code>.)</p>
   <ol class="steps">
-    <li><strong>No codear desde una idea vaga.</strong> Sin SPEC + ACCEPTANCE, primero modelar (<code class="in">/discovery</code> o <code class="in">/adr-refine</code>).</li>
+    <li><strong>No codear desde una idea vaga.</strong> Sin SPEC + ACCEPTANCE, primero modelar (<code class="in">/specloop-discovery</code> o <code class="in">/specloop-adr-refine</code>).</li>
     <li><strong>La verdad vive en archivos, no en el chat.</strong> Antes de tocar código, leé SPEC/ACCEPTANCE/ADR.</li>
     <li><strong>Convergé, no persigas el cero.</strong> Solo findings ≥ severity gate; el resto a ISSUES-DEFERRED.md.</li>
     <li><strong>Disciplina de ADR durante el build.</strong> Pará y proponé ADR ante dependencia/patrón/alternativa/contradicción. Linkeá <code class="in">// ADR: &lt;slug&gt;</code>.</li>
@@ -968,16 +968,16 @@ claude --version &amp;&amp; claude doctor                     <span class="c"># 
   <p>Un servicio backend (Java, Spring Boot, React, SQL), de la idea al PR, todo en Claude Code:</p>
   <pre><span class="c">claude code · sesión única</span>
 $ claude
-&gt; /discovery
+&gt; /specloop-discovery
   <span class="c">grilla 1×1, propone entidades/endpoints, vos decidís 3 cosas</span>
   <span class="o">✓</span> CONTEXT.md · DOMAIN-MODEL.md · SPEC-001 · ADR-001/2/3
   <span class="o">✓</span> ACCEPTANCE.md · RISKS.md · HANDOFF.md
 &gt; /dev-loop
   <span class="c">plan → coverage gate → build → QA loop (sub-agentes) → integration</span>
   <span class="o">CONVERGED</span> · PR abierto. Paro en el merge.
-&gt; !python3 .claude/skills/dev-loop/qa_ledger.py readiness --acceptance ACCEPTANCE.md
+&gt; !python3 .claude/skills/specloop-devloop/qa_ledger.py readiness --acceptance ACCEPTANCE.md
   <span class="o">READINESS: 88/100 — RELEASE CANDIDATE</span>
-&gt; /sys-doc                 <span class="c"># deck de dos vistas desde el ledger</span>
+&gt; /specloop-sysdoc                 <span class="c"># deck de dos vistas desde el ledger</span>
 <span class="c"># (vos) revisás el PR y mergeás — el human gate no se automatiza</span></pre>
   <div class="card accent"><p style="font-size:1.1rem;font-weight:600;color:var(--ink)">La herramienta ejecuta. La metodología gobierna. La evidencia decide. El humano aprueba.</p></div>
 </section>
@@ -987,18 +987,18 @@ $ claude
   <h2>La metodología en <span class="accent">10 pasos.</span></h2>
   <p>Un feature mínimo — <code class="in">applyDiscount(monto, porcentaje)</code> — recorrido entero. <strong>6 de los 10 pasos son falla o refinamiento</strong> (marcados <span style="color:var(--red);font-weight:700">⚠</span>): la metodología no es que todo salga bien de una — es que cada desvío tiene un gate que lo caza.</p>
   <ol class="steps">
-    <li><strong>Discovery.</strong> <code class="in">/discovery "applyDiscount(monto, porcentaje)"</code> → grilla 1×1 (¿redondeo? ¿límites del %?). Sale SPEC-001 + ACCEPTANCE + ADR-001.</li>
+    <li><strong>Discovery.</strong> <code class="in">/specloop-discovery "applyDiscount(monto, porcentaje)"</code> → grilla 1×1 (¿redondeo? ¿límites del %?). Sale SPEC-001 + ACCEPTANCE + ADR-001.</li>
     <li><strong style="color:var(--red-deep)">⚠ spec-check advisory.</strong> <code class="in">spec-check --spec SPEC-001.md</code> → criterio vago; lo reescribís testable: <em>"monto=100, %=20 → 80.00 (2 decimales)"</em>.</li>
     <li><strong style="color:var(--red-deep)">⚠ out-of-scope.</strong> spec-check te exige la sección (check estructural — es un hecho y bloquea, exit 1); agregás <em>"fuera de alcance: cupones, impuestos"</em> → hay oráculo para "scoped-but-absent".</li>
-    <li><strong>adr-refine.</strong> <code class="in">/adr-refine "redondeo: ¿HALF_UP o HALF_EVEN?"</code> → ADR-002, con la alternativa registrada.</li>
-    <li><strong>dev-loop.</strong> <code class="in">/dev-loop</code> → plan → coverage → build → QA loop. Compila, happy path verde.</li>
+    <li><strong>adr-refine.</strong> <code class="in">/specloop-adr-refine "redondeo: ¿HALF_UP o HALF_EVEN?"</code> → ADR-002, con la alternativa registrada.</li>
+    <li><strong>specloop-devloop.</strong> <code class="in">/specloop-devloop</code> → plan → coverage → build → QA loop. Compila, happy path verde.</li>
     <li><strong style="color:var(--red-deep)">⚠ pit-check.</strong> <code class="in">pit-check</code> (corrida scheduled/incremental, no inner-loop; el fail se persiste con <code class="in">log-gate</code>) → mutante vivo en el redondeo: el test corre pero no aserta el centavo. Sumás <code class="in">assertEquals("80.00", …)</code>. Coverage mentía.</li>
     <li><strong style="color:var(--red-deep)">⚠ gate-check BLOQUEA.</strong> <code class="in">gate-check --from-git</code> → el agente bajó el threshold de cobertura en <code class="in">pom.xml</code> para pasar. Se revierte, se arregla el test de verdad.</li>
     <li><strong style="color:var(--red-deep)">⚠ rebuild DIVERGE → amend-spec.</strong> <code class="in">rebuild --mode compare</code> → el caso <code class="in">%=120</code> quedó implícito. Enmendás la SPEC (">100 o &lt;0 → error"), regenerás, volvés a Ready. No parcheás el código.</li>
     <li><strong style="color:var(--red-deep)">⚠ simplicity-check.</strong> <code class="in">simplicity-check --from-git</code> → OVERBUILT: la <code class="in">DiscountStrategyFactory</code> para 3 líneas infló el diff muy por encima del budget (una dimensión &gt;1.5× lo fuerza); el conteo de abstracciones lo señala como advisory. Se recorta.</li>
-    <li><strong>readiness + human gate.</strong> <code class="in">readiness --acceptance ACCEPTANCE.md</code> → 88/100 RELEASE CANDIDATE. Vos leés el diff, aprobás el merge (nunca auto). <code class="in">/sys-doc</code> arma el deck. Ship.</li>
+    <li><strong>readiness + human gate.</strong> <code class="in">readiness --acceptance ACCEPTANCE.md</code> → 88/100 RELEASE CANDIDATE. Vos leés el diff, aprobás el merge (nunca auto). <code class="in">/specloop-sysdoc</code> arma el deck. Ship.</li>
   </ol>
-  <div class="card note"><h3>Variante migración (legacy → nueva arquitectura)</h3><p>Si en vez de crear <code class="in">applyDiscount</code> la portás del legacy, el paso 1 es otro: <code class="in">/reverse-discovery</code> mapea el sistema viejo (hechos) y <code class="in">/characterize</code> captura el golden del código VIEJO con inputs reales. Después, <code class="in">golden-diff</code> byte-compara el nuevo vs <code class="in">.approved</code> — cualquier no-match = DIVERGE. El agente nunca authorea los <code class="in">.approved</code>.</p></div>
+  <div class="card note"><h3>Variante migración (legacy → nueva arquitectura)</h3><p>Si en vez de crear <code class="in">applyDiscount</code> la portás del legacy, el paso 1 es otro: <code class="in">/specloop-reverse-discovery</code> mapea el sistema viejo (hechos) y <code class="in">/specloop-characterize</code> captura el golden del código VIEJO con inputs reales. Después, <code class="in">golden-diff</code> byte-compara el nuevo vs <code class="in">.approved</code> — cualquier no-match = DIVERGE. El agente nunca authorea los <code class="in">.approved</code>.</p></div>
 </section>
 
 <section class="slide" data-section="Reproducir el entorno en el equipo">
@@ -1010,7 +1010,7 @@ $ claude
     <tbody>
       <tr><td class="t">Config</td><td>settings.json · CLAUDE.md · output-style · theme</td><td>copiar (+ arreglar paths)</td></tr>
       <tr><td class="t">Plugins</td><td>engram · sonarqube</td><td>instalar desde marketplace</td></tr>
-      <tr><td class="t">Skills</td><td><code class="in">~/.claude/skills/</code> (discovery, dev-loop, QA...)</td><td>copiar la carpeta entera</td></tr>
+      <tr><td class="t">Skills</td><td><code class="in">~/.claude/skills/</code> (specloop-discovery, specloop-devloop, QA...)</td><td>copiar la carpeta entera</td></tr>
       <tr><td class="t">Agents + Commands</td><td>los <code class="in">sdd-*</code></td><td>copiar verbatim</td></tr>
       <tr><td class="t">Hooks</td><td>gates + higiene de sesión (.ps1)</td><td>copiar (usan <code class="in">$env:USERPROFILE</code>, portables)</td></tr>
       <tr><td class="t">CLI externa</td><td>gentle-ai (hook skill-registry)</td><td>scoop, bucket de Gentleman</td></tr>
@@ -1044,7 +1044,7 @@ scoop install gentle-ai</pre>
       <tr><td class="t">ADR</td><td>Architecture Decision Record. Por qué <em>esta</em> forma y no otra; una decisión con sus alternativas.</td></tr>
       <tr><td class="t">CONSTITUTION</td><td>Invariantes que ningún ADR ni SPEC puede violar. Qué <strong>nunca</strong> es aceptable.</td></tr>
       <tr><td class="t">ACCEPTANCE</td><td>Criterios de "done" verificables del cambio.</td></tr>
-      <tr><td class="t">CONTEXT · DOMAIN-MODEL · RISKS · HANDOFF</td><td>Paquete documental que produce <code class="in">/discovery</code>: contexto, modelo de dominio, riesgos, traspaso.</td></tr>
+      <tr><td class="t">CONTEXT · DOMAIN-MODEL · RISKS · HANDOFF</td><td>Paquete documental que produce <code class="in">/specloop-discovery</code>: contexto, modelo de dominio, riesgos, traspaso.</td></tr>
       <tr><td class="t">ISSUES-DEFERRED.md</td><td>Findings por debajo del severity gate; no bloquean, se difieren.</td></tr>
       <tr><td class="t">LEARNINGS.md</td><td>Correcciones compiladas a principios (learnings loop).</td></tr>
     </tbody>
@@ -1053,12 +1053,12 @@ scoop install gentle-ai</pre>
   <h3>Fases y comandos</h3>
   <table>
     <tbody>
-      <tr><td class="t">/discovery</td><td>Modo idea→forma (greenfield): grilla 1×1, propone entidades/endpoints.</td></tr>
-      <tr><td class="t">/reverse-discovery</td><td>Front brownfield: extrae HECHOS del sistema viejo (mapa + golden), no propone forma. El humano infiere la SPEC.</td></tr>
-      <tr><td class="t">/characterize</td><td>Captura el golden del código ORIGINAL con inputs reales; para en la aprobación humana. El agente no authorea el <code class="in">.approved</code>.</td></tr>
-      <tr><td class="t">/adr-refine</td><td>Modo para pulir decisiones arquitectónicas.</td></tr>
-      <tr><td class="t">/dev-loop</td><td>El orquestador: plan → coverage gate → build → QA loop → integración.</td></tr>
-      <tr><td class="t">/sys-doc</td><td>Genera el deck de dos vistas desde el ledger. Reporting opcional, a pedido — no es fase obligatoria del pipeline.</td></tr>
+      <tr><td class="t">/specloop-discovery</td><td>Modo idea→forma (greenfield): grilla 1×1, propone entidades/endpoints.</td></tr>
+      <tr><td class="t">/specloop-reverse-discovery</td><td>Front brownfield: extrae HECHOS del sistema viejo (mapa + golden), no propone forma. El humano infiere la SPEC.</td></tr>
+      <tr><td class="t">/specloop-characterize</td><td>Captura el golden del código ORIGINAL con inputs reales; para en la aprobación humana. El agente no authorea el <code class="in">.approved</code>.</td></tr>
+      <tr><td class="t">/specloop-adr-refine</td><td>Modo para pulir decisiones arquitectónicas.</td></tr>
+      <tr><td class="t">/specloop-devloop</td><td>El orquestador: plan → coverage gate → build → QA loop → integración.</td></tr>
+      <tr><td class="t">/specloop-sysdoc</td><td>Genera el deck de dos vistas desde el ledger. Reporting opcional, a pedido — no es fase obligatoria del pipeline.</td></tr>
       <tr><td class="t">Human gate</td><td>El humano aprueba el merge/release; nunca automático.</td></tr>
     </tbody>
   </table>

@@ -9,7 +9,7 @@ mismo.
 1. **El source canónico del kit es `dev-loop-kit/`.** Los zips en Downloads son builds;
    los docs en Downloads son snapshots. Ante conflicto, gana este repo.
 2. **Truth-pass obligatorio**: ningún doc de `docs/` puede afirmar algo que
-   `dev-loop-kit/.claude/skills/dev-loop/qa_ledger.py` no haga. Si cambiás el engine,
+   `dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py` no haga. Si cambiás el engine,
    actualizás los docs en el MISMO cambio (o marcás el claim como `propuesta`).
    *Under-claim, then wire, then re-claim.*
 3. **Los gemelos van juntos**: cada doc ES tiene su -EN. Un edit en uno exige el edit
