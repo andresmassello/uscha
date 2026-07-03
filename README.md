@@ -18,7 +18,7 @@ SpecLoop/
 │   ├── templates/         #   CLAUDE.md · CONSTITUTION.md · .gitattributes · docs/adr
 │   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (acceptance trazable) → 1.11.0 (tests fuera del presupuesto) → 1.12.0 (secret-scan) → 1.13.0 (ledger atómico) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (procedencia de umbrales) → 1.18.0 (FSM derivada) → 1.19.0 (spikes — backlog PragProg CERRADO)
 ├── docs/                  # artefactos publicados (canónicos acá; Downloads = snapshots)
-│   ├── spec-loop-claude-code-doc-FINAL.html   # deck largo ES (35 slides)
+│   ├── spec-loop-claude-code-doc-FINAL.html   # deck largo ES (36 slides)
 │   ├── spec-loop-claude-code-doc-EN.html      # deck largo EN
 │   ├── spec-loop-playbook{,-EN}.html          # Manual del Operador (trigger/move/gate)
 │   ├── spec-loop-onepager{,-EN}.html          # ficha de una página

@@ -270,13 +270,15 @@ gates     ← veredictos persistidos con log-gate (pass|fail|not-run)</pre>
         <tbody>
           <tr><td>golden-diff</td><td>bytes vs <code>.approved</code></td><td class="ok">BLOQUEA</td></tr>
           <tr><td>pit-check</td><td>XML de mutación — tier programado/incremental, no del loop interno; si el reporte existe y falla, se persiste</td><td class="ok">BLOQUEA</td></tr>
-          <tr><td>gate-check</td><td>estructura del diff</td><td class="ok">BLOQUEA</td></tr>
+          <tr><td>gate-check</td><td>estructura del diff (tests borrados/deshabilitados · thresholds bajados · secretos agregados — 1.12.0)</td><td class="ok">BLOQUEA</td></tr>
           <tr><td>static gate</td><td>4 linters, normalizados</td><td class="ok">BLOQUEA</td></tr>
-          <tr><td>spec-check (estructura)</td><td>falta out-of-scope · aceptación ausente/vacía — hechos, exit 1</td><td class="ok">BLOQUEA</td></tr>
+          <tr><td>spec-check (estructura)</td><td>falta out-of-scope · aceptación ausente/vacía · cero AC-n trazables — hechos, exit 1</td><td class="ok">BLOQUEA</td></tr>
+          <tr><td>phase --require pr-ready</td><td>estado DERIVADO del ledger; rama <code>spike/*</code> jamás pasa (1.18.0–1.19.0)</td><td class="ok">BLOQUEA</td></tr>
+          <tr><td>regression-check</td><td>cierre de findings sin test nuevo = NARRATED (1.16.0); <code>--strict</code> lo gatea</td><td class="no">ACONSEJA</td></tr>
           <tr><td>spec-check (prosa)</td><td>heurística sobre prosa (vaguedad, EARS); <code>--strict</code> la gatea</td><td class="no">ACONSEJA</td></tr>
         </tbody>
       </table>
-      <div class="rule"><div class="rk">nota de campo</div><p>Un checker no correlacionado atrapó el 93.4% de lo que atraparon cuatro (Osmani). Apilá opiniones <em>distintas</em>, no cuatro linters parecidos. En <code>/dev-loop</code> el agente corre los gates de hecho inline (exit 0/1) y persiste cada veredicto con <code>qa_ledger.py log-gate --kind golden-diff|gate-check|pit-check|simplicity --verdict pass|fail|not-run</code>: un fail bloquea la convergencia y capea readiness ≤65; un not-run queda registrado pero nunca es verde. El loop frena en el merge gate y revisa el humano — el kit no trae workflow de CI.</p></div>
+      <div class="rule"><div class="rk">nota de campo</div><p>Un checker no correlacionado atrapó el 93.4% de lo que atraparon cuatro (Osmani). Apilá opiniones <em>distintas</em>, no cuatro linters parecidos. En <code>/dev-loop</code> el agente corre los gates de hecho inline (exit 0/1) y persiste cada veredicto con <code>qa_ledger.py log-gate --kind golden-diff|gate-check|pit-check|simplicity|regression --verdict pass|fail|not-run</code>: un fail bloquea la convergencia y capea readiness ≤65; un not-run queda registrado pero nunca es verde. El loop frena en el merge gate y revisa el humano — el kit no trae workflow de CI.</p></div>
     </div>
   </section>
 
@@ -375,9 +377,11 @@ claude --version &amp;&amp; claude doctor</pre>
           <tr><td>readiness</td><td>KPI 0–100 que reporta (siempre exit 0), con caps duros — no es un gate exit 0/1.</td></tr>
           <tr><td>rebuild</td><td>completitud del spec: COVERS/PARTIAL/DIVERGE — exit 1 salvo COVERS.</td></tr>
           <tr><td>golden-diff</td><td>bytes vs .approved — verdad de campo, aprobada por humano; exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN.</td></tr>
-          <tr><td>log-gate</td><td>persiste el veredicto de un gate de hecho (--kind golden-diff|gate-check|pit-check|simplicity, --verdict pass|fail|not-run).</td></tr>
-          <tr><td>flag-blocker</td><td>loguea una violación (ej. --kind constitution): capea readiness ≤65 y bloquea convergencia hasta --resolve (humano).</td></tr>
+          <tr><td>log-gate</td><td>persiste el veredicto de un gate de hecho (--kind golden-diff|gate-check|pit-check|simplicity|regression, --verdict pass|fail|not-run).</td></tr>
+          <tr><td>flag-blocker</td><td>loguea una violación (ej. --kind constitution): capea readiness ≤65 y bloquea convergencia hasta --resolve (que exige --escape-analysis: qué gate/test debió atraparla — 1.16.0).</td></tr>
           <tr><td>resolve-escalation</td><td>resuelve una escalación; sin resolver, readiness queda capeado ≤75.</td></tr>
+          <tr><td>regression-check</td><td>Find Bugs Once (1.16.0): findings cerrados sin línea nueva de test = NARRATED (avisa; --strict gatea).</td></tr>
+          <tr><td>phase</td><td>estado del workflow DERIVADO del ledger (plan/build/qa/escalated/pr-ready), jamás declarado; --require pr-ready gatea el PR y veta ramas spike/* (1.18.0–1.19.0).</td></tr>
         </tbody>
       </table>
       <div class="rule"><div class="rk">protocolo md-trackeado</div><p>Antes de editar cualquier <code>.md</code> trackeado (CLAUDE.md, docs de plan/delta, docs/adr), traé primero la versión actual del repo. Esos archivos cargan progreso vivo — nunca los regeneres de cero.</p></div>

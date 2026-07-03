@@ -439,7 +439,7 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(1300px
     <span class="node">Evidence</span><span class="ar">→</span>
     <span class="node red">Human gate</span>
   </div>
-  <p>Two things the flow guarantees: <strong>lowering the cost of entry</strong> (you don't have to design the system to be able to start — Discovery proposes that) and <strong>raising the certainty of the output</strong> (an honest state, with evidence and blockers, tells you how ready it truly is). In Claude Code all of this lives in six callable skills (kit 1.10.0) and a measurement engine in Python.</p>
+  <p>Two things the flow guarantees: <strong>lowering the cost of entry</strong> (you don't have to design the system to be able to start — Discovery proposes that) and <strong>raising the certainty of the output</strong> (an honest state, with evidence and blockers, tells you how ready it truly is). In Claude Code all of this lives in six callable skills (kit 1.19.0) and a measurement engine in Python.</p>
   <div class="tagrow">
     <span class="chip red">/discovery</span><span class="chip red">/adr-refine</span><span class="chip red">/dev-loop</span><span class="chip red">/sys-doc</span><span class="chip red">/reverse-discovery</span><span class="chip red">/characterize</span><span class="chip">qa_ledger.py</span>
   </div>
@@ -580,13 +580,15 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
       <tr><td class="t">ingest-gate</td><td>Parses Checkstyle/PMD/SpotBugs/FindSecBugs, normalizes severities, and computes the real <code class="in">fixed</code> by diffing finding-IDs against the previous pass.</td></tr>
       <tr><td class="t">converged</td><td>Advisory. Exit 0 = converged (latest agent step of <em>every</em> tool in <code class="in">qa_tools_order</code> clean + every linter clean + every persisted fact gate clean). A red measured snapshot vetoes a narrated green — padding the window doesn't help.</td></tr>
       <tr><td class="t">oscillation</td><td>Advisory. Detects that a tool's findings fingerprint repeats with period 2 (pass N == pass N-2).</td></tr>
-      <tr><td class="t">log-gate</td><td>Persists a fact-gate verdict: <code class="in">--kind golden-diff|gate-check|pit-check|simplicity --verdict pass|fail|not-run</code>. A failing gate blocks convergence and caps readiness ≤65; a not-run is recorded but is never green.</td></tr>
+      <tr><td class="t">log-gate</td><td>Persists a fact-gate verdict: <code class="in">--kind golden-diff|gate-check|pit-check|simplicity|regression --verdict pass|fail|not-run</code>. A failing gate blocks convergence and caps readiness ≤65; a not-run is recorded but is never green.</td></tr>
       <tr><td class="t">flag-blocker</td><td>Logs a blocker (<code class="in">--kind constitution</code> for CONSTITUTION breaches): caps readiness ≤65 and blocks convergence until a human clears it with <code class="in">--resolve</code>.</td></tr>
       <tr><td class="t">escalate</td><td>Records a human-escalation event with a reason.</td></tr>
       <tr><td class="t">resolve-escalation</td><td>Resolves a recorded escalation — lifts the ≤75 readiness cap.</td></tr>
       <tr><td class="t">summary</td><td>Retrospective metrics (<code class="in">--json</code> is consumed by <code class="in">/sys-doc</code>).</td></tr>
       <tr><td class="t">readiness</td><td>The project-state KPI: score 0–100 with weights and hard caps.</td></tr>
       <tr><td class="t">rebuild</td><td>The rebuild test: SPEC completeness. <code class="in">--mode baseline</code> signs the system; <code class="in">--mode compare</code> scores the regeneration (COVERS/PARTIAL/DIVERGE).</td></tr>
+      <tr><td class="t">regression-check</td><td>Find Bugs Once (1.16.0): findings closed with no new test line = NARRATED — advises; <code class="in">--strict</code> gates; persisted via <code class="in">log-gate --kind regression</code>.</td></tr>
+      <tr><td class="t">phase</td><td>Workflow state DERIVED from the ledger (plan/build/qa/escalated/pr-ready), never self-declared. <code class="in">--require pr-ready</code> gates the PR and vetoes <code class="in">spike/*</code> branches (1.18.0–1.19.0).</td></tr>
     </tbody>
   </table>
   <pre><span class="c"># a typical pass of the loop</span>
@@ -625,16 +627,17 @@ python3 $QL converged --repo backend-api --tools-per-cycle 3</pre>
   <p>It measures the <strong>state of the result</strong>, never the effort. A weighted 0–100 score with <strong>hard caps</strong> that override the average. It <strong>reports</strong> (always exit 0) — it is not a pass/fail gate; <code class="in">rebuild</code> is the one that exits 1 unless COVERS. Cycles/regressions are <em>churn</em> (process health) and are reported separately — they never raise readiness. Show it after any task, not just complete runs.</p>
   <div class="kpi">
     <div class="hd"><div class="score">88<small>/100</small></div><div class="status amber">RELEASE CANDIDATE</div></div>
-    <div class="dim"><span>adr/acceptance</span><div class="track"><i style="width:100%"></i></div><span>30</span></div>
-    <div class="dim"><span>coverage</span><div class="track"><i style="width:92%"></i></div><span>25</span></div>
+    <div class="dim"><span>acceptance (measured)</span><div class="track"><i style="width:100%"></i></div><span>30</span></div>
     <div class="dim"><span>static gate</span><div class="track"><i style="width:100%"></i></div><span>20</span></div>
-    <div class="dim"><span>convergence</span><div class="track"><i style="width:100%"></i></div><span>15</span></div>
+    <div class="dim"><span>adr (narrative)</span><div class="track"><i style="width:100%"></i></div><span>15</span></div>
+    <div class="dim"><span>coverage</span><div class="track"><i style="width:92%"></i></div><span>15</span></div>
+    <div class="dim"><span>convergence</span><div class="track"><i style="width:100%"></i></div><span>10</span></div>
     <div class="dim"><span>integration</span><div class="track"><i style="width:60%"></i></div><span>10</span></div>
-    <div class="cap">cap active if: tests red → ≤35 · BLOCKER/CRITICAL open → ≤65 · unresolved escalation → ≤75</div>
+    <div class="cap">cap active if: tests red → ≤35 · BLOCKER/CRITICAL open → ≤65 · unresolved escalation → ≤75 — each cap states its provenance: requirement (config) or kit-default opinion (1.17.0)</div>
   </div>
   <div class="grid2">
-    <div class="card"><h3>Dimensions and weights</h3><ul class="clean"><li>ADR / acceptance completion — <strong>30</strong> (ACCEPTANCE.md checkboxes)</li><li>coverage — <strong>25</strong> (vs threshold, default 60%)</li><li>static gate — <strong>20</strong> (hits 0 with 10 gated findings open)</li><li>convergence — <strong>15</strong></li><li>integration — <strong>10</strong> (weight redistributed if disabled)</li></ul></div>
-    <div class="card"><h3>Bands and caps</h3><ul class="clean"><li>&lt;50 NOT READY · 50–79 IN PROGRESS · 80–94 RELEASE CANDIDATE · 95–100 READY</li><li>cap tests red → ≤35</li><li>cap BLOCKER/CRITICAL open → ≤65</li><li>cap unresolved escalation → ≤75 (until <code class="in">resolve-escalation</code>)</li><li>acceptance not found → ≤65 (and the ADR dimension = 0)</li></ul></div>
+    <div class="card"><h3>Dimensions and weights (kit 1.10.0+)</h3><ul class="clean"><li>acceptance — <strong>30</strong>, the dominant one: AC-n criteria closed by a <em>MEASURED green testcase</em> in the JUnit reports, not by checkbox (a <code class="in">[x]</code> with no test = <code class="in">narrated_only</code>, does not close)</li><li>static gate — <strong>20</strong> (hits 0 with 10 gated findings open)</li><li>ADR / checkbox completion — <strong>15</strong> (the narrative, demoted)</li><li>coverage — <strong>15</strong> (vs threshold, default 60%)</li><li>convergence — <strong>10</strong> · integration — <strong>10</strong> (weight redistributed if disabled)</li></ul></div>
+    <div class="card"><h3>Bands and caps</h3><ul class="clean"><li>&lt;50 NOT READY · 50–79 IN PROGRESS · 80–94 RELEASE CANDIDATE · 95–100 READY</li><li>cap tests red → ≤35</li><li>cap BLOCKER/CRITICAL open → ≤65</li><li>cap unresolved escalation → ≤75 (until <code class="in">resolve-escalation</code>)</li><li>acceptance not found → ≤65 (and the ADR dimension = 0)</li><li>two advisories (1.14.0, never gate): <strong>stall</strong> — gated findings flat/rising for 3 cycles → go back to the ADR; <strong>stop-signal</strong> — everything converged and zero blocking facts → PR candidate</li></ul></div>
   </div>
   <p class="small">The headline is always presented <em>with</em> the dimension breakdown <em>and</em> the blocker that caps it — so it's clear what's missing, not just the number. No formula, no number: that would be the numerology the method avoids.</p>
 </section>
@@ -753,17 +756,41 @@ $ python3 .claude/skills/dev-loop/qa_ledger.py simplicity-check --diff HEAD
   <table>
     <thead><tr><th>Gate</th><th>Reads</th><th></th></tr></thead>
     <tbody>
-      <tr><td class="t">golden-diff</td><td>byte-comparison vs <code class="in">.approved</code></td><td class="ok">BLOCKS</td></tr>
+      <tr><td class="t">golden-diff</td><td>byte-comparison vs <code class="in">.approved</code>; declared volatiles in <code class="in">golden.scrub.json</code> mask with VISIBLE masking, human-approved (1.15.0)</td><td class="ok">BLOCKS</td></tr>
       <tr><td class="t">pit-check</td><td>PIT XML (mutation testing) — scheduled tier; a failing report is persisted via <code class="in">log-gate</code></td><td class="ok">BLOCKS</td></tr>
-      <tr><td class="t">gate-check</td><td>diff structure (deleted tests/thresholds)</td><td class="ok">BLOCKS</td></tr>
+      <tr><td class="t">gate-check</td><td>diff structure: deleted/disabled tests, lowered thresholds, <strong>added secrets</strong> (PEM/AKIA/tokens/key containers — 1.12.0)</td><td class="ok">BLOCKS</td></tr>
       <tr><td class="t">rebuild</td><td>baseline vs regeneration; exit 1 unless COVERS</td><td class="ok">BLOCKS</td></tr>
+      <tr><td class="t">phase --require pr-ready</td><td>workflow state DERIVED from the ledger (converged + green tests + 0 BLOCKER/CRITICAL), never self-declared; a <code class="in">spike/*</code> branch never passes (1.18.0–1.19.0)</td><td class="ok">BLOCKS</td></tr>
       <tr><td class="t">readiness</td><td>reports (0–100 KPI, always exit 0) with hard caps</td><td class="no">REPORTS</td></tr>
-      <tr><td class="t">simplicity · budgets</td><td>+lines / net growth / files / nesting / largest hunk</td><td class="ok">BLOCKS</td></tr>
-      <tr><td class="t">spec-check · structural</td><td>missing out-of-scope · absent/empty acceptance criteria</td><td class="ok">BLOCKS</td></tr>
+      <tr><td class="t">simplicity · budgets</td><td>+lines / net growth / files / nesting / largest hunk — test trees stay OUT of the budget (1.11.0): writing tests never penalizes</td><td class="ok">BLOCKS</td></tr>
+      <tr><td class="t">spec-check · structural</td><td>missing out-of-scope · absent/empty acceptance criteria · zero traceable AC-n IDs or duplicates</td><td class="ok">BLOCKS</td></tr>
+      <tr><td class="t">regression-check</td><td>findings closed with no new test line = NARRATED (Find Bugs Once, 1.16.0) — <code class="in">--strict</code> gates it</td><td class="no">ADVISES</td></tr>
       <tr><td class="t">spec-check · prose · abstractions</td><td>heuristic over prose / "new types" (<code class="in">--strict</code> gates them)</td><td class="no">ADVISES</td></tr>
     </tbody>
   </table>
   <div class="card warn"><p>A natural-language heuristic that <strong>blocks</strong> throws false positives → the dev turns it off → dead gate (the erosion gate-check fights). That's why <code class="in">spec-check</code>'s prose heuristics are advisory and abstractions were dropped from the score — only its two structural facts block. <strong>No CI workflow ships in the kit: in <code class="in">/dev-loop</code> the agent runs the fact gates inline (exit 0/1), persists each verdict with <code class="in">log-gate</code>, converges, and stops at the merge gate → the human reviews → ship.</strong></p></div>
+</section>
+
+<section class="slide" data-section="The book went through the kit">
+  <div class="kicker"><span class="n">◆</span> The Pragmatic Programmer vs the kit — 10 of 10 <span class="callout-status real">in the kit</span></div>
+  <h2>The book went <span class="accent">through the kit.</span></h2>
+  <p>Crossing Hunt &amp; Thomas (20th Anniversary, 497 pp) against the method yielded 8 validations, 12 tensions and <strong>10 actionable improvements — all 10 are implemented</strong> (kits 1.10.0 → 1.19.0, each with a fresh review and a green smoke suite). The full analysis lives in <code class="in">docs/analisis-pragmatic-programmer.md</code>.</p>
+  <table>
+    <thead><tr><th>Tip / Topic</th><th>What landed in the engine</th><th>Kit</th></tr></thead>
+    <tbody>
+      <tr><td class="t">Tip 87 · Sudoku anecdote</td><td><strong>Traceable acceptance</strong>: AC-n closes on a MEASURED green testcase, not a checkbox — the dominant readiness dimension</td><td>1.10.0</td></tr>
+      <tr><td class="t">Topic 51</td><td><strong>Tests outside the simplicity budget</strong>: writing tests never penalizes the gate</td><td>1.11.0</td></tr>
+      <tr><td class="t">Topic 43</td><td><strong>Secret-scan</strong> in gate-check: added PEM/AKIA/tokens/key containers block as facts</td><td>1.12.0</td></tr>
+      <tr><td class="t">Topic 34</td><td><strong>Atomic ledger</strong>: sha256 checksum + hardened load — external mutation or corrupt JSON blocks with a recovery message</td><td>1.13.0</td></tr>
+      <tr><td class="t">Topics 37 · 5</td><td><strong>Plateau/stop-signal</strong> (advisory): findings not dropping for 3 cycles → "go back to the ADR"; everything converged → "PR candidate"</td><td>1.14.0</td></tr>
+      <tr><td class="t">Topic 41</td><td><strong>Golden scrub</strong>: declared volatiles (timestamps/ids) mask with visible, human-approved masking</td><td>1.15.0</td></tr>
+      <tr><td class="t">Tips 94 · 31</td><td><strong>Regression-capture</strong>: closing findings with no new test = NARRATED; resolving a blocker requires an escape-analysis</td><td>1.16.0</td></tr>
+      <tr><td class="t">Tip 8</td><td><strong>Threshold provenance</strong>: every cap states whether it is a requirement (config) or kit-default opinion</td><td>1.17.0</td></tr>
+      <tr><td class="t">Topic 29</td><td><strong>Derived FSM</strong>: <code class="in">phase</code> computes state from the ledger — the PR is gated on <code class="in">--require pr-ready</code></td><td>1.18.0</td></tr>
+      <tr><td class="t">Tip 21</td><td><strong>Formal spikes</strong>: a <code class="in">spike/*</code> branch never passes the PR gate; the legitimate output is an ADR with lessons</td><td>1.19.0</td></tr>
+    </tbody>
+  </table>
+  <div class="card accent"><p>On the two big tensions the kit departed from the book's letter to defend its own principle: the caps <em>keep</em> biting (their existence is a definition, the number is an opinion — and now it says so), and the FSM is <em>derived</em> rather than declared — a declared FSM would be narrated state. <strong>Measured beats narrated, applied even to the book.</strong></p></div>
 </section>
 
 <section class="slide" data-section="Loop engineering: did we reach it?">

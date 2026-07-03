@@ -443,7 +443,7 @@ body::before{content:"";position:fixed;inset:0;background:
     <span class="node">Evidence</span><span class="ar">→</span>
     <span class="node red">Human gate</span>
   </div>
-  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en seis skills invocables (kit 1.10.0) y un motor de medición en Python.</p>
+  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en seis skills invocables (kit 1.19.0) y un motor de medición en Python.</p>
   <div class="tagrow">
     <span class="chip red">/discovery</span><span class="chip red">/adr-refine</span><span class="chip red">/dev-loop</span><span class="chip red">/sys-doc</span><span class="chip red">/reverse-discovery</span><span class="chip red">/characterize</span><span class="chip">qa_ledger.py</span>
   </div>
@@ -583,7 +583,7 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">log-step</td><td>Registra un pase de una QA tool: reported / gated-reported / fixed / deferred / suppressed / tests-passed / files-changed / fingerprint.</td></tr>
       <tr><td class="t">ingest-gate</td><td>Parsea Checkstyle/PMD/SpotBugs/FindSecBugs, normaliza severidades y computa el <code class="in">fixed</code> real diffeando finding-IDs contra el pase anterior.</td></tr>
       <tr><td class="t">converged</td><td>Exit 0 = convergió: último paso de agente de <strong>cada</strong> tool de <code class="in">qa_tools_order</code> limpio + todos los linters limpios + todos los fact gates persistidos limpios. Un snapshot medido rojo veta el verde narrado (rellenar la ventana no ayuda).</td></tr>
-      <tr><td class="t">log-gate</td><td>Persiste el veredicto de un fact gate: <code class="in">--kind golden-diff|gate-check|pit-check|simplicity --verdict pass|fail|not-run</code>. Un <code class="in">fail</code> bloquea convergencia y capea readiness ≤65; un <code class="in">not-run</code> queda registrado pero nunca cuenta como verde.</td></tr>
+      <tr><td class="t">log-gate</td><td>Persiste el veredicto de un fact gate: <code class="in">--kind golden-diff|gate-check|pit-check|simplicity|regression --verdict pass|fail|not-run</code>. Un <code class="in">fail</code> bloquea convergencia y capea readiness ≤65; un <code class="in">not-run</code> queda registrado pero nunca cuenta como verde.</td></tr>
       <tr><td class="t">flag-blocker</td><td>Registra un blocker (p. ej. <code class="in">--kind constitution</code> por violación de la CONSTITUTION): capea readiness ≤65 y bloquea convergencia hasta <code class="in">--resolve</code> (humano).</td></tr>
       <tr><td class="t">resolve-escalation</td><td>Cierra una escalación registrada; hasta entonces readiness queda capeado ≤75.</td></tr>
       <tr><td class="t">oscillation</td><td>Advisory. Detecta que el fingerprint de findings de una tool se repite con período 2 (pase N == pase N-2).</td></tr>
@@ -591,6 +591,8 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">summary</td><td>Métricas retrospectivas (<code class="in">--json</code> lo consume <code class="in">/sys-doc</code>).</td></tr>
       <tr><td class="t">readiness</td><td>El KPI de estado del proyecto: score 0–100 con pesos y caps duros. <strong>Reporta</strong> (siempre exit 0); no es un gate exit 0/1.</td></tr>
       <tr><td class="t">rebuild</td><td>El rebuild test: completitud de la SPEC. <code class="in">--mode baseline</code> firma el sistema; <code class="in">--mode compare</code> puntúa la regeneración (COVERS/PARTIAL/DIVERGE).</td></tr>
+      <tr><td class="t">regression-check</td><td>Find Bugs Once (1.16.0): findings cerrados sin línea nueva de test = NARRATED — avisa; <code class="in">--strict</code> gatea; se persiste con <code class="in">log-gate --kind regression</code>.</td></tr>
+      <tr><td class="t">phase</td><td>Estado del workflow DERIVADO del ledger (plan/build/qa/escalated/pr-ready), jamás declarado. <code class="in">--require pr-ready</code> gatea el PR y veta ramas <code class="in">spike/*</code> (1.18.0–1.19.0).</td></tr>
     </tbody>
   </table>
   <pre><span class="c"># un pase típico del loop</span>
@@ -629,16 +631,17 @@ python3 $QL converged --repo backend-api --tools-per-cycle 3</pre>
   <p>Mide el <strong>estado del resultado</strong>, nunca el esfuerzo. Score ponderado 0–100 con <strong>caps duros</strong> que pisan el promedio. <strong>Reporta, no gatea</strong>: siempre sale exit 0 — el que corta la cadena es <code class="in">rebuild</code> (exit 1 salvo COVERS). Los ciclos/regresiones son <em>churn</em> (salud del proceso) y se reportan aparte — nunca suben el readiness. Mostralo después de cualquier tarea, no solo de runs completos.</p>
   <div class="kpi">
     <div class="hd"><div class="score">88<small>/100</small></div><div class="status amber">RELEASE CANDIDATE</div></div>
-    <div class="dim"><span>adr/acceptance</span><div class="track"><i style="width:100%"></i></div><span>30</span></div>
-    <div class="dim"><span>coverage</span><div class="track"><i style="width:92%"></i></div><span>25</span></div>
+    <div class="dim"><span>acceptance (medida)</span><div class="track"><i style="width:100%"></i></div><span>30</span></div>
     <div class="dim"><span>static gate</span><div class="track"><i style="width:100%"></i></div><span>20</span></div>
-    <div class="dim"><span>convergence</span><div class="track"><i style="width:100%"></i></div><span>15</span></div>
+    <div class="dim"><span>adr (relato)</span><div class="track"><i style="width:100%"></i></div><span>15</span></div>
+    <div class="dim"><span>coverage</span><div class="track"><i style="width:92%"></i></div><span>15</span></div>
+    <div class="dim"><span>convergence</span><div class="track"><i style="width:100%"></i></div><span>10</span></div>
     <div class="dim"><span>integration</span><div class="track"><i style="width:60%"></i></div><span>10</span></div>
-    <div class="cap">cap activo si: tests rojos → ≤35 · BLOCKER/CRITICAL abierto → ≤65 · escalación sin resolver → ≤75</div>
+    <div class="cap">cap activo si: tests rojos → ≤35 · BLOCKER/CRITICAL abierto → ≤65 · escalación sin resolver → ≤75 — cada cap dice su procedencia: requerimiento (config) u opinión default del kit (1.17.0)</div>
   </div>
   <div class="grid2">
-    <div class="card"><h3>Dimensiones y pesos</h3><ul class="clean"><li>ADR / acceptance completion — <strong>30</strong> (checkboxes de ACCEPTANCE.md)</li><li>coverage — <strong>25</strong> (vs umbral, default 60%)</li><li>static gate — <strong>20</strong> (llega a 0 con 10 findings gated abiertos)</li><li>convergence — <strong>15</strong></li><li>integration — <strong>10</strong> (peso redistribuido si está deshabilitado)</li></ul></div>
-    <div class="card"><h3>Bands y caps</h3><ul class="clean"><li>&lt;50 NOT READY · 50–79 IN PROGRESS · 80–94 RELEASE CANDIDATE · 95–100 READY</li><li>cap tests rojos → ≤35</li><li>cap BLOCKER/CRITICAL abierto → ≤65</li><li>cap escalación sin resolver → ≤75 (hasta <code class="in">resolve-escalation</code>)</li><li>acceptance no encontrado → ≤65 (y la dimensión ADR = 0)</li><li>el silencio no es éxito: repo lint-capaz cuyo static gate nunca corrió → UNMEASURED (0.0) en esa dimensión, nunca 1.0</li></ul></div>
+    <div class="card"><h3>Dimensiones y pesos (kit 1.10.0+)</h3><ul class="clean"><li>acceptance — <strong>30</strong>, la dominante: criterios AC-n cerrados por <em>testcase verde MEDIDO</em> en los JUnit, no por checkbox (un <code class="in">[x]</code> sin test = <code class="in">narrated_only</code>, no cierra)</li><li>static gate — <strong>20</strong> (llega a 0 con 10 findings gated abiertos)</li><li>ADR / checkbox completion — <strong>15</strong> (el relato, relegado)</li><li>coverage — <strong>15</strong> (vs umbral, default 60%)</li><li>convergence — <strong>10</strong> · integration — <strong>10</strong> (peso redistribuido si está deshabilitado)</li></ul></div>
+    <div class="card"><h3>Bands y caps</h3><ul class="clean"><li>&lt;50 NOT READY · 50–79 IN PROGRESS · 80–94 RELEASE CANDIDATE · 95–100 READY</li><li>cap tests rojos → ≤35</li><li>cap BLOCKER/CRITICAL abierto → ≤65</li><li>cap escalación sin resolver → ≤75 (hasta <code class="in">resolve-escalation</code>)</li><li>acceptance no encontrado → ≤65 (y la dimensión ADR = 0)</li><li>el silencio no es éxito: repo lint-capaz cuyo static gate nunca corrió → UNMEASURED (0.0) en esa dimensión, nunca 1.0</li><li>dos advisories (1.14.0, jamás gatean): <strong>stall</strong> — findings planos/subiendo 3 ciclos → volver a ADR; <strong>stop-signal</strong> — todo convergido y cero facts bloqueantes → candidato a PR</li></ul></div>
   </div>
   <p class="small">Siempre se presenta el headline <em>con</em> el desglose de dimensiones <em>y</em> el blocker que capea — así queda claro qué falta, no solo el número. Sin fórmula, no hay número: eso sería la numerología que el método evita.</p>
 </section>
@@ -756,17 +759,41 @@ $ python3 .claude/skills/dev-loop/qa_ledger.py simplicity-check --diff HEAD
   <table>
     <thead><tr><th>Gate</th><th>Lee</th><th></th></tr></thead>
     <tbody>
-      <tr><td class="t">golden-diff</td><td>byte-comparison vs <code class="in">.approved</code> — exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN (cero fixtures = NOT-RUN, nunca CLEAN)</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">golden-diff</td><td>byte-comparison vs <code class="in">.approved</code> — exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN (cero fixtures = NOT-RUN, nunca CLEAN); volátiles declarados en <code class="in">golden.scrub.json</code> enmascaran con masking VISIBLE, aprobado por el humano (1.15.0)</td><td class="ok">BLOQUEA</td></tr>
       <tr><td class="t">pit-check</td><td>XML de PIT (mutation testing) — tier scheduled/incremental, no inner-loop; si el reporte existe y falla, se persiste con <code class="in">log-gate</code></td><td class="ok">BLOQUEA</td></tr>
-      <tr><td class="t">gate-check</td><td>estructura del diff (tests borrados/deshabilitados, thresholds bajados o borrados)</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">gate-check</td><td>estructura del diff: tests borrados/deshabilitados, thresholds bajados o borrados, <strong>secretos agregados</strong> (PEM/AKIA/tokens/contenedores de claves — 1.12.0)</td><td class="ok">BLOQUEA</td></tr>
       <tr><td class="t">rebuild</td><td>baseline vs regenerado; COVERS/PARTIAL/DIVERGE — exit 1 salvo COVERS</td><td class="ok">BLOQUEA</td></tr>
-      <tr><td class="t">simplicity · budgets</td><td>líneas/archivos/anidación/hunk mayor</td><td class="ok">BLOQUEA</td></tr>
-      <tr><td class="t">spec-check · estructural</td><td>hechos: out-of-scope faltante, acceptance ausente/vacío — exit 1</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">simplicity · budgets</td><td>líneas/archivos/anidación/hunk mayor — los tests quedan FUERA del presupuesto (1.11.0): escribir tests nunca penaliza</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">spec-check · estructural</td><td>hechos: out-of-scope faltante, acceptance ausente/vacío, cero criterios AC-n trazables o IDs duplicados — exit 1</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">phase --require pr-ready</td><td>estado del workflow DERIVADO del ledger (convergencia + tests verdes + 0 BLOCKER/CRITICAL), jamás declarado; rama <code class="in">spike/*</code> nunca pasa (1.18.0–1.19.0)</td><td class="ok">BLOQUEA</td></tr>
       <tr><td class="t">readiness</td><td>KPI 0–100 con caps duros; siempre exit 0</td><td class="no">REPORTA</td></tr>
+      <tr><td class="t">regression-check</td><td>cierre de findings sin línea nueva de test = NARRATED (Find Bugs Once, 1.16.0) — <code class="in">--strict</code> lo gatea</td><td class="no">AVISA</td></tr>
       <tr><td class="t">spec-check · prosa / abstracciones</td><td>heurística sobre prosa (términos vagos, EARS) / "tipos nuevos" — <code class="in">--strict</code> las gatea</td><td class="no">AVISA</td></tr>
     </tbody>
   </table>
   <div class="card warn"><p>Un heurístico sobre lenguaje natural que <strong>bloquea</strong> tira falsos positivos → el dev lo apaga → gate muerto (la erosión que gate-check combate). Por eso los heurísticos de prosa de <code class="in">spec-check</code> son advisory (sus dos checks estructurales — out-of-scope faltante, acceptance ausente/vacío — son hechos y bloquean) y las abstracciones salieron del score. <strong>Los gates de hechos los corre el agente inline en <code class="in">/dev-loop</code> y los persiste con <code class="in">log-gate</code> — no hay workflow de CI en el kit.</strong></p></div>
+</section>
+
+<section class="slide" data-section="El libro pasó por el kit">
+  <div class="kicker"><span class="n">◆</span> The Pragmatic Programmer contra el kit — 10 de 10 <span class="callout-status real">en el kit</span></div>
+  <h2>El libro pasó <span class="accent">por el kit.</span></h2>
+  <p>El cruce con Hunt &amp; Thomas (20th Anniversary, 497 pp) dio 8 validaciones, 12 tensiones y <strong>10 mejoras accionables — las 10 están implementadas</strong> (kits 1.10.0 → 1.19.0, cada una con review fresco y smoke verde). El análisis completo vive en <code class="in">docs/analisis-pragmatic-programmer.md</code>.</p>
+  <table>
+    <thead><tr><th>Tip / Topic</th><th>Qué quedó en el engine</th><th>Kit</th></tr></thead>
+    <tbody>
+      <tr><td class="t">Tip 87 · anécdota Sudoku</td><td><strong>Acceptance trazable</strong>: AC-n cierra por testcase verde MEDIDO, no por checkbox — la dimensión dominante del readiness</td><td>1.10.0</td></tr>
+      <tr><td class="t">Topic 51</td><td><strong>Tests fuera del presupuesto</strong> de simplicity: escribir tests nunca penaliza el gate</td><td>1.11.0</td></tr>
+      <tr><td class="t">Topic 43</td><td><strong>Secret-scan</strong> en gate-check: PEM/AKIA/tokens/contenedores agregados bloquean como hecho</td><td>1.12.0</td></tr>
+      <tr><td class="t">Topic 34</td><td><strong>Ledger atómico</strong>: checksum sha256 + carga blindada — mutación externa o JSON corrupto bloquea con mensaje de recuperación</td><td>1.13.0</td></tr>
+      <tr><td class="t">Topics 37 · 5</td><td><strong>Plateau/stop-signal</strong> (advisory): findings sin bajar 3 ciclos → "volvé a ADR"; todo convergido → "candidato a PR"</td><td>1.14.0</td></tr>
+      <tr><td class="t">Topic 41</td><td><strong>Golden scrub</strong>: volátiles declarados (timestamps/ids) enmascaran con masking visible, humano-aprobado</td><td>1.15.0</td></tr>
+      <tr><td class="t">Tips 94 · 31</td><td><strong>Regression-capture</strong>: cierre de findings sin test nuevo = NARRATED; resolver un blocker exige escape-analysis</td><td>1.16.0</td></tr>
+      <tr><td class="t">Tip 8</td><td><strong>Procedencia de umbrales</strong>: cada cap dice si es requerimiento (config) u opinión default del kit</td><td>1.17.0</td></tr>
+      <tr><td class="t">Topic 29</td><td><strong>FSM derivada</strong>: <code class="in">phase</code> computa el estado del ledger — el PR se gatea con <code class="in">--require pr-ready</code></td><td>1.18.0</td></tr>
+      <tr><td class="t">Tip 21</td><td><strong>Spikes formales</strong>: rama <code class="in">spike/*</code> jamás pasa el gate de PR; el output legítimo es un ADR con lecciones</td><td>1.19.0</td></tr>
+    </tbody>
+  </table>
+  <div class="card accent"><p>En las dos tensiones grandes el kit se apartó de la letra del libro para defender su propio principio: los caps <em>siguen</em> mordiendo (que existan es definición, el número es opinión — y ahora lo dice), y la FSM se <em>deriva</em> en vez de declararse — una FSM declarada sería estado narrado. <strong>Measured beats narrated, aplicado hasta al libro.</strong></p></div>
 </section>
 
 <section class="slide" data-section="Loop engineering: ¿lo alcanzamos?">
