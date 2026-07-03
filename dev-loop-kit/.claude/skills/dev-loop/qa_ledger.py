@@ -93,13 +93,47 @@ def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _integrity_hash(data):
+    """sha256 canonico del contenido SIN el campo integrity (orden de claves
+    normalizado: el hash no depende de como quedo ordenado el dict)."""
+    body = {k: v for k, v in data.items() if k != "integrity"}
+    blob = json.dumps(body, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
 def _load(path):
-    with open(path, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+    """Carga blindada (kit 1.13.0, Topic 34: los recursos compartidos mutables
+    incluyen ARCHIVOS). JSON corrupto/truncado = hecho bloqueante con mensaje
+    de recuperacion, no un traceback. Si el archivo trae campo integrity
+    (escrito por _save >=1.13.0), el checksum se VERIFICA: una mutacion externa
+    o escritura parcial bloquea — todo 'measured beats narrated' se apoya en
+    este archivo. Archivos legacy sin integrity cargan sin verificar
+    (adopcion incremental, no rotura retroactiva)."""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"[qa_ledger] {path} corrupto (JSON invalido: {exc}). Es un artefacto "
+            f"fuente-de-verdad del loop — restauralo desde git "
+            f"(`git checkout -- {path}`) o desde el ultimo backup; no lo edites a mano.")
+    if isinstance(data, dict) and "integrity" in data:
+        want = (data.get("integrity") or {}).get("sha256")
+        got = _integrity_hash(data)
+        if want != got:
+            raise SystemExit(
+                f"[qa_ledger] {path} NO pasa el checksum de integridad "
+                f"(esperado {str(want)[:12]}…, calculado {got[:12]}…): fue mutado "
+                f"fuera de qa_ledger o quedo a medio escribir. Restauralo desde git; "
+                f"si la edicion externa fue deliberada y la aceptas, borra el campo "
+                f"'integrity' del JSON (acto humano explicito).")
+    return data
 
 
 def _save(path, data):
     data["updated_at"] = _now()
+    # el hash excluye 'integrity' — calcularlo antes o despues de asignar da igual
+    data["integrity"] = {"sha256": _integrity_hash(data)}
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)

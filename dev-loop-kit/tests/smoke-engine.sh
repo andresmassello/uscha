@@ -14,7 +14,8 @@
 # --acceptance como FACT estructural —
 # y tests fuera del presupuesto de simplicity (v1.11.0): escribir tests no
 # penaliza el gate (Topic 51) + edges 1.10.0 (falsos positivos, flaky) —
-# y secret-scan en gate-check (v1.12.0): secretos agregados bloquean como hecho.
+# y secret-scan en gate-check (v1.12.0): secretos agregados bloquean como hecho —
+# y ledger atomico (v1.13.0): checksum de integridad + carga blindada.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -547,6 +548,36 @@ chk "BORRAR un .p12 no bloquea (sacar secretos es bueno)" 0 run gate-check --dif
 printf -- "diff --git a/src/cfg.py b/src/cfg.py\n--- a/src/cfg.py\n+++ b/src/cfg.py\n@@ -0,0 +1,1 @@\n+password = \"hunter2secreto\"\n" > sec-lit.diff
 chk "literal password generico -> REVIEW exit 0 (advisory)" 0 run gate-check --diff sec-lit.diff
 chk "literal password generico + --strict -> exit 1" 1 run gate-check --diff sec-lit.diff --strict
+
+echo "== T35 ledger atomico: checksum de integridad + carga blindada =="
+# el ledger recien escrito trae integrity y carga verificado
+chk "ledger con integrity carga OK" 0 run summary
+# mutacion EXTERNA (JSON valido, contenido cambiado, hash viejo) -> bloquea
+"$PY" -c "
+import json, sys
+d = json.load(open('QA-LEDGER.json', encoding='utf-8'))
+assert 'integrity' in d and d['integrity']['sha256'], 'falta integrity en ledger nuevo'
+d['config']['defaults']['coverage_threshold'] = 1
+json.dump(d, open('QA-LEDGER.json', 'w', encoding='utf-8'))"
+chk "mutacion externa (checksum roto) -> bloquea exit 1" 1 run summary
+run summary 2>&1 | grep -qi "checksum" \
+  && { PASS=$((PASS+1)); echo "  ok   mensaje de checksum presente (no traceback)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin mensaje de checksum"; }
+# aceptacion humana explicita: borrar 'integrity' -> legacy, carga sin verificar
+"$PY" -c "
+import json
+d = json.load(open('QA-LEDGER.json', encoding='utf-8'))
+del d['integrity']
+json.dump(d, open('QA-LEDGER.json', 'w', encoding='utf-8'))"
+chk "legacy sin integrity -> carga OK (adopcion incremental)" 0 run summary
+# JSON corrupto (escritura parcial) -> mensaje de recuperacion, no traceback
+"$PY" -c "open('QA-LEDGER.json','a',encoding='utf-8').write('{trunc')"
+chk "JSON corrupto -> exit 1 con mensaje" 1 run summary
+run summary 2>&1 | grep -q "Traceback" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL traceback crudo en ledger corrupto"; } \
+  || { PASS=$((PASS+1)); echo "  ok   sin traceback: mensaje de recuperacion"; }
+# restaurar el ledger para lo que venga despues (re-init limpio)
+run init --config dev-loop.config.json >/dev/null 2>&1
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
