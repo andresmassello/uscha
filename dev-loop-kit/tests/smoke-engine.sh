@@ -29,6 +29,10 @@
 # fixture aprobado es un acto HUMANO incluso en tests. Se cubren NOT-RUN y DIVERGE.
 
 set -u
+# stdin SIEMPRE cerrado: spec-check (y cualquier subcomando futuro) lee stdin
+# cuando viene redirigido — con un pipe abierto sin EOF la suite se cuelga
+# infinito (paso en la vida real: exit 124 por timeout con commit encadenado).
+exec < /dev/null
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 QL="$KIT/.claude/skills/dev-loop/qa_ledger.py"
 # probe FUNCIONAL: en Windows 'python3' puede ser un stub de Store que está en
