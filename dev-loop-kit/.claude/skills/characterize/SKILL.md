@@ -46,10 +46,30 @@ Control every one of these, or the diff lies. Output the checklist applied:
 
 Execute the harness → generate `.received` files.
 
+**Declare volatile fields BEFORE approval (kit 1.15.0).** If the ORIGINAL code emits
+values that vary between correct runs and cannot be made deterministic at the source
+(timestamps, request ids, GUIDs from a layer you cannot touch), declare scrub rules in
+`golden.scrub.json` at the fixtures root:
+
+```json
+{ "rules": [
+    {"pattern": "\\d{4}-\\d{2}-\\d{2}T[0-9:.+Z-]+", "replace": "<TIMESTAMP>"},
+    {"pattern": "requestId=[0-9a-f-]{36}", "replace": "requestId=<UUID>"} ] }
+```
+
+`golden-diff` masks BOTH sides with these rules before comparing (text only; binary
+stays byte-for-byte) and reports every scrub-match separately (`N via scrub`) — masking
+is never invisible. Prefer fixing determinism at the source (Phase 2 checklist); scrub
+is for what you genuinely cannot control. The rules file is part of what the human
+approves in Phase 4 — gate-check flags any later edit to it (a broadened rule can mask
+real divergence).
+
 ## Phase 4 — STOP for human approval
 
-Return control to the human to review and approve the `.approved`. **The skill ends here.**
-It does NOT auto-complete approval, and it does NOT create any `.approved` file.
+Return control to the human to review and approve the `.approved` — and, if present,
+`golden.scrub.json` (the scrub rules are contract, same as the goldens). **The skill
+ends here.** It does NOT auto-complete approval, and it does NOT create any `.approved`
+file.
 
 ## Corpus — where the inputs come from (critical)
 

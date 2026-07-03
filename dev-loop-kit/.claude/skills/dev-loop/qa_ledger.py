@@ -2839,7 +2839,7 @@ def _gc_is_test_file(path):
 def cmd_gate_check(args):
     diff = _read_diff(args)
     removed_tests, disabled_tests, suppressions, thresholds = [], [], [], []
-    secrets, secret_literals = [], []
+    secrets, secret_literals, scrub_edits = [], [], []
     assertions_removed = 0
     path = None
     minus_path = None
@@ -2889,6 +2889,10 @@ def cmd_gate_check(args):
                     secrets.append(f"{path}: {label}")
             if _GC_SECRET_SOFT.search(body):
                 secret_literals.append(path)
+            # reglas de scrub del golden (kit 1.15.0): editarlas puede enmascarar
+            # divergencia real — señal blanda SIEMPRE visible, el humano decide.
+            if path.rsplit("/", 1)[-1] == "golden.scrub.json":
+                scrub_edits.append(path)
             if _GC_CONFIG.search(path) and _GC_THRESH.search(body) and _GC_NUM.search(body):
                 thresh_added.setdefault(path, []).append(body)
         elif raw.startswith("-"):
@@ -2898,6 +2902,10 @@ def cmd_gate_check(args):
                     removed_tests.append(path)
                 if _GC_ASSERT.search(body):
                     assertions_removed += 1
+            # borrar/recortar reglas de scrub tambien es editarlas (los goldens
+            # pueden volver perma-rojos, o el recorte esconder un ensanche previo)
+            if path.rsplit("/", 1)[-1] == "golden.scrub.json":
+                scrub_edits.append(path)
             if _GC_CONFIG.search(path) and _GC_THRESH.search(body) and _GC_NUM.search(body):
                 thresh_removed.setdefault(path, []).append(body)
 
@@ -2942,7 +2950,8 @@ def cmd_gate_check(args):
     hard = (len(removed_tests) + len(disabled_tests) + len(thresholds)
             + len(secrets))
     soft = (len(suppressions) + (1 if assertions_removed else 0)
-            + (1 if test_count_drop else 0) + len(secret_literals))
+            + (1 if test_count_drop else 0) + len(secret_literals)
+            + len(scrub_edits))
     blocker = hard > 0 or (args.strict and soft > 0)
     verdict = "BLOCKER" if blocker else ("REVIEW" if soft else "CLEAN")
 
@@ -2954,6 +2963,7 @@ def cmd_gate_check(args):
             "thresholds_lowered": thresholds,
             "secrets_added": sorted(set(secrets)),
             "secret_literals": sorted(set(secret_literals)),
+            "scrub_rules_touched": sorted(set(scrub_edits)),
             "suppressions_added": sorted(set(suppressions)),
             "assertions_removed": assertions_removed,
             "test_count_drop": test_count_drop,
@@ -2975,6 +2985,7 @@ def cmd_gate_check(args):
     if secrets:
         print(f"  ! secretos agregados (BLOCKER): {'; '.join(sorted(set(secrets)))}")
     _show("literales tipo password/token agregados (revisar)", secret_literals)
+    _show("reglas de scrub del golden editadas (revisar: pueden enmascarar divergencia)", scrub_edits)
     _show("supresiones de lint agregadas (revisar)", suppressions)
     if assertions_removed:
         print(f"  ~ asserts removidos en tests: {assertions_removed} (revisar)")
@@ -3206,13 +3217,61 @@ def _golden_approved_path(rec):
     return os.path.join(d, app_base)
 
 
+GOLDEN_SCRUB_FILE = "golden.scrub.json"
+
+
+def _load_scrub_rules(root):
+    """Reglas de scrub del golden master (kit 1.15.0, Topic 41: no apoyar tests
+    en cosas no confiables — timestamps, ids, posiciones). Formato:
+    {"rules": [{"pattern": "<regex>", "replace": "<placeholder>"}]}. Las reglas
+    se declaran en characterize y el HUMANO las aprueba junto con los .approved
+    (gate-check flaggea sus ediciones). Archivo ausente = sin scrub, byte puro.
+    Archivo invalido = exit 2 (error de config, explicito — nunca se saltea el
+    scrub en silencio). Devuelve [(compiled, replace, pattern)]."""
+    path = os.path.join(root, GOLDEN_SCRUB_FILE)
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            spec = json.load(fh)
+        # shape estricta: un typo ('reglas', lista a secas) NO puede degradar
+        # a 'cero reglas' en silencio — eso saltearia el scrub sin avisar.
+        if not isinstance(spec, dict) or not isinstance(spec.get("rules"), list):
+            raise TypeError('se espera {"rules": [{"pattern": ..., "replace": ...}]}')
+        rules = []
+        for r in spec["rules"]:
+            rules.append((re.compile(r["pattern"]), r["replace"], r["pattern"]))
+        return rules
+    except (json.JSONDecodeError, re.error, KeyError, TypeError) as exc:
+        print(f"[qa_ledger] {path} invalido ({exc}) — el scrub no se saltea en "
+              f"silencio: arregla el archivo o borralo.", file=sys.stderr)
+        sys.exit(2)
+
+
+def _scrub(blob, rules, counts):
+    """Aplica las reglas a contenido de TEXTO; el binario no se scrubbea
+    (vuelve intacto y el compare sigue siendo byte a byte)."""
+    try:
+        text = blob.decode("utf-8")
+    except UnicodeDecodeError:
+        return blob
+    for rx, repl, pat in rules:
+        text, n = rx.subn(repl, text)
+        if n:
+            counts[pat] = counts.get(pat, 0) + n
+    return text.encode("utf-8")
+
+
 def cmd_golden_diff(args):
     root = args.dir or "."
     hits = set(glob.glob(os.path.join(root, "**", "*.received.*"), recursive=True))
     hits |= set(glob.glob(os.path.join(root, "**", "*.received"), recursive=True))
     received = [p for p in sorted(hits) if os.path.isfile(p)]   # skip dirs matched by glob
+    rules = _load_scrub_rules(root)
+    scrub_counts = {}
     diverged = []   # (received_path, reason)
     matched = 0
+    matched_scrubbed = 0
     for rec in received:
         app = _golden_approved_path(rec)
         if app is None:
@@ -3230,6 +3289,13 @@ def cmd_golden_diff(args):
             continue
         if rb == ab:
             matched += 1
+        # el conteo reportado es del lado RECEIVED (la captura fresca) — sumar
+        # ambos lados duplicaria cada volatil enmascarado en el reporte.
+        elif rules and (_scrub(rb, rules, scrub_counts)
+                        == _scrub(ab, rules, {})):
+            # matchea SOLO tras enmascarar volatiles declarados — cuenta como
+            # pass pero se reporta APARTE: el masking jamas es invisible.
+            matched_scrubbed += 1
         else:
             diverged.append((rec, "diff NO aprobado contra .approved"))
 
@@ -3250,16 +3316,25 @@ def cmd_golden_diff(args):
     if args.json:
         print(json.dumps({
             "verdict": verdict, "matched": matched,
+            "matched_scrubbed": matched_scrubbed,
+            "scrub_rules": len(rules),
+            "scrub_substitutions": scrub_counts,
             "diverged": [{"file": f, "reason": r} for f, r in diverged],
         }, indent=2, ensure_ascii=False))
         sys.exit(0 if passed else 1)
-    print(f"GOLDEN-DIFF: {verdict}  ({matched} matchean · {len(diverged)} divergen)")
+    scrub_str = f" · {matched_scrubbed} via scrub" if matched_scrubbed else ""
+    print(f"GOLDEN-DIFF: {verdict}  ({matched} matchean{scrub_str} · {len(diverged)} divergen)")
+    if rules:
+        subs = sum(scrub_counts.values())
+        print(f"  · scrub activo: {len(rules)} regla(s) de {GOLDEN_SCRUB_FILE}, "
+              f"{subs} sustitucion(es) — el masking es visible, no magia")
     for f, r in diverged[:12]:
         print(f"  ! {f}: {r}")
     if len(diverged) > 12:
         print(f"  ... y {len(diverged) - 12} más")
     if passed:
-        print("  el comportamiento matchea el golden aprobado byte a byte")
+        print("  el comportamiento matchea el golden aprobado byte a byte"
+              + (" (volatiles declarados enmascarados)" if matched_scrubbed else ""))
     else:
         print("  el .approved es verdad de campo: si el diff es correcto, lo aprueba un HUMANO — el agente no lo toca")
     sys.exit(0 if passed else 1)

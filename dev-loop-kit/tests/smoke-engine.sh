@@ -16,7 +16,8 @@
 # penaliza el gate (Topic 51) + edges 1.10.0 (falsos positivos, flaky) —
 # y secret-scan en gate-check (v1.12.0): secretos agregados bloquean como hecho —
 # y ledger atomico (v1.13.0): checksum de integridad + carga blindada —
-# y plateau/stop-signal (v1.14.0): stall y candidato-a-PR como advisories.
+# y plateau/stop-signal (v1.14.0): stall y candidato-a-PR como advisories —
+# y golden scrub (v1.15.0): volatiles declarados enmascaran con masking visible.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -629,6 +630,52 @@ a = d['advice']
 sys.exit(0 if a['stop_signal'] is True and a['stalled_repos'] == [] else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   stop-signal: convergido + cero facts bloqueantes -> candidato a PR"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL stop-signal no emitido ($(echo "$RDY" | "$PY" -c 'import json,sys;print(json.load(sys.stdin).get("advice"))' 2>/dev/null))"; }
+
+echo "== T37 golden scrub: volatiles declarados enmascaran, el masking es VISIBLE =="
+# Nota INV-GOLDEN-01: crear un .approved es un acto HUMANO incluso en tests —
+# igual que el path CLEAN byte-a-byte, el path CLEAN-via-scrub NO se auto-testea.
+# La mecanica de scrub se prueba a nivel FUNCION (sin fixtures aprobados).
+"$PY" -c "
+import sys, os, re
+sys.path.insert(0, os.path.dirname(sys.argv[1]))
+import qa_ledger as q
+rules = [(re.compile(r'\d{4}-\d{2}-\d{2}T[0-9:Z.+-]+'), '<TS>', 'ts')]
+counts = {}
+a = q._scrub(b'ok at 2026-07-03T10:00:00Z\nvalor=42\n', rules, counts)
+b = q._scrub(b'ok at 2026-07-01T09:30:00Z\nvalor=42\n', rules, counts)
+assert a == b == b'ok at <TS>\nvalor=42\n', (a, b)
+assert counts['ts'] == 2, counts        # el masking se CUENTA, no es magia
+# divergencia real (mas alla del volatil) NO se enmascara
+c = q._scrub(b'ok at 2026-07-03T10:00:00Z\nvalor=99\n', rules, counts)
+assert c != a
+# binario: intacto, sigue byte a byte
+raw = bytes([0xff, 0xfe, 0x00, 0x42])
+assert q._scrub(raw, rules, counts) == raw
+sys.exit(0)" "$QL" \
+  && { PASS=$((PASS+1)); echo "  ok   scrub enmascara volatiles, cuenta sustituciones, binario intacto"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL mecanica de scrub"; }
+mkdir -p gsc
+printf "ok at 2026-07-03T10:00:00Z\n" > gsc/out.received.txt
+printf '{ "rules": [ {"pattern": "\\\\d{4}-\\\\d{2}-\\\\d{2}T[0-9:Z.+-]+", "replace": "<TS>"} ] }\n' > gsc/golden.scrub.json
+# el scrub NO fabrica aprobacion: .received sin .approved sigue DIVERGE
+chk "scrub activo sin .approved -> sigue DIVERGE exit 1" 1 run golden-diff --dir gsc
+# scrub invalido = error de config explicito, jamas se saltea en silencio
+printf '{ "rules": [ {"pattern": "([", "replace": "x"} ] }\n' > gsc/golden.scrub.json
+chk "scrub invalido (regex rota) -> exit 2 (config error)" 2 run golden-diff --dir gsc
+printf '[ {"pattern": "x", "replace": "y"} ]\n' > gsc/golden.scrub.json
+chk "scrub con shape invalida (lista a secas) -> exit 2, no traceback" 2 run golden-diff --dir gsc
+printf '{}\n' > gsc/golden.scrub.json
+chk "scrub sin key rules (typo) -> exit 2, no degrada a cero reglas" 2 run golden-diff --dir gsc
+# gate-check: editar el scrub es señal blanda visible
+printf -- "diff --git a/fixtures/golden.scrub.json b/fixtures/golden.scrub.json\n--- a/fixtures/golden.scrub.json\n+++ b/fixtures/golden.scrub.json\n@@ -0,0 +1,1 @@\n+{ \"rules\": [ {\"pattern\": \".*\", \"replace\": \"\"} ] }\n" > scrub-edit.diff
+run gate-check --diff scrub-edit.diff 2>/dev/null | grep -q "scrub" \
+  && { PASS=$((PASS+1)); echo "  ok   gate-check flaggea edicion de reglas de scrub (REVIEW)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL edicion de scrub invisible para gate-check"; }
+chk "edicion de scrub + --strict -> exit 1" 1 run gate-check --diff scrub-edit.diff --strict
+printf -- "diff --git a/fixtures/golden.scrub.json b/fixtures/golden.scrub.json\n--- a/fixtures/golden.scrub.json\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-{ \"rules\": [ {\"pattern\": \"x\", \"replace\": \"y\"} ] }\n" > scrub-del.diff
+run gate-check --diff scrub-del.diff 2>/dev/null | grep -q "scrub" \
+  && { PASS=$((PASS+1)); echo "  ok   BORRAR el scrub tambien se flaggea (borrar reglas es editarlas)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL borrado de scrub invisible"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
