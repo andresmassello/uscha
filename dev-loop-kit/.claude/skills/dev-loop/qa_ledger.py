@@ -1541,6 +1541,63 @@ def _converged(node, k, qa_order=None):
     return (not reasons), reasons
 
 
+# --------------------------------------------------------------------------- #
+# phase  (M4: FSM DERIVADA del workflow — el estado se computa, no se declara)
+# --------------------------------------------------------------------------- #
+# Una FSM donde el agente DECLARA "entro a qa" es estado narrado — lo que todo
+# el kit combate. Aca el estado ES los hechos del ledger; no existen
+# transiciones ilegales que validar porque no hay nada que declarar.
+# Reglas de derivacion (precedencia de arriba hacia abajo):
+#   escalated — escalacion abierta sin resolver (acto humano pendiente)
+#   pr-ready  — _converged() AND tests verdes AND 0 BLOCKER/CRITICAL
+#   qa        — hay pasos de QA registrados (agent o static-gate)
+#   build     — hay snapshots medidos pero ningun paso de QA
+#   plan      — ledger virgen para el repo
+PHASES = ["plan", "build", "qa", "escalated", "pr-ready"]
+
+
+def _derive_phase(ledger, name, node, k, qa_order):
+    """(estado, evidencia[]) — computado del ledger, jamas self-reported."""
+    open_esc = [e for e in ledger.get("escalations", [])
+                if e.get("repo") == name and not e.get("resolved_at")]
+    if open_esc:
+        return "escalated", [f"{len(open_esc)} escalacion(es) sin resolver "
+                             f"(la resolucion es un acto humano registrado)"]
+    conv, reasons = _converged(node, k, qa_order)
+    tests_red = _tests_red(node)
+    _go, sev = _gate_open_and_sev(node)
+    blk = sev.get("BLOCKER", 0) + sev.get("CRITICAL", 0)
+    if conv and not tests_red and blk == 0:
+        return "pr-ready", ["ciclo de agente limpio + static gates limpios",
+                            "tests verdes (medidos)", "0 BLOCKER/CRITICAL abiertos"]
+    if node["iterations"]:
+        return "qa", reasons or ["pasos de QA registrados, aun sin converger"]
+    if node.get("snapshots"):
+        return "build", ["snapshots medidos, ningun paso de QA todavia"]
+    return "plan", ["ledger virgen para el repo — nada medido aun"]
+
+
+def cmd_phase(args):
+    ledger = _load(args.ledger)
+    node = _repo_node(ledger, args.repo)
+    qa_order = ledger["config"].get("defaults", {}).get("qa_tools_order")
+    state, evidence = _derive_phase(ledger, args.repo, node,
+                                    args.tools_per_cycle, qa_order)
+    ok = args.require is None or state == args.require
+    if args.json:
+        print(json.dumps({"repo": args.repo, "phase": state,
+                          "evidence": evidence, "required": args.require,
+                          "satisfied": ok}, indent=2, ensure_ascii=False))
+        sys.exit(0 if ok else 1)
+    print(f"PHASE {args.repo}: {state}  (derivado del ledger — no declarado)")
+    for e in evidence:
+        print(f"  · {e}")
+    if args.require and not ok:
+        print(f"  ! se requiere '{args.require}' y los HECHOS dicen '{state}' — "
+              f"el estado no se negocia, se construye")
+    sys.exit(0 if ok else 1)
+
+
 def cmd_converged(args):
     """
     ADVISORY. Convergence requires ALL of:
@@ -3555,6 +3612,19 @@ def build_parser():
                     help="finding-ID granularity for fixed/oscillation diffing")
     pg.add_argument("--note", default=None)
     pg.set_defaults(func=cmd_ingest_gate)
+
+    pph = sub.add_parser(
+        "phase",
+        help="derived workflow state (plan/build/qa/escalated/pr-ready) — "
+             "computed from ledger FACTS, never self-declared; --require gates")
+    add_ledger(pph)
+    pph.add_argument("--repo", required=True)
+    pph.add_argument("--require", default=None, choices=PHASES,
+                     help="exit 1 unless the DERIVED state equals this "
+                          "(merge gate: --require pr-ready)")
+    pph.add_argument("--tools-per-cycle", type=int, default=3)
+    pph.add_argument("--json", action="store_true")
+    pph.set_defaults(func=cmd_phase)
 
     pv = sub.add_parser("converged", help="advisory convergence check")
     add_ledger(pv)

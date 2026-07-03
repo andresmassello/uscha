@@ -156,8 +156,10 @@ opciones (fiel-al-libro advisory-por-default / procedencia visible / rechazo)
 se eligió **procedencia visible** — los caps siguen mordiendo (que existan es
 principio, no opinión), pero cada umbral que muerde se etiqueta como
 `requerimiento (config)` o `default del kit`, y discovery gana la pregunta de
-quality-bar (ver CHANGELOG-1.17.0). Quedan en backlog SOLO: **M4** (FSM del
-workflow) y **M10** (convención de ramas spike). 8 de 10 resueltas
-(M1, M2, M3, M5, M6, M7, M8, M9).
+quality-bar (ver CHANGELOG-1.17.0). **M4 RESUELTA en kit 1.18.0** con decisión humana explícita: **FSM derivada**
+— el estado del workflow se COMPUTA de los hechos del ledger (una FSM declarada
+sería estado narrado); `phase --require pr-ready` vuelve mecánica la transición
+ilegal "PR sin convergencia" (ver CHANGELOG-1.18.0). Queda en backlog SOLO:
+**M10** (convención de ramas spike). 9 de 10 resueltas.
 M5/M4/M10/M1 requieren decisión humana de diseño (caps advisory-por-default,
 FSM del workflow, convención de ramas spike, schema de cierre de findings).

@@ -280,6 +280,15 @@ is a spec gap, not a code bug.
 
 ## Phase 6 — PR (stop at merge)
 
+- **Gate the PR on the DERIVED state (kit 1.18.0)** — per repo:
+
+```bash
+python3 $QL phase --repo <REPO> --require pr-ready   # exit 1 = the facts say no
+```
+
+The state is COMPUTED from the ledger (converged + green tests + zero
+BLOCKER/CRITICAL + no open escalation), never self-declared — if it exits 1, the
+output lists exactly which facts are missing; do NOT open the PR, close the gap.
 - Ensure conventional-commit history is clean.
 - Open the PR(s). Confirm CI is green.
 - **STOP.** Present the PR link(s) and wait for the human to merge.

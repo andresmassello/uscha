@@ -20,7 +20,8 @@
 # y golden scrub (v1.15.0): volatiles declarados enmascaran con masking visible —
 # y regression-capture (v1.16.0): cierre sin test = narrado; escape-analysis
 # obligatoria al resolver blockers — y procedencia de umbrales (v1.17.0):
-# requerimiento (config) vs default del kit, etiquetado en cada gate.
+# requerimiento (config) vs default del kit, etiquetado en cada gate —
+# y phase (v1.18.0): FSM derivada del ledger, el estado se computa.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -747,6 +748,27 @@ d = json.load(sys.stdin)
 sys.exit(0 if d['budgets_declared'] == ['max_lines_added'] else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   presupuesto declarado por CLI listado en budgets_declared"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL budgets_declared no refleja el CLI"; }
+
+echo "== T40 phase: FSM DERIVADA del ledger — el estado se computa, no se declara =="
+mkdir -p repo-x
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"] },\n  "repos": [ {"name":"fsm","path":"repo-x","type":"go"} ], "integration": {"enabled": false} }\n' > c-fsm.json
+run init --config c-fsm.json --out L-fsm.json >/dev/null 2>&1
+chk "ledger virgen -> plan" 0 run phase --ledger L-fsm.json --repo fsm --require plan
+run snapshot --ledger L-fsm.json --repo fsm >/dev/null 2>&1
+chk "snapshot medido sin QA -> build" 0 run phase --ledger L-fsm.json --repo fsm --require build
+run log-step --ledger L-fsm.json --repo fsm --tool code-review --iteration 1 \
+  --gated-reported 2 --tests-passed true >/dev/null 2>&1
+chk "pasos de QA sin converger -> qa" 0 run phase --ledger L-fsm.json --repo fsm --require qa
+chk "pedir pr-ready con findings abiertos -> exit 1 (los hechos mandan)" 1 \
+  run phase --ledger L-fsm.json --repo fsm --require pr-ready
+run escalate --ledger L-fsm.json --repo fsm --reason "duda de diseño" >/dev/null 2>&1
+chk "escalacion abierta -> escalated (pisa todo)" 0 run phase --ledger L-fsm.json --repo fsm --require escalated
+run resolve-escalation --ledger L-fsm.json --repo fsm --note ok >/dev/null 2>&1
+for t in code-review judgment-day improve; do
+  run log-step --ledger L-fsm.json --repo fsm --tool $t --iteration 2 \
+    --gated-reported 0 --files-changed 0 --tests-passed true >/dev/null 2>&1
+done
+chk "convergido + limpio -> pr-ready" 0 run phase --ledger L-fsm.json --repo fsm --require pr-ready
 # default sin --fixed: lee la suma de 'fixed' de la ultima iteracion del ledger
 run init --config dev-loop.config.json >/dev/null 2>&1
 run log-step --repo repo-a --tool code-review --iteration 1 --fixed 3 --tests-passed true >/dev/null 2>&1

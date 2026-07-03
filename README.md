@@ -10,13 +10,13 @@ y de su instanciación en Claude Code, el **dev-loop-kit**.
 
 ```
 SpecLoop/
-├── dev-loop-kit/          # ★ SOURCE canónico del kit (v1.17.0)
+├── dev-loop-kit/          # ★ SOURCE canónico del kit (v1.18.0)
 │   ├── .claude/skills/    #   6 skills: discovery · adr-refine · dev-loop · sys-doc
 │   │                      #             reverse-discovery · characterize
-│   ├── .claude/skills/dev-loop/qa_ledger.py   # motor de evidencia (20 subcomandos, stdlib)
+│   ├── .claude/skills/dev-loop/qa_ledger.py   # motor de evidencia (21 subcomandos, stdlib)
 │   ├── hooks/             #   PreToolUse: el agente no escribe .approved (INV-GOLDEN-01)
 │   ├── templates/         #   CLAUDE.md · CONSTITUTION.md · .gitattributes · docs/adr
-│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (acceptance trazable) → 1.11.0 (tests fuera del presupuesto) → 1.12.0 (secret-scan) → 1.13.0 (ledger atómico) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (procedencia de umbrales)
+│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (acceptance trazable) → 1.11.0 (tests fuera del presupuesto) → 1.12.0 (secret-scan) → 1.13.0 (ledger atómico) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (procedencia de umbrales) → 1.18.0 (FSM derivada)
 ├── docs/                  # artefactos publicados (canónicos acá; Downloads = snapshots)
 │   ├── spec-loop-claude-code-doc-FINAL.html   # deck largo ES (35 slides)
 │   ├── spec-loop-claude-code-doc-EN.html      # deck largo EN
@@ -37,7 +37,7 @@ SpecLoop/
 
 ## Estado (2026-07-03)
 
-- **Kit v1.17.0** — los fact gates están CABLEADOS al engine (1.3.0: `log-gate`,
+- **Kit v1.18.0** — los fact gates están CABLEADOS al engine (1.3.0: `log-gate`,
   `flag-blocker`, `resolve-escalation`; UNMEASURED; convergencia per-tool con veto de
   snapshot medido) y el engine mide repos **Python** (1.4.0: pytest/Cobertura + ruff +
   mypy) **TypeScript/JS** (1.5.0: lcov + jest-junit + eslint + tsc) **Go** (1.6.0: cover profile
@@ -56,11 +56,13 @@ SpecLoop/
   narrado; escape-analysis obligatoria al resolver blockers — M1). **Procedencia de
   umbrales** (1.17.0: cada umbral se etiqueta por procedencia — requerimiento
   declarado en config vs opinión default del kit; el cap que muerde lo dice en el
-  headline — M5). Smoke suite 111/111 verde.
+  headline — M5). **FSM derivada** (1.18.0: `phase` computa el estado del workflow
+  desde los hechos del ledger, jamás declarado; el PR se gatea con `--require
+  pr-ready` — M4). Smoke suite 117/117 verde.
   Licencia: MIT. El principio "facts block, guesses advise" es propiedad enforced,
   no slogan.
 - **Docs** — pasados por truth-pass contra el engine real: cada claim describe lo que
-  v1.17.0 hace; el anexo de referencias tiene **links verificados por fetch** a las 10
+  v1.18.0 hace; el anexo de referencias tiene **links verificados por fetch** a las 10
   fuentes. Convención de estado en los docs: `en el kit` / `nuevo` / `propuesta`.
 - **En curso** — dogfooding en caso real (proyecto piloto, Python): el adapter 1.4.0 lo desbloqueó;
   queda el dry-run de solo lectura (criterio 2 del HANDOFF python-adapter) y el on-ramp.
