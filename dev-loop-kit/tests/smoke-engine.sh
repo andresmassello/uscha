@@ -17,7 +17,9 @@
 # y secret-scan en gate-check (v1.12.0): secretos agregados bloquean como hecho —
 # y ledger atomico (v1.13.0): checksum de integridad + carga blindada —
 # y plateau/stop-signal (v1.14.0): stall y candidato-a-PR como advisories —
-# y golden scrub (v1.15.0): volatiles declarados enmascaran con masking visible.
+# y golden scrub (v1.15.0): volatiles declarados enmascaran con masking visible —
+# y regression-capture (v1.16.0): cierre sin test = narrado; escape-analysis
+# obligatoria al resolver blockers.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -89,8 +91,11 @@ chk "fact gate pass -> CONVERGED de nuevo" 0 run converged --repo repo-a
 echo "== T4 flag-blocker (constitution) bloquea hasta --resolve =="
 run flag-blocker --repo repo-a --kind constitution --note "INV-X breached" >/dev/null
 chk "blocker abierto -> NOT converged" 1 run converged --repo repo-a
-run flag-blocker --repo repo-a --kind constitution --resolve >/dev/null
-chk "blocker resuelto -> CONVERGED" 0 run converged --repo repo-a
+chk "resolver SIN escape-analysis -> rechazado (Find Bugs Once)" 1 \
+  run flag-blocker --repo repo-a --kind constitution --resolve
+run flag-blocker --repo repo-a --kind constitution --resolve \
+  --escape-analysis "hook nuevo + test que cubre INV-X" >/dev/null
+chk "blocker resuelto (con escape analysis) -> CONVERGED" 0 run converged --repo repo-a
 
 echo "== T5 escalate/resolve-escalation registrados =="
 # el cap_reason solo se muestra cuando el cap MUERDE (score > techo); con score bajo
@@ -676,6 +681,38 @@ printf -- "diff --git a/fixtures/golden.scrub.json b/fixtures/golden.scrub.json\
 run gate-check --diff scrub-del.diff 2>/dev/null | grep -q "scrub" \
   && { PASS=$((PASS+1)); echo "  ok   BORRAR el scrub tambien se flaggea (borrar reglas es editarlas)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL borrado de scrub invisible"; }
+
+echo "== T38 regression-check: cierre sin test = NARRADO, jamas medido (Find Bugs Once) =="
+# fix SIN tocar tests: solo produccion cambiada
+printf -- "diff --git a/src/main/java/App.java b/src/main/java/App.java\n--- a/src/main/java/App.java\n+++ b/src/main/java/App.java\n@@ -0,0 +1,1 @@\n+if (x != null) { return x.trim(); }\n" > fix-sin-test.diff
+chk "cierre sin test -> NARRATED, advisory exit 0" 0 run regression-check --repo repo-a --fixed 2 --diff fix-sin-test.diff
+run regression-check --repo repo-a --fixed 2 --diff fix-sin-test.diff 2>/dev/null | grep -q "NARRATED" \
+  && { PASS=$((PASS+1)); echo "  ok   verdict NARRATED visible (cierre narrado, no medido)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin verdict NARRATED"; }
+chk "cierre sin test + --strict -> exit 1" 1 run regression-check --repo repo-a --fixed 2 --diff fix-sin-test.diff --strict
+# fix CON test que reproduce: MEASURED
+printf -- "diff --git a/src/main/java/App.java b/src/main/java/App.java\n--- a/src/main/java/App.java\n+++ b/src/main/java/App.java\n@@ -0,0 +1,1 @@\n+if (x != null) { return x.trim(); }\ndiff --git a/src/test/java/AppTest.java b/src/test/java/AppTest.java\n--- a/src/test/java/AppTest.java\n+++ b/src/test/java/AppTest.java\n@@ -0,0 +1,2 @@\n+@Test\n+void testNullInputRegression() { assertNull(app.run(null)); }\n" > fix-con-test.diff
+chk "cierre con test nuevo -> MEASURED exit 0 (aun con --strict)" 0 run regression-check --repo repo-a --fixed 2 --diff fix-con-test.diff --strict
+# nada cerrado -> N/A, nada que exigir
+chk "fixed 0 -> N/A exit 0 (aun con --strict)" 0 run regression-check --repo repo-a --fixed 0 --diff fix-sin-test.diff --strict
+# gaming barato: UNA linea EN BLANCO en un test file NO es evidencia
+printf -- "diff --git a/src/test/java/AppTest.java b/src/test/java/AppTest.java\n--- a/src/test/java/AppTest.java\n+++ b/src/test/java/AppTest.java\n@@ -0,0 +1,1 @@\n+\n" > fix-blank.diff
+chk "linea en blanco en test file NO es evidencia -> NARRATED --strict exit 1" 1 \
+  run regression-check --repo repo-a --fixed 2 --diff fix-blank.diff --strict
+# evidencia debil (linea de test sin testdef ni assert) -> MEASURED pero avisa
+printf -- "diff --git a/src/test/java/AppTest.java b/src/test/java/AppTest.java\n--- a/src/test/java/AppTest.java\n+++ b/src/test/java/AppTest.java\n@@ -0,0 +1,1 @@\n+// nota\n" > fix-weak.diff
+run regression-check --repo repo-a --fixed 2 --diff fix-weak.diff 2>/dev/null | grep -q "DEBIL" \
+  && { PASS=$((PASS+1)); echo "  ok   evidencia debil (sin testdef/assert) marcada para el ojo humano"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL evidencia debil invisible"; }
+# default sin --fixed: lee la suma de 'fixed' de la ultima iteracion del ledger
+run init --config dev-loop.config.json >/dev/null 2>&1
+run log-step --repo repo-a --tool code-review --iteration 1 --fixed 3 --tests-passed true >/dev/null 2>&1
+run regression-check --repo repo-a --diff fix-sin-test.diff --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['fixed'] == 3 and d['verdict'] == 'NARRATED' else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   sin --fixed lee la ultima iteracion del ledger (fixed=3)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL lookup de fixed en el ledger"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"

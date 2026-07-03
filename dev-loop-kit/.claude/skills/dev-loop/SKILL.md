@@ -180,6 +180,17 @@ and, for migration work, golden-diff (does behavior still match the human-approv
 baseline?). Then PERSIST each verdict with `log-gate` — a failing fact gate blocks
 convergence and caps readiness ≤65 through the ledger:
 
+**Find Bugs Once (kit 1.16.0).** When a pass you log carries `--fixed > 0`, run
+`regression-check --repo <REPO> --from-git --base <base>`: closing findings without
+adding a single NON-BLANK test-tree line is **NARRATED** closure — the failing test
+goes BEFORE the fix (Tip 31), and every bug is found ONCE (Tip 94). It is a tripwire,
+not a judge: any non-blank test line counts (even a comment — content across 9 stacks
+is not guessed), so honor the `has_test_definition`/`has_assertion` facts and the
+"evidencia DÉBIL" warning; test QUALITY is pit-check's job. NARRATED advises by
+default; persist `log-gate --kind regression --verdict fail` if the team gates it.
+Resolving a `flag-blocker` now REQUIRES `--escape-analysis "<which gate/test should
+have caught this and what was done>"` — reflection is part of closing, not optional.
+
 ```bash
 python3 $QL gate-check --from-git --base <base> --repo <REPO>   # exit 1 = BLOCKER
 python3 $QL log-gate --repo <REPO> --iteration <N> --kind gate-check --verdict <pass|fail>

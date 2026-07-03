@@ -148,10 +148,13 @@ en kit 1.13.0** (ledger atómico: checksum de integridad + carga blindada — ve
 CHANGELOG-1.13.0; el file-lock opcional quedó diferido consciente). **M6
 IMPLEMENTADA en kit 1.14.0** (plateau/stop-signal — advisory puro, ver
 CHANGELOG-1.14.0). **M7 IMPLEMENTADA en kit 1.15.0** (scrub del golden master
-con masking visible — ver CHANGELOG-1.15.0). Quedan en backlog SOLO las que
-requieren decisión humana de diseño: **M5** (caps advisory-por-default — cambia
-la semántica de bloqueo para usuarios existentes), **M4** (FSM del workflow),
-**M10** (convención de ramas spike), **M1** (regression-capture — schema de
-cierre de findings). 6 de 10 implementadas (M2, M3, M6, M7, M8, M9).
+con masking visible — ver CHANGELOG-1.15.0). **M1 IMPLEMENTADA en kit 1.16.0**
+(regression-capture: cierre sin test = narrado, evidencia a nivel diff;
+escape-analysis obligatoria al resolver blockers; el mapeo finding→test
+específico quedó diferido consciente — ver CHANGELOG-1.16.0). Quedan en backlog
+SOLO las que requieren decisión humana de diseño: **M5** (caps
+advisory-por-default — cambia la semántica de bloqueo para usuarios
+existentes), **M4** (FSM del workflow), **M10** (convención de ramas spike).
+7 de 10 implementadas (M1, M2, M3, M6, M7, M8, M9).
 M5/M4/M10/M1 requieren decisión humana de diseño (caps advisory-por-default,
 FSM del workflow, convención de ramas spike, schema de cierre de findings).

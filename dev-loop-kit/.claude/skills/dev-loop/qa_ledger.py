@@ -1431,7 +1431,7 @@ def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, not
 
 
 def cmd_log_gate(args):
-    """Persist a FACT-gate verdict (golden-diff / gate-check / pit-check / simplicity)
+    """Persist a FACT-gate verdict (golden-diff / gate-check / pit-check / simplicity / regression)
     into the ledger, so 'facts may block' is enforced by the engine, not by goodwill.
       fail    -> BLOCKER record: trips the <=65 readiness cap AND blocks convergence.
       pass    -> clean record for the same tool: credits the fix, convergence sees clean.
@@ -1463,22 +1463,33 @@ def cmd_flag_blocker(args):
     """Record (or resolve) a CONSTITUTION/invariant breach as a first-class BLOCKER.
     The record is static-gate-shaped, so it caps readiness <=65 and blocks convergence
     through the same plumbing as a linter BLOCKER — no parallel mechanism.
-    --resolve writes a clean record for the same kind (latest-per-tool wins)."""
+    --resolve writes a clean record for the same kind (latest-per-tool wins).
+    Resolver EXIGE --escape-analysis (kit 1.16.0, Tip 94 'Find Bugs Once'): que
+    gate/test debio atrapar esto y que accion se tomo (test nuevo, gate nuevo,
+    busqueda de hermanos del bug) — cerrar un BLOCKER sin esa reflexion es
+    garantia de encontrarlo dos veces."""
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
     tool = f"blocker:{args.kind}"
     failing = not args.resolve
     if failing and not args.note:
         raise SystemExit("[qa_ledger] flag-blocker requires --note describing the breach.")
+    if args.resolve and not args.escape_analysis:
+        raise SystemExit(
+            "[qa_ledger] resolver un BLOCKER exige --escape-analysis: ¿que gate/test "
+            "debio atraparlo y que se hizo al respecto (test nuevo / gate nuevo / "
+            "busqueda de hermanos)? Encontrar cada bug UNA sola vez es la regla.")
     rec = _append_gate_record(ledger, node, args.repo, tool, args.iteration,
                               failing, 1, args.note)
+    if args.resolve:
+        rec["escape_analysis"] = args.escape_analysis
     _save(args.ledger, ledger)
     if failing:
         print(f"[qa_ledger] {args.repo}/{tool}: BLOCKER logged — {args.note} "
               f"(readiness capped <=65, convergence blocked until --resolve)")
     else:
         print(f"[qa_ledger] {args.repo}/{tool}: resolved — gate cleared "
-              f"(step #{rec['n']})")
+              f"(step #{rec['n']}, escape analysis registrada)")
 
 
 def _converged(node, k, qa_order=None):
@@ -2999,6 +3010,99 @@ def cmd_gate_check(args):
 
 
 # --------------------------------------------------------------------------- #
+# regression-check  (M1, Tip 94 'Find Bugs Once' + Tip 31 'Failing Test First')
+# --------------------------------------------------------------------------- #
+def cmd_regression_check(args):
+    """Cierre de findings SIN test que lo reproduzca = RELATO (aconseja),
+    jamas hecho. La evidencia es a nivel DIFF y es mecanica: el diff que
+    arregla tiene que AGREGAR/modificar lineas NO VACIAS en el arbol de test
+    (clasificador compartido de los 9 stacks). LIMITE DISCLOSED: es un tripwire,
+    no un juez — una linea de comentario en un test file cuenta (juzgar
+    contenido entre 9 lenguajes seria adivinanza); las señales
+    has_test_definition/has_assertion se exponen como hechos y su ausencia se
+    marca como evidencia debil. La CALIDAD de los tests la juzga pit-check.
+    Que test reproduce QUE finding seria adivinanza sin una convencion de
+    naming — diferido consciente; este gate mide lo que se puede medir sin
+    inventar. Verdicts: N/A (nada cerrado) · MEASURED
+    (cierre con tests tocados) · NARRATED (cierre sin evidencia — exit 1 solo
+    con --strict; persistir con log-gate --kind regression si el equipo decide
+    gatearlo)."""
+    diff = _read_diff(args)
+    fixed = args.fixed
+    if fixed is None:
+        # default: suma de 'fixed' de la iteracion MAS RECIENTE del repo
+        ledger = _load(args.ledger)
+        node = _repo_node(ledger, args.repo)
+        its = [s.get("iteration") or 0 for s in node["iterations"]]
+        last_it = max(its) if its else 0
+        fixed = sum((s.get("fixed") or 0) for s in node["iterations"]
+                    if (s.get("iteration") or 0) == last_it)
+    test_files = set()
+    test_added = 0          # solo lineas NO vacias: un '\n' suelto no es evidencia
+    has_testdef = False     # ¿alguna linea agregada define un test?
+    has_assert = False      # ¿alguna trae un assert/verify/expect?
+    in_hunk = False
+    counting = False
+    for raw in diff.splitlines():
+        if raw.startswith("diff --git"):
+            in_hunk = False
+            counting = False
+            continue
+        if raw.startswith("@@"):
+            in_hunk = True
+            continue
+        if not in_hunk:
+            if raw.startswith("+++ "):
+                p = raw[4:].strip().split("\t")[0]
+                if p != "/dev/null":
+                    rel = p[2:] if p[:2] in ("a/", "b/") else p
+                    counting = _is_simplicity_test_file(rel)
+                    if counting:
+                        test_files.add(rel)
+            continue
+        if counting and raw.startswith("+"):
+            body = raw[1:]
+            if body.strip():
+                test_added += 1
+                if _GC_TESTDEF.search(body):
+                    has_testdef = True
+                if _GC_ASSERT.search(body):
+                    has_assert = True
+
+    if fixed == 0:
+        verdict = "N/A"
+    elif test_added > 0:
+        verdict = "MEASURED"
+    else:
+        verdict = "NARRATED"
+    fail = verdict == "NARRATED" and args.strict
+
+    if args.json:
+        print(json.dumps({"verdict": verdict, "fixed": fixed,
+                          "test_files_touched": sorted(test_files),
+                          "test_lines_added": test_added,
+                          "has_test_definition": has_testdef,
+                          "has_assertion": has_assert},
+                         indent=2, ensure_ascii=False))
+        sys.exit(1 if fail else 0)
+    print(f"REGRESSION-CAPTURE: {verdict}  ({fixed} finding(s) cerrados · "
+          f"+{test_added} lineas de test en {len(test_files)} archivo(s))")
+    if verdict == "NARRATED":
+        print("  ! cierre NARRADO: desaparecieron findings sin tocar un solo test — "
+              "¿que test reproduce el bug que decis haber arreglado? (Tip 31: el "
+              "test que falla va ANTES del fix; Tip 94: cada bug se encuentra UNA vez)")
+    elif verdict == "MEASURED":
+        print("  cierre con evidencia: el diff que arregla trae tests")
+        if not (has_testdef or has_assert):
+            print("  · evidencia DEBIL: las lineas de test agregadas no traen ni "
+                  "definicion de test ni assert — el tripwire no juzga calidad "
+                  "(eso es pit-check), pero esto merece un ojo humano")
+    else:
+        print("  nada cerrado en la ultima iteracion — nada que exigir")
+    sys.exit(1 if fail else 0)
+
+
+# --------------------------------------------------------------------------- #
 # spec-check  (spec-quality gate: lint the SPEC/ACCEPTANCE BEFORE generation)
 # --------------------------------------------------------------------------- #
 # The kit gates code; this gates the SPEC — its deterministic twin. It does the
@@ -3449,13 +3553,14 @@ def build_parser():
 
     plg = sub.add_parser(
         "log-gate",
-        help="persist a FACT-gate verdict (golden-diff/gate-check/pit-check/simplicity) "
+        help="persist a FACT-gate verdict (golden-diff/gate-check/pit-check/simplicity/regression) "
              "so converged and readiness actually see it")
     add_ledger(plg)
     plg.add_argument("--repo", required=True)
     plg.add_argument("--iteration", type=int, required=True)
     plg.add_argument("--kind", required=True,
-                     choices=["golden-diff", "gate-check", "pit-check", "simplicity"])
+                     choices=["golden-diff", "gate-check", "pit-check", "simplicity",
+                              "regression"])
     plg.add_argument("--verdict", required=True, choices=["pass", "fail", "not-run"])
     plg.add_argument("--count", type=int, default=1,
                      help="failing finding count (fail only; default 1)")
@@ -3475,7 +3580,29 @@ def build_parser():
                      help="what was breached (required unless --resolve)")
     pfb.add_argument("--resolve", action="store_true",
                      help="clear the blocker (writes a clean record for the same kind)")
+    pfb.add_argument("--escape-analysis", default=None,
+                     help="REQUIRED with --resolve: which gate/test should have "
+                          "caught this and what was done (new test / new gate / "
+                          "sibling-bug sweep) — find every bug ONCE")
     pfb.set_defaults(func=cmd_flag_blocker)
+
+    prc = sub.add_parser(
+        "regression-check",
+        help="Find Bugs Once: closing findings without touching tests is "
+             "NARRATED, never measured (advisory; --strict gates)")
+    add_ledger(prc)
+    prc.add_argument("--repo", required=True)
+    prc.add_argument("--fixed", type=int, default=None,
+                     help="findings closed by the fixing diff (default: sum of "
+                          "'fixed' across the repo's most recent iteration)")
+    prc.add_argument("--diff", help="path to the FIXING unified diff (else --from-git or stdin)")
+    prc.add_argument("--from-git", action="store_true",
+                     help="run `git diff --unified=0 <base>` for the diff")
+    prc.add_argument("--base", default=None, help="git base ref (default HEAD)")
+    prc.add_argument("--strict", action="store_true",
+                     help="exit 1 on NARRATED closure (no test evidence)")
+    prc.add_argument("--json", action="store_true")
+    prc.set_defaults(func=cmd_regression_check)
 
     pm = sub.add_parser("summary", help="emit the final retrospective metrics")
     add_ledger(pm)
