@@ -352,6 +352,96 @@ def flutter_test_count(repo_path):
             "approximate": True}
 
 
+def _junit_report_files(repo_path):
+    """First-LOCATION-wins selection of JUnit-family reports (shared by the
+    test counter and the AC-tag scan — one list of locations, not two)."""
+    groups = [
+        [os.path.join(repo_path, "reports", "junit.xml")],
+        [os.path.join(repo_path, "junit.xml")],
+        sorted(glob.glob(os.path.join(repo_path, "reports", "TEST-*.xml"))),
+    ]
+    for group in groups:
+        found = [f for f in group if os.path.isfile(f)]
+        if found:
+            return found
+    return []
+
+
+def _junit_files_for(repo_path, repo_type):
+    """TODOS los reportes JUnit-family que el engine ya usa para contar tests
+    del type dado — para leer nombres de testcase (trazabilidad AC-n).
+    flutter no emite JUnit (conteo aproximado): devuelve []."""
+    if repo_type == "maven":
+        pats = [os.path.join(repo_path, "**", "target", "surefire-reports", "TEST-*.xml"),
+                os.path.join(repo_path, "**", "target", "failsafe-reports", "TEST-*.xml")]
+        return sorted({f for p in pats for f in glob.glob(p, recursive=True)})
+    if repo_type == "gradle":
+        return sorted(set(glob.glob(os.path.join(
+            repo_path, "**", "build", "test-results", "**", "TEST-*.xml"),
+            recursive=True)))
+    if repo_type == "flutter":
+        return []
+    files = _junit_report_files(repo_path)
+    if repo_type == "swift":
+        for f in (os.path.join(repo_path, "reports", "junit-swift-testing.xml"),
+                  os.path.join(repo_path, "junit-swift-testing.xml")):
+            if os.path.isfile(f) and f not in files:
+                files.append(f)
+    return files
+
+
+# tolerante a los limites de naming de cada lenguaje: test_ac1_x (python/go,
+# sin '-'), testAC01X (java camelCase), "AC-01: ..." (nombres libres).
+# OJO: \b no sirve — '_' es word character y test_ac1 quedaria invisible;
+# boundaries explicitos: separador no-alfanumerico, o salto camelCase a 'AC'.
+_AC_TAG = re.compile(
+    r"(?:(?<![A-Za-z0-9])[Aa][Cc]|(?<=[a-z])AC)[-_]?0*(\d+)(?!\d)")
+
+
+def _ac_tags(repo_path, repo_type):
+    """Tags AC-n leidos de los NOMBRES de testcase en los reportes JUnit que el
+    engine ya ingiere. Devuelve {'AC-n': {'green': x, 'red': y}}. Un criterio
+    cierra MEDIDO solo con >=1 testcase verde y 0 rojos (evidencia roja veta:
+    fail-closed). Testcases skipped no cuentan para ningun lado.
+
+    LIMITE CONOCIDO (heredado de junit_test_count, ahora con blast radius mayor
+    porque vetea/cierra un AC en vez de aproximar un conteo): maven/gradle
+    globbean TEST-*.xml recursivo sin chequeo de freshness — un reporte stale
+    de un test renombrado/borrado (surefire no lo limpia sin `mvn clean`) puede
+    vetear un AC para siempre (rojo stale) o mantenerlo cerrado sin evidencia
+    vigente (verde stale). Mitigacion real (mtime + correlacion con el arbol de
+    fuentes) queda diferida — no hay forma barata de distinguir "stale" de
+    "vigente" sin esa correlacion."""
+    tags = {}
+    for f in _junit_files_for(repo_path, repo_type):
+        try:
+            root = ET.parse(f).getroot()
+        except (ET.ParseError, OSError):
+            continue
+        for tc in root.iter():
+            if _local(tc.tag) != "testcase":
+                continue
+            status = "green"
+            for child in tc:
+                ln = _local(child.tag)
+                if ln in ("failure", "error"):
+                    status = "red"
+                    break
+                if ln == "skipped":
+                    status = None
+                    break
+            if status is None:
+                continue
+            # NOMBRE del testcase unicamente (nunca classname): un modulo/clase
+            # cuyo nombre matchea 'ACn' por coincidencia (test_ac3_flow.py) no
+            # debe taggear los OTROS tests del mismo archivo/clase.
+            blob = tc.get("name") or ""
+            for num in _AC_TAG.findall(blob):
+                d = tags.setdefault(f"AC-{int(num)}", {"green": 0, "red": 0})
+                d[status] += 1
+    return tags
+
+
 def junit_test_count(repo_path, extra_files=None):
     """JUnit-family XML: `pytest --junitxml=...` (python) and jest-junit /
     vitest --reporter=junit (node). Modern emitters WRAP the root:
@@ -361,17 +451,7 @@ def junit_test_count(repo_path, extra_files=None):
     # report — summing locations would double-count, and a stale root junit.xml
     # next to a fresh reports/junit.xml could permanently veto convergence.
     # (The TEST-*.xml set legitimately sums: those are per-class files.)
-    groups = [
-        [os.path.join(repo_path, "reports", "junit.xml")],
-        [os.path.join(repo_path, "junit.xml")],
-        sorted(glob.glob(os.path.join(repo_path, "reports", "TEST-*.xml"))),
-    ]
-    files = []
-    for group in groups:
-        found = [f for f in group if os.path.isfile(f)]
-        if found:
-            files = found
-            break
+    files = _junit_report_files(repo_path)
     # extra_files are ADDITIONAL full-run reports of a DISJOINT test set (swift:
     # --xunit-output writes XCTest to junit.xml and Swift Testing results to a
     # SECOND junit-swift-testing.xml) — summing them is correct, and skipping
@@ -1598,8 +1678,13 @@ def cmd_summary(args):
 # --------------------------------------------------------------------------- #
 # Defaults (overridable via config.defaults). Readiness measures STATE of the
 # result, never effort spent. Cycles are churn, not readiness.
-DEFAULT_WEIGHTS = {"adr": 30, "coverage": 25, "static_gate": 20,
-                   "convergence": 15, "integration": 10}
+# acceptance (criterios AC-n cerrados por testcase MEDIDO) domina; el checkbox
+# (adr) queda como progreso narrado y coverage baja de peso: verde alto no es
+# evidencia de resolver el problema — cerrar criterios trazados SI (Tip 94 /
+# anti-Goodhart: pulir la metrica sin acercarse a la solucion es el modo de
+# falla tipico del agente).
+DEFAULT_WEIGHTS = {"acceptance": 30, "adr": 15, "coverage": 15,
+                   "static_gate": 20, "convergence": 10, "integration": 10}
 DEFAULT_CAPS = {"tests_red": 35, "blocker_critical": 65, "escalation": 75}
 DEFAULT_STATIC_ZERO_AT = 10  # gated-open count at which the static dimension hits 0
 BANDS = [(95, "READY"), (80, "RELEASE CANDIDATE"), (50, "IN PROGRESS"), (0, "NOT READY")]
@@ -1612,11 +1697,17 @@ def _band(score):
     return "NOT READY"
 
 
-def _parse_acceptance(path, section=None):
-    """Count markdown checkboxes. Returns (done, total, found)."""
+_AC_ID = re.compile(r"(?i)^[*_`]*\s*AC[-_]?0*(\d+)\b[*_`]*[\s.:—–·-]*")
+
+
+def _parse_acceptance_items(path, section=None):
+    """Checkboxes markdown de ACCEPTANCE, con ID trazable opcional por criterio
+    ('- [ ] AC-01 — cuando X entonces Y'). Los IDs se normalizan por numero
+    (AC-01 == AC_1 == ac1 — los nombres de test de python/go no admiten '-').
+    Devuelve (items, found); item = {'id': 'AC-n'|None, 'checked', 'text'}."""
     if not path or not os.path.exists(path):
-        return 0, 0, False
-    done = total = 0
+        return [], False
+    items = []
     in_scope = section is None
     sec_low = section.lower() if section else None
     try:
@@ -1630,13 +1721,25 @@ def _parse_acceptance(path, section=None):
                     continue
                 s = stripped
                 if s[:5].lower() in ("- [x]", "* [x]"):
-                    done += 1
-                    total += 1
+                    checked = True
                 elif s[:5] in ("- [ ]", "* [ ]"):
-                    total += 1
+                    checked = False
+                else:
+                    continue
+                body = s[5:].strip()
+                m = _AC_ID.match(body)
+                items.append({"id": f"AC-{int(m.group(1))}" if m else None,
+                              "checked": checked,
+                              "text": body[m.end():].strip() if m else body})
     except OSError:
-        return 0, 0, False
-    return done, total, True
+        return [], False
+    return items, True
+
+
+def _parse_acceptance(path, section=None):
+    """Count markdown checkboxes. Returns (done, total, found)."""
+    items, found = _parse_acceptance_items(path, section)
+    return sum(1 for i in items if i["checked"]), len(items), found
 
 
 def _gate_open_and_sev(node):
@@ -1736,8 +1839,55 @@ def cmd_readiness(args):
 
     # ADR / acceptance completion (feature-level)
     acc_path = args.acceptance or defaults.get("acceptance_file")
-    done, total, acc_found = _parse_acceptance(acc_path, args.section)
+    acc_items, acc_found = _parse_acceptance_items(acc_path, args.section)
+    done = sum(1 for i in acc_items if i["checked"])
+    total = len(acc_items)
     adr_dim = (done / total) if total else 0.0
+
+    # acceptance TRAZADA — measured beats narrated a nivel CRITERIO: un AC-n
+    # cierra solo con >=1 testcase verde taggeado en los reportes JUnit ya
+    # ingeridos (y 0 rojos). El checkbox es RELATO; el testcase es HECHO.
+    ac_ids = [i for i in acc_items if i["id"]]
+    ac_tags = {}
+    for rcfg in ledger["config"].get("repos", []):
+        for cid, v in _ac_tags(rcfg.get("path", "."),
+                               rcfg.get("type", "maven")).items():
+            d = ac_tags.setdefault(cid, {"green": 0, "red": 0})
+            d["green"] += v["green"]
+            d["red"] += v["red"]
+
+    def _ac_closed(cid):
+        d = ac_tags.get(cid)
+        return bool(d and d["green"] >= 1 and d["red"] == 0)
+
+    # IDs duplicados (ACCEPTANCE mal numerado) cuentan UNA sola vez — si no,
+    # un solo test verde cierra "medido" tantos criterios como copias del ID.
+    id_list = [i["id"] for i in ac_ids]
+    dupe_ids = sorted({cid for cid in id_list if id_list.count(cid) > 1})
+    unique_ids = sorted(set(id_list))
+    measured_closed = [cid for cid in unique_ids if _ac_closed(cid)]
+    narrated_only = sorted({i["id"] for i in ac_ids
+                            if i["checked"] and not _ac_closed(i["id"])})
+    measured_unchecked = sorted({i["id"] for i in ac_ids
+                                 if not i["checked"] and _ac_closed(i["id"])})
+    ac_untagged = total - len(ac_ids)
+    acc_traceable = bool(ac_ids)
+    if acc_traceable:
+        # denominador = TODOS los criterios: uno sin ID no puede cerrar medido
+        acc_meas_dim = len(measured_closed) / total if total else 0.0
+    else:
+        # legacy sin IDs: no hay trazado — cae al ratio de checkboxes (relato)
+        # con warning; la adopcion es incremental, no una rotura retroactiva.
+        acc_meas_dim = adr_dim
+
+    # config pre-1.10.0 con readiness_weights EXPLICITOS que no conocian la
+    # dimension acceptance: si ademas no hay AC-IDs (adopcion no arrancada),
+    # inyectar el peso default duplicaria adr (mismo ratio de checkboxes,
+    # doble peso) hasta que el usuario elija explicitamente o tagee criterios.
+    legacy_weights_cfg = ("readiness_weights" in defaults
+                          and "acceptance" not in defaults["readiness_weights"])
+    if legacy_weights_cfg and not acc_traceable:
+        weights["acceptance"] = 0
 
     # per-repo readiness
     repos = {n: _repo_readiness(ledger, n, node, weights, caps, zero_at, k)
@@ -1784,8 +1934,8 @@ def cmd_readiness(args):
     else:
         integ_dim = None  # excluded, weight redistributed
 
-    dims = {"adr": adr_dim, "coverage": cov_dim, "static_gate": static_dim,
-            "convergence": conv_dim}
+    dims = {"acceptance": acc_meas_dim, "adr": adr_dim, "coverage": cov_dim,
+            "static_gate": static_dim, "convergence": conv_dim}
     if integ_dim is not None:
         dims["integration"] = integ_dim
     wsum = sum(weights[d] for d in dims)
@@ -1819,7 +1969,12 @@ def cmd_readiness(args):
                            "contribution": round(weights[d] * v / wsum * 100, 1)}
                        for d, v in dims.items()},
         "acceptance": {"done": done, "total": total, "found": acc_found,
-                       "file": acc_path, "section": args.section},
+                       "file": acc_path, "section": args.section,
+                       "traceable": acc_traceable, "ids": len(ac_ids),
+                       "untagged": ac_untagged, "duplicate_ids": dupe_ids,
+                       "measured_closed": measured_closed,
+                       "narrated_only": narrated_only,
+                       "measured_unchecked": measured_unchecked},
         "facts": {"coverage_pct": round(agg_cov_pct, 2), "coverage_threshold": threshold,
                   "gated_open": total_open, "severity": agg_sev,
                   "repos_converged": f"{sum(conv_flags)}/{len(conv_flags)}",
@@ -1836,6 +1991,30 @@ def cmd_readiness(args):
     print(f"READINESS: {out['score']}/100 — {out['status']}{cap_str}")
     if not acc_found:
         print(f"  ! acceptance file not found: {acc_path or '(unset)'} — ADR dimension = 0")
+    if acc_found and not total:
+        print(f"  ! acceptance encontrado pero 0 criterios en scope "
+              f"(--section {args.section!r} sin match en el archivo?) — "
+              f"dimensiones adr/acceptance en 0")
+    if acc_found and total and not acc_traceable:
+        print("  ! acceptance sin IDs trazables ('- [ ] AC-01 — ...') — la "
+              "dimension acceptance cae al ratio de checkboxes (RELATO, no medido)")
+    if dupe_ids:
+        print(f"  ! IDs duplicados en acceptance (normalizados): {', '.join(dupe_ids)} "
+              f"— cada ID cuenta UNA sola vez en la dimension acceptance")
+    if legacy_weights_cfg and not acc_traceable:
+        print("  ! config con readiness_weights explicitos de kit <=1.9.0 sin "
+              "'acceptance' — dimension excluida (peso 0) hasta agregar AC-IDs "
+              "o el peso explicito en config.defaults.readiness_weights")
+    if narrated_only:
+        print(f"  ! narrated-only: {', '.join(narrated_only)} — checkbox marcado "
+              f"SIN testcase verde 'AC-n' en los reportes (measured beats "
+              f"narrated: NO cierra)")
+    if measured_unchecked:
+        print(f"  · medido sin marcar: {', '.join(measured_unchecked)} — hay "
+              f"testcase verde; marca el checkbox si el criterio esta completo")
+    if acc_traceable and ac_untagged:
+        print(f"  · {ac_untagged} criterio(s) sin AC-ID — no pueden cerrar "
+              f"MEDIDO (cuentan como abiertos en la dimension acceptance)")
     if unmeasured_repos:
         print(f"  ! static gate NEVER ran in: {', '.join(unmeasured_repos)} — "
               f"dimension scored UNMEASURED (0.0), silence is not success")
@@ -1843,7 +2022,9 @@ def cmd_readiness(args):
     for d in dims:
         print(f"  {d:13s} {weights[d]:3d} | {dims[d]:.2f} | "
               f"{out['dimensions'][d]['contribution']:5.1f}")
-    print(f"--- acceptance: {done}/{total} tasks   "
+    acc_str = (f"medida {len(measured_closed)}/{total}" if acc_traceable
+               else "sin trazar")
+    print(f"--- acceptance: {done}/{total} tasks ({acc_str})   "
           f"coverage: {round(agg_cov_pct,1)}% (thr {threshold})   "
           f"gated open: {total_open}   converged: {sum(conv_flags)}/{len(conv_flags)}")
     print(f"--- churn (not readiness): max cycle {cycles}, "
@@ -2727,7 +2908,38 @@ def _spec_check_text(text):
     }
 
 
+def _acceptance_traceability(path):
+    """Trazabilidad del ACCEPTANCE (kit 1.10.0): estructura = FACT.
+    Bloquea: archivo ausente, cero criterios, CERO criterios con AC-ID, IDs
+    duplicados (tras normalizar: AC-01 == AC-1). Aconseja: criterios sueltos
+    sin ID (no podran cerrar MEDIDO)."""
+    blockers, advisory = [], []
+    items, found = _parse_acceptance_items(path)
+    if not found:
+        blockers.append(f"acceptance no encontrado: {path}")
+        return blockers, advisory
+    if not items:
+        blockers.append("acceptance sin criterios (cero checkboxes)")
+        return blockers, advisory
+    ids = [i["id"] for i in items if i["id"]]
+    if not ids:
+        blockers.append("cero criterios trazables — cada criterio lleva ID "
+                        "estable: '- [ ] AC-01 — cuando X entonces Y'")
+        return blockers, advisory
+    dupes = sorted({x for x in ids if ids.count(x) > 1})
+    if dupes:
+        blockers.append(f"IDs duplicados (normalizados): {', '.join(dupes)}")
+    untagged = sum(1 for i in items if not i["id"])
+    if untagged:
+        advisory.append(f"{untagged} criterio(s) sin AC-ID — no podran "
+                        f"cerrar MEDIDO en el readiness")
+    return blockers, advisory
+
+
 def cmd_spec_check(args):
+    acc_block, acc_adv = ([], [])
+    if args.acceptance:
+        acc_block, acc_adv = _acceptance_traceability(args.acceptance)
     if args.spec:
         text = ""
         for p in args.spec:
@@ -2737,20 +2949,29 @@ def cmd_spec_check(args):
             except OSError as exc:
                 print(f"[qa_ledger] cannot read spec {p}: {exc}", file=sys.stderr)
                 sys.exit(2)
+    elif args.acceptance and sys.stdin.isatty():
+        text = ""  # modo solo-acceptance interactivo: nada pipeado, no bloquear leyendo stdin
     else:
+        # sin --spec: leer stdin SIEMPRE que venga pipeado/redirigido (incluso
+        # con --acceptance) — un `cat SPEC.md | ... --acceptance X` no debe
+        # descartar en silencio el SPEC pipeado.
         text = sys.stdin.read()
-    if not text.strip():
+    if not text.strip() and not args.acceptance:
         print("[qa_ledger] no spec content; use --spec PATH or pipe on stdin.", file=sys.stderr)
         sys.exit(2)
 
-    m = _spec_check_text(text)
-    structural = len(m["blockers"])       # section present/absent = a FACT -> blocks
-    soft_find = len(m["untestable"]) + len(m["stack_hits"])
+    m = (_spec_check_text(text) if text.strip()
+         else {"blockers": [], "untestable": [], "stack_hits": [],
+               "non_ears": 0, "n_criteria": 0})
+    structural = len(m["blockers"]) + len(acc_block)  # estructura = FACT -> bloquea
+    soft_find = len(m["untestable"]) + len(m["stack_hits"]) + len(acc_adv)
     fail = structural > 0 or (args.strict and soft_find > 0)
     verdict = "BLOCKED" if structural else ("ADVISORY" if soft_find else "OK")
 
     if args.json:
-        print(json.dumps({"verdict": verdict, "advisory": structural == 0, **m},
+        print(json.dumps({"verdict": verdict, "advisory": structural == 0,
+                          "acceptance_blockers": acc_block,
+                          "acceptance_advisory": acc_adv, **m},
                          indent=2, ensure_ascii=False))
         sys.exit(1 if fail else 0)
 
@@ -2758,6 +2979,10 @@ def cmd_spec_check(args):
     print(f"SPEC-QUALITY: {verdict}{label}  ({m['n_criteria']} criterios de aceptación)")
     for b in m["blockers"]:
         print(f"  ! estructura (FACT — bloquea): {b}")
+    for b in acc_block:
+        print(f"  ! trazabilidad (FACT — bloquea): {b}")
+    for a in acc_adv:
+        print(f"  · trazabilidad (advisory): {a}")
     if m["untestable"]:
         print(f"  ~ testabilidad ({len(m['untestable'])}): criterios vagos sin métrica —")
         for c in m["untestable"][:5]:
@@ -3079,6 +3304,10 @@ def build_parser():
         help="spec-quality gate: lint a SPEC/ACCEPTANCE for structure/testability BEFORE generation")
     psc.add_argument("--spec", action="append",
                      help="path to a SPEC/ACCEPTANCE markdown (repeatable; else stdin)")
+    psc.add_argument("--acceptance", default=None,
+                     help="validate ACCEPTANCE traceability (AC-n IDs): missing "
+                          "file / zero criteria / zero traceable / duplicate "
+                          "IDs block as structural FACTS")
     psc.add_argument("--strict", action="store_true",
                      help="also fail (exit 1) on soft findings: untestable criteria / stack named")
     psc.add_argument("--json", action="store_true")

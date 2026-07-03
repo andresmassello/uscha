@@ -96,7 +96,11 @@ answer.
   Implementation Plan makes the ADR an executable spec: the agent implements it without
   asking follow-ups. Number from the highest existing ADR.
 - **`ACCEPTANCE.md`** — Definition of Done as `- [ ]` checkboxes + success metrics. This
-  is the file the readiness KPI measures downstream.
+  is the file the readiness KPI measures downstream. Give EVERY criterion a stable
+  traceable ID: `- [ ] AC-01 — when X then Y` (sequential, never reused). Downstream,
+  a criterion only closes MEASURED when a green testcase carries its tag in the name
+  (`test_ac1_x` / `testAC01X` / `"AC-01: ..."`) — write criteria so each one is
+  coverable by at least one named test.
 - **`RISKS.md`** — residual risks, assumptions, points needing human approval.
 - **`HANDOFF.md`** — what to read before coding + hard "no hacer" rules + required evidence.
 

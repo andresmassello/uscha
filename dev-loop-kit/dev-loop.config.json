@@ -1,5 +1,5 @@
 {
-  "version": "1.9.0",
+  "version": "1.10.0",
   "defaults": {
     "coverage_threshold": 60,
     "max_iterations": 5,
@@ -27,10 +27,11 @@
     "id_granularity": "file",
     "acceptance_file": "ACCEPTANCE.md",
     "readiness_weights": {
-      "adr": 30,
-      "coverage": 25,
+      "acceptance": 30,
+      "adr": 15,
+      "coverage": 15,
       "static_gate": 20,
-      "convergence": 15,
+      "convergence": 10,
       "integration": 10
     },
     "readiness_caps": {

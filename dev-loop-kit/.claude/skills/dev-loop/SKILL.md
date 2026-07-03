@@ -285,20 +285,33 @@ the STATE of the result (not effort spent), as a weighted score 0..100 with hard
 python3 $QL readiness --acceptance <ACCEPTANCE.md> --tools-per-cycle <count>
 ```
 
-Dimensions and default weights: ADR/acceptance completion 30, coverage 25, static gate
-20, convergence 15, integration 10. A lint-capable repo whose static gate NEVER ran
-scores that dimension UNMEASURED (0.0) — silence is not success. Hard caps override the
-weighted score: tests red → ≤35, BLOCKER/CRITICAL open → ≤65, unresolved escalation →
-≤75 (held until `resolve-escalation` — a recorded event, not an implication). A
-`CONSTITUTION.md` breach does NOT reach the engine by itself: **you MUST log it** —
+Dimensions and default weights: acceptance (traced, MEASURED) 30, ADR/checkbox
+completion 15, coverage 15, static gate 20, convergence 10, integration 10. A
+lint-capable repo whose static gate NEVER ran scores that dimension UNMEASURED (0.0) —
+silence is not success. Hard caps override the weighted score: tests red → ≤35,
+BLOCKER/CRITICAL open → ≤65, unresolved escalation → ≤75 (held until
+`resolve-escalation` — a recorded event, not an implication). A `CONSTITUTION.md`
+breach does NOT reach the engine by itself: **you MUST log it** —
 `flag-blocker --repo <REPO> --kind constitution --note "<invariant breached>"` — and
 once logged it caps readiness ≤65 and blocks convergence until `--resolve`. Bands:
 <50 NOT READY, 50–79 IN PROGRESS, 80–94 RELEASE CANDIDATE, 95–100 READY.
 
+**Acceptance traceability (the DOMINANT dimension — kit 1.10.0).** Each ACCEPTANCE
+criterion carries a stable ID: `- [ ] AC-01 — when X then Y`. A criterion counts as
+CLOSED only when ≥1 GREEN testcase whose name carries the tag (`test_ac1_x`,
+`testAC01X`, `"AC-01: ..."` — IDs normalize by number, `AC-01 == AC_1 == ac1`) exists
+in the ingested JUnit reports AND no tagged testcase is red. The checkbox is the
+NARRATIVE; the testcase is the FACT — a checked box without a green tagged test shows
+up as `narrated_only` and does NOT close (measured beats narrated, per criterion).
+So: when you write the tests for a criterion, put its AC-n in the test name; run
+`spec-check --acceptance ACCEPTANCE.md` up front (zero traceable criteria / duplicate
+IDs block as structural FACTS). Files without IDs fall back to the checkbox ratio
+with a warning (legacy mode — adopt incrementally).
+
 ADR completion is parsed from the **acceptance task list** (markdown `- [x]`/`- [ ]`),
 read-only — set the path via `config.defaults.acceptance_file` or `--acceptance`. Count
 the WHOLE file (the CLI default); only pass `--section` if you have verified the heading
-text matches your template exactly — a mismatched section silently zeroes the heaviest
+text matches your template exactly — a mismatched section silently zeroes a heavy
 dimension. Always present the headline WITH the dimension breakdown AND the capping
 blocker, so it's clear what's missing, not just the number. Cycles/regressions are churn
 (process health) and are reported separately — they never raise readiness.

@@ -292,10 +292,22 @@ python3 $QL readiness --acceptance ACCEPTANCE.md
 python3 $QL readiness --json            # lo consume sys-doc (widget semáforo)
 ```
 
-- Dimensiones/pesos: ADR/acceptance 30, coverage 25, static gate 20, convergencia 15,
-  integración 10. El **ADR completion** sale de tu acceptance task list (checkboxes
-  `- [x]`/`- [ ]`, solo lectura) — contá el archivo entero (default del CLI); `--section`
-  solo si verificaste que el heading matchea exacto (un mismatch cerea la dimensión en silencio).
+- Dimensiones/pesos: **acceptance trazada (MEDIDA) 30**, ADR/checkboxes 15, coverage 15,
+  static gate 20, convergencia 10, integración 10. El **ADR completion** sale de tu
+  acceptance task list (checkboxes `- [x]`/`- [ ]`, solo lectura) — contá el archivo
+  entero (default del CLI); `--section` solo si verificaste que el heading matchea
+  exacto (un mismatch cerea la dimensión en silencio).
+- **Trazabilidad (kit 1.10.0, la dimensión dominante)**: cada criterio lleva ID estable
+  — `- [ ] AC-01 — cuando X entonces Y`. Un criterio cierra MEDIDO solo cuando existe
+  ≥1 testcase VERDE con su tag en el nombre (`test_ac1_x` / `testAC01X` / `"AC-01: ..."`
+  — se normaliza por número: `AC-01 == AC_1 == ac1`) en los reportes JUnit ya ingeridos,
+  y ningún testcase taggeado en rojo. El checkbox es RELATO; el testcase es HECHO: un
+  `[x]` sin test verde aparece como `narrated_only` y NO cierra. Anti-Goodhart: el agente
+  ya no puede subir el KPI puliendo coverage — solo cerrando criterios con tests con
+  nombre. `spec-check --acceptance ACCEPTANCE.md` valida la estructura como FACT (cero
+  criterios trazables o IDs duplicados = BLOCKED). Sin IDs: cae al ratio de checkboxes
+  con warning (legacy, adopción incremental). Flutter no emite JUnit: sus criterios no
+  cierran medido (limitación documentada).
 - Un repo linteable cuyo static gate **nunca corrió** puntúa esa dimensión UNMEASURED (0.0)
   — el silencio no es éxito.
 - **Hard caps** (pisan el techo): tests en rojo → ≤35, BLOCKER/CRITICAL abierto → ≤65,

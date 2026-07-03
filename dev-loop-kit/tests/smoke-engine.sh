@@ -9,7 +9,9 @@
 # los adapters rust/dotnet (v1.7.0): Cobertura reusada, clippy JSONL, SARIF —
 # el adapter cpp (v1.8.0): gcovr Cobertura, ctest junit plano, clang-tidy —
 # y los adapters gradle/swift (v1.9.0): JaCoCo/lcov/junit/checkstyle reusados
-# en paths nuevos (detekt, swiftlint) + fixes de los reviews 1.7.0/1.8.0.
+# en paths nuevos (detekt, swiftlint) + fixes de los reviews 1.7.0/1.8.0 —
+# y acceptance trazable (v1.10.0): AC-n cierra por testcase medido, spec-check
+# --acceptance como FACT estructural.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -425,6 +427,41 @@ ok = any(x.startswith('swiftlint:') and 'Sources/Kit/Kit.swift' in x.replace(chr
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   IDs swiftlint repo-relativos (sin colision por basename)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL IDs swiftlint no relativizados"; }
+
+echo "== T29 acceptance trazable: AC-n cierra por testcase MEDIDO, no por checkbox =="
+# AC-1: checkbox [x] + testcase verde 'test_ac1_*' -> cierra MEDIDO.
+# AC-2: checkbox [x] pero su testcase FALLA -> narrated-only, NO cierra.
+# AC-3: sin marcar y sin test -> abierta. Dimension acceptance = 1/3.
+printf -- "# ACCEPTANCE\n\n- [x] AC-01 alta de cliente valida\n- [x] AC-02 rechazo de duplicado\n- [ ] AC-03 baja logica\n" > ACCEPTANCE.md
+cat > repo-c/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="pytest" tests="3" failures="1" errors="0" skipped="0">
+<testcase classname="tests.test_flow" name="test_ac1_alta_ok"/>
+<testcase classname="tests.test_flow" name="test_ac_02_rechazo_duplicado"><failure message="boom"/></testcase>
+<testcase classname="tests.test_misc" name="test_sin_criterio"/>
+</testsuite></testsuites>
+EOF
+RDY=$(run readiness --json 2>/dev/null)
+echo "$RDY" | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+a = d['acceptance']
+ok = (a['traceable'] is True and a['measured_closed'] == ['AC-1']
+      and a['narrated_only'] == ['AC-2']
+      and abs(d['dimensions']['acceptance']['raw'] - 0.333) < 0.01)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   AC-1 cierra medido; AC-2 narrated-only (test rojo veta); dim=1/3"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL acceptance trazable ($(echo "$RDY" | "$PY" -c 'import json,sys;print(json.load(sys.stdin)["acceptance"])' 2>/dev/null))"; }
+run readiness 2>/dev/null | grep -q "narrated-only: AC-2" \
+  && { PASS=$((PASS+1)); echo "  ok   warning narrated-only visible (measured beats narrated)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin warning narrated-only"; }
+
+echo "== T30 spec-check --acceptance: trazabilidad como FACT =="
+chk "acceptance con AC-IDs -> exit 0" 0 run spec-check --acceptance ACCEPTANCE.md
+printf -- "- [ ] criterio sin id\n" > acc-untraced.md
+chk "cero criterios trazables -> BLOCKED exit 1" 1 run spec-check --acceptance acc-untraced.md
+printf -- "- [ ] AC-01 a\n- [x] AC-1 b\n" > acc-dup.md
+chk "IDs duplicados (AC-01 == AC-1 normalizado) -> exit 1" 1 run spec-check --acceptance acc-dup.md
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
