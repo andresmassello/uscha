@@ -289,6 +289,8 @@ python3 $QL phase --repo <REPO> --require pr-ready   # exit 1 = the facts say no
 The state is COMPUTED from the ledger (converged + green tests + zero
 BLOCKER/CRITICAL + no open escalation), never self-declared — if it exits 1, the
 output lists exactly which facts are missing; do NOT open the PR, close the gap.
+A `spike/*` branch NEVER passes this gate (kit 1.19.0): spike code is disposable
+by contract — its only legitimate output is an ADR with lessons, never a merge.
 - Ensure conventional-commit history is clean.
 - Open the PR(s). Confirm CI is green.
 - **STOP.** Present the PR link(s) and wait for the human to merge.

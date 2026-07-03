@@ -1577,6 +1577,20 @@ def _derive_phase(ledger, name, node, k, qa_order):
     return "plan", ["ledger virgen para el repo — nada medido aun"]
 
 
+def _spike_branch(repo_path):
+    """Rama actual si es spike/* (kit 1.19.0, Tip 21 'Prototype to Learn').
+    symbolic-ref funciona incluso antes del primer commit; detached HEAD o
+    directorio sin git = None (no hay rama spike que vetar)."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", repo_path, "symbolic-ref", "--short",
+                            "-q", "HEAD"], capture_output=True, text=True)
+        branch = (r.stdout or "").strip()
+        return branch if branch.startswith("spike/") else None
+    except Exception:  # noqa: BLE001 — sin git instalado no hay veto posible
+        return None
+
+
 def cmd_phase(args):
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
@@ -1584,15 +1598,32 @@ def cmd_phase(args):
     state, evidence = _derive_phase(ledger, args.repo, node,
                                     args.tools_per_cycle, qa_order)
     ok = args.require is None or state == args.require
+    # M10: el codigo de spike es descartable POR CONTRATO — una rama spike/*
+    # jamas pasa el gate de PR, aunque los hechos del ledger den pr-ready.
+    # El output legitimo de un spike es un ADR con lecciones, no un merge.
+    spike = None
+    if args.require == "pr-ready" and args.repo != "integration":
+        try:
+            path = _repo_cfg(ledger, args.repo).get("path", ".")
+        except SystemExit:
+            path = None
+        spike = _spike_branch(path) if path else None
+        if spike:
+            ok = False
     if args.json:
         print(json.dumps({"repo": args.repo, "phase": state,
                           "evidence": evidence, "required": args.require,
-                          "satisfied": ok}, indent=2, ensure_ascii=False))
+                          "spike_branch": spike, "satisfied": ok},
+                         indent=2, ensure_ascii=False))
         sys.exit(0 if ok else 1)
     print(f"PHASE {args.repo}: {state}  (derivado del ledger — no declarado)")
     for e in evidence:
         print(f"  · {e}")
-    if args.require and not ok:
+    if spike:
+        print(f"  ! rama '{spike}': codigo de SPIKE, descartable por contrato "
+              f"(Tip 21) — el output legitimo es un ADR con las lecciones, "
+              f"jamas un PR. Escribi el ADR y arranca limpio en una rama normal.")
+    elif args.require and not ok:
         print(f"  ! se requiere '{args.require}' y los HECHOS dicen '{state}' — "
               f"el estado no se negocia, se construye")
     sys.exit(0 if ok else 1)

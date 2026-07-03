@@ -21,7 +21,8 @@
 # y regression-capture (v1.16.0): cierre sin test = narrado; escape-analysis
 # obligatoria al resolver blockers — y procedencia de umbrales (v1.17.0):
 # requerimiento (config) vs default del kit, etiquetado en cada gate —
-# y phase (v1.18.0): FSM derivada del ledger, el estado se computa.
+# y phase (v1.18.0): FSM derivada del ledger, el estado se computa —
+# y spikes (v1.19.0): rama spike/* jamas pasa el gate de PR.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -769,6 +770,22 @@ for t in code-review judgment-day improve; do
     --gated-reported 0 --files-changed 0 --tests-passed true >/dev/null 2>&1
 done
 chk "convergido + limpio -> pr-ready" 0 run phase --ledger L-fsm.json --repo fsm --require pr-ready
+
+echo "== T41 spike/*: codigo descartable por contrato — jamas pasa el gate de PR =="
+# repo-x convergido (pr-ready por hechos, de T40) pero en rama spike/* -> DENEGADO
+git init -q repo-x 2>/dev/null
+git -C repo-x symbolic-ref HEAD refs/heads/spike/idea-loca
+chk "pr-ready por hechos PERO rama spike/* -> exit 1" 1 \
+  run phase --ledger L-fsm.json --repo fsm --require pr-ready
+run phase --ledger L-fsm.json --repo fsm --require pr-ready 2>/dev/null | grep -q "ADR con las lecciones" \
+  && { PASS=$((PASS+1)); echo "  ok   mensaje del contrato de spike visible (ADR, no PR)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin mensaje de contrato de spike"; }
+# misma rama consultada SIN --require: informa, no bloquea
+chk "phase sin --require en rama spike -> exit 0 (informa, no gatea)" 0 \
+  run phase --ledger L-fsm.json --repo fsm
+git -C repo-x symbolic-ref HEAD refs/heads/main
+chk "rama normal -> pr-ready OK de nuevo" 0 \
+  run phase --ledger L-fsm.json --repo fsm --require pr-ready
 # default sin --fixed: lee la suma de 'fixed' de la ultima iteracion del ledger
 run init --config dev-loop.config.json >/dev/null 2>&1
 run log-step --repo repo-a --tool code-review --iteration 1 --fixed 3 --tests-passed true >/dev/null 2>&1

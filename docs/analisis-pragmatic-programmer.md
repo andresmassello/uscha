@@ -159,7 +159,17 @@ principio, no opinión), pero cada umbral que muerde se etiqueta como
 quality-bar (ver CHANGELOG-1.17.0). **M4 RESUELTA en kit 1.18.0** con decisión humana explícita: **FSM derivada**
 — el estado del workflow se COMPUTA de los hechos del ledger (una FSM declarada
 sería estado narrado); `phase --require pr-ready` vuelve mecánica la transición
-ilegal "PR sin convergencia" (ver CHANGELOG-1.18.0). Queda en backlog SOLO:
-**M10** (convención de ramas spike). 9 de 10 resueltas.
+ilegal "PR sin convergencia" (ver CHANGELOG-1.18.0). **M10 RESUELTA en kit 1.19.0** con convención elegida por el humano
+(`spike/*`): el veto vive en `phase --require pr-ready` — código de spike
+descartable por contrato, el output legítimo es un ADR con lecciones (ver
+CHANGELOG-1.19.0).
+
+**BACKLOG CERRADO: 10 de 10.** M2 (1.10.0) · M9 (1.11.0) · M8 (1.12.0) ·
+M3 (1.13.0) · M6 (1.14.0) · M7 (1.15.0) · M1 (1.16.0) · M5 (1.17.0) ·
+M4 (1.18.0) · M10 (1.19.0). Ocho implementadas directas, dos resueltas con
+decisión humana explícita entre opciones (M5 procedencia visible, M4 FSM
+derivada — en ambas el kit se apartó de la letra del libro para defender su
+propio principio: measured beats narrated). Los diferidos conscientes de cada
+una viven en su CHANGELOG.
 M5/M4/M10/M1 requieren decisión humana de diseño (caps advisory-por-default,
 FSM del workflow, convención de ramas spike, schema de cierre de findings).

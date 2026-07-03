@@ -84,6 +84,11 @@ answer.
    **requerimiento (config)** in the engine's output; an undeclared one stays a kit
    default (opinion) and is labeled as such. Declaring is committing the config.
 10. **Riesgos residuales y dependencias.** What's uncertain, what must exist first.
+    For each HIGH-uncertainty risk, ask (kit 1.19.0, Tip 21 'Prototype to Learn'):
+    "¿Amerita un spike time-boxed antes de congelar la SPEC?" A spike runs on a
+    `spike/*` branch and its ONLY legitimate output is an **ADR with lessons**
+    (facts that feed the SPEC) — never mergeable code. The contract is executable:
+    `phase --require pr-ready` refuses any `spike/*` branch, INV-GOLDEN-01 style.
 
 ## Files to write (lazily, inline)
 
