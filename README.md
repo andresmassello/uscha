@@ -24,7 +24,7 @@ SpecLoop/
 │   ├── spec-loop-onepager{,-EN}.html          # ficha de una página
 │   ├── spec-loop-team-pitch.html              # pitch de adopción para el equipo (historia Vale/Martín, 14 slides)
 │   ├── spec-loop-team-pitch-extended.html     # pitch extendido: + día-tipo, KPI readiness, ledger 2 pisos, piloto (22 slides)
-│   ├── skills-referencia.md                   # referencia exhaustiva de las 6 skills (qué hace cada una, fase por fase)
+│   ├── skills-referencia.html                 # referencia exhaustiva de las 6 skills (qué hace cada una, fase por fase)
 │   ├── casos-reales.md                        # bitácora: momentos reales donde el método interviene (anonimizados)
 │   ├── *.png                                  # mapa del sistema · 10 pasos · reverse-discovery
 │   └── diagram-sources/                       # HTML fuente de los PNG (re-renderizables)
