@@ -19,7 +19,8 @@
 # y plateau/stop-signal (v1.14.0): stall y candidato-a-PR como advisories —
 # y golden scrub (v1.15.0): volatiles declarados enmascaran con masking visible —
 # y regression-capture (v1.16.0): cierre sin test = narrado; escape-analysis
-# obligatoria al resolver blockers.
+# obligatoria al resolver blockers — y procedencia de umbrales (v1.17.0):
+# requerimiento (config) vs default del kit, etiquetado en cada gate.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -704,6 +705,44 @@ printf -- "diff --git a/src/test/java/AppTest.java b/src/test/java/AppTest.java\
 run regression-check --repo repo-a --fixed 2 --diff fix-weak.diff 2>/dev/null | grep -q "DEBIL" \
   && { PASS=$((PASS+1)); echo "  ok   evidencia debil (sin testdef/assert) marcada para el ojo humano"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL evidencia debil invisible"; }
+
+echo "== T39 procedencia de umbrales: requerimiento (config) vs default del kit =="
+# cap DECLARADO en config (tests_red: 1 — siempre muerde con el junit rojo de repo-c)
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "readiness_caps": {"tests_red": 1} },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > c-caps.json
+run init --config c-caps.json --out L-caps.json >/dev/null 2>&1
+run snapshot --ledger L-caps.json --repo solo >/dev/null 2>&1
+RDY=$(run readiness --ledger L-caps.json --json 2>/dev/null)
+echo "$RDY" | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+td = d['thresholds_declared']
+ok = (d['cap_source'] == 'requerimiento (config)'
+      and td['readiness_caps'] == ['tests_red']
+      and td['coverage_threshold'] is False)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   cap declarado en config etiquetado 'requerimiento (config)'"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL procedencia en readiness ($(echo "$RDY" | "$PY" -c 'import json,sys;d=json.load(sys.stdin);print(d.get("cap_source"),d.get("thresholds_declared"))' 2>/dev/null))"; }
+run readiness --ledger L-caps.json 2>/dev/null | grep -q "requerimiento (config)" \
+  && { PASS=$((PASS+1)); echo "  ok   etiqueta de procedencia visible en el texto del cap"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL etiqueta de procedencia ausente en texto"; }
+# el sandbox principal no declara caps: la lista de declarados queda vacia
+run readiness --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['thresholds_declared']['readiness_caps'] == [] else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   sin caps declarados -> lista vacia (defaults = opinion del kit)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL thresholds_declared del sandbox principal"; }
+# simplicity: sin config -> todos default (aviso); con presupuesto CLI -> declarado
+printf -- "diff --git a/src/A.java b/src/A.java\n--- a/src/A.java\n+++ b/src/A.java\n@@ -0,0 +1,1 @@\n+int x = 1;\n" > simp-tiny.diff
+run simplicity-check --diff simp-tiny.diff 2>/dev/null | grep -q "defaults del kit" \
+  && { PASS=$((PASS+1)); echo "  ok   simplicity avisa: presupuestos = opinion del kit"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin aviso de presupuestos default"; }
+run simplicity-check --diff simp-tiny.diff --max-lines-added 100 --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['budgets_declared'] == ['max_lines_added'] else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   presupuesto declarado por CLI listado en budgets_declared"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL budgets_declared no refleja el CLI"; }
 # default sin --fixed: lee la suma de 'fixed' de la ultima iteracion del ledger
 run init --config dev-loop.config.json >/dev/null 2>&1
 run log-step --repo repo-a --tool code-review --iteration 1 --fixed 3 --tests-passed true >/dev/null 2>&1

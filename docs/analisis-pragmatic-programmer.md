@@ -151,10 +151,13 @@ CHANGELOG-1.14.0). **M7 IMPLEMENTADA en kit 1.15.0** (scrub del golden master
 con masking visible — ver CHANGELOG-1.15.0). **M1 IMPLEMENTADA en kit 1.16.0**
 (regression-capture: cierre sin test = narrado, evidencia a nivel diff;
 escape-analysis obligatoria al resolver blockers; el mapeo finding→test
-específico quedó diferido consciente — ver CHANGELOG-1.16.0). Quedan en backlog
-SOLO las que requieren decisión humana de diseño: **M5** (caps
-advisory-por-default — cambia la semántica de bloqueo para usuarios
-existentes), **M4** (FSM del workflow), **M10** (convención de ramas spike).
-7 de 10 implementadas (M1, M2, M3, M6, M7, M8, M9).
+específico quedó diferido consciente — ver CHANGELOG-1.16.0). **M5 RESUELTA en kit 1.17.0** con decisión humana explícita: de las tres
+opciones (fiel-al-libro advisory-por-default / procedencia visible / rechazo)
+se eligió **procedencia visible** — los caps siguen mordiendo (que existan es
+principio, no opinión), pero cada umbral que muerde se etiqueta como
+`requerimiento (config)` o `default del kit`, y discovery gana la pregunta de
+quality-bar (ver CHANGELOG-1.17.0). Quedan en backlog SOLO: **M4** (FSM del
+workflow) y **M10** (convención de ramas spike). 8 de 10 resueltas
+(M1, M2, M3, M5, M6, M7, M8, M9).
 M5/M4/M10/M1 requieren decisión humana de diseño (caps advisory-por-default,
 FSM del workflow, convención de ramas spike, schema de cierre de findings).

@@ -1812,9 +1812,11 @@ def _tests_red(node):
 
 
 def _apply_caps(score, caps_active):
+    # tuplas (label, ceiling) o (label, ceiling, key) — tolerante a ambas
     capped = score
     reason = None
-    for label, ceiling in caps_active:
+    for cap in caps_active:
+        label, ceiling = cap[0], cap[1]
         if capped > ceiling:
             capped = ceiling
             reason = label
@@ -2021,17 +2023,30 @@ def cmd_readiness(args):
     raw = sum(weights[d] * v for d, v in dims.items()) / wsum * 100 if wsum else 0.0
 
     # aggregate hard caps = min across repos (any repo trips it -> whole release capped)
+    # procedencia (kit 1.17.0, Tip 8 'Make Quality a Requirements Issue'): que el
+    # cap EXISTA es principio (tests rojos != ready es definicion, no opinion);
+    # el NUMERO es opinion del kit SALVO que el humano lo haya declarado en
+    # config.defaults.readiness_caps — el config commiteado ES el acto de
+    # declaracion. El output etiqueta cual de las dos cosas mordio.
+    declared_caps = set(defaults.get("readiness_caps", {}))
     caps_active = []
     if any(r["facts"]["tests_red"] for r in repos.values()):
-        caps_active.append(("tests red in a repo", caps["tests_red"]))
+        caps_active.append(("tests red in a repo", caps["tests_red"], "tests_red"))
     blk = agg_sev.get("BLOCKER", 0) + agg_sev.get("CRITICAL", 0)
     if blk:
-        caps_active.append((f"{blk} BLOCKER/CRITICAL open", caps["blocker_critical"]))
+        caps_active.append((f"{blk} BLOCKER/CRITICAL open",
+                            caps["blocker_critical"], "blocker_critical"))
     if any(not e.get("resolved_at") for e in ledger.get("escalations", [])):
-        caps_active.append(("unresolved escalation", caps["escalation"]))
+        caps_active.append(("unresolved escalation", caps["escalation"], "escalation"))
     if not acc_found:
-        caps_active.append(("acceptance file not found", caps["blocker_critical"]))
+        caps_active.append(("acceptance file not found",
+                            caps["blocker_critical"], "blocker_critical"))
     final, cap_reason = _apply_caps(raw, caps_active)
+    cap_key = next((c[2] for c in caps_active if c[0] == cap_reason), None)
+    cap_source = None
+    if cap_reason:
+        cap_source = ("requerimiento (config)" if cap_key in declared_caps
+                      else "default del kit")
 
     # plateau / stop-signal (ADVISORY: recomienda, jamas gatea)
     qa_order = defaults.get("qa_tools_order")
@@ -2049,7 +2064,11 @@ def cmd_readiness(args):
 
     out = {
         "score": round(final, 1), "raw": round(raw, 1), "status": _band(final),
-        "cap_reason": cap_reason,
+        "cap_reason": cap_reason, "cap_source": cap_source,
+        "thresholds_declared": {
+            "readiness_caps": sorted(declared_caps),
+            "coverage_threshold": "coverage_threshold" in defaults,
+        },
         "weights": {d: weights[d] for d in dims},
         "dimensions": {d: {"raw": round(v, 3),
                            "contribution": round(weights[d] * v / wsum * 100, 1)}
@@ -2074,7 +2093,8 @@ def cmd_readiness(args):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
 
-    cap_str = f"  (capped at {int(final)}: {cap_reason})" if cap_reason else ""
+    cap_str = (f"  (capped at {int(final)}: {cap_reason} — umbral {cap_source})"
+               if cap_reason else "")
     print(f"READINESS: {out['score']}/100 — {out['status']}{cap_str}")
     if not acc_found:
         print(f"  ! acceptance file not found: {acc_path or '(unset)'} — ADR dimension = 0")
@@ -2120,8 +2140,9 @@ def cmd_readiness(args):
               f"{out['dimensions'][d]['contribution']:5.1f}")
     acc_str = (f"medida {len(measured_closed)}/{total}" if acc_traceable
                else "sin trazar")
+    thr_src = ("declarado" if "coverage_threshold" in defaults else "default del kit")
     print(f"--- acceptance: {done}/{total} tasks ({acc_str})   "
-          f"coverage: {round(agg_cov_pct,1)}% (thr {threshold})   "
+          f"coverage: {round(agg_cov_pct,1)}% (thr {threshold}, {thr_src})   "
           f"gated open: {total_open}   converged: {sum(conv_flags)}/{len(conv_flags)}")
     print(f"--- churn (not readiness): max cycle {cycles}, "
           f"regressions {regressions}")
@@ -2626,17 +2647,22 @@ def _simplicity_flags(m, b):
 
 def cmd_simplicity_check(args):
     b = dict(SIMPLICITY_DEFAULTS)
+    declared = set()   # presupuestos declarados por el humano (config o CLI)
     if args.config and os.path.exists(args.config):
         cfg = _load(args.config).get("defaults", {}).get("simplicity", {})
         b.update({k: cfg[k] for k in b if k in cfg})
+        declared |= {k for k in b if k in cfg and k != "indent_width"}
     for k in ("max_lines_added", "max_net_lines", "max_files_changed",
               "max_nesting_depth", "max_hunk_added", "max_new_abstractions",
               "indent_width"):
         v = getattr(args, k, None)
         if v is not None:
             b[k] = v
+            if k != "indent_width":   # parametro de parseo, no un presupuesto
+                declared.add(k)
     if args.max_abstraction_density is not None:
         b["max_abstraction_density"] = args.max_abstraction_density
+        declared.add("max_abstraction_density")
 
     m = _simplicity_metrics(_read_diff(args), b["indent_width"])
     score, dims = _simplicity_score(m, b)
@@ -2645,24 +2671,29 @@ def cmd_simplicity_check(args):
 
     out = {"score": score, "verdict": verdict, "weights": SIMPLICITY_WEIGHTS,
            "dimensions": {k: round(v, 3) for k, v in dims.items()},
-           "metrics": m, "budgets": b, "flags": flags}
+           "metrics": m, "budgets": b, "budgets_declared": sorted(declared),
+           "flags": flags}
     if args.json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
         sys.exit(0 if verdict != "OVERBUILT" else 1)
 
     print(f"SIMPLICITY: {score}/100 — {verdict}")
-    print("--- métricas (valor / presupuesto) ---")
+    print("--- métricas (valor / presupuesto · * = declarado por el humano) ---")
     rows = [
-        ("lines_added", m["lines_added"], b["max_lines_added"]),
-        ("net_lines", m["net_lines"], b["max_net_lines"]),
-        ("files_changed", m["files_changed"], b["max_files_changed"]),
-        ("max_nesting", m["max_nesting"], b["max_nesting_depth"]),
-        ("new_abstractions", m["new_abstractions"], b["max_new_abstractions"]),
-        ("abstraction/100", m["abstraction_density"], b["max_abstraction_density"]),
-        ("max_hunk_added", m["max_hunk_added"], b["max_hunk_added"]),
+        ("lines_added", m["lines_added"], b["max_lines_added"], "max_lines_added"),
+        ("net_lines", m["net_lines"], b["max_net_lines"], "max_net_lines"),
+        ("files_changed", m["files_changed"], b["max_files_changed"], "max_files_changed"),
+        ("max_nesting", m["max_nesting"], b["max_nesting_depth"], "max_nesting_depth"),
+        ("new_abstractions", m["new_abstractions"], b["max_new_abstractions"], "max_new_abstractions"),
+        ("abstraction/100", m["abstraction_density"], b["max_abstraction_density"], "max_abstraction_density"),
+        ("max_hunk_added", m["max_hunk_added"], b["max_hunk_added"], "max_hunk_added"),
     ]
-    for name, val, bud in rows:
-        print(f"  {name:17s} {str(val):>7s} / {bud}")
+    for name, val, bud, key in rows:
+        mark = "*" if key in declared else ""
+        print(f"  {name:17s} {str(val):>7s} / {bud}{mark}")
+    if not declared:
+        print("  (todos los presupuestos son defaults del kit — opinion, no "
+              "requerimiento: declara los tuyos en config.defaults.simplicity)")
     print(f"  (new_functions: {m['new_functions']} — informativo, no gateado)")
     if m.get("test_files_changed"):
         print(f"  (tests FUERA del presupuesto: +{m['test_lines_added']} lineas "

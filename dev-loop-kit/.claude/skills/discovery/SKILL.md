@@ -76,7 +76,14 @@ answer.
    downstream, and a breach is a BLOCKER, never a trade-off.
 7. **Out of scope.** Explicit boundaries with forward references.
 8. **Acceptance / Definition of Done.** Concrete, checkable criteria + success metrics.
-9. **Riesgos residuales y dependencias.** What's uncertain, what must exist first.
+9. **Quality bar (→ config, kit 1.17.0).** "¿Qué nivel de calidad BASTA acá, y qué
+   dimensiones son negociables (coverage, perf, seguridad)?" Propose thresholds fit for
+   the risk profile (a payments core is not an internal dashboard). What the human
+   declares goes into `dev-loop.config.json` (`defaults.coverage_threshold`,
+   `defaults.readiness_caps`, `defaults.simplicity`) — a declared threshold reads as
+   **requerimiento (config)** in the engine's output; an undeclared one stays a kit
+   default (opinion) and is labeled as such. Declaring is committing the config.
+10. **Riesgos residuales y dependencias.** What's uncertain, what must exist first.
 
 ## Files to write (lazily, inline)
 
