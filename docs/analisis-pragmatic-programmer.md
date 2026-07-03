@@ -141,9 +141,8 @@ Spike formal: en discovery, cada item de RISKS con incertidumbre alta dispara la
 ## Estado
 
 **M2 IMPLEMENTADA en kit 1.10.0** (acceptance-check trazable — ver
-CHANGELOG-1.10.0). El resto sigue siendo backlog, nada más está implementado.
-Prioridad sugerida al retomarse: M2 (acceptance-check trazable — ataca el
-Goodhart del agente, la tensión más seria), M8 (secret-scan — barato y
-fail-closed puro), M9 (tests fuera del presupuesto de simplicity — incentivo
-perverso activo hoy), M3 (ledger atómico — todo el edificio se apoya en ese
-archivo).
+CHANGELOG-1.10.0). **M9 IMPLEMENTADA en kit 1.11.0** (tests fuera del
+presupuesto de simplicity — ver CHANGELOG-1.11.0). El resto sigue siendo
+backlog, nada más está implementado. Prioridad sugerida al retomarse:
+M8 (secret-scan — barato y fail-closed puro), M3 (ledger atómico — todo el
+edificio se apoya en ese archivo).

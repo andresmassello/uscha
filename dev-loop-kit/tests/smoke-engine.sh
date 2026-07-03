@@ -11,7 +11,9 @@
 # y los adapters gradle/swift (v1.9.0): JaCoCo/lcov/junit/checkstyle reusados
 # en paths nuevos (detekt, swiftlint) + fixes de los reviews 1.7.0/1.8.0 —
 # y acceptance trazable (v1.10.0): AC-n cierra por testcase medido, spec-check
-# --acceptance como FACT estructural.
+# --acceptance como FACT estructural —
+# y tests fuera del presupuesto de simplicity (v1.11.0): escribir tests no
+# penaliza el gate (Topic 51) + edges 1.10.0 (falsos positivos, flaky).
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -462,6 +464,75 @@ printf -- "- [ ] criterio sin id\n" > acc-untraced.md
 chk "cero criterios trazables -> BLOCKED exit 1" 1 run spec-check --acceptance acc-untraced.md
 printf -- "- [ ] AC-01 a\n- [x] AC-1 b\n" > acc-dup.md
 chk "IDs duplicados (AC-01 == AC-1 normalizado) -> exit 1" 1 run spec-check --acceptance acc-dup.md
+
+echo "== T31 edges 1.10.0: regex sin falsos positivos + flaky de surefire =="
+# HVAC2/mac1/track12 NO son tags AC; classname jamas taggea (solo el NOMBRE);
+# flaky que paso tras retry (solo <flakyFailure>) = verde; fallo definitivo
+# (<failure> + <rerunFailure>) = rojo y veta.
+"$PY" -c "
+import sys, os, tempfile
+sys.path.insert(0, os.path.dirname(sys.argv[1]))
+import qa_ledger as q
+for name in ('testHVAC2Compressor', 'test_mac1_address', 'testMac1Parse', 'test_track12'):
+    assert q._AC_TAG.findall(name) == [], name
+for name, want in (('test_ac1_alta', ['1']), ('testAC01X', ['1']), ('AC-01: alta', ['1'])):
+    assert q._AC_TAG.findall(name) == want, name
+xml_ = '''<testsuites><testsuite name=\"s\">
+<testcase classname=\"tests.test_ac9_flow\" name=\"test_sin_tag\"/>
+<testcase classname=\"C\" name=\"test_ac1_flaky\"><flakyFailure message=\"retry\"/></testcase>
+<testcase classname=\"C\" name=\"test_ac2_fallo\"><failure message=\"x\"/><rerunFailure message=\"r\"/></testcase>
+</testsuite></testsuites>'''
+d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, 'reports'))
+open(os.path.join(d, 'reports', 'junit.xml'), 'w').write(xml_)
+t = q._ac_tags(d, 'python')
+assert 'AC-9' not in t, 'classname no taggea'
+assert t['AC-1'] == {'green': 1, 'red': 0}, 'flaky-que-paso = verde'
+assert t['AC-2'] == {'green': 0, 'red': 1}, 'fallo-tras-reruns = rojo'
+sys.exit(0)" "$QL" \
+  && { PASS=$((PASS+1)); echo "  ok   sin falsos positivos (HVAC2/mac1/track12); classname no taggea; flaky ok"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL edges regex/flaky 1.10.0"; }
+
+echo "== T32 simplicity: tests FUERA del presupuesto (M9, Topic 51) =="
+# Diff con 6 lineas de prod y 300 de test: el presupuesto solo ve las 6.
+"$PY" -c "
+import io, os, sys
+sys.path.insert(0, os.path.dirname(sys.argv[1]))
+import qa_ledger as q
+prod = ''.join(f'+line {i}\n' for i in range(6))
+test = ''.join(f'+assert {i}\n' for i in range(300))
+diff = (
+    'diff --git a/src/main/java/App.java b/src/main/java/App.java\n'
+    '--- a/src/main/java/App.java\n+++ b/src/main/java/App.java\n@@ -0,0 +1,6 @@\n' + prod +
+    'diff --git a/src/test/java/AppTest.java b/src/test/java/AppTest.java\n'
+    '--- /dev/null\n+++ b/src/test/java/AppTest.java\n@@ -0,0 +1,300 @@\n' + test +
+    'diff --git a/tests/test_flow.py b/tests/test_flow.py\n'
+    '--- /dev/null\n+++ b/tests/test_flow.py\n@@ -0,0 +1,2 @@\n+x = 1\n+y = 2\n'
+)
+m = q._simplicity_metrics(diff, 4)
+assert m['lines_added'] == 6, m
+assert m['files_changed'] == 1, m
+assert m['test_lines_added'] == 302, m
+assert m['test_files_changed'] == 2, m
+# clasificador: convenciones de los 9 stacks, sin tragar backtest.cpp
+tf = q._is_simplicity_test_file
+assert tf('src/test/java/AppTest.java') and tf('tests/test_flow.py')
+assert tf('src/integrationTest/kotlin/FlowTest.kt') and tf('lib/foo.spec.ts')
+assert tf('Api.Tests/FooTests.cs') and tf('pkg/foo_test.go')
+assert not tf('src/main/java/App.java') and not tf('src/backtest.cpp')
+assert not tf('src/protest.cc') and not tf('Sources/Core/Engine.swift')
+sys.exit(0)" "$QL" \
+  && { PASS=$((PASS+1)); echo "  ok   presupuesto solo prod (6 lineas, 1 archivo); tests contados aparte (+302 en 2)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL tests dentro del presupuesto de simplicity"; }
+
+echo "== T33 gate-check: borrado de tests go/dotnet/js tambien bloquea (clasificador unificado) =="
+# gate-check reusa el clasificador de los 9 stacks + TESTDEF ampliado: la promesa
+# 'borrar tests lo bloquea gate-check' vale para TODAS las convenciones, no solo JVM.
+printf -- "diff --git a/pkg/foo_test.go b/pkg/foo_test.go\n--- a/pkg/foo_test.go\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-func TestFoo(t *testing.T) {\n-\tassertEqual(t, 1, 1)\n" > del-go.diff
+chk "delete de foo_test.go (Go) -> BLOCKER" 1 run gate-check --diff del-go.diff
+printf -- "diff --git a/Api.Tests/CalcTests.cs b/Api.Tests/CalcTests.cs\n--- a/Api.Tests/CalcTests.cs\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-[Fact]\n-public void Suma_Valida() { Assert.Equal(2, Calc.Suma(1,1)); }\n" > del-cs.diff
+chk "delete de Api.Tests/*.cs (xunit [Fact]) -> BLOCKER" 1 run gate-check --diff del-cs.diff
+printf -- "diff --git a/__tests__/flow.test.ts b/__tests__/flow.test.ts\n--- a/__tests__/flow.test.ts\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-it('valida el flujo', () => {\n-  expect(flow()).toBe(true);\n" > del-ts.diff
+chk "delete de __tests__/*.test.ts (it/expect) -> BLOCKER" 1 run gate-check --diff del-ts.diff
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"

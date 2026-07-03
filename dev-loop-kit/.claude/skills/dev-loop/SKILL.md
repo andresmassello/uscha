@@ -139,6 +139,11 @@ and re-run — do not carry it into the QA loop or converge on it. The flags tel
 what to cut. Budgets live in `config.defaults.simplicity` (tighten per risk profile). For a
 2-space codebase pass `--indent-width 2`.
 
+**Tests are OUTSIDE the budget** (kit 1.11.0): test files (the 9 stack conventions) are
+counted and reported apart (`test_lines_added`) but never gate — writing tests must not
+push a diff toward OVERBUILT (deleting them is already blocked by gate-check). A good
+project can have MORE test code than production code.
+
 **Persist the verdict** so convergence and readiness see it (facts block through the
 ledger, not through your goodwill):
 

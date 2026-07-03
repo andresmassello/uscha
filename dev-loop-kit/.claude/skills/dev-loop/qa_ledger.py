@@ -2344,21 +2344,52 @@ def _is_simplicity_code_file(rel):
     return os.path.splitext(p)[1].lower() in _SIMPLICITY_CODE_EXT
 
 
+def _is_simplicity_test_file(rel):
+    """Tests FUERA del presupuesto de simplicity (Topic 51: 'un buen proyecto
+    puede tener MAS codigo de test que de produccion'): si el presupuesto los
+    cuenta junto a produccion, el gate castiga escribir tests — incentivo
+    perverso directo contra el corazon del kit. Se cuentan y REPORTAN aparte.
+
+    Type-agnostico (el diff no trae repo_type): union de las convenciones de
+    _is_test_path para los 9 stacks. Direccion de fallo benigna: un falso
+    positivo solo EXIME del presupuesto (borrar tests lo bloquea gate-check,
+    no este gate); CamelCase case-sensitive como dotnet/cpp para no tragar
+    backtest.cpp/protest.cpp."""
+    p = rel.replace("\\", "/")
+    parts = p.split("/")
+    fn = parts[-1]
+    dirs = parts[:-1]
+    if any(d in ("test", "tests", "__tests__", "Tests") or d.endswith(".Tests")
+           for d in dirs):
+        return True
+    # gradle source sets custom: src/integrationTest/, src/functionalTest/...
+    for i, d in enumerate(dirs):
+        if d == "src" and i + 1 < len(dirs) and dirs[i + 1].endswith("Test"):
+            return True
+    base, _ = os.path.splitext(fn)
+    low = base.lower()
+    segs = fn.lower().split(".")
+    return (low.startswith("test_") or low.endswith(("_test", "_tests"))
+            or base.endswith(("Test", "Tests"))
+            or (len(segs) >= 3 and segs[-2] in ("test", "spec")))  # foo.test.ts / a.b.spec.js
+
+
 def _simplicity_metrics(diff_text, indent_width):
     # Expects GIT-format diffs (a `diff --git` line per file — as produced by `git diff`
     # and the --from-git path). A plain POSIX `diff -u`/`svn diff` WITHOUT those headers
     # miscounts files after the first (their `--- `/`+++ ` headers get read as hunk body).
     # Feed git diffs, not raw POSIX diffs. [judgment-day R2 / B1: documented limitation]
-    files, skipped = set(), set()
+    files, test_files, skipped = set(), set(), set()
     added, removed = 0, 0
+    test_added, test_removed = 0, 0
     max_nesting, new_types, new_funcs = 0, 0, 0
     hunk_added, max_hunk_added = 0, 0
-    counting = False   # does the current file count toward the budget?
+    counting = None    # 'prod' gatea | 'test' se cuenta aparte | None fuera
     in_hunk = False    # inside a hunk body? file headers only appear before the first @@
     for raw in diff_text.splitlines():
         if raw.startswith("diff --git"):
             in_hunk = False
-            counting = False
+            counting = None
             continue
         if raw.startswith("@@"):
             in_hunk = True
@@ -2370,19 +2401,31 @@ def _simplicity_metrics(diff_text, indent_width):
             if raw.startswith("+++ "):
                 path = raw[4:].strip().split("\t")[0]
                 if path == "/dev/null":
-                    counting = False
+                    counting = None
                 else:
                     rel = path[2:] if path[:2] in ("a/", "b/") else path
-                    if _is_simplicity_code_file(rel):
-                        counting = True
-                        files.add(rel)
-                    else:
-                        counting = False
+                    if not _is_simplicity_code_file(rel):
+                        counting = None
                         skipped.add(rel)
+                    elif _is_simplicity_test_file(rel):
+                        # tests fuera del presupuesto (Topic 51): contados y
+                        # reportados, nunca gateados — el gate no debe castigar
+                        # escribir tests (gate-check ya bloquea borrarlos).
+                        counting = "test"
+                        test_files.add(rel)
+                    else:
+                        counting = "prod"
+                        files.add(rel)
             continue
         # inside a hunk body: +/- lines are content. A source line `++ x` shows up as
         # `+++ x` here but is correctly a body add (not a header) because in_hunk is True.
-        if not counting:
+        if counting is None:
+            continue
+        if counting == "test":
+            if raw.startswith("+"):
+                test_added += 1
+            elif raw.startswith("-"):
+                test_removed += 1
             continue
         if raw.startswith("+"):
             added += 1
@@ -2410,6 +2453,9 @@ def _simplicity_metrics(diff_text, indent_width):
         "new_functions": new_funcs,
         "max_hunk_added": max_hunk_added,
         "abstraction_density": round(density, 2),
+        "test_files_changed": len(test_files),
+        "test_lines_added": test_added,
+        "test_lines_removed": test_removed,
     }
 
 
@@ -2522,6 +2568,10 @@ def cmd_simplicity_check(args):
     for name, val, bud in rows:
         print(f"  {name:17s} {str(val):>7s} / {bud}")
     print(f"  (new_functions: {m['new_functions']} — informativo, no gateado)")
+    if m.get("test_files_changed"):
+        print(f"  (tests FUERA del presupuesto: +{m['test_lines_added']} lineas "
+              f"en {m['test_files_changed']} archivo(s) de test — escribir tests "
+              f"nunca penaliza este gate)")
     if m.get("files_skipped"):
         print(f"  ({m['files_skipped']} archivo(s) no-código salteados: docs/config/resources)")
     if flags:
@@ -2645,7 +2695,13 @@ def cmd_pit_check(args):
 _GC_DISABLE = re.compile(
     r"@Disabled\b|@Ignore\b|enabled\s*=\s*false|\bxit\s*\(|\bxdescribe\s*\(|"
     r"\.skip\b|@(?:pytest\.mark\.)?skip\b", re.I)
-_GC_TESTDEF = re.compile(r"@Test\b|\bvoid\s+test\w*|\bdef\s+test_\w+|\bfun\s+test\w*", re.I)
+# solo se evalua DENTRO de archivos ya clasificados test (_gc_is_test_file) —
+# un falso positivo aca es inocuo. Cubre: JUnit/TestNG, C#/Java void, pytest,
+# kotlin fun, Go func TestX, xunit [Fact]/[Theory], rust #[test], js it/test/describe.
+_GC_TESTDEF = re.compile(
+    r"@Test\b|\bvoid\s+test\w*|\bdef\s+test_\w+|\bfun\s+test\w*|"
+    r"\bfunc\s+test\w+|\[(?:Fact|Theory)\]|#\[\s*(?:tokio::)?test\s*\]|"
+    r"\b(?:it|test|describe)\s*\(", re.I)
 _GC_SUPPRESS = re.compile(
     r"@SuppressWarnings|@SuppressFBWarnings|//\s*NOPMD|//\s*NOSONAR|checkstyle:off|"
     r"eslint-disable|#\s*noqa|#\s*type:\s*ignore|#\s*pylint:\s*disable", re.I)
@@ -2659,6 +2715,12 @@ _GC_NUM = re.compile(r"\d+(?:\.\d+)?")
 
 
 def _gc_is_test_file(path):
+    # UNION fail-closed (kit 1.11.0): el clasificador compartido de los 9 stacks
+    # (foo_test.go, *.Tests/ de dotnet, __tests__, spec.tsx, source sets gradle)
+    # MAS los sufijos legacy case-insensitive — solo se AMPLIA que cuenta como
+    # test para el veto de borrado; ningun path antes protegido se desprotege.
+    if _is_simplicity_test_file(path):
+        return True
     p = path.lower()
     if "/test/" in p or "/tests/" in p or p.startswith(("test/", "tests/")):
         return True

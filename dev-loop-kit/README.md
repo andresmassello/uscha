@@ -349,9 +349,13 @@ python3 $QL simplicity-check --from-git --base main            # usa git por vos
 python3 $QL simplicity-check --diff cambios.diff --json        # lo consume sys-doc / CI
 ```
 
-- Dimensiones/pesos: diff_size 30, nesting 25, abstraction 20, net_growth 15, fan_out 5, blob 5.
+- Dimensiones/pesos: diff_size 35, nesting 30, net_growth 20, fan_out 8, blob 7
+  (abstraction NO pesa en el score — es proxy adivinón, queda como métrica + flag advisory).
 - Veredictos: `SIMPLE ≥85` · `ACCEPTABLE ≥65` · `OVERBUILT <65` (exit 1 = BLOCKER: recortá y re-corré).
   Un exceso grosero (2× presupuesto, o anidación muy profunda) capea el score a 60 sí o sí.
+- **Tests FUERA del presupuesto** (kit 1.11.0): los archivos de test (convenciones de los
+  9 stacks) se cuentan y reportan aparte (`test_lines_added`) pero no gatean — escribir
+  tests nunca empuja el diff a OVERBUILT (borrarlos ya lo bloquea gate-check).
 - Los flags te dicen qué recortar (guard clauses, tipos/capas especulativos, hunks gigantes).
 - Presupuestos en `defaults.simplicity`; ajustables por perfil de riesgo. 2-espacios → `--indent-width 2`.
 

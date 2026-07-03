@@ -10,13 +10,13 @@ y de su instanciación en Claude Code, el **dev-loop-kit**.
 
 ```
 SpecLoop/
-├── dev-loop-kit/          # ★ SOURCE canónico del kit (v1.10.0)
+├── dev-loop-kit/          # ★ SOURCE canónico del kit (v1.11.0)
 │   ├── .claude/skills/    #   6 skills: discovery · adr-refine · dev-loop · sys-doc
 │   │                      #             reverse-discovery · characterize
 │   ├── .claude/skills/dev-loop/qa_ledger.py   # motor de evidencia (19 subcomandos, stdlib)
 │   ├── hooks/             #   PreToolUse: el agente no escribe .approved (INV-GOLDEN-01)
 │   ├── templates/         #   CLAUDE.md · CONSTITUTION.md · .gitattributes · docs/adr
-│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (acceptance trazable)
+│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (acceptance trazable) → 1.11.0 (tests fuera del presupuesto)
 ├── docs/                  # artefactos publicados (canónicos acá; Downloads = snapshots)
 │   ├── spec-loop-claude-code-doc-FINAL.html   # deck largo ES (35 slides)
 │   ├── spec-loop-claude-code-doc-EN.html      # deck largo EN
@@ -35,9 +35,9 @@ SpecLoop/
     └── verificacion-team-pitch.json           # 3 lentes sobre el pitch
 ```
 
-## Estado (2026-07-02)
+## Estado (2026-07-03)
 
-- **Kit v1.10.0** — los fact gates están CABLEADOS al engine (1.3.0: `log-gate`,
+- **Kit v1.11.0** — los fact gates están CABLEADOS al engine (1.3.0: `log-gate`,
   `flag-blocker`, `resolve-escalation`; UNMEASURED; convergencia per-tool con veto de
   snapshot medido) y el engine mide repos **Python** (1.4.0: pytest/Cobertura + ruff +
   mypy) **TypeScript/JS** (1.5.0: lcov + jest-junit + eslint + tsc) **Go** (1.6.0: cover profile
@@ -46,11 +46,12 @@ SpecLoop/
   logger + SARIF/Roslyn), **C++** (1.8.0: gcovr/Cobertura + ctest junit +
   clang-tidy), **Kotlin/JVM Gradle** y **Swift** (1.9.0: cero parsers nuevos —
   JaCoCo/lcov/JUnit/checkstyle reusados; detekt + SwiftLint). **Acceptance trazable** (1.10.0: AC-n cierra por testcase
-  MEDIDO, dimensión dominante del readiness — M2 del backlog PragProg).
-  Smoke suite 68/68 verde. Licencia: MIT. El principio "facts block, guesses advise" es propiedad
+  MEDIDO, dimensión dominante del readiness — M2 del backlog PragProg). **Tests fuera
+  del presupuesto de simplicity** (1.11.0: escribir tests no penaliza el gate — M9).
+  Smoke suite 73/73 verde. Licencia: MIT. El principio "facts block, guesses advise" es propiedad
   enforced, no slogan.
 - **Docs** — pasados por truth-pass contra el engine real: cada claim describe lo que
-  v1.10.0 hace; el anexo de referencias tiene **links verificados por fetch** a las 10
+  v1.11.0 hace; el anexo de referencias tiene **links verificados por fetch** a las 10
   fuentes. Convención de estado en los docs: `en el kit` / `nuevo` / `propuesta`.
 - **En curso** — dogfooding en caso real (proyecto piloto, Python): el adapter 1.4.0 lo desbloqueó;
   queda el dry-run de solo lectura (criterio 2 del HANDOFF python-adapter) y el on-ramp.
