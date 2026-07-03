@@ -315,6 +315,13 @@ So: when you write the tests for a criterion, put its AC-n in the test name; run
 IDs block as structural FACTS). Files without IDs fall back to the checkbox ratio
 with a warning (legacy mode — adopt incrementally).
 
+**Heed the two readiness advisories (kit 1.14.0 — they recommend, never gate).**
+`stall:` = gated findings flat or RISING for 3 agent cycles: more iteration is not
+approaching the solution — stop iterating, go back to the ADR / re-plan WITH the human.
+`stop-signal:` = every repo converged and zero blocking facts remain: what's left is
+measurable debt (coverage/acceptance), not findings — raise "candidate to cut and go
+to PR" to the human instead of polishing further.
+
 ADR completion is parsed from the **acceptance task list** (markdown `- [x]`/`- [ ]`),
 read-only — set the path via `config.defaults.acceptance_file` or `--acceptance`. Count
 the WHOLE file (the CLI default); only pass `--section` if you have verified the heading

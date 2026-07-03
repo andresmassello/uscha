@@ -15,7 +15,8 @@
 # y tests fuera del presupuesto de simplicity (v1.11.0): escribir tests no
 # penaliza el gate (Topic 51) + edges 1.10.0 (falsos positivos, flaky) —
 # y secret-scan en gate-check (v1.12.0): secretos agregados bloquean como hecho —
-# y ledger atomico (v1.13.0): checksum de integridad + carga blindada.
+# y ledger atomico (v1.13.0): checksum de integridad + carga blindada —
+# y plateau/stop-signal (v1.14.0): stall y candidato-a-PR como advisories.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -578,6 +579,56 @@ run summary 2>&1 | grep -q "Traceback" \
   || { PASS=$((PASS+1)); echo "  ok   sin traceback: mensaje de recuperacion"; }
 # restaurar el ledger para lo que venga despues (re-init limpio)
 run init --config dev-loop.config.json >/dev/null 2>&1
+
+echo "== T36 plateau/stop-signal: advisory sobre el historico (Know When to Stop) =="
+# (a) stall: findings gateados SUBIENDO 3 ciclos COMPLETOS en repo-a -> re-planear.
+# Con qa_tools_order configurado solo cuentan ciclos con TODAS las tools logueadas.
+for i in 1 2 3; do
+  run log-step --repo repo-a --tool code-review --iteration $i \
+    --reported $((i+3)) --gated-reported $((i+3)) --tests-passed true >/dev/null 2>&1
+  for t in judgment-day improve; do
+    run log-step --repo repo-a --tool $t --iteration $i \
+      --gated-reported 0 --tests-passed true >/dev/null 2>&1
+  done
+done
+run readiness 2>/dev/null | grep -q "stall: repo-a" \
+  && { PASS=$((PASS+1)); echo "  ok   stall detectado (findings 4->5->6, iterar no acerca)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin aviso de stall"; }
+# (b) mismo patron pero con el ULTIMO ciclo INCOMPLETO (1 de 3 tools) -> no cuenta,
+# la serie completa queda corta y el stall NO dispara (sin contaminacion parcial)
+run log-step --repo repo-a --tool code-review --iteration 4 \
+  --gated-reported 9 --tests-passed true >/dev/null 2>&1
+run readiness 2>/dev/null | grep -q "stall: repo-a" \
+  && { PASS=$((PASS+1)); echo "  ok   ciclo 4 parcial no rompe la serie (stall sigue por ciclos 1-3)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL ciclo parcial altero la deteccion"; }
+# (c) serie BAJANDO no es stall (hay progreso)
+run init --config dev-loop.config.json >/dev/null 2>&1
+for i in 1 2 3; do
+  run log-step --repo repo-a --tool code-review --iteration $i \
+    --reported $((7-i*2)) --gated-reported $((7-i*2)) --tests-passed true >/dev/null 2>&1
+  for t in judgment-day improve; do
+    run log-step --repo repo-a --tool $t --iteration $i \
+      --gated-reported 0 --tests-passed true >/dev/null 2>&1
+  done
+done
+run readiness 2>/dev/null | grep -q "stall: repo-a" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL stall con serie bajando (5->3->1 es progreso)"; } \
+  || { PASS=$((PASS+1)); echo "  ok   serie bajando (5->3->1) no dispara stall"; }
+# (c) stop-signal: repo unico convergido, cero facts bloqueantes -> candidato a PR
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"] },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > c-solo.json
+run init --config c-solo.json --out L-solo.json >/dev/null 2>&1
+for t in code-review judgment-day improve; do
+  run log-step --ledger L-solo.json --repo solo --tool $t --iteration 1 \
+    --gated-reported 0 --files-changed 0 --tests-passed true >/dev/null 2>&1
+done
+RDY=$(run readiness --ledger L-solo.json --json 2>/dev/null)
+echo "$RDY" | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+a = d['advice']
+sys.exit(0 if a['stop_signal'] is True and a['stalled_repos'] == [] else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   stop-signal: convergido + cero facts bloqueantes -> candidato a PR"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL stop-signal no emitido ($(echo "$RDY" | "$PY" -c 'import json,sys;print(json.load(sys.stdin).get("advice"))' 2>/dev/null))"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"

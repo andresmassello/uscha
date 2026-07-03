@@ -1862,6 +1862,40 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
     }
 
 
+# plateau/stop-signal (kit 1.14.0, Topic 37 'Listen to Your Lizard Brain' +
+# Topic 5 'Know When to Stop'). ADVISORY puro: recomienda, jamas gatea.
+STALL_WINDOW = 3  # ciclos consecutivos sin progreso que disparan el aviso
+
+
+def _stall_series(node, qa_order=None):
+    """Findings gateados por CICLO de agente (suma sobre las tools del ciclo),
+    en orden de ciclo — la serie sobre la que se mide el plateau. Con qa_order
+    configurado solo cuentan ciclos COMPLETOS (todas las tools logueadas): un
+    ciclo a medio correr suma parcial y puede enmascarar o inventar un stall."""
+    by_cycle, tools_by_cycle = {}, {}
+    for s in node["iterations"]:
+        if s.get("category", "agent") != "agent":
+            continue
+        it = s.get("iteration") or 0
+        by_cycle[it] = by_cycle.get(it, 0) + (s.get("gated_reported") or 0)
+        tools_by_cycle.setdefault(it, set()).add(s.get("tool"))
+    cycles = sorted(by_cycle)
+    if qa_order:
+        cycles = [c for c in cycles if tools_by_cycle[c] >= set(qa_order)]
+    return [by_cycle[c] for c in cycles]
+
+
+def _is_stalled(node, qa_order=None, window=STALL_WINDOW):
+    """True si los ultimos `window` ciclos (completos) muestran findings
+    gateados planos o SUBIENDO (y todavia hay findings): iterar mas no esta
+    acercando la solucion — la senal tipica de que el problema es de
+    diseño/SPEC, no de codigo."""
+    tail = _stall_series(node, qa_order)[-window:]
+    if len(tail) < window or tail[-1] <= 0:
+        return False
+    return all(tail[i] <= tail[i + 1] for i in range(len(tail) - 1))
+
+
 def cmd_readiness(args):
     ledger = _load(args.ledger)
     defaults = ledger["config"].get("defaults", {})
@@ -1988,6 +2022,13 @@ def cmd_readiness(args):
         caps_active.append(("acceptance file not found", caps["blocker_critical"]))
     final, cap_reason = _apply_caps(raw, caps_active)
 
+    # plateau / stop-signal (ADVISORY: recomienda, jamas gatea)
+    qa_order = defaults.get("qa_tools_order")
+    stalled_repos = sorted(n for n, node in ledger["repos"].items()
+                           if _is_stalled(node, qa_order))
+    stop_signal = (bool(conv_flags) and all(conv_flags)
+                   and not caps_active and total_open == 0)
+
     # churn (separate from readiness)
     tool_roll = _tool_rollup(ledger)
     cycles = max([s.get("iteration", 0) for node in ledger["repos"].values()
@@ -2015,6 +2056,7 @@ def cmd_readiness(args):
                   "static_unmeasured_repos": unmeasured_repos},
         "churn": {"max_cycle": cycles, "new_regressions": regressions,
                   "by_tool_fixed_pct": {t: x["fixed_pct"] for t, x in tool_roll.items()}},
+        "advice": {"stalled_repos": stalled_repos, "stop_signal": stop_signal},
         "by_repo": repos,
     }
     if args.json:
@@ -2052,6 +2094,15 @@ def cmd_readiness(args):
     if unmeasured_repos:
         print(f"  ! static gate NEVER ran in: {', '.join(unmeasured_repos)} — "
               f"dimension scored UNMEASURED (0.0), silence is not success")
+    if stalled_repos:
+        print(f"  ! stall: {', '.join(stalled_repos)} — findings gateados planos o "
+              f"subiendo {STALL_WINDOW} ciclos: iterar mas no esta acercando la "
+              f"solucion. Probable problema de diseño/SPEC — volver a ADR / "
+              f"re-planear con el humano (advisory)")
+    if stop_signal:
+        print("  · stop-signal: todos los repos convergieron y no queda ningun "
+              "fact bloqueante — lo que falta es deuda medible (coverage/"
+              "acceptance), no findings: candidato a cortar e ir a PR (advisory)")
     print("--- dimensions (weight | raw | contribution) ---")
     for d in dims:
         print(f"  {d:13s} {weights[d]:3d} | {dims[d]:.2f} | "
