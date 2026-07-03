@@ -22,7 +22,8 @@
 # obligatoria al resolver blockers — y procedencia de umbrales (v1.17.0):
 # requerimiento (config) vs default del kit, etiquetado en cada gate —
 # y phase (v1.18.0): FSM derivada del ledger, el estado se computa —
-# y spikes (v1.19.0): rama spike/* jamas pasa el gate de PR.
+# y spikes (v1.19.0): rama spike/* jamas pasa el gate de PR —
+# y doctor (v1.22.0): diagnostico de la instalacion, ledger corrupto = error.
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -795,6 +796,24 @@ d = json.load(sys.stdin)
 sys.exit(0 if d['fixed'] == 3 and d['verdict'] == 'NARRATED' else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   sin --fixed lee la ultima iteracion del ledger (fixed=3)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL lookup de fixed en el ledger"; }
+
+echo "== T42 doctor: diagnostico de la instalacion (flutter-doctor spirit) =="
+chk "doctor en sandbox con config -> exit 0 (avisos no fallan)" 0 run doctor
+run doctor --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sk = next(c for c in d['checks'] if c['title'].startswith('skills'))
+ok = (d['errors'] == 0 and d['global_install'] is False
+      and sk['level'] == 'ok'
+      and any(c['title'].startswith('proyecto:') for c in d['checks'])
+      and any(c['title'].startswith('ACCEPTANCE') and c['level'] == 'ok'
+              for c in d['checks']))
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   doctor: 6/6 skills, install por proyecto, config y ACCEPTANCE leidos"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL doctor json"; }
+# ledger corrupto = ERROR (no aviso): el doctor debe salir 1
+"$PY" -c "open('QA-LEDGER.json','a',encoding='utf-8').write('{trunc')"
+chk "doctor con ledger corrupto -> exit 1" 1 run doctor
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"

@@ -53,6 +53,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -3564,11 +3565,245 @@ def cmd_golden_diff(args):
 
 
 # --------------------------------------------------------------------------- #
+# doctor  (diagnostico de la instalacion, espiritu flutter doctor)
+# --------------------------------------------------------------------------- #
+# El engine verifica su PROPIA instalacion: las skills viven al lado de
+# qa_ledger.py (sea ~/.claude/skills global o .claude/skills del proyecto), asi
+# que doctor inspecciona a sus hermanos. Output ASCII puro: es la herramienta
+# de primer contacto en maquinas virgenes - no puede depender del encoding de
+# la consola. Exit 1 SOLO con errores; los avisos no fallan (un toolchain
+# ausente en la maquina puede vivir en CI).
+SPECLOOP_SKILLS = ["specloop-discovery", "specloop-adr-refine",
+                   "specloop-reverse-discovery", "specloop-characterize",
+                   "specloop-devloop", "specloop-sysdoc"]
+# herramienta primaria por type - su ausencia es AVISO, no error
+DOCTOR_TOOLS = {"maven": "mvn", "flutter": "flutter", "python": "pytest",
+                "node": "npm", "go": "go", "rust": "cargo", "dotnet": "dotnet",
+                "cpp": "ctest", "gradle": "gradle", "swift": "swift"}
+# como instalar cada toolchain faltante (el doctor no solo diagnostica: cura)
+DOCTOR_FIX = {
+    "mvn": "https://maven.apache.org/install.html",
+    "flutter": "https://docs.flutter.dev/get-started/install",
+    "pytest": "pip install pytest  (https://docs.pytest.org)",
+    "npm": "https://nodejs.org/en/download",
+    "go": "https://go.dev/dl/",
+    "cargo": "https://rustup.rs",
+    "dotnet": "https://dotnet.microsoft.com/download",
+    "ctest": "https://cmake.org/download/  (ctest viene con CMake)",
+    "gradle": "https://gradle.org/install/  (o usa el gradlew del repo)",
+    "swift": "https://www.swift.org/install/",
+}
+HOOK_NAME = "block-approved-writes.ps1"
+
+
+def _doctor_hook_registered(settings_path):
+    """True si el hook aparece bajo PreToolUse en ese settings.json.
+    Match por substring del filename dentro de la rama PreToolUse - limite
+    disclosed: otro comando que MENCIONE el filename daria falso positivo
+    (rebuscado, y la direccion de fallo es solo un [OK] de mas en un aviso)."""
+    try:
+        with open(settings_path, "r", encoding="utf-8") as fh:
+            cfg = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return False
+    hooks = cfg.get("hooks", {})
+    return HOOK_NAME in json.dumps(hooks.get("PreToolUse", []))
+
+
+def cmd_doctor(args):
+    checks = []   # (nivel 'ok'|'warn'|'error', titulo, detalle)
+
+    def ok(t, d=""):
+        checks.append(("ok", t, d))
+
+    def warn(t, d=""):
+        checks.append(("warn", t, d))
+
+    def err(t, d=""):
+        checks.append(("error", t, d))
+
+    # --- core -------------------------------------------------------------
+    py = sys.version_info
+    if py >= (3, 8):
+        ok(f"Python {py.major}.{py.minor}.{py.micro} (>= 3.8)")
+    else:
+        err(f"Python {py.major}.{py.minor} - el kit requiere 3.8+",
+            "instalar: https://www.python.org/downloads/")
+    if shutil.which("git"):
+        ok("git en PATH")
+    else:
+        err("git no esta en PATH - gate-check/simplicity/regression lo usan (--from-git)",
+            "instalar: https://git-scm.com/downloads")
+
+    engine_dir = os.path.dirname(os.path.abspath(__file__))
+    home_skills = os.path.join(os.path.expanduser("~"), ".claude", "skills")
+    # separador final + normcase: sin ellos '~/.claude/skills-evil' clasificaria
+    # como global, y en Windows el case del drive puede diferir
+    is_global = os.path.normcase(engine_dir).startswith(
+        os.path.normcase(os.path.abspath(home_skills)) + os.sep)
+    ok(f"engine: {os.path.abspath(__file__)}",
+       "instalacion global (~/.claude/skills)" if is_global
+       else "instalacion por proyecto")
+
+    # --- skills: hermanas del engine ---------------------------------------
+    skills_root = os.path.dirname(engine_dir)
+    missing, mismatched = [], []
+    for s in SPECLOOP_SKILLS:
+        smd = os.path.join(skills_root, s, "SKILL.md")
+        if not os.path.isfile(smd):
+            missing.append(s)
+            continue
+        try:
+            with open(smd, "r", encoding="utf-8") as fh:
+                head = fh.read(2048)
+            if f"name: {s}" not in head:
+                mismatched.append(s)
+        except OSError:
+            missing.append(s)
+    if not missing and not mismatched:
+        ok(f"skills {len(SPECLOOP_SKILLS)}/{len(SPECLOOP_SKILLS)} junto al engine",
+           ", ".join(SPECLOOP_SKILLS))
+    else:
+        if missing:
+            err(f"skills faltantes en {skills_root}: {', '.join(missing)}",
+                "instalar: copia dev-loop-kit/.claude/skills/* a ~/.claude/skills/ "
+                "(README del kit > Instalacion, opcion B) - del zip dev-loop-kit-X.Y.Z "
+                "o de tu checkout del repo SPEC-LOOP")
+        if mismatched:
+            err(f"SKILL.md con frontmatter name distinto al directorio: {', '.join(mismatched)}")
+
+    # --- hook INV-GOLDEN-01 -------------------------------------------------
+    kit_root = os.path.abspath(os.path.join(engine_dir, "..", "..", ".."))
+    hook_paths = [os.path.join(os.path.expanduser("~"), ".claude", "hooks", HOOK_NAME),
+                  os.path.join(kit_root, "hooks", HOOK_NAME)]
+    hook_file = next((p for p in hook_paths if os.path.isfile(p)), None)
+    settings_paths = [os.path.join(os.path.expanduser("~"), ".claude", "settings.json"),
+                      os.path.join(".claude", "settings.json"),
+                      os.path.join(".claude", "settings.local.json")]
+    registered = any(_doctor_hook_registered(p) for p in settings_paths
+                     if os.path.isfile(p))
+    ps = shutil.which("powershell") or shutil.which("pwsh")
+    if hook_file and registered and ps:
+        ok("hook INV-GOLDEN-01: presente, registrado (PreToolUse) e interpretable",
+           hook_file)
+    elif not hook_file:
+        warn(f"hook {HOOK_NAME} no encontrado (~/.claude/hooks ni <kit>/hooks)",
+             f"instalar: copia dev-loop-kit/hooks/{HOOK_NAME} a ~/.claude/hooks/ y "
+             f"registra el snippet de su header en ~/.claude/settings.json - sin el, "
+             f"el agente PUEDE escribir .approved (obligatorio para migraciones, perfil E)")
+    elif not registered:
+        warn("hook presente pero NO registrado en settings.json (PreToolUse)",
+             "snippet de registro en el header del .ps1")
+    else:
+        warn("hook registrado pero sin powershell/pwsh en PATH",
+             "instalar pwsh: https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-linux")
+
+    # --- proyecto (si hay config aca) ---------------------------------------
+    qa_order = ["code-review", "judgment-day", "improve"]   # default del kit
+    cfg_path = args.config or "dev-loop.config.json"
+    if os.path.isfile(cfg_path):
+        try:
+            cfg = _load(cfg_path)
+            defaults = cfg.get("defaults", {})
+            repos = cfg.get("repos", [])
+            ok(f"proyecto: {cfg_path} v{cfg.get('version', '?')} ({len(repos)} repo(s))")
+            acc = defaults.get("acceptance_file")
+            if acc and os.path.isfile(acc):
+                items, _found = _parse_acceptance_items(acc)
+                ids = sum(1 for i in items if i["id"])
+                if items and ids:
+                    ok(f"ACCEPTANCE: {len(items)} criterio(s), {ids} con AC-ID trazable")
+                elif items:
+                    warn(f"ACCEPTANCE sin AC-IDs trazables ({len(items)} criterio(s))",
+                         "generala con /specloop-discovery o /specloop-adr-refine "
+                         "(formato '- [ ] AC-01 - ...') - sin IDs la dimension dominante "
+                         "del readiness cae al ratio de checkboxes")
+                else:
+                    warn(f"ACCEPTANCE {acc} sin criterios (cero checkboxes)")
+            elif acc:
+                warn(f"acceptance_file declarado pero ausente: {acc}")
+            qa_order = defaults.get("qa_tools_order", qa_order)
+            for r in repos:
+                tool = DOCTOR_TOOLS.get(r.get("type", ""))
+                if not tool:
+                    continue
+                if r.get("type") == "gradle" and (
+                        os.path.isfile(os.path.join(r.get("path", "."), "gradlew"))
+                        or os.path.isfile(os.path.join(r.get("path", "."), "gradlew.bat"))):
+                    ok(f"toolchain {r['name']} (gradle): gradlew del repo")
+                elif shutil.which(tool):
+                    ok(f"toolchain {r['name']} ({r.get('type')}): {tool} en PATH")
+                else:
+                    warn(f"toolchain {r['name']} ({r.get('type')}): {tool} NO esta en PATH",
+                         f"instalar: {DOCTOR_FIX.get(tool, 'ver docs del toolchain')} "
+                         f"(o puede vivir solo en CI)")
+            ledger_path = args.ledger
+            if os.path.isfile(ledger_path):
+                try:
+                    _load(ledger_path)
+                    ok(f"ledger {ledger_path}: carga e integridad OK")
+                except SystemExit as exc:
+                    err(f"ledger {ledger_path} corrupto o mutado", str(exc))
+        except SystemExit as exc:
+            err(f"{cfg_path} invalido", str(exc))
+    else:
+        warn(f"sin {cfg_path} en este directorio",
+             "instalar: copia dev-loop.config.json del kit a la raiz del repo y declara "
+             "tus repos/types y tu quality bar - necesario solo para CORRER el loop aca")
+
+    # --- skills de QA del loop (externas al kit, se orquestan sin traerlas) --
+    # sin ellas la fase 3 (QA loop) no corre; chequeables con o sin config.
+    missing_qa = [t for t in qa_order
+                  if not os.path.isdir(os.path.join(".claude", "skills", t))
+                  and not os.path.isdir(os.path.join(home_skills, t))]
+    if not missing_qa:
+        ok(f"skills de QA del loop instaladas: {', '.join(qa_order)}")
+    else:
+        warn(f"skills de QA no encontradas como archivo: {', '.join(missing_qa)}",
+             "instalar tus skills de QA en ~/.claude/skills/ o declarar otras en "
+             "config.defaults.qa_tools_order; si es una built-in del harness "
+             "(p.ej. code-review), ignora este aviso")
+
+    # --- veredicto ----------------------------------------------------------
+    n_ok = sum(1 for lv, _, _ in checks if lv == "ok")
+    n_warn = sum(1 for lv, _, _ in checks if lv == "warn")
+    n_err = sum(1 for lv, _, _ in checks if lv == "error")
+    if args.json:
+        # ensure_ascii=True a proposito: doctor promete bytes ASCII siempre
+        print(json.dumps({"verdict": "ERROR" if n_err else ("WARN" if n_warn else "OK"),
+                          "ok": n_ok, "warnings": n_warn, "errors": n_err,
+                          "global_install": is_global,
+                          "checks": [{"level": lv, "title": t, "detail": d}
+                                     for lv, t, d in checks]},
+                         indent=2, ensure_ascii=True))
+        sys.exit(1 if n_err else 0)
+    print("SPECLOOP DOCTOR - diagnostico de la instalacion")
+    mark = {"ok": "[OK]", "warn": "[ !]", "error": "[ X]"}
+    for lv, t, d in checks:
+        print(f"  {mark[lv]} {t}")
+        if d:
+            print(f"       {d}")
+    print(f"RESULTADO: {n_ok} ok - {n_warn} aviso(s) - {n_err} error(es)"
+          + ("  -> instalacion sana" if not n_err else "  -> hay errores que corregir"))
+    sys.exit(1 if n_err else 0)
+
+
+# --------------------------------------------------------------------------- #
 # cli
 # --------------------------------------------------------------------------- #
 def build_parser():
     p = argparse.ArgumentParser(description="dev-loop QA ledger / measurement engine")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    pdoc = sub.add_parser(
+        "doctor",
+        help="diagnose the specloop installation (flutter-doctor spirit): "
+             "python/git, skills, hook, project config, per-repo toolchains")
+    pdoc.add_argument("--config", default=None,
+                      help="project config to inspect (default: ./dev-loop.config.json)")
+    pdoc.add_argument("--ledger", default=DEFAULT_LEDGER)
+    pdoc.add_argument("--json", action="store_true")
+    pdoc.set_defaults(func=cmd_doctor)
 
     pi = sub.add_parser("init", help="create the ledger from a config file")
     pi.add_argument("--config", required=True)

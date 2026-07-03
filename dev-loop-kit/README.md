@@ -230,7 +230,22 @@ migración el `.gitattributes` de `templates/` (`*.approved.* binary`).
 
 > En la máquina donde DESARROLLÁS el kit, en vez de copiar conviene un junction/symlink
 > de cada skill al repo canónico — global siempre al día con main, cero re-instalación
-> por release: `cmd /c mklink /J "%USERPROFILE%\.claude\skills\dev-loop" "<repo>\dev-loop-kit\.claude\skills\dev-loop"` (una por skill).
+> por release: `cmd /c mklink /J "%USERPROFILE%\.claude\skills\specloop-devloop" "<repo>\dev-loop-kit\.claude\skills\specloop-devloop"` (una por skill).
+
+**Verificá la instalación con `doctor`** (kit 1.22.0, espíritu flutter doctor —
+Windows y Linux, output ASCII, exit 1 solo con errores):
+
+```bash
+python3 ~/.claude/skills/specloop-devloop/qa_ledger.py doctor
+# o, por proyecto:  python3 ./.claude/skills/specloop-devloop/qa_ledger.py doctor
+```
+
+Chequea: Python >=3.8 · git · las 6 skills junto al engine (frontmatter
+verificado) · el hook INV-GOLDEN-01 (presente + registrado en settings.json +
+intérprete powershell/pwsh) · y si hay `dev-loop.config.json` en el cwd:
+config parseable, ACCEPTANCE con AC-IDs, integridad del ledger, las skills de
+QA de `qa_tools_order` (el loop las orquesta sin traerlas) y el toolchain
+primario de cada repo por type (su ausencia es AVISO — puede vivir solo en CI).
 
 ## Configurar
 
@@ -374,9 +389,10 @@ python3 $QL simplicity-check --diff cambios.diff --json        # lo consume sys-
 
 ## Subcomandos del ledger
 
-`init · snapshot · check-coverage · log-step · ingest-gate · log-gate · flag-blocker ·
+`doctor · init · snapshot · check-coverage · log-step · ingest-gate · log-gate · flag-blocker ·
 converged · oscillation · escalate · resolve-escalation · summary · readiness · rebuild ·
-simplicity-check · pit-check · gate-check · spec-check · golden-diff` — cada uno con `--help`.
+simplicity-check · pit-check · gate-check · spec-check · golden-diff · regression-check ·
+phase` — cada uno con `--help`.
 
 Los **fact gates** (golden-diff, gate-check, pit-check, simplicity) se PERSISTEN con
 `log-gate`: un fail bloquea convergencia y capea readiness ≤65 vía el ledger. Una violación
