@@ -210,14 +210,27 @@ cp dev-loop-kit/dev-loop.config.json  <repo-primario>/
 chmod +x <repo-primario>/.claude/skills/dev-loop/qa_ledger.py
 ```
 
-**Opción B — global** (para todos tus repos): copiá los skills a `~/.claude/skills/`.
-El `dev-loop.config.json` igual va en la raíz del repo donde corras la run (los `path`
-del config son relativos a ahí).
+**Opción B — global** (kit 1.20.0: para todos tus repos, existentes y nuevos): copiá
+las SEIS skills a `~/.claude/skills/` y el hook a `~/.claude/hooks/` + registralo en
+`~/.claude/settings.json` (snippet en el header del .ps1) — así INV-GOLDEN-01 rige en
+todos los proyectos. Las skills resuelven el engine primero en el proyecto y caen a
+`~/.claude/skills/dev-loop/qa_ledger.py` si no hay instalación local.
 
 ```bash
-cp -r dev-loop-kit/.claude/skills/dev-loop  ~/.claude/skills/
-cp -r dev-loop-kit/.claude/skills/sys-doc   ~/.claude/skills/
+for s in discovery adr-refine reverse-discovery characterize dev-loop sys-doc; do
+  cp -r "dev-loop-kit/.claude/skills/$s" ~/.claude/skills/
+done
+mkdir -p ~/.claude/hooks && cp dev-loop-kit/hooks/block-approved-writes.ps1 ~/.claude/hooks/
 ```
+
+Lo que sigue siendo POR PROYECTO (estado, no instalable): `dev-loop.config.json` en la
+raíz del repo donde corras la run (los `path` son relativos a ahí — y tu quality bar
+declarada vive ahí), el `QA-LEDGER.json`, el `ACCEPTANCE.md`, y para trabajo de
+migración el `.gitattributes` de `templates/` (`*.approved.* binary`).
+
+> En la máquina donde DESARROLLÁS el kit, en vez de copiar conviene un junction/symlink
+> de cada skill al repo canónico — global siempre al día con main, cero re-instalación
+> por release: `cmd /c mklink /J "%USERPROFILE%\.claude\skills\dev-loop" "<repo>\dev-loop-kit\.claude\skills\dev-loop"` (una por skill).
 
 ## Configurar
 

@@ -27,8 +27,10 @@ switch between at any time:
    never invent figures.
 
 ```bash
-python3 ./.claude/skills/dev-loop/qa_ledger.py summary --json > /tmp/qa-summary.json
-python3 ./.claude/skills/dev-loop/qa_ledger.py readiness --json > /tmp/qa-readiness.json
+QL="./.claude/skills/dev-loop/qa_ledger.py"                      # instalacion por proyecto
+[ -f "$QL" ] || QL="$HOME/.claude/skills/dev-loop/qa_ledger.py"  # instalacion global (kit 1.20.0)
+python3 $QL summary --json > /tmp/qa-summary.json
+python3 $QL readiness --json > /tmp/qa-readiness.json
 ```
 
    From the summary use: `total_steps`, `by_tool`, `by_repo`, `aggregate`, `escalations`.

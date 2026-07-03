@@ -51,7 +51,8 @@ recorded for the retrospective; a measured red always overrides a narrated green
 ## Setup (once per run)
 
 ```bash
-QL="./.claude/skills/dev-loop/qa_ledger.py"
+QL="./.claude/skills/dev-loop/qa_ledger.py"                      # instalacion por proyecto
+[ -f "$QL" ] || QL="$HOME/.claude/skills/dev-loop/qa_ledger.py"  # instalacion global (kit 1.20.0)
 python3 $QL init --config dev-loop.config.json
 ```
 
