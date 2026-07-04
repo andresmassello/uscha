@@ -443,7 +443,7 @@ body::before{content:"";position:fixed;inset:0;background:
     <span class="node">Evidence</span><span class="ar">→</span>
     <span class="node red">Human gate</span>
   </div>
-  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en seis skills invocables (kit 1.21.0) y un motor de medición en Python.</p>
+  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en siete skills invocables (kit 1.23.0) y un motor de medición en Python.</p>
   <div class="tagrow">
     <span class="chip red">/specloop-discovery</span><span class="chip red">/specloop-adr-refine</span><span class="chip red">/specloop-devloop</span><span class="chip red">/specloop-sysdoc</span><span class="chip red">/specloop-reverse-discovery</span><span class="chip red">/specloop-characterize</span><span class="chip">qa_ledger.py</span>
   </div>
@@ -769,6 +769,7 @@ $ python3 .claude/skills/specloop-devloop/qa_ledger.py simplicity-check --diff H
       <tr><td class="t">phase --require pr-ready</td><td>estado del workflow DERIVADO del ledger (convergencia + tests verdes + 0 BLOCKER/CRITICAL), jamás declarado; rama <code class="in">spike/*</code> nunca pasa (1.18.0–1.19.0)</td><td class="ok">BLOQUEA</td></tr>
       <tr><td class="t">readiness</td><td>KPI 0–100 con caps duros; siempre exit 0</td><td class="no">REPORTA</td></tr>
       <tr><td class="t">regression-check</td><td>cierre de findings sin línea nueva de test = NARRATED (Find Bugs Once, 1.16.0) — <code class="in">--strict</code> lo gatea</td><td class="no">AVISA</td></tr>
+      <tr><td class="t">rubric-ingest</td><td>grade de la rúbrica: criterio cualitativo versionado con evidencia obligatoria (1.23.0) — gatea SOLO si el humano lo declara (<code class="in">defaults.rubric.gate</code>)</td><td class="no">AVISA</td></tr>
       <tr><td class="t">spec-check · prosa / abstracciones</td><td>heurística sobre prosa (términos vagos, EARS) / "tipos nuevos" — <code class="in">--strict</code> las gatea</td><td class="no">AVISA</td></tr>
     </tbody>
   </table>
@@ -910,7 +911,7 @@ $ python3 .claude/skills/specloop-devloop/qa_ledger.py simplicity-check --diff H
       <tr><td class="t">Python 3.8+</td><td>corre qa_ledger.py (stdlib pura)</td><td><code class="in">python3</code> en PATH</td></tr>
       <tr><td class="t">git</td><td>versionado</td><td>2.x con user.name/email</td></tr>
       <tr><td class="t">gh</td><td>crear repo / abrir PR</td><td>opcional, recomendado</td></tr>
-      <tr><td class="t">skills del kit</td><td>specloop-discovery, specloop-adr-refine, specloop-devloop, specloop-sysdoc, specloop-reverse-discovery, specloop-characterize</td><td>en <code class="in">~/.claude/skills/</code></td></tr>
+      <tr><td class="t">skills del kit</td><td>specloop-discovery, specloop-adr-refine, specloop-devloop, specloop-sysdoc, specloop-reverse-discovery, specloop-characterize, specloop-rubric</td><td>en <code class="in">~/.claude/skills/</code></td></tr>
       <tr><td class="t">skills de QA</td><td>code-review, judgment-day, improve</td><td>tus skills globales (el specloop-devloop los <strong>orquesta</strong>, no los trae)</td></tr>
       <tr><td class="t">engram (plugin)</td><td>memoria persistente entre sesiones</td><td>marketplace <code class="in">Gentleman-Programming/engram</code></td></tr>
       <tr><td class="t">sonarqube (plugin)</td><td>static gate hosteado (alternativa al java-qa-gate)</td><td>marketplace <code class="in">claude-plugins-official</code></td></tr>

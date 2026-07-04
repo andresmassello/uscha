@@ -2219,6 +2219,13 @@ def cmd_readiness(args):
               f"subiendo {STALL_WINDOW} ciclos: iterar mas no esta acercando la "
               f"solucion. Probable problema de diseño/SPEC — volver a ADR / "
               f"re-planear con el humano (advisory)")
+    # rubrica (1.23.0): el ultimo grade por repo, siempre visible — guess
+    # estructurado que aconseja; si esta gateado ya bloqueo por el ledger
+    for rname, rnode in ledger["repos"].items():
+        rub = _latest_static_by_tool(rnode).get("rubric:grade")
+        if rub:
+            m_ = "!" if rub.get("gated_reported") else "·"
+            print(f"  {m_} rubrica {rname}: {rub.get('note', 's/d')}")
     if stop_signal:
         print("  · stop-signal: todos los repos convergieron y no queda ningun "
               "fact bloqueante — lo que falta es deuda medible (coverage/"
@@ -3358,10 +3365,184 @@ def _acceptance_traceability(path):
     return blockers, advisory
 
 
+# --------------------------------------------------------------------------- #
+# rubric  (kit 1.23.0: el ACCEPTANCE de lo NO-testeable — criterio cualitativo
+# versionado. El engine NO corre ningun grader: valida la estructura de
+# RUBRIC.md como HECHO e ingesta el JSON del contrato — quien lo emitio
+# (Claude Code, Codex, Gemini CLI, un curl, un humano) es irrelevante.
+# Advisory por default; gatea SOLO por declaracion humana (--gate o
+# defaults.rubric.gate en config — procedencia 1.17.0).
+# --------------------------------------------------------------------------- #
+_RB_ID = re.compile(r"(?i)^(RB(-NEG)?[-_]?0*(\d+))\b")
+_RB_WEIGHT = re.compile(r"\(peso\s+(\d+)\)")
+_RB_THRESHOLD = re.compile(r"(?im)^threshold:\s*([0-9.]+)\s*$")
+
+
+def _parse_rubric(path):
+    """(items, threshold, found). item = {'id': 'RB-n'|'RB-NEG-n', 'weight',
+    'negative', 'text'} — IDs normalizados por numero. Los anchors son prosa
+    para el grader: el engine no los parsea."""
+    if not path or not os.path.exists(path):
+        return [], None, False
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return [], None, False
+    m = _RB_THRESHOLD.search(text)
+    try:
+        threshold = float(m.group(1)) if m else None
+    except ValueError:   # 'threshold: 0.8.0' — malformado = ausente, no traceback
+        threshold = None
+    items = []
+    for line in text.splitlines():
+        s = line.strip()
+        if s[:5].lower() not in ("- [ ]", "- [x]", "* [ ]", "* [x]"):
+            continue
+        body = s[5:].strip()
+        mid = _RB_ID.match(body)
+        if not mid:
+            continue
+        negative = bool(mid.group(2))
+        num = int(mid.group(3))
+        mw = _RB_WEIGHT.search(body)
+        items.append({"id": f"RB-NEG-{num}" if negative else f"RB-{num}",
+                      "weight": int(mw.group(1)) if mw else 1,
+                      "negative": negative,
+                      "text": body[mid.end():].strip()})
+    return items, threshold, True
+
+
+def _rubric_structure(path):
+    """Estructura de la rubrica = HECHO. Bloquea: archivo ausente, cero
+    criterios positivos, IDs duplicados (normalizados), threshold ausente o
+    fuera de (0, 1]."""
+    blockers = []
+    items, threshold, found = _parse_rubric(path)
+    if not found:
+        return [f"rubrica no encontrada: {path}"]
+    positives = [i for i in items if not i["negative"]]
+    if not positives:
+        blockers.append("rubrica sin criterios positivos ('- [ ] RB-01 (peso N) — ...')")
+    ids = [i["id"] for i in items]
+    dupes = sorted({x for x in ids if ids.count(x) > 1})
+    if dupes:
+        blockers.append(f"IDs duplicados (normalizados): {', '.join(dupes)}")
+    if threshold is None:
+        blockers.append("threshold ausente (linea 'threshold: 0.NN')")
+    elif not 0 < threshold <= 1:
+        blockers.append(f"threshold {threshold} fuera de (0, 1]")
+    return blockers
+
+
+def cmd_rubric_ingest(args):
+    ledger = _load(args.ledger)
+    node = _repo_node(ledger, args.repo)
+    defaults = ledger["config"].get("defaults", {})
+    rub_cfg = defaults.get("rubric", {}) if isinstance(defaults.get("rubric"), dict) else {}
+    rubric_path = args.rubric or rub_cfg.get("file", "RUBRIC.md")
+    blockers = _rubric_structure(rubric_path)
+    if blockers:
+        for b in blockers:
+            print(f"[qa_ledger] rubrica invalida: {b}", file=sys.stderr)
+        sys.exit(2)
+    items, threshold, _found = _parse_rubric(rubric_path)
+    by_id = {i["id"]: i for i in items}
+
+    try:
+        with open(args.report, "r", encoding="utf-8") as fh:
+            report = json.load(fh)
+        criteria = report["criteria"]
+        assert isinstance(criteria, list)
+        assert all(isinstance(c, dict) for c in criteria)  # entradas no-dict = contrato roto
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, AssertionError) as exc:
+        raise SystemExit(f"[qa_ledger] reporte del grader invalido ({args.report}): {exc} "
+                         f'— contrato: {{"criteria": [{{"id","verdict","evidence","note"}}]}}')
+
+    def _rb_norm(raw):
+        # mismo normalizado que la rubrica: RB-01 == RB_1 == rb1 (por numero)
+        m = _RB_ID.match(str(raw or "").strip())
+        if not m:
+            return None
+        return f"RB-NEG-{int(m.group(3))}" if m.group(2) else f"RB-{int(m.group(3))}"
+
+    unknown = [str(c.get("id")) for c in criteria
+               if _rb_norm(c.get("id")) not in by_id]
+    if unknown:
+        raise SystemExit(f"[qa_ledger] IDs del reporte que no existen en la rubrica: "
+                         f"{', '.join(unknown)} — el grader no inventa criterios.")
+    norm_ids = [_rb_norm(c["id"]) for c in criteria]
+    rep_dupes = sorted({x for x in norm_ids if norm_ids.count(x) > 1})
+    if rep_dupes:
+        # dos veredictos para el mismo criterio = contrato roto (si no, el
+        # ultimo pisa al primero en silencio — vector de gaming del grader)
+        raise SystemExit(f"[qa_ledger] IDs duplicados en el reporte (normalizados): "
+                         f"{', '.join(rep_dupes)} — un veredicto por criterio.")
+
+    verdicts = {_rb_norm(c["id"]): c for c in criteria}
+    unsupported = []   # veredictos que afectan el score SIN evidencia -> no puntuan
+    earned = 0.0
+    failed_pos = []
+    n_pos = sum(1 for i in items if not i["negative"])
+    for it in items:
+        c = verdicts.get(it["id"])
+        if it["negative"]:
+            # fail = la practica prohibida APARECE -> resta peso (con evidencia)
+            if c and c.get("verdict") == "fail":
+                if str(c.get("evidence") or "").strip():
+                    earned -= it["weight"]
+                else:
+                    unsupported.append(it["id"])
+            continue
+        if c and c.get("verdict") == "pass":
+            if str(c.get("evidence") or "").strip():
+                earned += it["weight"]
+            else:
+                unsupported.append(it["id"])
+                failed_pos.append(it["id"])
+        else:
+            # fail explicito o NO evaluado: no evaluado no es aprobado
+            failed_pos.append(it["id"])
+    total = sum(i["weight"] for i in items if not i["negative"])
+    score = max(0.0, earned) / total if total else 0.0
+    passed = score >= threshold
+    gated = bool(args.gate or rub_cfg.get("gate") is True)
+
+    note = (f"score {score:.2f} vs threshold {threshold:.2f} "
+            f"({n_pos - len(failed_pos)}/{n_pos} positivos con evidencia)"
+            + (" [GATE declarado]" if gated else " [advisory]"))
+    failing = (not passed) and gated
+    _append_gate_record(ledger, node, args.repo, "rubric:grade", args.iteration,
+                        failing, len(failed_pos), note)
+    _save(args.ledger, ledger)
+
+    if args.json:
+        print(json.dumps({"verdict": "PASS" if passed else "BELOW",
+                          "score": round(score, 3), "threshold": threshold,
+                          "gated": gated, "failed": sorted(failed_pos),
+                          "unsupported": sorted(unsupported)},
+                         indent=2, ensure_ascii=False))
+        sys.exit(1 if failing else 0)
+    print(f"RUBRIC: {'PASS' if passed else 'BELOW'}  {note}")
+    if failed_pos:
+        print(f"  ! criterios sin cerrar: {', '.join(sorted(failed_pos))}")
+    if unsupported:
+        print(f"  ! veredictos SIN evidencia (no puntuan): {', '.join(sorted(unsupported))} "
+              f"— evidence-or-nothing, el juicio sin cita no cuenta")
+    if failing:
+        print("  el gate esta DECLARADO (config/--gate): bloquea convergencia y "
+              "capea readiness <=65 hasta un grade limpio")
+    elif not passed:
+        print("  advisory: no gatea — declaralo en defaults.rubric.gate para que bloquee")
+    sys.exit(1 if failing else 0)
+
+
 def cmd_spec_check(args):
     acc_block, acc_adv = ([], [])
     if args.acceptance:
         acc_block, acc_adv = _acceptance_traceability(args.acceptance)
+    if getattr(args, "rubric", None):
+        acc_block = acc_block + _rubric_structure(args.rubric)
     if args.spec:
         text = ""
         for p in args.spec:
@@ -3371,14 +3552,14 @@ def cmd_spec_check(args):
             except OSError as exc:
                 print(f"[qa_ledger] cannot read spec {p}: {exc}", file=sys.stderr)
                 sys.exit(2)
-    elif args.acceptance and sys.stdin.isatty():
-        text = ""  # modo solo-acceptance interactivo: nada pipeado, no bloquear leyendo stdin
+    elif (args.acceptance or getattr(args, "rubric", None)) and sys.stdin.isatty():
+        text = ""  # modo solo-acceptance/rubrica interactivo: no bloquear leyendo stdin
     else:
         # sin --spec: leer stdin SIEMPRE que venga pipeado/redirigido (incluso
         # con --acceptance) — un `cat SPEC.md | ... --acceptance X` no debe
         # descartar en silencio el SPEC pipeado.
         text = sys.stdin.read()
-    if not text.strip() and not args.acceptance:
+    if not text.strip() and not args.acceptance and not getattr(args, "rubric", None):
         print("[qa_ledger] no spec content; use --spec PATH or pipe on stdin.", file=sys.stderr)
         sys.exit(2)
 
@@ -3575,7 +3756,7 @@ def cmd_golden_diff(args):
 # ausente en la maquina puede vivir en CI).
 SPECLOOP_SKILLS = ["specloop-discovery", "specloop-adr-refine",
                    "specloop-reverse-discovery", "specloop-characterize",
-                   "specloop-devloop", "specloop-sysdoc"]
+                   "specloop-devloop", "specloop-sysdoc", "specloop-rubric"]
 # herramienta primaria por type - su ausencia es AVISO, no error
 DOCTOR_TOOLS = {"maven": "mvn", "flutter": "flutter", "python": "pytest",
                 "node": "npm", "go": "go", "rust": "cargo", "dotnet": "dotnet",
@@ -3737,6 +3918,20 @@ def cmd_doctor(args):
                     warn(f"toolchain {r['name']} ({r.get('type')}): {tool} NO esta en PATH",
                          f"instalar: {DOCTOR_FIX.get(tool, 'ver docs del toolchain')} "
                          f"(o puede vivir solo en CI)")
+            rub_cfg = defaults.get("rubric", {}) if isinstance(defaults.get("rubric"), dict) else {}
+            if rub_cfg.get("file"):
+                if os.path.isfile(rub_cfg["file"]):
+                    rb_block = _rubric_structure(rub_cfg["file"])
+                    if rb_block:
+                        warn(f"rubrica {rub_cfg['file']} con estructura invalida",
+                             "; ".join(rb_block) + " - ver templates/RUBRIC.md")
+                    else:
+                        ok(f"rubrica declarada: {rub_cfg['file']}"
+                           + (" (GATE declarado)" if rub_cfg.get("gate") is True else " (advisory)"))
+                else:
+                    warn(f"rubrica declarada pero ausente: {rub_cfg['file']}",
+                         "instalar: crea desde templates/RUBRIC.md (criterios RB-nn "
+                         "ponderados + threshold)")
             ledger_path = args.ledger
             if os.path.isfile(ledger_path):
                 try:
@@ -3804,6 +3999,23 @@ def build_parser():
     pdoc.add_argument("--ledger", default=DEFAULT_LEDGER)
     pdoc.add_argument("--json", action="store_true")
     pdoc.set_defaults(func=cmd_doctor)
+
+    pri = sub.add_parser(
+        "rubric-ingest",
+        help="ingest a rubric grader's JSON verdict (vendor-neutral contract; "
+             "advisory by default, --gate or defaults.rubric.gate blocks)")
+    pri.add_argument("--ledger", default=DEFAULT_LEDGER)
+    pri.add_argument("--repo", required=True)
+    pri.add_argument("--report", required=True,
+                     help='grader JSON: {"criteria":[{"id","verdict","evidence","note"}]}')
+    pri.add_argument("--rubric", default=None,
+                     help="RUBRIC.md path (default: defaults.rubric.file or ./RUBRIC.md)")
+    pri.add_argument("--iteration", type=int, default=0)
+    pri.add_argument("--gate", action="store_true",
+                     help="a below-threshold score writes a GATED record: blocks "
+                          "convergence and caps readiness <=65")
+    pri.add_argument("--json", action="store_true")
+    pri.set_defaults(func=cmd_rubric_ingest)
 
     pi = sub.add_parser("init", help="create the ledger from a config file")
     pi.add_argument("--config", required=True)
@@ -3927,7 +4139,7 @@ def build_parser():
     plg.add_argument("--iteration", type=int, required=True)
     plg.add_argument("--kind", required=True,
                      choices=["golden-diff", "gate-check", "pit-check", "simplicity",
-                              "regression"])
+                              "regression", "rubric"])
     plg.add_argument("--verdict", required=True, choices=["pass", "fail", "not-run"])
     plg.add_argument("--count", type=int, default=1,
                      help="failing finding count (fail only; default 1)")
@@ -4062,6 +4274,9 @@ def build_parser():
         help="spec-quality gate: lint a SPEC/ACCEPTANCE for structure/testability BEFORE generation")
     psc.add_argument("--spec", action="append",
                      help="path to a SPEC/ACCEPTANCE markdown (repeatable; else stdin)")
+    psc.add_argument("--rubric", default=None,
+                     help="validate RUBRIC.md structure as FACTS: missing file / zero "
+                          "positive criteria / duplicate RB-nn IDs / bad threshold block")
     psc.add_argument("--acceptance", default=None,
                      help="validate ACCEPTANCE traceability (AC-n IDs): missing "
                           "file / zero criteria / zero traceable / duplicate "

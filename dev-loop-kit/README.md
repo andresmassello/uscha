@@ -1,8 +1,8 @@
 # dev-loop kit
 
 Orquestador spec-driven + QA multi-repo para Claude Code, con ledger determinístico.
-**Seis skills** (`specloop-discovery`, `specloop-adr-refine`, `specloop-devloop`, `specloop-sysdoc`, `specloop-reverse-discovery`,
-`specloop-characterize`) y un motor de medición (`qa_ledger.py`).
+**Siete skills** (`specloop-discovery`, `specloop-adr-refine`, `specloop-devloop`, `specloop-sysdoc`, `specloop-reverse-discovery`,
+`specloop-characterize`, `specloop-rubric`) y un motor de medición (`qa_ledger.py`).
 
 **Para quién:** un operador solo llevando UN cambio no-trivial o con riesgo, mantenido
 honesto por un ledger determinístico y un human gate en el merge. NO es para cambios
@@ -28,7 +28,8 @@ dev-loop-kit/
    ├─ specloop-devloop/
    │  ├─ SKILL.md                  # orquestador: plan → build → QA loop → PR
    │  └─ qa_ledger.py              # medición + ledger + gates (ingest/log-gate/golden-diff/gate-check/pit/simplicity/rebuild)
-   └─ specloop-sysdoc/                     # (opcional) deck HTML de dos vistas desde el ledger
+   ├─ specloop-sysdoc/                     # (opcional) deck HTML de dos vistas desde el ledger
+   └─ specloop-rubric/                      # (opcional) grade de la rubrica — adapter fino; el nucleo es agnostico
 ```
 
 ## Flujo punta a punta
@@ -217,7 +218,7 @@ todos los proyectos. Las skills resuelven el engine primero en el proyecto y cae
 `~/.claude/skills/specloop-devloop/qa_ledger.py` si no hay instalación local.
 
 ```bash
-for s in specloop-discovery specloop-adr-refine specloop-reverse-discovery specloop-characterize specloop-devloop specloop-sysdoc; do
+for s in specloop-discovery specloop-adr-refine specloop-reverse-discovery specloop-characterize specloop-devloop specloop-sysdoc specloop-rubric; do
   cp -r "dev-loop-kit/.claude/skills/$s" ~/.claude/skills/
 done
 mkdir -p ~/.claude/hooks && cp dev-loop-kit/hooks/block-approved-writes.ps1 ~/.claude/hooks/
@@ -392,7 +393,7 @@ python3 $QL simplicity-check --diff cambios.diff --json        # lo consume sys-
 `doctor · init · snapshot · check-coverage · log-step · ingest-gate · log-gate · flag-blocker ·
 converged · oscillation · escalate · resolve-escalation · summary · readiness · rebuild ·
 simplicity-check · pit-check · gate-check · spec-check · golden-diff · regression-check ·
-phase` — cada uno con `--help`.
+phase · rubric-ingest · doctor` — cada uno con `--help`.
 
 Los **fact gates** (golden-diff, gate-check, pit-check, simplicity) se PERSISTEN con
 `log-gate`: un fail bloquea convergencia y capea readiness ≤65 vía el ledger. Una violación

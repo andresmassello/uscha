@@ -279,6 +279,7 @@ LOC       ← its own count (stdlib)</pre>
           <tr><td>spec-check · structure</td><td>out-of-scope section + acceptance criteria present + traceable AC-n IDs</td><td class="ok">BLOCKS</td></tr>
           <tr><td>phase --require pr-ready</td><td>state DERIVED from the ledger; a <code>spike/*</code> branch never passes (1.18.0–1.19.0)</td><td class="ok">BLOCKS</td></tr>
           <tr><td>regression-check</td><td>findings closed with no new test = NARRATED (1.16.0); <code>--strict</code> gates it</td><td class="no">ADVISES</td></tr>
+          <tr><td>rubric-ingest</td><td>rubric grade (versioned qualitative criteria, vendor-neutral JSON contract, 1.23.0); gates only when the human declares it</td><td class="no">ADVISES</td></tr>
           <tr><td>spec-check · prose</td><td>vague terms, EARS, stack naming (<code>--strict</code> gates)</td><td class="no">ADVISES</td></tr>
         </tbody>
       </table>
@@ -388,6 +389,7 @@ claude --version &amp;&amp; claude doctor</pre>
           <tr><td>resolve-escalation</td><td>human clears an escalation so readiness can rise past 75.</td></tr>
           <tr><td>regression-check</td><td>Find Bugs Once (1.16.0): findings closed with no new test line = NARRATED (advises; --strict gates).</td></tr>
           <tr><td>phase</td><td>workflow state DERIVED from the ledger (plan/build/qa/escalated/pr-ready), never self-declared; --require pr-ready gates the PR and vetoes spike/* branches (1.18.0–1.19.0).</td></tr>
+          <tr><td>rubric-ingest</td><td>ingests the rubric grader JSON (evidence-or-nothing, weighted score vs threshold); advisory by default, --gate or defaults.rubric.gate makes it blocking (1.23.0).</td></tr>
         </tbody>
       </table>
       <div class="rule"><div class="rk">tracked-md protocol</div><p>Before editing any tracked <code>.md</code> (CLAUDE.md, plan/delta docs, docs/adr), pull the repo's current version first. Those files carry live progress — never regenerate from scratch.</p></div>

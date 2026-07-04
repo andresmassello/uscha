@@ -181,6 +181,15 @@ and, for migration work, golden-diff (does behavior still match the human-approv
 baseline?). Then PERSIST each verdict with `log-gate` — a failing fact gate blocks
 convergence and caps readiness ≤65 through the ledger:
 
+**Rubric — the non-testable layer (kit 1.23.0).** If a `RUBRIC.md` exists (or
+`defaults.rubric.file` declares one), on passes that changed code run the
+`specloop-rubric` grade (isolated context — the grader reads ONLY diff + rubric;
+evidence-or-nothing) and ingest the contract JSON:
+`rubric-ingest --repo <REPO> --report reports/rubric-grade.json --iteration <N>`.
+Advisory by default — it gates ONLY when the human declared
+`defaults.rubric.gate: true` (then a below-threshold score blocks convergence like
+any fact gate). Never declare the gate yourself.
+
 **Find Bugs Once (kit 1.16.0).** When a pass you log carries `--fixed > 0`, run
 `regression-check --repo <REPO> --from-git --base <base>`: closing findings without
 adding a single NON-BLANK test-tree line is **NARRATED** closure — the failing test

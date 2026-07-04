@@ -439,7 +439,7 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(1300px
     <span class="node">Evidence</span><span class="ar">→</span>
     <span class="node red">Human gate</span>
   </div>
-  <p>Two things the flow guarantees: <strong>lowering the cost of entry</strong> (you don't have to design the system to be able to start — Discovery proposes that) and <strong>raising the certainty of the output</strong> (an honest state, with evidence and blockers, tells you how ready it truly is). In Claude Code all of this lives in six callable skills (kit 1.21.0) and a measurement engine in Python.</p>
+  <p>Two things the flow guarantees: <strong>lowering the cost of entry</strong> (you don't have to design the system to be able to start — Discovery proposes that) and <strong>raising the certainty of the output</strong> (an honest state, with evidence and blockers, tells you how ready it truly is). In Claude Code all of this lives in seven callable skills (kit 1.23.0) and a measurement engine in Python.</p>
   <div class="tagrow">
     <span class="chip red">/specloop-discovery</span><span class="chip red">/specloop-adr-refine</span><span class="chip red">/specloop-devloop</span><span class="chip red">/specloop-sysdoc</span><span class="chip red">/specloop-reverse-discovery</span><span class="chip red">/specloop-characterize</span><span class="chip">qa_ledger.py</span>
   </div>
@@ -766,6 +766,7 @@ $ python3 .claude/skills/specloop-devloop/qa_ledger.py simplicity-check --diff H
       <tr><td class="t">simplicity · budgets</td><td>+lines / net growth / files / nesting / largest hunk — test trees stay OUT of the budget (1.11.0): writing tests never penalizes</td><td class="ok">BLOCKS</td></tr>
       <tr><td class="t">spec-check · structural</td><td>missing out-of-scope · absent/empty acceptance criteria · zero traceable AC-n IDs or duplicates</td><td class="ok">BLOCKS</td></tr>
       <tr><td class="t">regression-check</td><td>findings closed with no new test line = NARRATED (Find Bugs Once, 1.16.0) — <code class="in">--strict</code> gates it</td><td class="no">ADVISES</td></tr>
+      <tr><td class="t">rubric-ingest</td><td>rubric grade: versioned qualitative criteria with mandatory evidence (1.23.0) — gates ONLY when the human declares it (<code class="in">defaults.rubric.gate</code>)</td><td class="no">ADVISES</td></tr>
       <tr><td class="t">spec-check · prose · abstractions</td><td>heuristic over prose / "new types" (<code class="in">--strict</code> gates them)</td><td class="no">ADVISES</td></tr>
     </tbody>
   </table>
@@ -907,7 +908,7 @@ $ python3 .claude/skills/specloop-devloop/qa_ledger.py simplicity-check --diff H
       <tr><td class="t">Python 3.8+</td><td>runs qa_ledger.py (pure stdlib)</td><td><code class="in">python3</code> on PATH</td></tr>
       <tr><td class="t">git</td><td>versioning</td><td>2.x with user.name/email</td></tr>
       <tr><td class="t">gh</td><td>create repo / open PR</td><td>optional, recommended</td></tr>
-      <tr><td class="t">kit skills</td><td>specloop-discovery, specloop-adr-refine, specloop-devloop, specloop-sysdoc, specloop-reverse-discovery, specloop-characterize</td><td>in <code class="in">~/.claude/skills/</code></td></tr>
+      <tr><td class="t">kit skills</td><td>specloop-discovery, specloop-adr-refine, specloop-devloop, specloop-sysdoc, specloop-reverse-discovery, specloop-characterize, specloop-rubric</td><td>in <code class="in">~/.claude/skills/</code></td></tr>
       <tr><td class="t">QA skills</td><td>code-review, judgment-day, improve</td><td>your global skills (specloop-devloop <strong>orchestrates</strong> them, doesn't bundle them)</td></tr>
       <tr><td class="t">engram (plugin)</td><td>persistent memory across sessions</td><td>marketplace <code class="in">Gentleman-Programming/engram</code></td></tr>
       <tr><td class="t">sonarqube (plugin)</td><td>hosted static gate (alternative to java-qa-gate)</td><td>marketplace <code class="in">claude-plugins-official</code></td></tr>

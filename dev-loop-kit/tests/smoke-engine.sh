@@ -23,7 +23,8 @@
 # requerimiento (config) vs default del kit, etiquetado en cada gate —
 # y phase (v1.18.0): FSM derivada del ledger, el estado se computa —
 # y spikes (v1.19.0): rama spike/* jamas pasa el gate de PR —
-# y doctor (v1.22.0): diagnostico de la instalacion, ledger corrupto = error.
+# y doctor (v1.22.0): diagnostico de la instalacion, ledger corrupto = error —
+# y rubric layer (v1.23.0): criterio cualitativo versionado, agnostico (T43 a mano).
 #
 # Uso:   bash tests/smoke-engine.sh        (desde la raíz del kit)
 # Exit:  0 = todos los checks verdes · 1 = algún check falló
@@ -814,6 +815,89 @@ sys.exit(0 if ok else 1)" \
 # ledger corrupto = ERROR (no aviso): el doctor debe salir 1
 "$PY" -c "open('QA-LEDGER.json','a',encoding='utf-8').write('{trunc')"
 chk "doctor con ledger corrupto -> exit 1" 1 run doctor
+run init --config dev-loop.config.json >/dev/null 2>&1
+
+echo "== T43 rubric layer: agnostico — el grader.json se llena A MANO, sin LLM =="
+cat > RUBRIC.md <<'EOF'
+# RUBRIC — smoke
+threshold: 0.80
+## Criterios
+- [ ] RB-01 (peso 3) — errores sanos
+- [ ] RB-02 (peso 1) — convenciones del repo
+## Criterios negativos
+- [ ] RB-NEG-01 (peso 2) — comentarios que narran el cambio
+EOF
+chk "spec-check --rubric valida -> exit 0" 0 run spec-check --rubric RUBRIC.md
+printf -- "# RUBRIC\n- [ ] RB-01 a\n- [ ] RB-1 b\n" > rub-dup.md
+chk "IDs duplicados (RB-01 == RB-1) -> exit 1" 1 run spec-check --rubric rub-dup.md
+printf -- "# RUBRIC\n- [ ] RB-01 a\n" > rub-nothr.md
+chk "sin threshold -> exit 1" 1 run spec-check --rubric rub-nothr.md
+# grade a mano: RB-01 pass con evidencia (3), RB-02 pass SIN evidencia (no puntua),
+# negativo no aparece -> score 3/4 = 0.75 < 0.80 -> BELOW
+cat > grader.json <<'EOF'
+{ "criteria": [
+  {"id": "RB-01", "verdict": "pass", "evidence": "src/x.py:42 — timeout+retry", "note": "ok"},
+  {"id": "RB-02", "verdict": "pass", "evidence": "", "note": "sin cita"},
+  {"id": "RB-NEG-01", "verdict": "pass", "evidence": "", "note": "no aparece"} ] }
+EOF
+chk "BELOW threshold sin gate declarado -> advisory exit 0" 0 \
+  run rubric-ingest --repo repo-a --report grader.json --rubric RUBRIC.md
+run rubric-ingest --repo repo-a --report grader.json --rubric RUBRIC.md --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ok = (d['verdict'] == 'BELOW' and abs(d['score'] - 0.75) < 0.001
+      and d['unsupported'] == ['RB-2'] and d['gated'] is False)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   evidence-or-nothing: pass sin cita no puntua (0.75 < 0.80)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL contrato del grader"; }
+run readiness 2>/dev/null | grep -q "rubrica repo-a" \
+  && { PASS=$((PASS+1)); echo "  ok   readiness muestra el grade como advisory (no dimension)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL rubrica invisible en readiness"; }
+# gate DECLARADO: below-threshold bloquea convergencia via ledger.
+# Primero repo-a CONVERGE (ciclo limpio) — sin esto el check seria VACUO
+# (converged ya sale 1 en un ledger virgen por 'no agent steps').
+for t in code-review judgment-day improve; do
+  run log-step --repo repo-a --tool $t --iteration 9 \
+    --gated-reported 0 --files-changed 0 --tests-passed true >/dev/null 2>&1
+done
+chk "repo-a converge ANTES del gate (sanidad del fixture)" 0 run converged --repo repo-a
+chk "BELOW con --gate -> exit 1" 1 \
+  run rubric-ingest --repo repo-a --report grader.json --rubric RUBRIC.md --gate
+chk "convergencia bloqueada por rubric:grade gateado" 1 run converged --repo repo-a
+# threshold malformado ('0.8.0') = ausente, no traceback
+printf -- "# RUBRIC\nthreshold: 0.8.0\n- [ ] RB-01 x\n" > rub-badthr.md
+chk "threshold malformado -> exit 1 sin traceback" 1 run spec-check --rubric rub-badthr.md
+# dos veredictos para el mismo criterio (RB-01 y RB-1) = contrato roto
+printf -- '{ "criteria": [ {"id": "RB-01", "verdict": "pass", "evidence": "x:1", "note": ""}, {"id": "RB-1", "verdict": "fail", "evidence": "", "note": ""} ] }\n' > grader-dup.json
+chk "IDs duplicados en el reporte -> exit 1 (un veredicto por criterio)" 1 \
+  run rubric-ingest --repo repo-a --report grader-dup.json --rubric RUBRIC.md
+# grade limpio (todo con evidencia, negativo sin matchear) -> PASS y limpia el gate
+cat > grader-ok.json <<'EOF'
+{ "criteria": [
+  {"id": "RB-01", "verdict": "pass", "evidence": "src/x.py:42 — ok", "note": "ok"},
+  {"id": "RB-02", "verdict": "pass", "evidence": "src/y.py:7 — snake_case", "note": "ok"},
+  {"id": "RB-NEG-01", "verdict": "pass", "evidence": "", "note": "no aparece"} ] }
+EOF
+chk "grade limpio con --gate -> exit 0 (PASS)" 0 \
+  run rubric-ingest --repo repo-a --report grader-ok.json --rubric RUBRIC.md --gate
+chk "gate limpio libera la convergencia (latest-wins)" 0 run converged --repo repo-a
+# ID inexistente = error de contrato
+printf -- '{ "criteria": [ {"id": "RB-99", "verdict": "pass", "evidence": "x:1", "note": ""} ] }\n' > grader-bad.json
+chk "ID inexistente en la rubrica -> exit 1" 1 \
+  run rubric-ingest --repo repo-a --report grader-bad.json --rubric RUBRIC.md
+# negativo CON evidencia resta peso: 4/4 - 2 = 2/4 = 0.5
+cat > grader-neg.json <<'EOF'
+{ "criteria": [
+  {"id": "RB-01", "verdict": "pass", "evidence": "src/x.py:42 — ok", "note": "ok"},
+  {"id": "RB-02", "verdict": "pass", "evidence": "src/y.py:7 — ok", "note": "ok"},
+  {"id": "RB-NEG-01", "verdict": "fail", "evidence": "src/z.py:9 — 'now correctly...'", "note": "narra"} ] }
+EOF
+run rubric-ingest --repo repo-a --report grader-neg.json --rubric RUBRIC.md --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['verdict'] == 'BELOW' and abs(d['score'] - 0.5) < 0.001 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   negativo con evidencia resta peso (4-2)/4 = 0.50"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL semantica de negativos"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
