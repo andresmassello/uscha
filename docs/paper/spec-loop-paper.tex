@@ -6,14 +6,16 @@
 \usepackage{microtype}
 \usepackage{booktabs}
 \usepackage{enumitem}
+\usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{xcolor}
 \hypersetup{colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue}
 
 \title{\textbf{spec-loop: A Fact-Gated, Tool-Agnostic Methodology for\\Specification-Driven Development with LLM Coding Agents}}
-\author{Andr\'es Massello\\
-\small C\'ordoba, Argentina\\
-\small \texttt{https://github.com/andresmassello}}
+\author{Andr\'es Massello\thanks{This work is licensed under a Creative
+Commons Attribution 4.0 International (CC BY 4.0) license.}\\
+\small Independent Researcher --- C\'ordoba, Argentina\\
+\small \texttt{amassello@gmail.com} $\cdot$ \texttt{github.com/andresmassello}}
 \date{July 2026}
 
 \begin{document}
@@ -67,7 +69,22 @@ human review as mitigations~\cite{demacedo2026prompt}, but they largely encode
 their process as \emph{prose instructions that the agent may ignore}, and their
 verification signals rarely distinguish between what is mechanically verifiable
 and what is a model's opinion. spec-loop starts from that distinction and makes
-it the organizing principle of the whole process.
+it the organizing principle of the whole process. Figure~\ref{fig:system}
+shows the resulting pipeline: eight stations from idea to human gate, under a
+constitution of invariants that no station may violate, with an inner
+convergence loop over the build and an outer proposal loop that returns to
+discovery --- while the merge remains human.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig1-system-map.png}
+\caption{The spec-loop pipeline. Eight stations from idea to human gate under
+a constitution of inviolable invariants. The inner loop
+(build--verify--evidence) converges instead of chasing zero findings; the
+outer loop returns evidence to discovery as a proposal --- the human still
+owns the merge.}
+\label{fig:system}
+\end{figure}
 
 The methodology is built on one discipline and three architectural commitments:
 
@@ -160,7 +177,21 @@ only legitimate output is a decision record with lessons --- spike branches are
 mechanically refused at the pull-request gate. The front emits a versioned
 specification package: context glossary, constitution, domain model,
 specification, decision records with implementation plans and verification
-checklists, acceptance file, risks, and handoff.
+checklists, acceptance file, risks, and handoff. Figure~\ref{fig:hierarchy}
+shows how the package's artifacts feed the evidence engine and how the engine
+verifies the result across six layers of truth.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{fig2-spec-hierarchy.png}
+\caption{The specification package (left: what gets done) and the six layers
+of truth (right: how it is verified), joined by the evidence engine. The
+bottom band states the four commitments the diagram encodes: evidence produced
+by execution rather than asserted by the author; merge and release decided by
+a person; convergence instead of perfection; and legacy awareness --- freeze
+the old debt, block the new.}
+\label{fig:hierarchy}
+\end{figure}
 
 \textbf{Brownfield (reverse discovery).} For an existing system, the direction
 of trust inverts: observable behavior is ground truth, and the agent may
@@ -196,6 +227,34 @@ until a human resolves it, and resolving a blocker requires an \emph{escape
 analysis}: which gate or test should have caught this, and what was done about
 it.
 
+\subsection{A worked example in ten steps}
+
+Figure~\ref{fig:tensteps} walks a deliberately small feature --- a discount
+calculation --- through the whole methodology, because the small case makes
+the failure modes legible. Six of the ten steps are failures or refinements,
+and that is the point: each deviation is caught by a specific gate rather than
+by hope. Two advisory passes tighten the specification before any code exists
+(a vague criterion becomes a testable oracle; a missing out-of-scope section
+is added). During the build, mutation testing exposes a test that runs but
+asserts nothing (\emph{coverage was lying}); the gate-integrity check catches
+and blocks the agent lowering a threshold to pass; the rebuild test diverges
+on an implicit input case, and the response is to amend the specification,
+never the code; the simplicity gate cuts a speculative abstraction. Only then
+does the readiness score --- capped by facts, dominated by measured acceptance
+--- reach the human gate, where a person reads the diff and approves the
+merge.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\linewidth]{fig3-ten-steps.png}
+\caption{A worked example: \texttt{applyDiscount(amount,~\%)} through the ten
+steps of the methodology. Black steps advance (blue marks the build), amber
+steps refine the specification (advisory), red steps are gates stopping the
+agent (fix and re-run), and the final green step is the human gate. Six of ten steps being
+failure or refinement is the expected shape of the process, not an anomaly.}
+\label{fig:tensteps}
+\end{figure}
+
 \section{The Evidence Engine}\label{sec:engine}
 
 The engine is a single dependency-free Python file. It never runs an LLM and
@@ -204,37 +263,104 @@ XML, Cobertura and lcov coverage, nine linter formats across nine language
 stacks) and validates structures. Every verdict is persisted in a
 deterministic ledger with an integrity checksum; external mutation or a
 truncated write blocks loading with a recovery message.
+Table~\ref{tab:checks} summarizes the complete check family and the verdict
+class of each.
 
-\textbf{Fact gates (block).} A byte-comparison golden gate (with declared
-volatile fields masked \emph{visibly} --- masking is reported, never silent); a
-gate-integrity check that blocks diffs that weaken the measuring apparatus
-(deleted or disabled tests across all nine stack conventions, lowered
-thresholds, added secrets); simplicity budgets over the diff; structural
-specification linting (missing sections, zero traceable acceptance criteria,
-duplicate identifiers); and a derived state machine: the workflow state
-(plan, build, qa, escalated, pr-ready) is \emph{computed} from ledger facts.
-A self-declared state machine would be narrated state --- the exact category of
-signal the methodology distrusts --- so there is nothing to declare and no
-illegal transition to police.
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lp{8.6cm}l@{}}
+\toprule
+\textbf{Check} & \textbf{Reads} & \textbf{Verdict} \\
+\midrule
+\texttt{golden-diff} & byte comparison against human-approved fixtures;
+declared volatiles masked \emph{visibly} & blocks \\
+\texttt{gate-check} & diff structure: deleted/disabled tests (nine stack
+conventions), lowered thresholds, added secrets & blocks \\
+\texttt{pit-check} & mutation-testing reports (test effectiveness, because
+coverage lies) & blocks \\
+\texttt{simplicity-check} & diff size, nesting, net growth against declared
+budgets; test code excluded & blocks \\
+\texttt{spec-check} (structure) & missing sections, zero traceable acceptance
+identifiers, duplicates, invalid rubric structure & blocks \\
+\texttt{phase --require pr-ready} & workflow state derived from ledger facts;
+spike branches always refused & blocks \\
+\texttt{readiness} & weighted state score with hard caps and threshold
+provenance & reports \\
+\texttt{regression-check} & findings closed without new non-blank test lines
+$\rightarrow$ narrated closure & advises* \\
+\texttt{rubric-ingest} & weighted qualitative criteria; evidence-or-nothing
+grader contract & advises* \\
+\texttt{spec-check} (prose) & vagueness and shape heuristics over
+specification text & advises* \\
+\bottomrule
+\end{tabular}
+\caption{The check family. Verdicts marked * advise by default and gate only
+under explicit human declaration (configuration or flag); the declaration is
+surfaced everywhere as \emph{requirement (declared)} versus \emph{default (kit
+opinion)}.}
+\label{tab:checks}
+\end{table}
 
-\textbf{Structured guesses (advise).} Prose heuristics over specifications;
-regression capture (closing findings without adding a single non-blank test
-line is flagged as \emph{narrated closure}); plateau and stop-signal
-advisories over the finding history; and a rubric layer: a versioned file of
-weighted qualitative criteria with anchor examples, negative criteria, and a
-threshold, graded by any runner against a JSON contract with
-evidence-or-nothing semantics --- a verdict that affects the score without a
-file-and-line citation does not count. All of these advise by default and
-gate only when the human declares it in configuration; the declaration
-distinction is surfaced everywhere as \emph{requirement (declared) versus
-default (kit opinion)}.
+\textbf{Fact gates (block).} The blocking gates read artifacts, not opinions.
+Two design choices deserve emphasis. First, the golden gate's masking of
+volatile fields (timestamps, request identifiers) is itself governed: masking
+rules are declared in a versioned file that the human approves together with
+the fixtures, every masked match is reported separately, and any later edit to
+the rules file is flagged --- masking is never invisible. Second, the workflow
+state machine is \emph{derived}: the state (plan, build, qa, escalated,
+pr-ready) is computed from ledger facts. A self-declared state machine would
+be narrated state --- the exact category of signal the methodology distrusts
+--- so there is nothing to declare and no illegal transition to police.
+
+\textbf{Structured guesses (advise).} The advisory layer includes regression
+capture (closing findings without adding a single non-blank test line is
+flagged as \emph{narrated closure}; the failing test goes before the fix);
+plateau and stop-signal advisories over the finding history (findings flat or
+rising across three complete cycles means more iteration is not approaching
+the solution --- return to the decision records; everything converged with
+zero blocking facts means cut and ship); and the rubric layer: a versioned
+file of weighted qualitative criteria --- conventions, error-handling sanity,
+interface ergonomics, documentation quality --- with anchor examples, negative
+criteria, and a threshold, graded by any runner against a JSON contract with
+evidence-or-nothing semantics: a verdict that affects the score without a
+file-and-line citation does not count, duplicate verdicts for one criterion
+break the contract, and unevaluated criteria count as failed (unevaluated is
+not approved).
 
 \textbf{Readiness.} A weighted 0--100 score reports the state of the result,
-never effort. The dominant dimension is measured acceptance --- criteria closed
-by green, name-tagged tests --- with checkbox completion demoted to a narrative
-dimension. Hard caps override the average (red tests, open blockers,
-unresolved escalations), and every biting threshold states its provenance.
-The score reports; it does not gate --- the gates are the facts above.
+never effort (Table~\ref{tab:readiness}). The dominant dimension is measured
+acceptance --- criteria closed by green, name-tagged tests --- with checkbox
+completion demoted to a narrative dimension. Hard caps override the weighted
+average, and every biting threshold states its provenance. The score reports;
+it does not gate --- the gates are the facts above.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lcp{8.6cm}@{}}
+\toprule
+\textbf{Dimension} & \textbf{Weight} & \textbf{Measured from} \\
+\midrule
+acceptance (measured) & 30 & criteria closed by green, name-tagged test cases
+in ingested reports \\
+static gate & 20 & latest linter runs, normalized severities; never-ran scores
+0 (silence is not success) \\
+\texttt{adr} (narrative completion) & 15 & checkbox ratio of the acceptance
+file --- narrated progress, deliberately demoted below measured acceptance \\
+coverage & 15 & coverage reports against the declared threshold \\
+convergence & 10 & clean last cycle of every review tool plus clean persisted
+fact gates \\
+integration & 10 & cross-repository contract pass (weight redistributed if
+disabled) \\
+\bottomrule
+\end{tabular}
+\caption{Readiness dimensions and default weights. Hard caps override the
+average: red tests $\le$35, open blocker/critical findings $\le$65, unresolved
+escalation $\le$75 --- each cap reporting whether its threshold is a declared
+requirement or a kit default.}
+\label{tab:readiness}
+\end{table}
 
 \section{Reference Implementation}\label{sec:impl}
 
@@ -254,12 +380,20 @@ not by instruction --- during development of the implementation itself the hook
 blocked one of its author's own commands, which is the property working as
 designed.
 
-The implementation includes an installation-diagnosis subcommand in the
-spirit of \texttt{flutter doctor} (interpreter, toolchains per stack, hook
-presence and registration, skill integrity, per-project configuration), a
-smoke suite of 140 executable checks over a synthetic ledger, and three
-installation modes (per-project, per-user, and as a packaged plugin for one
-agent runtime --- packaging, not dependency).
+The implementation carries its process in executable form. A smoke suite of
+140 checks exercises the engine against a synthetic ledger --- including,
+deliberately, the agnosticism claim: the rubric-layer tests fill the grader's
+JSON by hand, with no model in the loop. Version consistency across the five
+release artifacts (version file, configuration, changelog, plugin manifest,
+marketplace manifest) is itself a suite check, converting a release convention
+into a verifiable fact. An installation-diagnosis subcommand in the spirit of
+\texttt{flutter doctor} verifies interpreter, per-stack toolchains, hook
+presence and registration, skill integrity, and per-project configuration ---
+and every failing check carries its remedy (an installation link or command),
+so the workflow is: run, install what is listed, re-run until green. Three
+installation modes are supported: per-project, per-user, and as a packaged
+plugin for one agent runtime --- packaging, not dependency; the other runtimes
+install by copying files.
 
 \section{Design Validation and Self-Application}\label{sec:validation}
 
@@ -281,7 +415,12 @@ slogan to enforced property.
 against classical software-engineering doctrine~\cite{thomas2019pragmatic},
 producing 8 validations, 12 tensions with recorded resolutions, and 10
 actionable improvements --- all ten implemented, each as a separate release
-with its own regression checks. In the two deepest tensions the methodology
+with its own regression checks. The validations were often word-for-word:
+``don't assume it --- prove it'' is the ledger's two-tier contract; shared
+mutable resources including \emph{files} motivated the ledger's integrity
+checksum; and the doctrine's warning against trusting enforcement to good
+intentions is exactly why the golden prohibition is a hook rather than an
+instruction. In the two deepest tensions the methodology
 deliberately departed from the letter of the doctrine to defend its own
 principle: readiness caps continue to bite by default (their existence is a
 definition; only the numbers are opinion, and they now state their
@@ -293,9 +432,12 @@ the same commit, a fresh-context review before merge, and a five-way version
 consistency check enforced by the suite. Fresh-context reviews found real
 defects prior to merge in 13 of 14 reviewed releases, including: test-file
 classifier gaps that made a documented guarantee an overclaim; a blank-line
-loophole in regression-capture evidence; a review-suite check that passed for
-the wrong reason (its precondition never held); and silent last-wins
-semantics on duplicated grader verdicts --- a grader gaming vector. We take the
+loophole in regression-capture evidence (any non-blank test line counts as
+evidence --- a tripwire, not a judge --- but a blank line must not); a
+review-suite check that passed for the wrong reason (its precondition never
+held, so the assertion was vacuous); and silent last-wins semantics on
+duplicated grader verdicts --- a grader gaming vector, now a broken-contract
+error. We take the
 consistency of this defect stream as evidence for the methodology's core
 premise: independent, fresh-context checking against recorded criteria
 catches what the authoring context cannot see.
