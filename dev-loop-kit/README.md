@@ -233,6 +233,21 @@ migración el `.gitattributes` de `templates/` (`*.approved.* binary`).
 > de cada skill al repo canónico — global siempre al día con main, cero re-instalación
 > por release: `cmd /c mklink /J "%USERPROFILE%\.claude\skills\specloop-devloop" "<repo>\dev-loop-kit\.claude\skills\specloop-devloop"` (una por skill).
 
+**Opción C — plugin de Claude Code** (kit 1.24.0, la recomendada si usás Claude Code):
+el repo es su propio marketplace y el hook INV-GOLDEN-01 se auto-registra al instalar
+(cero edición de settings.json). Las skills quedan como `specloop:specloop-*`.
+
+```
+/plugin marketplace add andresmassello/SPEC-LOOP
+/plugin install specloop@specloop
+```
+
+Updates: `/plugin update specloop@specloop` cuando haya release nuevo (el plugin declara
+`version`, así que solo actualiza con bump). Linux: el hook es PowerShell — instalá pwsh
+(el doctor te da el link) y ajustá el comando del hook si hace falta. El resto de los
+runtimes (Codex, Gemini CLI, Cursor) siguen usando la Opción A/B — el plugin es
+empaquetado, no dependencia.
+
 **Verificá la instalación con `doctor`** (kit 1.22.0, espíritu flutter doctor —
 Windows y Linux, output ASCII, exit 1 solo con errores):
 

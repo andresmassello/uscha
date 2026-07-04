@@ -3818,13 +3818,20 @@ def cmd_doctor(args):
 
     engine_dir = os.path.dirname(os.path.abspath(__file__))
     home_skills = os.path.join(os.path.expanduser("~"), ".claude", "skills")
+    home_plugins = os.path.join(os.path.expanduser("~"), ".claude", "plugins")
+
     # separador final + normcase: sin ellos '~/.claude/skills-evil' clasificaria
     # como global, y en Windows el case del drive puede diferir
-    is_global = os.path.normcase(engine_dir).startswith(
-        os.path.normcase(os.path.abspath(home_skills)) + os.sep)
-    ok(f"engine: {os.path.abspath(__file__)}",
-       "instalacion global (~/.claude/skills)" if is_global
-       else "instalacion por proyecto")
+    def _under(child, parent):
+        return os.path.normcase(os.path.abspath(child)).startswith(
+            os.path.normcase(os.path.abspath(parent)) + os.sep)
+
+    is_plugin = _under(engine_dir, home_plugins)
+    is_global = (not is_plugin) and _under(engine_dir, home_skills)
+    mode = ("instalacion como PLUGIN (~/.claude/plugins, 1.24.0)" if is_plugin
+            else "instalacion global (~/.claude/skills)" if is_global
+            else "instalacion por proyecto")
+    ok(f"engine: {os.path.abspath(__file__)}", mode)
 
     # --- skills: hermanas del engine ---------------------------------------
     skills_root = os.path.dirname(engine_dir)
@@ -3863,6 +3870,9 @@ def cmd_doctor(args):
                       os.path.join(".claude", "settings.local.json")]
     registered = any(_doctor_hook_registered(p) for p in settings_paths
                      if os.path.isfile(p))
+    if is_plugin and os.path.isfile(os.path.join(kit_root, "hooks", "hooks.json")):
+        # los hooks del plugin se auto-registran via hooks/hooks.json (1.24.0)
+        registered = True
     ps = shutil.which("powershell") or shutil.which("pwsh")
     if hook_file and registered and ps:
         ok("hook INV-GOLDEN-01: presente, registrado (PreToolUse) e interpretable",
@@ -3967,7 +3977,7 @@ def cmd_doctor(args):
         # ensure_ascii=True a proposito: doctor promete bytes ASCII siempre
         print(json.dumps({"verdict": "ERROR" if n_err else ("WARN" if n_warn else "OK"),
                           "ok": n_ok, "warnings": n_warn, "errors": n_err,
-                          "global_install": is_global,
+                          "global_install": is_global, "plugin_install": is_plugin,
                           "checks": [{"level": lv, "title": t, "detail": d}
                                      for lv, t, d in checks]},
                          indent=2, ensure_ascii=True))

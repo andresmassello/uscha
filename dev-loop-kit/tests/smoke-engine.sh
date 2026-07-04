@@ -899,6 +899,22 @@ sys.exit(0 if d['verdict'] == 'BELOW' and abs(d['score'] - 0.5) < 0.001 else 1)"
   && { PASS=$((PASS+1)); echo "  ok   negativo con evidencia resta peso (4-2)/4 = 0.50"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL semantica de negativos"; }
 
+echo "== T44 sync quintuple de version: VERSION = config = plugin.json = marketplace.json =="
+"$PY" -c "
+import json, sys, os, io
+kit = os.path.dirname(os.path.dirname(os.path.dirname(sys.argv[1])))  # <kit>/.claude/skills/x -> <kit>
+repo = os.path.dirname(kit)
+v_file = io.open(os.path.join(kit, 'VERSION'), encoding='utf-8').read().split()[-1]
+v_cfg = json.load(io.open(os.path.join(kit, 'dev-loop.config.json'), encoding='utf-8'))['version']
+v_plug = json.load(io.open(os.path.join(kit, '.claude-plugin', 'plugin.json'), encoding='utf-8'))['version']
+mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
+v_mkt = mk['plugins'][0]['version']
+vs = {v_file, v_cfg, v_plug, v_mkt}
+print('  versiones:', v_file, v_cfg, v_plug, v_mkt)
+sys.exit(0 if len(vs) == 1 else 1)" "$(dirname "$QL")" \
+  && { PASS=$((PASS+1)); echo "  ok   las cuatro fuentes de version coinciden"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version entre VERSION/config/plugin/marketplace"; }
+
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"

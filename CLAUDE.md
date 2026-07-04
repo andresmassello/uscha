@@ -21,7 +21,8 @@ mismo.
    tiene que salir 0 ANTES de commitear cualquier cambio a `qa_ledger.py`. Si el cambio
    agrega comportamiento, se agrega su check a la suite en el mismo commit.
 6. **Versionado**: bump de `VERSION` + `dev-loop.config.json` + `CHANGELOG-X.Y.Z.md`
-   en el mismo commit. Los tres tienen que coincidir.
+   + `dev-loop-kit/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`
+   en el mismo commit. Los cinco tienen que coincidir (el smoke T44 lo verifica).
 7. **Commits convencionales** (`feat:`, `fix:`, `docs:`…), chicos y atómicos.
 8. **INV-GOLDEN-01 rige acá también**: nunca escribir/renombrar un `.approved`
    (el hook del kit aplica sobre este repo como sobre cualquier otro).
