@@ -71,17 +71,22 @@ always override agent self-reports; (iii)&nbsp;a family of executable fact gates
 (golden non-authorship, gate-integrity, simplicity budgets, per-criterion
 measured acceptance, regression capture, a derived &mdash; never self-declared
 &mdash; workflow state machine) and a structured-guess layer (versioned
-qualitative rubrics with mandatory evidence) that advises by default and gates
-only by explicit human declaration; and (iv)&nbsp;a strict placement of the human
-at three fixed points: approving the shape, approving the golden baseline, and
-merging. A reference implementation (seven agent skills and a dependency-free
-Python engine with 23 subcommands and adapters for nine language stacks) is
+qualitative rubrics with mandatory evidence, and deterministic
+clone-vs-repository detection that surfaces the duplication a diff-local
+simplicity gate cannot see) that advises by default and gates only by explicit
+human declaration; and (iv)&nbsp;a strict placement of the human at three fixed
+points: approving the shape, approving the golden baseline, and merging. The
+methodology also applies its own Lean discipline reflexively: a meta-invariant
+that keeps a growing set of good gates from becoming an audit (over-processing
+waste), enforced by collapsing every persisted gate into a single readiness
+verdict. A reference implementation (seven agent skills and a dependency-free
+Python engine with 24 subcommands and adapters for nine language stacks) is
 described, together with its design validation: two adversarial audits (231
 agent evaluations) that initially found the central principle inverted in code
 and drove its re-wiring; a systematic cross-examination against classical
 software-engineering doctrine that produced ten shipped improvements; and
 sustained self-application, in which fresh-context reviews caught real defects
-in 13 of 14 releases before merge. We report design validation and
+in 15 of 17 releases before merge. We report design validation and
 self-application evidence only; controlled empirical evaluation remains future
 work.</p>
 </div>
@@ -306,6 +311,7 @@ check family and the verdict class of each.</p>
 <tr><td><code>readiness</code></td><td>weighted state score with hard caps and threshold provenance</td><td>reports</td></tr>
 <tr><td><code>regression-check</code></td><td>findings closed without new non-blank test lines &rarr; narrated closure</td><td>advises*</td></tr>
 <tr><td><code>rubric-ingest</code></td><td>weighted qualitative criteria; evidence-or-nothing grader contract</td><td>advises*</td></tr>
+<tr><td><code>waste-check</code></td><td>Type-1/2 clone windows of the diff vs the repository &mdash; the duplication a diff-local gate cannot see</td><td>advises*</td></tr>
 <tr class="last"><td><code>spec-check</code> (prose)</td><td>vagueness and shape heuristics over specification text</td><td>advises*</td></tr>
 </table>
 <div class="tabcap"><b>Table 1.</b> The check family. Verdicts marked * advise by
@@ -338,14 +344,30 @@ anchor examples, negative criteria, and a threshold, graded by any runner
 against a JSON contract with evidence-or-nothing semantics: a verdict that
 affects the score without a file-and-line citation does not count, duplicate
 verdicts for one criterion break the contract, and unevaluated criteria count
-as failed (unevaluated is not approved).</p>
+as failed (unevaluated is not approved). The advisory layer also carries
+<i>reuse detection</i>: a deterministic Type-1/Type-2 clone check of the diff
+against the existing repository. This targets the duplication that a diff-local
+simplicity gate is blind to by construction &mdash; the muda most characteristic
+of generated code [9,&nbsp;10]. It too reports a fact (a byte-identical window
+already exists at <code>file:line</code>) while leaving the verdict
+&ldquo;wasteful&rdquo; advisory, because a normalized-line proxy has honest
+false positives (boilerplate, data-transfer objects, embedded SQL) and a check
+that blocks on those would be disabled and die.</p>
 
-<p><b class="rh">Readiness.</b> A weighted 0&ndash;100 score reports the state
-of the result, never effort (Table&nbsp;2). The dominant dimension is measured
-acceptance &mdash; criteria closed by green, name-tagged tests &mdash; with
-checkbox completion demoted to a narrative dimension. Hard caps override the
-weighted average, and every biting threshold states its provenance. The score
-reports; it does not gate &mdash; the gates are the facts above.</p>
+<p><b class="rh">Readiness and the anti-ceremony invariant.</b> A weighted
+0&ndash;100 score reports the state of the result, never effort (Table&nbsp;2).
+The dominant dimension is measured acceptance &mdash; criteria closed by green,
+name-tagged tests &mdash; with checkbox completion demoted to a narrative
+dimension. Hard caps override the weighted average, and every biting threshold
+states its provenance. The score reports; it does not gate &mdash; the gates
+are the facts above. As the gate set grows, the dominant risk shifts from any
+one bad gate to the <i>sum</i> of good ones making the loop feel like an audit
+&mdash; over-processing, the ceremony form of waste. The methodology answers
+this reflexively with a meta-invariant every future gate must satisfy (it runs
+without human input, speaks only when it matters, collapses into readiness, and
+a trivial change skips it), mechanized as a single-verdict view: readiness
+collapses every persisted gate into one line, expandable on demand. This is the
+same Lean lens the method applies to code, turned on the method itself&nbsp;[9].</p>
 
 <table class="tab">
 <tr><th>Dimension</th><th>Weight</th><th>Measured from</th></tr>
@@ -366,7 +388,7 @@ its threshold is a declared requirement or a kit default.</div>
 <p>The reference implementation packages the methodology as seven agent skills
 (the two fronts, a precision interview for known features, the loop
 orchestrator, golden capture, a two-audience system-documentation generator,
-and the rubric grader adapter) plus the engine (23 subcommands). Three
+and the rubric grader adapter) plus the engine (24 subcommands). Three
 properties matter for portability. First, the skills are markdown instruction
 files readable by any instruction-following agent; the engine is invoked
 identically from any of them. Second, every LLM-judgment interface is a
@@ -380,9 +402,13 @@ hook blocked one of its author's own commands, which is the property working
 as designed.</p>
 
 <p>The implementation carries its process in executable form. A smoke suite of
-140 checks exercises the engine against a synthetic ledger &mdash; including,
+161 checks exercises the engine against a synthetic ledger &mdash; including,
 deliberately, the agnosticism claim: the rubric-layer tests fill the grader's
-JSON by hand, with no model in the loop. Version consistency across the five
+JSON by hand, with no model in the loop. The engine also reports a passive Lean
+process metric &mdash; first-time yield, the fraction of repositories that
+cleared QA on the first cycle with no rework or escalation &mdash; derived from
+ledger facts and kept strictly informational, never a gate: it measures the
+process, not the state of the result. Version consistency across the five
 release artifacts (version file, configuration, changelog, plugin manifest,
 marketplace manifest) is itself a suite check, converting a release convention
 into a verifiable fact. An installation-diagnosis subcommand in the spirit of
@@ -426,17 +452,19 @@ definition; only the numbers are opinion, and they now state their
 provenance), and the workflow state machine is derived rather than declared.</p>
 
 <p><b class="rh">Self-application.</b> The implementation is developed under
-its own process. Across fifteen releases, each engine change carried smoke
+its own process. Across eighteen releases, each engine change carried smoke
 checks in the same commit, a fresh-context review before merge, and the
 five-way version consistency check enforced by the suite. Fresh-context
-reviews found real defects prior to merge in 13 of 14 reviewed releases,
+reviews found real defects prior to merge in 15 of 17 reviewed releases,
 including: test-file classifier gaps that made a documented guarantee an
 overclaim; a blank-line loophole in regression-capture evidence (any non-blank
 test line counts as evidence &mdash; a tripwire, not a judge &mdash; but a blank
 line must not); a review-suite check that passed for the wrong reason (its
-precondition never held, so the assertion was vacuous); and silent last-wins
+precondition never held, so the assertion was vacuous); silent last-wins
 semantics on duplicated grader verdicts &mdash; a grader gaming vector, now a
-broken-contract error. We take the consistency of this defect stream as
+broken-contract error; and, in the single-verdict release itself, documentation
+that under-enumerated what the collapsed view actually shows. We take the
+consistency of this defect stream as
 evidence for the methodology's core premise: independent, fresh-context
 checking against recorded criteria catches what the authoring context cannot
 see.</p>
@@ -468,7 +496,13 @@ other than the author; a controlled comparison against the frameworks in [3]
 along their six taxonomy dimensions, with particular attention to the
 validation and portability axes; and an evaluation of the rubric layer's
 inter-run variance under anchored versus unanchored criteria, connecting to
-the validation self-awareness agenda of [2].</p>
+the validation self-awareness agenda of [2]. A further direction extends the
+Lean lens beyond the inner loop: the reuse and anti-ceremony gates address two
+forms of waste (duplication and over-processing), but the &ldquo;shine&rdquo;
+discipline of 5S &mdash; scheduled cleanup that keeps the legacy layer from
+silently freezing &mdash; is a candidate <i>outer-loop</i> routine [9],
+deliberately out of scope here because it acts on the repository over time
+rather than on a single change under review.</p>
 
 <h2>9&nbsp;&nbsp;Conclusion</h2>
 
@@ -511,6 +545,12 @@ martinfowler.com/articles/exploring-gen-ai.html</p>
 <p>[8] M. Strathern, &ldquo;&lsquo;Improving ratings&rsquo;: audit in the
 British University system,&rdquo; <i>European Review</i>, vol. 5, no. 3,
 pp. 305&ndash;321, 1997.</p>
+
+<p>[9] M. Poppendieck and T. Poppendieck, <i>Implementing Lean Software
+Development: From Concept to Cash</i>. Addison-Wesley, 2006.</p>
+
+<p>[10] GitClear, &ldquo;AI Copilot Code Quality / The Maintainability
+Gap,&rdquo; industry research report, 2024&ndash;2026. gitclear.com</p>
 </div>
 
 </body>
