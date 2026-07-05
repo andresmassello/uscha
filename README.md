@@ -1,8 +1,12 @@
-# SpecLoop
+# Uscha
 
-Hogar del proyecto **Uscha**: una metodología spec-driven, tool-agnóstica, para
-desarrollo con LLM coding agents — *vos traés la idea, el método construye el resto* —
-y de su instanciación en Claude Code, el **uscha-kit**.
+**Uscha** es una metodología spec-driven, tool-agnóstica, para desarrollo con
+LLM coding agents — *vos traés la idea, el método construye el resto* — con su
+instanciación en Claude Code, el **uscha-kit**.
+
+> **Uscha** es el nombre; el patrón que operacionaliza es un *spec-loop* — un loop
+> spec-driven de build-and-verify. "spec-loop" es el **concepto**, no el naming.
+> (El checkout local conserva el path `SpecLoop`.)
 
 > La herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba.
 

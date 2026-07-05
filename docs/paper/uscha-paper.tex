@@ -74,8 +74,10 @@ Existing agent development frameworks converge on persistent artifacts and
 human review as mitigations~\cite{demacedo2026prompt}, but they largely encode
 their process as \emph{prose instructions that the agent may ignore}, and their
 verification signals rarely distinguish between what is mechanically verifiable
-and what is a model's opinion. Uscha starts from that distinction and makes
-it the organizing principle of the whole process. Figure~\ref{fig:system}
+and what is a model's opinion. Uscha\footnote{``Uscha'' is the name of the
+methodology; the pattern it operationalizes is a \emph{spec-loop} --- a
+specification-driven build-and-verify loop.} starts from that distinction and
+makes it the organizing principle of the whole process. Figure~\ref{fig:system}
 shows the resulting pipeline: eight stations from idea to human gate, under a
 constitution of invariants that no station may violate, with an inner
 convergence loop over the build and an outer proposal loop that returns to
