@@ -13,9 +13,9 @@ conditions, and update your row below when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | Smoke coverage for `pit-check` (mutation gate) | P1 | M | — | TODO |
-| 002  | Smoke coverage for `check-coverage`            | P2 | S | — | TODO |
-| 003  | Smoke coverage for `rebuild` (baseline+compare)| P2 | M | — | TODO |
+| 001  | Smoke coverage for `pit-check` (mutation gate) | P1 | M | — | DONE (T48, +4 checks) |
+| 002  | Smoke coverage for `check-coverage`            | P2 | S | — | DONE (T49, +3 checks) |
+| 003  | Smoke coverage for `rebuild` (baseline+compare)| P2 | M | — | DONE (T50, +6 checks) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

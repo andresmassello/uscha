@@ -1099,6 +1099,93 @@ sys.exit(0 if f['repos_first_time'] == 0 and f['pct'] == 0.0 else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   escalacion saca al repo del first-time yield"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL escalacion no afecta FTY"; }
 
+echo "== T48 pit-check: mutation gate desde un mutations.xml (efectividad, no coverage) =="
+cat > mutations.xml <<'EOF'
+<mutations>
+<mutation detected="true"  status="KILLED"><sourceFile>a.py</sourceFile></mutation>
+<mutation detected="true"  status="KILLED"><sourceFile>a.py</sourceFile></mutation>
+<mutation detected="true"  status="KILLED"><sourceFile>a.py</sourceFile></mutation>
+<mutation detected="true"  status="SURVIVED"><sourceFile>a.py</sourceFile></mutation>
+<mutation detected="false" status="SURVIVED"><sourceFile>b.py</sourceFile></mutation>
+<mutation detected="false" status="NO_COVERAGE"><sourceFile>b.py</sourceFile></mutation>
+<mutation detected="false" status="NON_VIABLE"><sourceFile>c.py</sourceFile></mutation>
+<mutation detected="false" status="RUN_ERROR"><sourceFile>c.py</sourceFile></mutation>
+</mutations>
+EOF
+# total = killed(4: 3 KILLED + 1 detected-override) + survived(1) + no_cov(1) = 6
+# NON_VIABLE + RUN_ERROR excluidos del denominador -> excluded=2
+# mutation_score = 100*4/6 = 66.7 ; test_strength = 100*4/(4+1) = 80.0
+chk "score 66.7 >= min-score 60 -> PASS exit 0" 0 run pit-check --report mutations.xml --min-score 60
+chk "score 66.7 < min-score 70 -> BELOW-GATE exit 1" 1 run pit-check --report mutations.xml --min-score 70
+run pit-check --report mutations.xml --min-score 60 --json 2>/dev/null | "$PY" -c "
+import json, sys
+m = json.load(sys.stdin)['metrics']
+ok = (m['total'] == 6 and m['killed'] == 4 and m['survived'] == 1
+      and m['no_coverage'] == 1 and m['excluded'] == 2
+      and abs(m['mutation_score'] - 66.7) < 0.05
+      and abs(m['test_strength'] - 80.0) < 0.05)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   NON_VIABLE/RUN_ERROR fuera del denominador; detected=true cuenta como killed"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL metricas del mutation report mal computadas"; }
+chk "report inexistente -> exit 2 (no evidencia)" 2 run pit-check --report no-such.xml --min-score 60
+
+echo "== T49 check-coverage: gate de umbral (OK / BELOW / sin report = fail-closed) =="
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" },\n  "repos": [ {"name":"cov","path":"covrepo","type":"python"}, {"name":"nocov","path":"nocovrepo","type":"python"} ], "integration": {"enabled": false} }\n' > cc-cfg.json
+mkdir -p covrepo nocovrepo
+# Cobertura: line-rate 0.85 -> 85% (lines-valid/lines-covered coherentes con line-rate)
+cat > covrepo/coverage.xml <<'EOF'
+<?xml version="1.0"?>
+<coverage lines-valid="20" lines-covered="17" line-rate="0.85" version="7.4"></coverage>
+EOF
+run init --config cc-cfg.json --out L-cc.json >/dev/null
+chk "coverage 85% >= threshold 60 -> OK exit 0" 0 run check-coverage --repo cov --threshold 60 --ledger L-cc.json
+chk "coverage 85% < threshold 90 -> BELOW exit 1" 1 run check-coverage --repo cov --threshold 90 --ledger L-cc.json
+chk "sin report de coverage -> fail-closed exit 1" 1 run check-coverage --repo nocov --threshold 60 --ledger L-cc.json
+
+echo "== T50 rebuild: baseline escribe la firma; compare puntua COVERS / DIVERGE =="
+mkdir -p rbrepo/src rbrepo/reports
+cat > rbrepo/src/mod.py <<'EOF'
+def add(a, b):
+    return a + b
+def mul(a, b):
+    return a * b
+EOF
+cat > rbrepo/coverage.xml <<'EOF'
+<?xml version="1.0"?>
+<coverage lines-valid="10" lines-covered="8" line-rate="0.8" version="7.4"></coverage>
+EOF
+cat > rbrepo/reports/junit.xml <<'EOF'
+<testsuites><testsuite name="S" tests="5" failures="0" errors="0" skipped="0"/></testsuites>
+EOF
+printf -- "# ACCEPTANCE\n\n- [x] uno\n- [x] dos\n" > ACCEPTANCE-rb.md
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE-rb.md" },\n  "repos": [ {"name":"rb","path":"rbrepo","type":"python"} ], "integration": {"enabled": false} }\n' > rb-cfg.json
+# baseline: escribe la firma
+chk "baseline escribe REBUILD-BASELINE -> exit 0" 0 run rebuild --mode baseline --config rb-cfg.json --out RB.json
+"$PY" -c "import json,sys; d=json.load(open('RB.json',encoding='utf-8')); sys.exit(0 if 'rb' in d['repos'] and d['repos']['rb']['tests']['total']==5 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   la firma baseline capturo el repo (tests total=5)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL baseline no capturo la firma esperada"; }
+# compare sobre el MISMO arbol -> todas las dimensiones 1.0 -> COVERS
+chk "compare mismo arbol -> COVERS exit 0" 0 run rebuild --mode compare --baseline RB.json --json
+run rebuild --mode compare --baseline RB.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['verdict'] == 'COVERS' and d['dimensions']['tests'] == 1.0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   arbol sin cambios -> COVERS (tests dim 1.0)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL compare del mismo arbol no da COVERS"; }
+# el arbol 'regenerado' rompe tests -> la dimension dominante cae -> NO COVERS + gap
+cat > rbrepo/reports/junit.xml <<'EOF'
+<testsuites><testsuite name="S" tests="5" failures="4" errors="0" skipped="0"/></testsuites>
+EOF
+chk "compare con tests que fallan -> exit 1 (no COVERS)" 1 run rebuild --mode compare --baseline RB.json --json
+run rebuild --mode compare --baseline RB.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ok = (d['verdict'] != 'COVERS' and d['dimensions']['tests'] < 0.5
+      and any('fail' in g for g in d['gaps']))
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   tests rotos al regenerar -> DIVERGE/PARTIAL + gap reportado"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL compare no detecto la divergencia de tests"; }
+
 echo "== T44 sync quintuple de version: VERSION = config = plugin.json = marketplace.json =="
 "$PY" -c "
 import json, sys, os, io
