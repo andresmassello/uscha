@@ -1,4 +1,6 @@
-# dev-loop kit
+# uscha-kit
+
+**Versión del kit:** v1.31.0 <!-- uscha:version -->
 
 Orquestador spec-driven + QA multi-repo para Claude Code, con ledger determinístico.
 **Siete skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -207,12 +209,12 @@ repo primario y `uscha.config.json` a la raíz de ese repo.
 
 ```bash
 cp -r uscha-kit/.claude  <repo-primario>/
-cp uscha-kit/uscha-devloop.config.json  <repo-primario>/
+cp uscha-kit/uscha.config.json  <repo-primario>/
 chmod +x <repo-primario>/.claude/skills/uscha-devloop/qa_ledger.py
 ```
 
 **Opción B — global** (kit 1.20.0: para todos tus repos, existentes y nuevos): copiá
-las SEIS skills a `~/.claude/skills/` y el hook a `~/.claude/hooks/` + registralo en
+las SIETE skills a `~/.claude/skills/` y el hook a `~/.claude/hooks/` + registralo en
 `~/.claude/settings.json` (snippet en el header del .ps1) — así INV-GOLDEN-01 rige en
 todos los proyectos. Las skills resuelven el engine primero en el proyecto y caen a
 `~/.claude/skills/uscha-devloop/qa_ledger.py` si no hay instalación local.
@@ -256,7 +258,7 @@ python3 ~/.claude/skills/uscha-devloop/qa_ledger.py doctor
 # o, por proyecto:  python3 ./.claude/skills/uscha-devloop/qa_ledger.py doctor
 ```
 
-Chequea: Python >=3.8 · git · las 6 skills junto al engine (frontmatter
+Chequea: Python >=3.8 · git · las 7 skills junto al engine (frontmatter
 verificado) · el hook INV-GOLDEN-01 (presente + registrado en settings.json +
 intérprete powershell/pwsh) · y si hay `uscha.config.json` en el cwd:
 config parseable, ACCEPTANCE con AC-IDs, integridad del ledger, las skills de

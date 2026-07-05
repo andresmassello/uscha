@@ -387,6 +387,9 @@ CLOSED only when ≥1 GREEN testcase whose name carries the tag (`test_ac1_x`,
 in the ingested JUnit reports AND no tagged testcase is red. The checkbox is the
 NARRATIVE; the testcase is the FACT — a checked box without a green tagged test shows
 up as `narrated_only` and does NOT close (measured beats narrated, per criterion).
+A JUnit report older than the repo's source code is treated as STALE (the code changed
+after the tests ran) and is DISCARDED — a criterion backed only by stale reports stays
+UNMEASURED, never falsely closed or vetoed (kit 1.31.0; surfaced as `stale_reports`).
 So: when you write the tests for a criterion, put its AC-n in the test name; run
 `spec-check --acceptance ACCEPTANCE.md` up front (zero traceable criteria / duplicate
 IDs block as structural FACTS). Files without IDs fall back to the checkbox ratio

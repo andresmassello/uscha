@@ -425,6 +425,43 @@ def _junit_files_for(repo_path, repo_type):
     return files
 
 
+# freshness de los reportes: un TEST-*.xml mas viejo que el codigo fuente es
+# STALE — los tests no se re-corrieron tras el ultimo cambio, asi que su verde/
+# rojo NO es evidencia vigente. Correlacion barata (mtime del arbol de fuentes
+# vs mtime del reporte); sin falso positivo en el flujo real (editar -> testear
+# deja el reporte como lo mas nuevo), detecta el caso peligroso (no re-correr).
+_SRC_EXT = {
+    ".java", ".kt", ".kts", ".scala", ".groovy", ".py", ".js", ".jsx",
+    ".ts", ".tsx", ".mjs", ".cjs", ".go", ".rs", ".cs", ".vb", ".fs",
+    ".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".swift", ".m", ".mm",
+    ".rb", ".php", ".dart", ".gradle",
+}
+_SRC_SKIP_DIRS = {
+    ".git", "target", "build", "reports", "node_modules", "dist", ".gradle",
+    "venv", ".venv", "__pycache__", ".idea", "bin", "obj", "Pods",
+    ".dart_tool", "coverage", "out", ".vs",
+}
+
+
+def _source_newest_mtime(repo_path):
+    """Newest mtime among source files under repo_path, skipping build/vendor/
+    report dirs. Reference for JUnit report freshness: a report older than this
+    means the code changed after the tests ran. Returns 0.0 if no source file
+    is found (cannot correlate -> never flags stale, avoids false positives)."""
+    newest = 0.0
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in _SRC_SKIP_DIRS]
+        for fn in files:
+            if os.path.splitext(fn)[1].lower() in _SRC_EXT:
+                try:
+                    m = os.path.getmtime(os.path.join(root, fn))
+                except OSError:
+                    continue
+                if m > newest:
+                    newest = m
+    return newest
+
+
 # tolerante a los limites de naming de cada lenguaje: test_ac1_x (python/go,
 # sin '-'), testAC01X (java camelCase), "AC-01: ..." (nombres libres).
 # OJO: \b no sirve — '_' es word character y test_ac1 quedaria invisible;
@@ -435,20 +472,29 @@ _AC_TAG = re.compile(
 
 def _ac_tags(repo_path, repo_type):
     """Tags AC-n leidos de los NOMBRES de testcase en los reportes JUnit que el
-    engine ya ingiere. Devuelve {'AC-n': {'green': x, 'red': y}}. Un criterio
+    engine ya ingiere. Devuelve (tags, stale) donde tags = {'AC-n': {'green': x,
+    'red': y}} y stale = [rutas de reportes descartados por viejos]. Un criterio
     cierra MEDIDO solo con >=1 testcase verde y 0 rojos (evidencia roja veta:
     fail-closed). Testcases skipped no cuentan para ningun lado.
 
-    LIMITE CONOCIDO (heredado de junit_test_count, ahora con blast radius mayor
-    porque vetea/cierra un AC en vez de aproximar un conteo): maven/gradle
-    globbean TEST-*.xml recursivo sin chequeo de freshness — un reporte stale
-    de un test renombrado/borrado (surefire no lo limpia sin `mvn clean`) puede
-    vetear un AC para siempre (rojo stale) o mantenerlo cerrado sin evidencia
-    vigente (verde stale). Mitigacion real (mtime + correlacion con el arbol de
-    fuentes) queda diferida — no hay forma barata de distinguir "stale" de
-    "vigente" sin esa correlacion."""
+    FRESHNESS (kit 1.31.0): maven/gradle globbean TEST-*.xml recursivo; un
+    reporte mas viejo que el codigo fuente es STALE (el codigo cambio despues de
+    correr los tests) y se DESCARTA — no vetea ni cierra. Un AC respaldado solo
+    por reportes stale queda UNMEASURED (ni falso-verde ni falso-rojo): honrar
+    evidencia stale romperia 'la evidencia decide'. junit_test_count (el conteo
+    aproximado) mantiene el limite conocido — su blast radius es menor (no
+    cierra ACs, solo aproxima un conteo)."""
     tags = {}
+    stale = []
+    newest_src = _source_newest_mtime(repo_path)
     for f in _junit_files_for(repo_path, repo_type):
+        if newest_src > 0.0:
+            try:
+                if os.path.getmtime(f) < newest_src:
+                    stale.append(f)
+                    continue
+            except OSError:
+                pass
         try:
             root = ET.parse(f).getroot()
         except (ET.ParseError, OSError):
@@ -474,7 +520,7 @@ def _ac_tags(repo_path, repo_type):
             for num in _AC_TAG.findall(blob):
                 d = tags.setdefault(f"AC-{int(num)}", {"green": 0, "red": 0})
                 d[status] += 1
-    return tags
+    return tags, stale
 
 
 def junit_test_count(repo_path, extra_files=None):
@@ -2066,12 +2112,16 @@ def cmd_readiness(args):
     # ingeridos (y 0 rojos). El checkbox es RELATO; el testcase es HECHO.
     ac_ids = [i for i in acc_items if i["id"]]
     ac_tags = {}
+    stale_reports = []
     for rcfg in ledger["config"].get("repos", []):
-        for cid, v in _ac_tags(rcfg.get("path", "."),
-                               rcfg.get("type", "maven")).items():
+        rtags, rstale = _ac_tags(rcfg.get("path", "."),
+                                 rcfg.get("type", "maven"))
+        for cid, v in rtags.items():
             d = ac_tags.setdefault(cid, {"green": 0, "red": 0})
             d["green"] += v["green"]
             d["red"] += v["red"]
+        stale_reports.extend(rstale)
+    stale_reports = sorted(set(stale_reports))
 
     def _ac_closed(cid):
         d = ac_tags.get(cid)
@@ -2217,7 +2267,8 @@ def cmd_readiness(args):
                        "measured_pct": (round(100.0 * len(measured_closed) / total, 1)
                                         if (acc_traceable and total) else None),
                        "narrated_only": narrated_only,
-                       "measured_unchecked": measured_unchecked},
+                       "measured_unchecked": measured_unchecked,
+                       "stale_reports": stale_reports},
         "facts": {"coverage_pct": round(agg_cov_pct, 2), "coverage_threshold": threshold,
                   "gated_open": total_open, "severity": agg_sev,
                   "repos_converged": f"{sum(conv_flags)}/{len(conv_flags)}",
@@ -2271,6 +2322,10 @@ def cmd_readiness(args):
     if unmeasured_repos:
         print(f"  ! static gate NEVER ran in: {', '.join(unmeasured_repos)} — "
               f"dimension scored UNMEASURED (0.0), silence is not success")
+    if stale_reports:
+        print(f"  ! {len(stale_reports)} reporte(s) JUnit STALE descartados "
+              f"(codigo mas nuevo que la evidencia) — los AC que dependian solo "
+              f"de ellos quedan UNMEASURED; re-corre los tests")
     if stalled_repos:
         print(f"  ! stall: {', '.join(stalled_repos)} — findings gateados planos o "
               f"subiendo {STALL_WINDOW} ciclos: iterar mas no esta acercando la "

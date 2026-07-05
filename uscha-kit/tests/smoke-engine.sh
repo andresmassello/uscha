@@ -536,7 +536,7 @@ xml_ = '''<testsuites><testsuite name=\"s\">
 </testsuite></testsuites>'''
 d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, 'reports'))
 open(os.path.join(d, 'reports', 'junit.xml'), 'w').write(xml_)
-t = q._ac_tags(d, 'python')
+t, _stale = q._ac_tags(d, 'python')
 assert 'AC-9' not in t, 'classname no taggea'
 assert t['AC-1'] == {'green': 1, 'red': 0}, 'flaky-que-paso = verde'
 assert t['AC-2'] == {'green': 0, 'red': 1}, 'fallo-tras-reruns = rojo'
@@ -1235,6 +1235,63 @@ print('  versiones:', v_file, v_cfg, v_plug, v_mkt)
 sys.exit(0 if len(vs) == 1 else 1)" "$(dirname "$QL")" \
   && { PASS=$((PASS+1)); echo "  ok   las cuatro fuentes de version coinciden"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL drift de version entre VERSION/config/plugin/marketplace"; }
+
+echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
+mkdir -p repo-fresh/reports
+printf 'def alta():\n    return True\n' > repo-fresh/alta.py
+cat > repo-fresh/reports/junit.xml <<'EOF'
+<?xml version="1.0"?>
+<testsuites><testsuite name="pytest" tests="1" failures="0" errors="0" skipped="0">
+<testcase classname="tests.test_flow" name="test_ac1_alta_ok"/>
+</testsuite></testsuites>
+EOF
+printf -- "# ACCEPTANCE\n\n- [x] AC-01 alta\n" > acc-fresh.md
+printf '{ "defaults": { "acceptance_file": "acc-fresh.md" },\n  "repos": [ {"name":"fresh","path":"repo-fresh","type":"python"} ], "integration": {"enabled": false} }\n' > fresh.json
+run init --config fresh.json --out L-fresh.json >/dev/null 2>&1
+# FRESCO: reporte mas nuevo que la fuente -> AC-1 cierra medido, sin stale
+touch -t 202601010800 repo-fresh/alta.py
+touch -t 202601010900 repo-fresh/reports/junit.xml
+run readiness --ledger L-fresh.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+a = json.load(sys.stdin)['acceptance']
+sys.exit(0 if a['measured_closed'] == ['AC-1'] and a['stale_reports'] == [] else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   reporte fresco: AC-1 cierra medido, stale_reports vacio"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL fresco no cierra o reporta stale de mas (falso positivo)"; }
+# STALE: la fuente pasa a ser mas nueva que el reporte -> reporte descartado
+touch -t 202601011200 repo-fresh/alta.py
+run readiness --ledger L-fresh.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+a = json.load(sys.stdin)['acceptance']
+sys.exit(0 if a['measured_closed'] == [] and len(a['stale_reports']) == 1 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   codigo mas nuevo: reporte STALE descartado, AC-1 UNMEASURED"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL stale no descartado (falso-verde por evidencia vieja)"; }
+run readiness --ledger L-fresh.json 2>/dev/null | grep -q "STALE descartados" \
+  && { PASS=$((PASS+1)); echo "  ok   advisory de reportes STALE visible en la vista default"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin advisory de STALE"; }
+
+echo "== T52 gate de doc-version (1.31.0): READMEs (marcador uscha:version) = VERSION =="
+"$PY" -c "
+import sys, os, io, re
+skdir = sys.argv[1]                                   # <kit>/.claude/skills/uscha-devloop
+kit = os.path.dirname(os.path.dirname(os.path.dirname(skdir)))
+repo = os.path.dirname(kit)
+ver = io.open(os.path.join(kit, 'VERSION'), encoding='utf-8').read().split()[-1]
+docs = [os.path.join(repo, 'README.md'), os.path.join(kit, 'README.md')]
+rx = re.compile(r'v?(\d+\.\d+\.\d+)')
+bad = []
+for d in docs:
+    marked = [l for l in io.open(d, encoding='utf-8') if 'uscha:version' in l]
+    if not marked:
+        bad.append(d + ': SIN marcador uscha:version'); continue
+    m = rx.search(marked[0])
+    got = m.group(1) if m else None
+    if got != ver:
+        bad.append(d + ': marcador dice ' + str(got) + ' != VERSION ' + ver)
+print('  VERSION:', ver, '· READMEs marcados y en sync:', len(docs) - len(bad))
+for b in bad: print('   ', b)
+sys.exit(1 if bad else 0)" "$(dirname "$QL")" \
+  && { PASS=$((PASS+1)); echo "  ok   los READMEs declaran la version actual (doc drift bloqueado)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL doc-version drift: un README no coincide con VERSION"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
