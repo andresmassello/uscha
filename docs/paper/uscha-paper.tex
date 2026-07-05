@@ -155,6 +155,26 @@ the specification package alone can regenerate the system; fragility through
 an integrity-checksummed ledger; and platform dependence through the contract
 architecture and a dependency-free engine.
 
+\textbf{Field-level evidence and the autonomy trajectory.} A systematic review
+of agentic AI across the software development life
+cycle~\cite{alvanakis2026assistance} finds agentic support concentrated
+downstream --- implementation, testing, maintenance --- while the upstream
+phases (requirements, specification, design) remain the least mature, and it
+identifies output verifiability as the primary enabler of adoption.
+Uscha is a direct wager on that gap: it invests its heaviest machinery
+precisely upstream, where the review reports support is thinnest, and makes
+verifiability --- not autonomy --- the axis it optimizes. The framing is
+deliberately narrow: the review establishes that the upstream,
+verifiability-first niche is real and underserved; it does not, and cannot,
+measure Uscha itself, whose own evidence remains design validation and
+self-application (\S\ref{sec:validation}). The complementary direction is the
+autonomy-first multi-agent framework, of which ALMAS~\cite{tawosi2025almas} is
+representative: specialized agents aligned with agile roles drive the loop
+toward less human involvement. Uscha takes the opposite stance on the same
+problem --- the human stays at three fixed decision points (shape, golden,
+merge), and the reviewer's verdict is a recorded ledger fact backed by
+file-and-line evidence, never one more agent's self-report.
+
 \textbf{Practitioner doctrine.} The methodology's check classification adapts
 the computational-versus-inferential distinction from B\"ockeler's
 \emph{sensor} framework for coding agents~\cite{boeckeler2025sensors,fowler2023exploring}
@@ -631,6 +651,16 @@ Development: From Concept to Cash}. Addison-Wesley, 2006.
 \bibitem{gitclear2026gap}
 GitClear, ``AI Copilot Code Quality / The Maintainability Gap,'' industry
 research report, 2024--2026. \url{https://www.gitclear.com}
+
+\bibitem{alvanakis2026assistance}
+S.~Alvanakis Apostolou, J.~Bosch, and H.~Holmstr\"om Olsson,
+``Assistance to Autonomy: A Systematic Literature Review of Agentic AI across
+the Software Development Life Cycle,'' arXiv:2605.15245 [cs.SE], 2026.
+
+\bibitem{tawosi2025almas}
+V.~Tawosi, K.~Ramani, S.~Alamir, and X.~Liu,
+``ALMAS: an Autonomous LLM-based Multi-Agent Software Engineering Framework,''
+arXiv:2510.03463 [cs.SE], 2025.
 
 \end{thebibliography}
 
