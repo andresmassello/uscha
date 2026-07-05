@@ -1761,6 +1761,30 @@ def _tool_rollup(ledger):
     return tools
 
 
+def _fty(ledger):
+    """First-Time Yield (Lean, kit 1.27.0): fraction of repos that cleared QA on the
+    FIRST cycle — no second pass, no new regressions, no escalation (resolved or not:
+    a human intervention means it did NOT pass first-time). PASSIVE: derived from ledger
+    facts already recorded, adds zero human step. Informational (retrospective) — never
+    a gate, never a readiness dimension (it measures process, not the result's state)."""
+    escalated = {e.get("repo") for e in ledger.get("escalations", [])}
+    total, first_pass, detail = 0, 0, []
+    for name, node in ledger["repos"].items():
+        its = node.get("iterations", [])
+        if not its:
+            continue  # never entered QA — not part of the yield base
+        total += 1
+        max_cycle = max((s.get("iteration", 0) or 0) for s in its)
+        regr = sum((s.get("new_regressions") or 0) for s in its)
+        yielded = (max_cycle <= 1 and regr == 0 and name not in escalated)
+        first_pass += 1 if yielded else 0
+        detail.append({"repo": name, "first_time": yielded, "max_cycle": max_cycle,
+                       "regressions": regr, "escalated": name in escalated})
+    return {"pct": round(100.0 * first_pass / total, 1) if total else None,
+            "repos_first_time": first_pass, "repos_through_qa": total,
+            "by_repo": detail}
+
+
 def cmd_summary(args):
     ledger = _load(args.ledger)
     repos = {}
@@ -1792,6 +1816,7 @@ def cmd_summary(args):
         "updated_at": ledger["updated_at"],
         "total_steps": ledger["step_counter"],
         "escalations": ledger["escalations"],
+        "first_time_yield": _fty(ledger),
         "by_tool": _tool_rollup(ledger),
         "by_repo": repos,
         "aggregate": {
@@ -1809,6 +1834,11 @@ def cmd_summary(args):
     a = summary["aggregate"]
     print(f"=== dev-loop run {summary['run_id']} ===")
     print(f"total steps: {summary['total_steps']}   escalations: {len(summary['escalations'])}")
+    fty = summary["first_time_yield"]
+    if fty["repos_through_qa"]:
+        print(f"first-time yield: {fty['pct']}% "
+              f"({fty['repos_first_time']}/{fty['repos_through_qa']} repos limpios al 1er "
+              f"ciclo, sin regresiones ni escalacion — Lean, informativo, no gatea)")
     print(f"aggregate coverage: {a['coverage_pct']}%   "
           f"prod LOC: {a['prod_loc']}   test LOC: {a['test_loc']}   "
           f"tests: {a['test_count']}   tests/kLOC: {a['test_per_kloc']}")

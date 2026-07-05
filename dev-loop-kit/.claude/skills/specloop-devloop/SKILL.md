@@ -404,7 +404,10 @@ are reported separately — they never raise readiness.
 Optionally (on request — reporting, not part of the verified build) invoke the `specloop-sysdoc`
 skill to generate the two-view HTML deck. Finish with a retrospective drawn FROM the
 ledger summary: total steps, %fixed per tool, coverage, prod LOC vs test LOC, test
-count, tests/kLOC, plus concrete methodology improvements.
+count, tests/kLOC, **first-time yield** (kit 1.27.0 — the Lean % of repos that cleared
+QA on the first cycle with no second pass, regression or escalation; passive, derived
+from the ledger, informational only — never a gate), plus concrete methodology
+improvements.
 
 ## Escalation contract — STOP and ask the human when:
 

@@ -1073,6 +1073,32 @@ run readiness --ledger L-ac.json 2>/dev/null | grep -- "--- gates:" | grep -q "g
   && { PASS=$((PASS+1)); echo "  ok   gate:waste persistido aparece en el veredicto unico"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL gate:waste no entra al rollup de readiness"; }
 
+echo "== T47 FTY (1.27.0): first-time yield pasivo en summary, informativo, no gatea =="
+printf '{ "defaults": {"qa_tools_order":["code-review"]},\n  "repos": [ {"name":"fa","path":"repo-c","type":"python"},{"name":"fb","path":"repo-d","type":"python"} ], "integration": {"enabled": false} }\n' > fty-cfg.json
+run init --config fty-cfg.json --out L-fty.json >/dev/null
+# fa: limpio al ciclo 1 (first-time). fb: necesito 2 ciclos (no first-time).
+run log-step --repo fa --tool code-review --iteration 1 --gated-reported 0 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
+run log-step --repo fb --tool code-review --iteration 1 --gated-reported 3 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
+run log-step --repo fb --tool code-review --iteration 2 --gated-reported 0 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
+run summary --ledger L-fty.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+f = json.load(sys.stdin)['first_time_yield']
+ok = (f['repos_through_qa'] == 2 and f['repos_first_time'] == 1 and f['pct'] == 50.0)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   FTY 50% (fa limpio al 1er ciclo, fb necesito 2)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL FTY mal computado"; }
+run summary --ledger L-fty.json 2>/dev/null | grep -q "first-time yield: 50.0%" \
+  && { PASS=$((PASS+1)); echo "  ok   FTY visible en el texto del summary"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL FTY no aparece en summary"; }
+# una escalacion (aunque el repo converja) lo saca del first-time yield
+run escalate --repo fa --reason "design doubt" --ledger L-fty.json >/dev/null 2>&1
+run summary --ledger L-fty.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+f = json.load(sys.stdin)['first_time_yield']
+sys.exit(0 if f['repos_first_time'] == 0 and f['pct'] == 0.0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   escalacion saca al repo del first-time yield"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL escalacion no afecta FTY"; }
+
 echo "== T44 sync quintuple de version: VERSION = config = plugin.json = marketplace.json =="
 "$PY" -c "
 import json, sys, os, io
