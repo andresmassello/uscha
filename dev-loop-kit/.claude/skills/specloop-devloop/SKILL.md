@@ -357,8 +357,13 @@ the per-language linter gates (`*-qa-gate` from `ingest-gate`) plus the discrete
 gates (`gate:*` from `log-gate`, `rubric:grade`, `blocker:*` from `flag-blocker`) — into
 `N ok / M bloqueando (repo/gate...)`. This
 is presentation over facts already in the ledger — it never recomputes the score, so
-the KPI is identical to before the rollup existed. Pass `--verbose` to expand the
-dimensions table, the acceptance/coverage/churn summary and the per-repo breakdown.
+the KPI is identical to before the rollup existed. When the acceptance file has traceable
+AC-IDs, the default view also prints the honest **`acceptance medido: X%`** line (kit
+1.28.0 — criteria closed by a green name-tagged test / total; the `measured_pct` field in
+`--json`): the one "% done" the kit can sign, MEASURED not narrated, informational and
+never a gate. With no AC-IDs it does not print (a % over bare checkboxes would be
+narrated). Pass `--verbose` to expand the dimensions table, the acceptance/coverage/churn
+summary and the per-repo breakdown.
 Show the human the default; reach for `--verbose` only when they ask what is inside the
 number.
 

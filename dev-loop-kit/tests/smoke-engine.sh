@@ -475,6 +475,19 @@ sys.exit(0 if ok else 1)" \
 run readiness 2>/dev/null | grep -q "narrated-only: AC-2" \
   && { PASS=$((PASS+1)); echo "  ok   warning narrated-only visible (measured beats narrated)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL sin warning narrated-only"; }
+# % TERMINADO medido (1.28.0): 1 de 3 AC cerrado por test verde = 33.3%, informativo
+run readiness --json 2>/dev/null | "$PY" -c "import json,sys; sys.exit(0 if json.load(sys.stdin)['acceptance']['measured_pct']==33.3 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   acceptance.measured_pct = 33.3% en --json (1 de 3 medido)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL measured_pct mal computado"; }
+run readiness 2>/dev/null | grep -q "acceptance medido: 33.3%" \
+  && { PASS=$((PASS+1)); echo "  ok   '% terminado' medido visible en la vista default"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL linea de acceptance medido ausente"; }
+# sin trazabilidad AC-n NO hay % honesto: la linea no debe aparecer
+printf -- "# ACCEPTANCE\n\n- [x] criterio uno\n- [ ] criterio dos\n" > ACCEPTANCE.md
+run readiness 2>/dev/null | grep -q "acceptance medido:" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL muestra % medido sin AC-IDs (deshonesto)"; } \
+  || { PASS=$((PASS+1)); echo "  ok   sin AC-IDs no muestra % medido (honesto)"; }
+printf -- "# ACCEPTANCE\n\n- [x] AC-01 alta de cliente valida\n- [x] AC-02 rechazo de duplicado\n- [ ] AC-03 baja logica\n" > ACCEPTANCE.md
 
 echo "== T30 spec-check --acceptance: trazabilidad como FACT =="
 chk "acceptance con AC-IDs -> exit 0" 0 run spec-check --acceptance ACCEPTANCE.md

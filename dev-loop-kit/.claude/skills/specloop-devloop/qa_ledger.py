@@ -2214,6 +2214,8 @@ def cmd_readiness(args):
                        "traceable": acc_traceable, "ids": len(ac_ids),
                        "untagged": ac_untagged, "duplicate_ids": dupe_ids,
                        "measured_closed": measured_closed,
+                       "measured_pct": (round(100.0 * len(measured_closed) / total, 1)
+                                        if (acc_traceable and total) else None),
                        "narrated_only": narrated_only,
                        "measured_unchecked": measured_unchecked},
         "facts": {"coverage_pct": round(agg_cov_pct, 2), "coverage_threshold": threshold,
@@ -2233,6 +2235,13 @@ def cmd_readiness(args):
     cap_str = (f"  (capped at {int(final)}: {cap_reason} — umbral {cap_source})"
                if cap_reason else "")
     print(f"READINESS: {out['score']}/100 — {out['status']}{cap_str}")
+    # % TERMINADO que el kit puede firmar: criterios cerrados por test verde /
+    # total (MEDIDO, no el ratio de checkboxes). Solo con trazabilidad AC-n;
+    # sin ella no hay % honesto que mostrar. Informativo: jamas gatea (kit 1.28.0).
+    if acc_traceable and total:
+        print(f"  acceptance medido: {out['acceptance']['measured_pct']}% "
+              f"({len(measured_closed)}/{total} criterios cerrados por test verde "
+              f"— medido, no gatea)")
     if not acc_found:
         print(f"  ! acceptance file not found: {acc_path or '(unset)'} — ADR dimension = 0")
     if acc_found and not total:
