@@ -10,7 +10,7 @@
       "name": "uscha",
       "source": "./uscha-kit",
       "description": "7 skills (uscha-*) + qa_ledger.py (24 subcomandos, stdlib). Facts block, guesses advise; el humano aprueba.",
-      "version": "1.29.0",
+      "version": "1.30.0",
       "author": { "name": "Andres Massello" },
       "homepage": "https://github.com/andresmassello/uscha",
       "repository": "https://github.com/andresmassello/uscha",

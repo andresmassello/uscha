@@ -132,8 +132,9 @@ el enforcement del registro sí es del engine. Nunca se resuelve "rodeándola" e
   score cae bajo el gate o sobreviven mutantes en el camino crítico, es finding **BLOCKER** —
   coverage verde no alcanza. Caro → tier *scheduled / incremental*, no en el inner loop.
 - La invariante **Integridad del gate** la mide `qa_ledger.py gate-check`: tests borrados o
-  deshabilitados y thresholds bajados = **BLOCKER** (exit 1); supresiones de lint y asserts
-  removidos = revisar (o `--strict`). Para alto blast-radius se exige además un checker
+  deshabilitados y thresholds bajados = **BLOCKER** (exit 1); supresiones de lint, asserts
+  removidos y **dependencias nuevas** (la regla "0 deps sin aprobación", hecha visible —
+  kit 1.30.0) = revisar (o `--strict`). Para alto blast-radius se exige además un checker
   no-correlacionado con el maker (distinta familia/perfil) — eso es proceso, no código.
 - La invariante **Golden (INV-GOLDEN-01)** la mide `qa_ledger.py golden-diff`: cualquier `.received`
   que no matchee su `.approved` (o sin aprobar) = **DIVERGE**, corta la cadena antes de judgment-day.

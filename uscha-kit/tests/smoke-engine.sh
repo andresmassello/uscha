@@ -126,6 +126,27 @@ chk "lowered cross-hunk -> BLOCKER" 1 run gate-check --diff thr.diff
 printf -- "diff --git a/pom.xml b/pom.xml\n--- a/pom.xml\n+++ b/pom.xml\n@@ -10,1 +10,0 @@\n-  <coverage-minimum>0.80</coverage-minimum>\n@@ -55,0 +55,1 @@\n+  <coverage-minimum>0.80</coverage-minimum>\n" > move.diff
 chk "mover threshold igual -> CLEAN" 0 run gate-check --diff move.diff
 
+echo "== T7b gate-check: dependencia nueva = senal BLANDA (kit 1.30.0) =="
+# la CONSTITUTION dice '0 deps nuevas sin aprobacion'; gate-check la hace visible.
+printf -- 'diff --git a/package.json b/package.json\n--- a/package.json\n+++ b/package.json\n@@ -10,3 +10,4 @@\n   "dependencies": {\n+    "sketchy-lib": "^2.1.0",\n     "react": "^18.0.0"\n' > dep.diff
+run gate-check --diff dep.diff --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ok = (d['verdict'] == 'REVIEW' and len(d['new_dependencies']) == 1
+      and 'sketchy-lib' in d['new_dependencies'][0])
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   dep nueva -> REVIEW + listada en new_dependencies"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL dep nueva no detectada"; }
+chk "dep nueva SIN --strict -> exit 0 (advisory)" 0 run gate-check --diff dep.diff
+chk "dep nueva CON --strict -> exit 1 (gatea la senal blanda)" 1 run gate-check --diff dep.diff --strict
+# un diff de codigo normal NO debe flaguear dep (sin falsos positivos)
+printf -- 'diff --git a/src/mod.py b/src/mod.py\n--- a/src/mod.py\n+++ b/src/mod.py\n@@ -1,2 +1,3 @@\n def f(x):\n+    return x + 1\n' > nodep.diff
+run gate-check --diff nodep.diff --json 2>/dev/null | "$PY" -c "
+import json, sys
+sys.exit(0 if json.load(sys.stdin)['new_dependencies'] == [] else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   diff de codigo normal no flaguea dep (sin falso positivo)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL falso positivo de dep en codigo normal"; }
+
 echo "== T8 golden-diff: NOT-RUN y DIVERGE =="
 mkdir -p g && ( cd g && chk "cero fixtures -> NOT-RUN exit 2" 2 run golden-diff )
 ( cd g && printf "x" > f.received.txt && chk "fixture sin aprobar -> DIVERGE exit 1" 1 run golden-diff )

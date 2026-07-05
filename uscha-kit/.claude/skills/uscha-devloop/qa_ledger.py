@@ -3288,10 +3288,42 @@ def _gc_is_test_file(path):
                               "_test.py", ".test.js", ".test.ts", ".spec.js", ".spec.ts")))
 
 
+# dependencias nuevas (supply-chain, kit 1.30.0): la CONSTITUTION dice "0 dependencias
+# nuevas sin aprobacion" — hoy es prosa; esto la hace VISIBLE. Senal BLANDA (avisa;
+# gatea con --strict), no BLOCKER: agregar una dep suele ser legitimo, solo necesita
+# que un humano la vea/apruebe. Heuristica por manifest; un falso positivo (bump de
+# version, key no-dep) es benigno porque es advisory. Cubre los 9 stacks del kit.
+_GC_DEP_MANIFEST = {
+    "package.json":   re.compile(r'"[\w@./-]+"\s*:\s*"[~^<>=v]?\d'),   # "pkg": "^1.2.3"
+    "pyproject.toml": re.compile(r'^\s*[\w.-]+\s*=\s*[">{\d~^]'),
+    "cargo.toml":     re.compile(r'^\s*[\w.-]+\s*=\s*[">{\d~^]'),
+    "go.mod":         re.compile(r'^\s*[\w.][\w./-]+\s+v\d'),
+    "pom.xml":        re.compile(r'<artifactId>'),
+    "gemfile":        re.compile(r'^\s*gem\s+["\']'),
+    "podfile":        re.compile(r'^\s*pod\s+["\']'),
+}
+_GC_REQ = re.compile(r'^\s*[A-Za-z][\w.-]*\s*(?:[=<>~!]=|~=|>=|<=|@|\[)')
+_GC_GRADLE = re.compile(r'\b(?:implementation|api|testImplementation|runtimeOnly|compile|classpath)\s*[("\']')
+
+
+def _gc_new_dep(path, body):
+    """True if an ADDED line introduces a dependency in a known manifest (advisory
+    heuristic — a false positive is benign because this is a soft finding)."""
+    base = path.rsplit("/", 1)[-1].lower()
+    if base.endswith((".csproj", ".vbproj", ".fsproj")):
+        return "<PackageReference" in body
+    if base.startswith("build.gradle"):
+        return bool(_GC_GRADLE.search(body))
+    if base.startswith("requirements") and base.endswith(".txt"):
+        return bool(_GC_REQ.search(body))
+    rx = _GC_DEP_MANIFEST.get(base)
+    return bool(rx.search(body)) if rx else False
+
+
 def cmd_gate_check(args):
     diff = _read_diff(args)
     removed_tests, disabled_tests, suppressions, thresholds = [], [], [], []
-    secrets, secret_literals, scrub_edits = [], [], []
+    secrets, secret_literals, scrub_edits, new_deps = [], [], [], []
     assertions_removed = 0
     path = None
     minus_path = None
@@ -3341,6 +3373,8 @@ def cmd_gate_check(args):
                     secrets.append(f"{path}: {label}")
             if _GC_SECRET_SOFT.search(body):
                 secret_literals.append(path)
+            if _gc_new_dep(path, body):
+                new_deps.append(f"{path}: {body.strip()[:70]}")
             # reglas de scrub del golden (kit 1.15.0): editarlas puede enmascarar
             # divergencia real — señal blanda SIEMPRE visible, el humano decide.
             if path.rsplit("/", 1)[-1] == "golden.scrub.json":
@@ -3403,7 +3437,7 @@ def cmd_gate_check(args):
             + len(secrets))
     soft = (len(suppressions) + (1 if assertions_removed else 0)
             + (1 if test_count_drop else 0) + len(secret_literals)
-            + len(scrub_edits))
+            + len(scrub_edits) + len(new_deps))
     blocker = hard > 0 or (args.strict and soft > 0)
     verdict = "BLOCKER" if blocker else ("REVIEW" if soft else "CLEAN")
 
@@ -3417,6 +3451,7 @@ def cmd_gate_check(args):
             "secret_literals": sorted(set(secret_literals)),
             "scrub_rules_touched": sorted(set(scrub_edits)),
             "suppressions_added": sorted(set(suppressions)),
+            "new_dependencies": sorted(set(new_deps)),
             "assertions_removed": assertions_removed,
             "test_count_drop": test_count_drop,
         }, indent=2, ensure_ascii=False))
@@ -3439,6 +3474,7 @@ def cmd_gate_check(args):
     _show("literales tipo password/token agregados (revisar)", secret_literals)
     _show("reglas de scrub del golden editadas (revisar: pueden enmascarar divergencia)", scrub_edits)
     _show("supresiones de lint agregadas (revisar)", suppressions)
+    _show("dependencias nuevas (revisar: 0 deps nuevas sin aprobacion)", new_deps)
     if assertions_removed:
         print(f"  ~ asserts removidos en tests: {assertions_removed} (revisar)")
     if test_count_drop:
