@@ -899,6 +899,47 @@ sys.exit(0 if d['verdict'] == 'BELOW' and abs(d['score'] - 0.5) < 0.001 else 1)"
   && { PASS=$((PASS+1)); echo "  ok   negativo con evidencia resta peso (4-2)/4 = 0.50"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL semantica de negativos"; }
 
+echo "== T45 anti-ceremonia (1.25.0): readiness = veredicto unico; --verbose expande; gates colapsados =="
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > ac-cfg.json
+run init --config ac-cfg.json --out L-ac.json >/dev/null
+# default = 1 veredicto, SIN la tabla de rutina (dimensiones/by-repo son ceremonia)
+run readiness --ledger L-ac.json 2>/dev/null | grep -q "^READINESS:" \
+  && { PASS=$((PASS+1)); echo "  ok   default emite el veredicto (READINESS:)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL default no emite el veredicto"; }
+run readiness --ledger L-ac.json 2>/dev/null | grep -q -- "--- dimensions" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL default filtra la tabla de dimensiones (ceremonia)"; } \
+  || { PASS=$((PASS+1)); echo "  ok   default colapsa las dimensiones"; }
+run readiness --ledger L-ac.json 2>/dev/null | grep -q -- "--- by repo" \
+  && { FAIL=$((FAIL+1)); echo "  FAIL default filtra el by-repo (ceremonia)"; } \
+  || { PASS=$((PASS+1)); echo "  ok   default colapsa el by-repo"; }
+# --verbose expande el detalle
+run readiness --ledger L-ac.json --verbose 2>/dev/null | grep -q -- "--- dimensions" \
+  && { PASS=$((PASS+1)); echo "  ok   --verbose expande las dimensiones"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL --verbose no expande las dimensiones"; }
+run readiness --ledger L-ac.json --verbose 2>/dev/null | grep -q -- "--- by repo" \
+  && { PASS=$((PASS+1)); echo "  ok   --verbose expande el by-repo"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL --verbose no expande el by-repo"; }
+# un gate BLOQUEANTE persistido aparece nombrado en la linea colapsada
+run log-gate --repo solo --iteration 1 --kind simplicity --verdict fail --count 3 --ledger L-ac.json >/dev/null 2>&1
+run readiness --ledger L-ac.json 2>/dev/null | grep -- "--- gates:" | grep -q "solo/gate:simplicity" \
+  && { PASS=$((PASS+1)); echo "  ok   gate bloqueante colapsado y nombrado"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL gate bloqueante no nombrado en la linea de gates"; }
+# gate limpio (latest-wins) -> la linea reporta ninguno bloqueando
+run log-gate --repo solo --iteration 2 --kind simplicity --verdict pass --ledger L-ac.json >/dev/null 2>&1
+run readiness --ledger L-ac.json 2>/dev/null | grep -- "--- gates:" | grep -q "ninguno bloqueando" \
+  && { PASS=$((PASS+1)); echo "  ok   gate limpio libera la linea de gates (latest-wins)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL gate limpio no libera la linea de gates"; }
+# --json expone gates[] (aditivo: presentacion sobre hechos, no recomputa el KPI)
+run readiness --ledger L-ac.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+g = d.get('gates')
+ok = (isinstance(g, list) and len(g) == 1 and g[0]['tool'] == 'gate:simplicity'
+      and g[0]['blocking'] is False)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   --json expone gates[] aditivo (latest limpio, blocking False)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL contrato gates[] en --json"; }
+
 echo "== T44 sync quintuple de version: VERSION = config = plugin.json = marketplace.json =="
 "$PY" -c "
 import json, sys, os, io

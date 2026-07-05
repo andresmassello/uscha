@@ -324,6 +324,18 @@ the STATE of the result (not effort spent), as a weighted score 0..100 with hard
 python3 $QL readiness --acceptance <ACCEPTANCE.md> --tools-per-cycle <count>
 ```
 
+**Single-verdict view (kit 1.25.0, anti-ceremony).** By default `readiness` is ONE
+screen: the verdict line, any conditional warning that actually fired (it speaks only
+when it matters), and a `--- gates:` line that COLLAPSES every persisted gate record —
+the per-language linter gates (`*-qa-gate` from `ingest-gate`) plus the discrete fact
+gates (`gate:*` from `log-gate`, `rubric:grade`, `blocker:*` from `flag-blocker`) — into
+`N ok / M bloqueando (repo/gate...)`. This
+is presentation over facts already in the ledger — it never recomputes the score, so
+the KPI is identical to before the rollup existed. Pass `--verbose` to expand the
+dimensions table, the acceptance/coverage/churn summary and the per-repo breakdown.
+Show the human the default; reach for `--verbose` only when they ask what is inside the
+number.
+
 Dimensions and default weights: acceptance (traced, MEASURED) 30, ADR/checkbox
 completion 15, coverage 15, static gate 20, convergence 10, integration 10. A
 lint-capable repo whose static gate NEVER ran scores that dimension UNMEASURED (0.0) —
@@ -358,9 +370,10 @@ ADR completion is parsed from the **acceptance task list** (markdown `- [x]`/`- 
 read-only — set the path via `config.defaults.acceptance_file` or `--acceptance`. Count
 the WHOLE file (the CLI default); only pass `--section` if you have verified the heading
 text matches your template exactly — a mismatched section silently zeroes a heavy
-dimension. Always present the headline WITH the dimension breakdown AND the capping
-blocker, so it's clear what's missing, not just the number. Cycles/regressions are churn
-(process health) and are reported separately — they never raise readiness.
+dimension. Present the single-verdict headline (the number, the capping blocker if any,
+and the collapsed `--- gates:` line); add `--verbose` only if the human wants the
+dimension breakdown behind the number. Cycles/regressions are churn (process health) and
+are reported separately — they never raise readiness.
 
 Optionally (on request — reporting, not part of the verified build) invoke the `specloop-sysdoc`
 skill to generate the two-view HTML deck. Finish with a retrospective drawn FROM the

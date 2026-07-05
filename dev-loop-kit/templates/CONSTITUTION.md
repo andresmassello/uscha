@@ -83,6 +83,20 @@ el enforcement del registro sí es del engine. Nunca se resuelve "rodeándola" e
 - [ ] `golden-diff` limpio (byte a byte) = condición dura de cierre del módulo tocado
 - [ ] Corpus documentado; módulo con corpus insuficiente = PARTIAL, nunca COVERS
 
+## Anti-ceremonia — Lean sobre el propio método (meta-invariante)
+
+> El riesgo no es un gate malo: es la **suma** de gates buenos volviendo `/dev-loop` una
+> auditoría. Eso es *over-processing* — muda de ceremonia (Poppendieck cap. 4). Aplica a la
+> herramienta, no al código: si un paso no agrega valor **para el humano**, es desperdicio.
+> Es una **meta-invariante** — el criterio que TODO gate futuro debe pasar antes de entrar.
+> Hoy solo la regla 3 está mecanizada (el veredicto único de `readiness`, kit 1.25.0); el
+> resto es disciplina de diseño y criterio de review, no algo que el engine chequee.
+
+- [ ] **Corre sin que el humano tipee nada** — un script/agente lo autocompleta; sin formularios de rutina
+- [ ] **Habla solo cuando importa** — falla, o perfil de riesgo alto; si habla siempre, se silencia por defecto
+- [ ] **Colapsa en `readiness`** — un número + una línea, no otra pantalla (`--verbose` abre el detalle)
+- [ ] **Un cambio trivial lo saltea** — gateado por perfil de riesgo <!-- principio: perfiles A–E aún NO mecanizados en el engine -->
+
 ## Cómo se hace cumplir
 
 - `/discovery` y `/adr-refine` la leen y derivan de acá el **severity gate** (paso
@@ -104,6 +118,11 @@ el enforcement del registro sí es del engine. Nunca se resuelve "rodeándola" e
 - La invariante **Golden (INV-GOLDEN-01)** la mide `qa_ledger.py golden-diff`: cualquier `.received`
   que no matchee su `.approved` (o sin aprobar) = **DIVERGE**, corta la cadena antes de judgment-day.
   El agente no toca `.approved` (idealmente un hook `PreToolUse` lo hace imposible).
+- La meta-invariante **Anti-ceremonia** no la mide ningún subcomando: es el filtro de admisión
+  de gates nuevos (¿autocorre? ¿calla salvo cuando importa? ¿colapsa en `readiness`? ¿lo saltea
+  un cambio trivial?). Su única pata mecanizada hoy es el veredicto único de `readiness` (kit
+  1.25.0): los gates persistidos se muestran colapsados en una línea por defecto y se abren con
+  `--verbose`. Un gate que no pasa las cuatro preguntas no entra al kit — se documenta por qué.
 - **Un ADR que contradiga la CONSTITUTION no es válido**: se escala, no se aprueba. Si una
   decisión necesitaría violar un invariante, primero se discute cambiar la CONSTITUTION
   (decisión humana explícita), nunca se "rodea" en silencio.

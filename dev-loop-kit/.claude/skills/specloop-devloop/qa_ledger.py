@@ -1409,6 +1409,23 @@ def _latest_static_by_tool(node):
     return latest
 
 
+def _gate_rollup(ledger):
+    """Collapse the latest persisted gate record per (repo, tool) into a flat list
+    for the single-verdict view (1.25.0, anti-ceremony). Reads FACTS already in the
+    ledger — it never re-runs a gate nor recomputes the readiness score; a record is
+    'blocking' iff its latest state gated at least one finding (gated_reported > 0).
+    This is presentation over persisted facts: the score/caps are untouched, so the
+    KPI stays exactly what it was before the rollup existed."""
+    gates = []
+    for rname, rnode in ledger["repos"].items():
+        for tool, rec in _latest_static_by_tool(rnode).items():
+            gates.append({"repo": rname, "tool": tool,
+                          "blocking": rec.get("gated_reported", 0) > 0,
+                          "gated": rec.get("gated_reported", 0),
+                          "note": rec.get("note")})
+    return sorted(gates, key=lambda g: (g["repo"], g["tool"]))
+
+
 def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, note):
     """Append a static-gate-shaped record for a FACT gate so the EXISTING plumbing
     sees it: _gate_open_and_sev feeds the BLOCKER/CRITICAL readiness cap (<=65) and
@@ -2176,6 +2193,7 @@ def cmd_readiness(args):
         "churn": {"max_cycle": cycles, "new_regressions": regressions,
                   "by_tool_fixed_pct": {t: x["fixed_pct"] for t, x in tool_roll.items()}},
         "advice": {"stalled_repos": stalled_repos, "stop_signal": stop_signal},
+        "gates": _gate_rollup(ledger),
         "by_repo": repos,
     }
     if args.json:
@@ -2230,6 +2248,22 @@ def cmd_readiness(args):
         print("  · stop-signal: todos los repos convergieron y no queda ningun "
               "fact bloqueante — lo que falta es deuda medible (coverage/"
               "acceptance), no findings: candidato a cortar e ir a PR (advisory)")
+    # veredicto unico (1.25.0, anti-ceremonia): los gates persistidos se colapsan a
+    # UNA linea bajo el KPI. El detalle (dimensiones, acceptance, churn, by-repo) es
+    # ruido de auditoria en el caso normal -> detras de --verbose. Las lineas de
+    # arriba SI se quedan: son condicionales ("habla solo cuando importa").
+    gate_roll = out["gates"]
+    if gate_roll:
+        blocking = [g for g in gate_roll if g["blocking"]]
+        n_ok = len(gate_roll) - len(blocking)
+        hint = "" if args.verbose else "   (readiness --verbose para el detalle)"
+        if blocking:
+            names = ", ".join(f"{g['repo']}/{g['tool']}" for g in blocking)
+            print(f"--- gates: {n_ok} ok · {len(blocking)} bloqueando ({names}){hint}")
+        else:
+            print(f"--- gates: {n_ok} ok, ninguno bloqueando{hint}")
+    if not args.verbose:
+        return
     print("--- dimensions (weight | raw | contribution) ---")
     for d in dims:
         print(f"  {d:13s} {weights[d]:3d} | {dims[d]:.2f} | "
@@ -4207,6 +4241,10 @@ def build_parser():
                     help="only count checkboxes under headings matching this text")
     pr.add_argument("--tools-per-cycle", type=int, default=3)
     pr.add_argument("--json", action="store_true")
+    pr.add_argument("--verbose", action="store_true",
+                    help="expand the collapsed sub-scores (dimensions table, "
+                         "acceptance/coverage summary, churn, per-repo breakdown); "
+                         "default is the single-verdict view (anti-ceremony)")
     pr.set_defaults(func=cmd_readiness)
 
     pb = sub.add_parser("rebuild",
