@@ -275,6 +275,7 @@ gates     ← veredictos persistidos con log-gate (pass|fail|not-run)</pre>
           <tr><td>spec-check (estructura)</td><td>falta out-of-scope · aceptación ausente/vacía · cero AC-n trazables — hechos, exit 1</td><td class="ok">BLOQUEA</td></tr>
           <tr><td>phase --require pr-ready</td><td>estado DERIVADO del ledger; rama <code>spike/*</code> jamás pasa (1.18.0–1.19.0)</td><td class="ok">BLOQUEA</td></tr>
           <tr><td>regression-check</td><td>cierre de findings sin test nuevo = NARRATED (1.16.0); <code>--strict</code> lo gatea</td><td class="no">ACONSEJA</td></tr>
+          <tr><td>waste-check</td><td>clones Type-1/2 del diff vs el repo (reuse-first, 1.26.0) — la duplicación que <code>simplicity-check</code> no ve; flags con <code>file:line</code> a reusar; gatea solo con <code>--gate</code> o <code>defaults.waste.gate</code></td><td class="no">ACONSEJA</td></tr>
           <tr><td>rubric-ingest</td><td>grade de la rúbrica (criterio cualitativo versionado, contrato JSON agnóstico, 1.23.0); gatea solo si el humano lo declara</td><td class="no">ACONSEJA</td></tr>
           <tr><td>spec-check (prosa)</td><td>heurística sobre prosa (vaguedad, EARS); <code>--strict</code> la gatea</td><td class="no">ACONSEJA</td></tr>
         </tbody>
@@ -369,20 +370,22 @@ claude --version &amp;&amp; claude doctor</pre>
           <tr><td>/specloop-adr-refine</td><td>pulir los bordes de una decisión.</td></tr>
           <tr><td>/specloop-devloop</td><td>plan → coverage → build → QA loop → integración.</td></tr>
           <tr><td>/specloop-sysdoc</td><td>reporte opcional (a pedido) — deck de dos vistas desde el ledger.</td></tr>
-          <tr><td>doctor</td><td>diagnóstico de la instalación (flutter-doctor spirit): python/git, 6 skills, hook INV-GOLDEN-01, config/ACCEPTANCE/ledger, toolchains por type — exit 1 solo con errores (1.22.0).</td></tr>
+          <tr><td>doctor</td><td>diagnóstico de la instalación (flutter-doctor spirit): python/git, 7 skills, hook INV-GOLDEN-01, config/ACCEPTANCE/ledger, toolchains por type — exit 1 solo con errores (1.22.0).</td></tr>
           <tr><td>qa_ledger init</td><td>arma el ledger desde dev-loop.config.json.</td></tr>
           <tr><td>snapshot</td><td>coverage/tests/LOC (--phase pre|post).</td></tr>
           <tr><td>check-coverage</td><td>exit 0 si ≥ umbral (gate de fase 1).</td></tr>
           <tr><td>ingest-gate</td><td>parsea linters, normaliza severidad, diffea IDs.</td></tr>
           <tr><td>converged</td><td>ciclo limpio + static gate limpio.</td></tr>
           <tr><td>oscillation</td><td>repetición de huella período-2.</td></tr>
-          <tr><td>readiness</td><td>KPI 0–100 que reporta (siempre exit 0), con caps duros — no es un gate exit 0/1.</td></tr>
+          <tr><td>readiness</td><td>KPI 0–100 que reporta (siempre exit 0), con caps duros — no es un gate exit 0/1. Veredicto único (anti-ceremonia, 1.25.0): por default UNA pantalla — veredicto + una línea <code>--- gates:</code> colapsada; <code>--verbose</code> expande las dimensiones y el detalle por repo.</td></tr>
           <tr><td>rebuild</td><td>completitud del spec: COVERS/PARTIAL/DIVERGE — exit 1 salvo COVERS.</td></tr>
           <tr><td>golden-diff</td><td>bytes vs .approved — verdad de campo, aprobada por humano; exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN.</td></tr>
           <tr><td>log-gate</td><td>persiste el veredicto de un gate de hecho (--kind golden-diff|gate-check|pit-check|simplicity|regression, --verdict pass|fail|not-run).</td></tr>
           <tr><td>flag-blocker</td><td>loguea una violación (ej. --kind constitution): capea readiness ≤65 y bloquea convergencia hasta --resolve (que exige --escape-analysis: qué gate/test debió atraparla — 1.16.0).</td></tr>
           <tr><td>resolve-escalation</td><td>resuelve una escalación; sin resolver, readiness queda capeado ≤75.</td></tr>
           <tr><td>regression-check</td><td>Find Bugs Once (1.16.0): findings cerrados sin línea nueva de test = NARRATED (avisa; --strict gatea).</td></tr>
+          <tr><td>waste-check</td><td>reuse-first (1.26.0): clones Type-1/2 determinísticos del diff vs el repo — la duplicación que simplicity-check no ve; flags con file:line a reusar; advisory salvo --gate o defaults.waste.gate.</td></tr>
+          <tr><td>summary</td><td>métricas retrospectivas (--json lo consume /specloop-sysdoc); incluye el first-time yield (FTY, 1.27.0): % de repos que pasaron QA en el 1er ciclo — informativo, jamás gatea.</td></tr>
           <tr><td>phase</td><td>estado del workflow DERIVADO del ledger (plan/build/qa/escalated/pr-ready), jamás declarado; --require pr-ready gatea el PR y veta ramas spike/* (1.18.0–1.19.0).</td></tr>
           <tr><td>rubric-ingest</td><td>ingesta el JSON del grader de la rúbrica (evidence-or-nothing, score ponderado vs threshold); advisory por default, --gate o defaults.rubric.gate lo vuelve bloqueante (1.23.0).</td></tr>
         </tbody>

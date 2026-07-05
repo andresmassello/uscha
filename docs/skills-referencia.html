@@ -109,7 +109,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 <div class="wrap">
 
 <header class="hero">
-  <div class="tag">referencia exhaustiva · dev-loop-kit 1.23.0</div>
+  <div class="tag">referencia exhaustiva · dev-loop-kit 1.27.0</div>
   <h1>Las siete skills <span class="a">del método.</span></h1>
   <p>Qué hace cada una, fase por fase: propósito, cuándo se invoca, principios no
   negociables, protocolo, artefactos, guardrails y relaciones. La fuente de verdad son
@@ -137,7 +137,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <span class="ar">QA-LEDGER.json →</span><span class="n hot">/specloop-sysdoc</span><span class="ar">deck comercial + técnico, a pedido</span>
   </div>
   <p style="margin-top:1rem;color:var(--fg-soft);font-size:.9rem">La pieza transversal es el
-  <strong style="color:var(--fg)">engine</strong> (<code>qa_ledger.py</code>, 21 subcomandos,
+  <strong style="color:var(--fg)">engine</strong> (<code>qa_ledger.py</code>, 24 subcomandos,
   Python stdlib): las skills instruyen al agente, el engine mide y bloquea. El lema:
   <em style="font-style:normal;color:var(--coral)">los gates que leen hechos bloquean; los que
   adivinan sobre prosa, avisan</em>. El detalle comando por comando vive en el playbook.</p>
@@ -298,13 +298,14 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
       <li><strong>Fase 1 — Coverage gate → caracterización condicional.</strong> <code>snapshot --phase pre</code> + <code>check-coverage</code>. Bajo el umbral → tests de contrato EN EL BORDE (no internals), revisados por el humano. Migración → golden ANTES de tocar nada; sin golden aprobado no hay build.</li>
       <li><strong>Fase 2 — Build.</strong> Commits convencionales por paso lógico. Disciplina ADR: consultar antes de tocar área gobernada; triggers proactivos de ADR nuevo; linkear código↔ADR; <strong>jamás editar la SPEC/ADR para que la implementación parezca correcta</strong>.</li>
       <li><strong>Fase 2b — Simplicity gate ("Reduce").</strong> <code>simplicity-check</code> sobre el diff; OVERBUILT (exit 1) es BLOCKER: recortar y re-correr. <strong>Los tests quedan FUERA del presupuesto</strong> (1.11.0). Se persiste con <code>log-gate --kind simplicity</code>.</li>
+      <li><strong>Fase 2c — Waste gate ("Reuse-first", 1.26.0).</strong> <code>waste-check</code>: detección determinística de clones Type-1/2 del diff contra el REPOSITORIO — la duplicación que <code>simplicity-check</code> no puede ver (puntúa el diff aislado). Cada flag nombra el <code>file:line</code> a reusar. Advisory por default; gatea solo con <code>--gate</code> o <code>defaults.waste.gate</code>. Raíz: muda Lean (Poppendieck) + el +81% de duplicación que midió GitClear.</li>
       <li><strong>Fase 3 — QA loop (por repo).</strong> Tools de <code>qa_tools_order</code> (code-review → judgment-day → improve); un pase de todas = un ciclo. Tras cada pase: fixes ≥ gate, tests, <code>log-step</code>. En cada pase que cambió código: <code>gate-check</code> (¿debilitó el aparato? ¿agregó un secreto? — 1.12.0) y <code>golden-diff</code> en migración, persistidos con <code>log-gate</code>. <strong>Find Bugs Once (1.16.0):</strong> con <code>--fixed &gt; 0</code>, correr <code>regression-check</code> — cierre sin línea nueva de test = NARRATED (el test que falla va ANTES del fix). El static gate se ingiere con <code>ingest-gate</code> (severidades normalizadas, <code>fixed</code> real por diff de IDs). Cierre de ciclo: <code>converged</code> + <code>oscillation</code>.</li>
       <li><strong>Fase 4 — Integración.</strong> La capa cross-repo con todos los repos montados, logueada bajo <code>--repo integration</code>. Verde por-repo no implica costuras verdes.</li>
       <li><strong>Fase 5 — Verify.</strong> Recién ahora se escribe la cobertura fina; suite completa verde, <code>snapshot --phase post</code>.</li>
       <li><strong>Fase 5b — Rebuild test (opcional, perfil C+/E).</strong> ¿La SPEC alcanza para regenerar el sistema? Un test que pasaba y falla en el regenerado = comportamiento que la SPEC dejó implícito. La divergencia es gap de spec, no bug de código.</li>
       <li><strong>Fase 6 — PR.</strong> <code>phase --require pr-ready</code> POR REPO antes de abrir: estado COMPUTADO del ledger, jamás declarado; exit 1 lista los hechos que faltan. Rama <code>spike/*</code> jamás pasa (1.19.0). PR, CI verde, <strong>STOP</strong> — el humano mergea.</li>
       <li><strong>Fase 7 — Smoke list.</strong> Checklist manual concreto (rutas reales, endpoints, flujos de device).</li>
-      <li><strong>Fase 8 — Docs + retrospectiva.</strong> <code>summary</code> (+ <code>--json</code> para sys-doc) y el readiness KPI tras CUALQUIER tarea: acceptance MEDIDA 30 · static 20 · adr 15 · coverage 15 · convergencia 10 · integración 10; caps duros con procedencia etiquetada (1.17.0); trazabilidad AC-n (1.10.0); advisories stall / stop-signal (1.14.0).</li>
+      <li><strong>Fase 8 — Docs + retrospectiva.</strong> <code>summary</code> (+ <code>--json</code> para sys-doc; incluye el <strong>first-time yield (FTY, 1.27.0)</strong>: % de repos que pasaron QA en el primer ciclo, sin rework ni escalación — métrica Lean informativa, jamás gatea) y el readiness KPI tras CUALQUIER tarea: acceptance MEDIDA 30 · static 20 · adr 15 · coverage 15 · convergencia 10 · integración 10; caps duros con procedencia etiquetada (1.17.0); trazabilidad AC-n (1.10.0); advisories stall / stop-signal (1.14.0). <strong>Veredicto único (anti-ceremonia, 1.25.0):</strong> por default el readiness es UNA pantalla — el veredicto + una línea <code>--- gates:</code> colapsada; <code>--verbose</code> expande las dimensiones y el detalle por repo. Un meta-invariante en la CONSTITUTION gobierna que los gates futuros sigan callados-por-default y colapsen dentro del readiness.</li>
     </ol>
 
     <div class="rule stop"><div class="rk">contrato de escalación — frenar y preguntar cuando</div>
@@ -488,7 +489,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <table>
       <thead><tr><th>Invariante</th><th>Qué exige</th><th>Dónde rige</th></tr></thead>
       <tbody>
-        <tr><td>tracked-markdown</td><td>Antes de sobreescribir un <code>.md</code> trackeado que ya existe, pedir la versión actual — jamás reemplazar progreso real en silencio.</td><td>las 6</td></tr>
+        <tr><td>tracked-markdown</td><td>Antes de sobreescribir un <code>.md</code> trackeado que ya existe, pedir la versión actual — jamás reemplazar progreso real en silencio.</td><td>las 7</td></tr>
         <tr><td>INV-GOLDEN-01</td><td>El agente jamás escribe/renombra/edita un <code>.approved</code>; un hook PreToolUse lo vuelve mecánicamente imposible. Vale incluso en tests: crear un fixture aprobado es un acto humano.</td><td>specloop-characterize · specloop-reverse-discovery · specloop-devloop</td></tr>
         <tr><td>CONSTITUTION.md</td><td>Los invariantes están ARRIBA de los ADRs; una violación es BLOCKER y se escala, jamás se negocia. Enmendarla es una decisión humana explícita y separada.</td><td>specloop-discovery · specloop-adr-refine · specloop-devloop</td></tr>
         <tr><td>hechos vs prosa</td><td>Los gates que leen hechos bloquean (golden-diff, gate-check, simplicity, spec-check estructural, phase); los que adivinan sobre prosa avisan (spec-check prosa, regression-check, advisories del readiness) — <code>--strict</code> los gatea cuando el equipo lo decide.</td><td>todas, vía engine</td></tr>
@@ -503,7 +504,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <footer class="foot">
   <p>la herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba</p>
-  <p style="margin-top:.5rem">fuente de verdad: dev-loop-kit/.claude/skills/*/SKILL.md · kit 1.19.0 · 2026-07</p>
+  <p style="margin-top:.5rem">fuente de verdad: dev-loop-kit/.claude/skills/*/SKILL.md · kit 1.27.0 · 2026-07</p>
 </footer>
 
 </div>

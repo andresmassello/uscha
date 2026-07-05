@@ -279,6 +279,7 @@ LOC       ← its own count (stdlib)</pre>
           <tr><td>spec-check · structure</td><td>out-of-scope section + acceptance criteria present + traceable AC-n IDs</td><td class="ok">BLOCKS</td></tr>
           <tr><td>phase --require pr-ready</td><td>state DERIVED from the ledger; a <code>spike/*</code> branch never passes (1.18.0–1.19.0)</td><td class="ok">BLOCKS</td></tr>
           <tr><td>regression-check</td><td>findings closed with no new test = NARRATED (1.16.0); <code>--strict</code> gates it</td><td class="no">ADVISES</td></tr>
+          <tr><td>waste-check</td><td>Type-1/2 clones of the diff vs the repo (reuse-first, 1.26.0) — the duplication <code>simplicity-check</code> can't see; flags name the <code>file:line</code> to reuse; gates only with <code>--gate</code> or <code>defaults.waste.gate</code></td><td class="no">ADVISES</td></tr>
           <tr><td>rubric-ingest</td><td>rubric grade (versioned qualitative criteria, vendor-neutral JSON contract, 1.23.0); gates only when the human declares it</td><td class="no">ADVISES</td></tr>
           <tr><td>spec-check · prose</td><td>vague terms, EARS, stack naming (<code>--strict</code> gates)</td><td class="no">ADVISES</td></tr>
         </tbody>
@@ -374,20 +375,22 @@ claude --version &amp;&amp; claude doctor</pre>
           <tr><td>/specloop-adr-refine</td><td>polish a decision's edges.</td></tr>
           <tr><td>/specloop-devloop</td><td>plan → coverage → build → QA loop → integration.</td></tr>
           <tr><td>/specloop-sysdoc</td><td>two-view deck from the ledger — optional reporting, on request.</td></tr>
-          <tr><td>doctor</td><td>installation diagnosis (flutter-doctor spirit): python/git, 6 skills, INV-GOLDEN-01 hook, config/ACCEPTANCE/ledger, per-type toolchains — exit 1 only on errors (1.22.0).</td></tr>
+          <tr><td>doctor</td><td>installation diagnosis (flutter-doctor spirit): python/git, 7 skills, INV-GOLDEN-01 hook, config/ACCEPTANCE/ledger, per-type toolchains — exit 1 only on errors (1.22.0).</td></tr>
           <tr><td>qa_ledger init</td><td>build ledger from dev-loop.config.json.</td></tr>
           <tr><td>snapshot</td><td>coverage/tests/LOC (--phase pre|post).</td></tr>
           <tr><td>check-coverage</td><td>exit 0 if ≥ threshold (phase-1 gate).</td></tr>
           <tr><td>ingest-gate</td><td>parse linters, normalize severity, diff IDs.</td></tr>
           <tr><td>converged</td><td>latest step of every QA tool clean + every linter clean + every persisted fact gate clean; a red measured snapshot vetoes a narrated green.</td></tr>
           <tr><td>oscillation</td><td>period-2 fingerprint repeat.</td></tr>
-          <tr><td>readiness</td><td>0–100 KPI that reports (always exit 0); hard caps: tests red ≤35, BLOCKER/CRITICAL ≤65, unresolved escalation ≤75.</td></tr>
+          <tr><td>readiness</td><td>0–100 KPI that reports (always exit 0); hard caps: tests red ≤35, BLOCKER/CRITICAL ≤65, unresolved escalation ≤75. Single-verdict (anti-ceremony, 1.25.0): the default is ONE screen — verdict + a collapsed <code>--- gates:</code> line; <code>--verbose</code> expands the dimensions and by-repo detail.</td></tr>
           <tr><td>rebuild</td><td>spec completeness: COVERS/PARTIAL/DIVERGE — exits 1 unless COVERS.</td></tr>
           <tr><td>golden-diff</td><td>bytes vs .approved — field truth, human-approved. Exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN (zero fixtures = NOT-RUN, never CLEAN).</td></tr>
           <tr><td>log-gate</td><td>persist a fact-gate verdict (golden-diff · gate-check · pit-check · simplicity · regression); a fail blocks convergence and caps readiness ≤65.</td></tr>
           <tr><td>flag-blocker</td><td>log a CONSTITUTION breach; caps readiness ≤65 and blocks convergence until --resolve (which requires --escape-analysis: which gate/test should have caught it — 1.16.0).</td></tr>
           <tr><td>resolve-escalation</td><td>human clears an escalation so readiness can rise past 75.</td></tr>
           <tr><td>regression-check</td><td>Find Bugs Once (1.16.0): findings closed with no new test line = NARRATED (advises; --strict gates).</td></tr>
+          <tr><td>waste-check</td><td>reuse-first (1.26.0): deterministic Type-1/2 clones of the diff vs the repo — the duplication simplicity-check can't see; flags name the file:line to reuse; advisory unless --gate or defaults.waste.gate.</td></tr>
+          <tr><td>summary</td><td>retrospective metrics (--json is consumed by /specloop-sysdoc); includes first-time yield (FTY, 1.27.0): % of repos that cleared QA on the 1st cycle — informational, never gates.</td></tr>
           <tr><td>phase</td><td>workflow state DERIVED from the ledger (plan/build/qa/escalated/pr-ready), never self-declared; --require pr-ready gates the PR and vetoes spike/* branches (1.18.0–1.19.0).</td></tr>
           <tr><td>rubric-ingest</td><td>ingests the rubric grader JSON (evidence-or-nothing, weighted score vs threshold); advisory by default, --gate or defaults.rubric.gate makes it blocking (1.23.0).</td></tr>
         </tbody>
