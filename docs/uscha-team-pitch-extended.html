@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uscha · del criterio propio al método compartido — edición extendida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c1618; --bg-2:#102023; --panel:#14282b; --panel-2:#183034; --line:#22403f;
+  --fg:#dbe8e6; --fg-soft:#9db3b0; --mute:#638079;
+  --coral:#ff6b4a; --coral-deep:#e8552f; --coral-soft:#3a1d17; --amber:#f5b13d; --cyan:#4fd6c9;
+  --pass:#4ddb95; --pass-bg:#12352a; --fail:#ff5d5d; --fail-bg:#3a1a1c;
+  --disp:"Chivo",sans-serif; --body:"Inter",sans-serif; --mono:"JetBrains Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow:hidden}
+body::before{content:"";position:fixed;inset:0;background:
+  radial-gradient(1300px 600px at 82% -10%,rgba(255,107,74,.08),transparent 60%),
+  radial-gradient(1000px 600px at -5% 110%,rgba(79,214,201,.06),transparent 60%);pointer-events:none;z-index:0}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:48px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;background:rgba(12,22,24,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);font-family:var(--mono);font-size:.75rem}
+.topbar .mk{font-family:var(--disp);font-weight:900;font-size:1.05rem;letter-spacing:-.03em;text-transform:lowercase;color:var(--fg)}
+.topbar .mk b{color:var(--coral)}
+.topbar .sec{color:var(--mute);letter-spacing:.06em;text-transform:uppercase;font-size:.66rem;max-width:44vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar .count{color:var(--fg-soft)}
+#progress{position:fixed;top:48px;left:0;height:2px;background:var(--coral);z-index:41;transition:width .25s ease}
+
+.slide{display:none;position:fixed;inset:48px 0 0 0;overflow-y:auto;z-index:1}
+.slide.active{display:block}
+.inner{min-height:100%;max-width:1080px;margin:0 auto;padding:4vh 3rem 9vh;display:flex;flex-direction:column;justify-content:center}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;color:var(--coral);margin-bottom:1.1rem;display:flex;align-items:center;gap:.7rem}
+.kicker .n{background:var(--coral);color:var(--bg);border-radius:5px;padding:2px 9px;font-weight:700;letter-spacing:0}
+h1{font-family:var(--disp);font-weight:900;font-size:clamp(2.4rem,5.4vw,4.1rem);line-height:.99;letter-spacing:-.035em;margin-bottom:1.2rem}
+h1 .a{color:var(--coral)}
+h2{font-family:var(--disp);font-weight:800;font-size:clamp(1.7rem,3.4vw,2.6rem);line-height:1.02;letter-spacing:-.03em;margin-bottom:1rem}
+h2 .a{color:var(--coral)}
+h3{font-family:var(--disp);font-weight:700;font-size:1.1rem;margin-bottom:.5rem;color:var(--fg)}
+p{color:var(--fg-soft);margin-bottom:.85rem;max-width:72ch}
+p.lead{font-size:1.15rem;color:var(--fg);font-weight:500;max-width:64ch}
+strong{color:var(--fg);font-weight:700}
+em{font-style:normal;color:var(--coral);font-weight:600}
+code{font-family:var(--mono);font-size:.85em;background:var(--bg-2);border:1px solid var(--line);padding:1px 6px;border-radius:4px;color:var(--cyan);white-space:nowrap}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:1rem 0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:1rem 0}
+@media(max-width:860px){.grid2,.grid3{grid-template-columns:1fr}}
+.card{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem}
+.card.bad{border-color:#5e2a1e;background:linear-gradient(180deg,#1d1512,var(--bg-2))}
+.card.good{border-color:#1e5540;background:linear-gradient(180deg,#0f231c,var(--bg-2))}
+.card p{font-size:.9rem;margin-bottom:.4rem}
+.card p:last-child{margin-bottom:0}
+.card ul{margin:.3rem 0 0 0}
+
+.pill{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;padding:2px 9px;border-radius:4px;margin-bottom:.5rem}
+.pill.bad{background:var(--fail-bg);color:var(--fail);border:1px solid #5e2a1e}
+.pill.good{background:var(--pass-bg);color:var(--pass);border:1px solid #1e5540}
+.pill.info{background:#152a33;color:var(--cyan);border:1px solid #1e4550}
+.pill.warn{background:#3a2f12;color:var(--amber);border:1px solid #5e4a1a}
+
+.term{background:#081012;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:.9rem 0;font-family:var(--mono);font-size:.78rem;line-height:1.6}
+.term .tbar{display:flex;align-items:center;gap:.5rem;padding:.5rem .9rem;background:var(--panel-2);border-bottom:1px solid var(--line);font-size:.66rem;color:var(--mute);letter-spacing:.08em}
+.term .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.term .body{padding:.85rem 1.1rem;color:#c6dad7;overflow-x:auto}
+.term .u{color:var(--amber)}
+.term .a{color:#c6dad7}
+.term .ok{color:var(--pass)}
+.term .err{color:var(--fail)}
+.term .dim{color:var(--mute);font-style:italic}
+.term .cy{color:var(--cyan)}
+
+ul.x,ul.v{list-style:none;margin:.6rem 0}
+ul.x li,ul.v li{position:relative;padding-left:1.7rem;margin-bottom:.5rem;color:var(--fg-soft)}
+ul.x li::before{content:"✕";position:absolute;left:.1rem;color:var(--fail);font-weight:700}
+ul.v li::before{content:"▸";position:absolute;left:0;color:var(--pass);font-weight:700}
+ul.x li strong,ul.v li strong{color:var(--fg)}
+
+table{width:100%;border-collapse:collapse;font-size:.88rem;margin:.9rem 0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th{background:var(--panel-2);color:var(--fg);text-align:left;font-family:var(--disp);font-weight:700;padding:.6rem .9rem;font-size:.82rem}
+td{padding:.55rem .9rem;border-top:1px solid var(--line);vertical-align:top;color:var(--fg-soft)}
+td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font-size:.8rem}
+.ok{color:var(--pass);font-weight:700}.no{color:var(--fail);font-weight:700}.rep{color:var(--amber);font-weight:700}
+
+.quote{border-left:3px solid var(--coral);background:var(--bg-2);border-radius:0 12px 12px 0;padding:.95rem 1.25rem;margin:1.1rem 0;font-family:var(--disp);font-weight:700;font-size:1.18rem;line-height:1.35;color:var(--fg);max-width:64ch}
+.quote small{display:block;font-family:var(--mono);font-weight:400;font-size:.66rem;color:var(--mute);margin-top:.45rem;letter-spacing:.08em;text-transform:uppercase}
+
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:1rem 0}
+@media(max-width:860px){.vs{grid-template-columns:1fr}}
+
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:.7rem 1.4rem;background:rgba(12,22,24,.9);backdrop-filter:blur(8px);border-top:1px solid var(--line);font-family:var(--mono);font-size:.7rem;color:var(--mute)}
+.nav .btns{display:flex;gap:.5rem;align-items:center}
+.nav button{background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:8px;width:38px;height:34px;font-size:1rem;cursor:pointer;transition:.15s}
+.nav button:hover{border-color:var(--coral);color:var(--coral)}
+.nav .pos{color:var(--fg-soft);padding:0 .6rem}
+
+.mapwrap{background:var(--bg-2);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1rem .8rem;margin:1rem 0}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:.66rem;color:var(--fg-soft);margin-top:.4rem;padding-left:.4rem}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.caption{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin-top:.4rem}
+
+.foot-sign{font-family:var(--mono);font-size:.78rem;color:var(--mute);letter-spacing:.04em}
+@media(prefers-reduced-motion:reduce){#progress{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="mk">spec<b>·</b>loop</span>
+  <span class="sec" id="section">—</span>
+  <span class="count"><span id="curTop">1</span> / <span id="totalTop">?</span></span>
+</div>
+<div id="progress"></div>
+
+<!-- 01 · title -->
+<section class="slide active" data-section="Apertura">
+  <div class="inner">
+    <div class="kicker">para el equipo · edición extendida · ~35 minutos</div>
+    <h1>Cada uno usa el agente<br>a su manera. <span class="a">Y funciona…</span><br>hasta que tocás el código de otro.</h1>
+    <p class="lead">Todos usamos Claude Code, y todos somos productivos. El problema no aparece cuando codeás — aparece cuando <strong>seguís el trabajo de otro</strong>. Esta es una historia que ya vivimos, el método que la evita, y cómo se siente usarlo un día cualquiera.</p>
+    <p class="foot-sign" style="margin-top:2rem">Uscha · metodología spec-driven, tool-agnóstica · ← → para navegar</p>
+  </div>
+</section>
+
+<!-- 02 · current state -->
+<section class="slide" data-section="Hoy: 5 devs, 5 métodos">
+  <div class="inner">
+    <div class="kicker"><span class="n">01</span> la situación actual</div>
+    <h2>Cinco devs, cinco <span class="a">métodos distintos.</span></h2>
+    <p class="lead">Cada uno configuró su Claude Code a su mejor criterio. Y el criterio de cada uno es bueno — pero es <strong>de cada uno</strong>.</p>
+    <div class="grid3">
+      <div class="card bad"><h3>El contexto</h3><p>Vive en el chat de cada sesión: qué se decidió, por qué, qué quedó afuera. El chat se compacta, se borra, se pierde.</p></div>
+      <div class="card bad"><h3>El setup</h3><p>CLAUDE.md distinto (o ninguno), prompts de memoria, skills diferentes. El mismo pedido da resultados distintos según quién lo haga.</p></div>
+      <div class="card bad"><h3>La evidencia</h3><p>"El agente dijo que está listo y los tests pasan." ¿Qué tests? ¿Asertan lo importante? Nadie lo mide — se confía en la narración.</p></div>
+    </div>
+    <p>Ninguna de estas cosas duele <em>hoy</em>. Duelen dentro de tres semanas, cuando otra persona hereda el trabajo.</p>
+  </div>
+</section>
+
+<!-- 03 · story 1 -->
+<section class="slide" data-section="Historia · viernes">
+  <div class="inner">
+    <div class="kicker"><span class="n">02</span> una historia simulada — pero que ya viste pasar</div>
+    <h2>Viernes: Vale shipea <span class="a">cupones.</span></h2>
+    <p>Vale arma la feature de cupones con Claude Code, como siempre: directo al código, iterando en el chat. Queda bien. En el medio, Comercial le pide por Slack un detalle: <strong>un cupón vencido hace menos de 24 h se acepta igual</strong> (período de gracia). Ella se lo explica al agente en el chat, el agente lo implementa, tests verdes, merge.</p>
+    <div class="term">
+      <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; claude — sesión de vale · viernes 17:40</div>
+      <div class="body">
+<span class="u">&gt; comercial pide: si el cupón venció hace menos de 24hs, aceptalo igual (gracia)</span><br>
+<span class="a">Entendido — agrego la ventana de gracia de 24 h en la validación de expiración…</span><br>
+<span class="ok">✓ 14 tests passed</span> <span class="dim">· "listo, implementado y probado"</span><br>
+<span class="dim">— merge. La razón del "bug raro" quedó acá, en este chat. Y este chat no lo va a leer nadie.</span>
+      </div>
+    </div>
+    <p><strong>¿Dónde quedó documentada la regla de gracia?</strong> En un Slack que va a scrollear al olvido y en un chat de Claude Code que se compacta. En el código quedó un <code>expiredAt + 24h</code> sin comentario. En ningún SPEC, en ningún test que la asertee explícitamente.</p>
+  </div>
+</section>
+
+<!-- 04 · story 2 -->
+<section class="slide" data-section="Historia · 3 semanas después">
+  <div class="inner">
+    <div class="kicker"><span class="n">03</span> tres semanas después</div>
+    <h2>Martín hereda cupones.<br><span class="a">Y hereda un misterio.</span></h2>
+    <p>Le toca agregar reglas de vencimiento por categoría. Abre el código y encuentra el <code>+ 24h</code>. Le pregunta a SU Claude Code — que tiene otro setup, otro CLAUDE.md, otra memoria — por qué está eso ahí.</p>
+    <div class="term">
+      <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; claude — sesión de martín · otro setup, cero contexto de vale</div>
+      <div class="body">
+<span class="u">&gt; ¿por qué la validación de expiración suma 24hs? parece un bug</span><br>
+<span class="a">Coincido — parece un off-by-one en el manejo de fechas. La expiración debería ser</span><br>
+<span class="a">estricta. Lo corrijo y normalizo el manejo de timezones…</span><br>
+<span class="err">✗ regla de negocio eliminada</span> <span class="ok">✓ 14 tests passed</span> <span class="dim">· ningún test asertaba la gracia</span>
+      </div>
+    </div>
+    <p>El agente de Martín no miente: <strong>adivina con confianza</strong> — sin el contexto de Vale, el período de gracia ES indistinguible de un bug. Los tests pasan porque nunca pinnearon esa regla. El lunes siguiente, Comercial reporta que "se rompieron los cupones" en el peor momento posible.</p>
+  </div>
+</section>
+
+<!-- 05 · postmortem -->
+<section class="slide" data-section="Historia · el postmortem">
+  <div class="inner">
+    <div class="kicker"><span class="n">04</span> el postmortem honesto</div>
+    <h2>Nadie hizo nada mal.<br><span class="a">Y todo salió mal.</span></h2>
+    <div class="grid2">
+      <div class="card bad"><span class="pill bad">falla 1</span><h3>El "porqué" vivía en el chat</h3><p>La decisión (gracia de 24 h) nunca llegó a un archivo versionado. ¿Un comentario en el código? <strong>Explica, pero no protege</strong>: nada lo testea, no frena un merge, y el agente que "normaliza" lo borra junto con la línea.</p></div>
+      <div class="card bad"><span class="pill bad">falla 2</span><h3>Setups distintos, resultados distintos</h3><p>El agente de Martín no se comporta como el de Vale: otro CLAUDE.md, otras skills, otra memoria. El comportamiento no era replicable.</p></div>
+      <div class="card bad"><span class="pill bad">falla 3</span><h3>"Listo" era narración</h3><p>"Tests verdes" sonó a evidencia, pero nadie midió si los tests <em>asertaban</em> lo importante. La regla crítica no tenía ni un test.</p></div>
+      <div class="card bad"><span class="pill bad">falla 4</span><h3>Nada frenó al segundo agente</h3><p>¿Y el code review? El reviewer tenía el mismo contexto que Martín: <strong>cero</strong>. El diff parecía un fix legítimo de off-by-one con tests verdes — y lo aprobó por la misma razón por la que el agente lo propuso. Faltaba contexto, no diligencia.</p></div>
+    </div>
+    <div class="quote" style="font-size:1.05rem;margin-top:.7rem;padding:.8rem 1.2rem">El problema no es la herramienta ni el dev. Es que el conocimiento vivía en lugares que se mueren — y no había ningún método compartido que lo obligara a vivir en el repo.</div>
+  </div>
+</section>
+
+<!-- 06 · enter Uscha -->
+<section class="slide" data-section="Entra Uscha">
+  <div class="inner">
+    <div class="kicker"><span class="n">05</span> el método</div>
+    <h2>Uscha: <span class="a">vos traés la idea,</span><br>el método construye el resto.</h2>
+    <p class="lead">Una metodología spec-driven que arranca <em>antes</em> del spec, avanza solo con <strong>evidencia capturada</strong>, y para en un <strong>merge que aprueba un humano</strong>. La corremos todos igual, sobre los mismos archivos, con las mismas skills de Claude Code.</p>
+    <div class="mapwrap">
+      <svg viewBox="0 0 1080 300" style="width:100%;height:auto" role="img" aria-label="mapa del sistema Uscha">
+        <defs>
+          <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#638079"/></marker>
+          <marker id="ao" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff6b4a"/></marker>
+        </defs>
+        <rect x="40" y="20" width="1000" height="30" rx="8" fill="#183034" stroke="#22403f"/>
+        <text x="540" y="40" text-anchor="middle" font-family="Chivo,sans-serif" font-weight="700" font-size="14" fill="#dbe8e6">CONSTITUTION — invariantes que ninguna estación puede violar</text>
+        <line x1="70" y1="150" x2="1010" y2="150" stroke="#22403f" stroke-width="3"/>
+        <g font-family="JetBrains Mono,monospace" font-size="11" fill="#9db3b0" text-anchor="middle">
+          <circle cx="80" cy="150" r="9" fill="#ff6b4a"/><text x="80" y="180">idea</text><text x="80" y="130" fill="#638079" font-size="9">01</text>
+          <circle cx="210" cy="150" r="9" fill="#dbe8e6"/><text x="210" y="180">discovery</text><text x="210" y="130" fill="#638079" font-size="9">02</text>
+          <circle cx="330" cy="150" r="9" fill="#dbe8e6"/><text x="330" y="180">listo</text><text x="330" y="130" fill="#638079" font-size="9">03</text>
+          <circle cx="450" cy="150" r="9" fill="#dbe8e6"/><text x="450" y="180">SPEC / ADR</text><text x="450" y="130" fill="#638079" font-size="9">04</text>
+          <circle cx="600" cy="150" r="9" fill="#dbe8e6"/><text x="600" y="180">build</text><text x="600" y="130" fill="#638079" font-size="9">05</text>
+          <rect x="712" y="141" width="18" height="18" rx="3" fill="#4ddb95"/><text x="721" y="180">verify</text><text x="721" y="130" fill="#638079" font-size="9">06</text>
+          <rect x="832" y="141" width="18" height="18" rx="3" fill="#4ddb95"/><text x="841" y="180">evidencia</text><text x="841" y="130" fill="#638079" font-size="9">07</text>
+          <circle cx="1000" cy="150" r="11" fill="#ff6b4a" stroke="#e8552f" stroke-width="2"/><text x="1000" y="182" font-weight="600">gate humano</text><text x="1000" y="128" fill="#638079" font-size="9">08</text>
+        </g>
+        <path d="M841,141 C841,90 600,90 600,141" fill="none" stroke="#638079" stroke-width="2" marker-end="url(#ah)"/>
+        <text x="720" y="82" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#9db3b0">loop interno · convergé, no persigas el cero</text>
+        <path d="M1000,164 C1000,250 210,250 210,164" fill="none" stroke="#ff6b4a" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ao)"/>
+        <text x="605" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#ff6b4a">loop externo · propuesta — el merge sigue siendo del humano</text>
+      </svg>
+      <div class="legend">
+        <span><i style="background:#dbe8e6"></i> estación</span>
+        <span><i style="background:#4ddb95"></i> gate de evidencia</span>
+        <span><i style="background:#ff6b4a"></i> del humano</span>
+        <span><i style="background:#638079"></i> loop interno</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 · a day with Uscha -->
+<section class="slide" data-section="Un día con Uscha">
+  <div class="inner">
+    <div class="kicker"><span class="n">06</span> la rosca de uso</div>
+    <h2>Cómo se siente <span class="a">un día</span> con el método.</h2>
+    <p>No es un proceso aparte del trabajo: <strong>es el mismo día, con tres momentos nuevos</strong> — dejarte interrogar antes, dejar que el loop mida durante, y leer el estado real al final.</p>
+    <div class="mapwrap">
+      <svg viewBox="0 0 1080 210" style="width:100%;height:auto" role="img" aria-label="timeline de un día con Uscha">
+        <defs><marker id="tl" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#638079"/></marker></defs>
+        <line x1="60" y1="105" x2="1020" y2="105" stroke="#22403f" stroke-width="3" marker-end="url(#tl)"/>
+        <g font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle">
+          <circle cx="100" cy="105" r="8" fill="#ff6b4a"/>
+          <text x="100" y="75" fill="#638079">10:00</text><text x="100" y="135" fill="#dbe8e6" font-size="11" font-weight="600">idea</text>
+          <circle cx="280" cy="105" r="8" fill="#dbe8e6"/>
+          <text x="280" y="75" fill="#638079">10:05 · ~30-40 min</text><text x="280" y="135" fill="#dbe8e6" font-size="11" font-weight="600">/uscha-discovery te grilla</text><text x="280" y="152" fill="#9db3b0">contradicciones · bordes</text>
+          <circle cx="470" cy="105" r="8" fill="#dbe8e6"/>
+          <text x="470" y="75" fill="#638079">10:45</text><text x="470" y="135" fill="#dbe8e6" font-size="11" font-weight="600">SPEC + ADR al repo</text><text x="470" y="152" fill="#9db3b0">commiteados, no en el chat</text>
+          <circle cx="670" cy="105" r="8" fill="#4fd6c9"/>
+          <text x="670" y="75" fill="#638079">resto del día</text><text x="670" y="135" fill="#dbe8e6" font-size="11" font-weight="600">/uscha-devloop construye</text><text x="670" y="152" fill="#9db3b0">gates inline · log-gate</text>
+          <circle cx="860" cy="105" r="8" fill="#4ddb95"/>
+          <text x="860" y="75" fill="#638079">al cerrar</text><text x="860" y="135" fill="#dbe8e6" font-size="11" font-weight="600">PR + readiness</text><text x="860" y="152" fill="#9db3b0">estado medido, no sensación</text>
+          <circle cx="990" cy="105" r="10" fill="#ff6b4a" stroke="#e8552f" stroke-width="2"/>
+          <text x="990" y="135" fill="#ff6b4a" font-size="11" font-weight="700">humano mergea</text>
+        </g>
+      </svg>
+      <div class="caption">tiempos ilustrativos de la historia de cupones — el discovery de una feature mediana toma media hora, no un sprint</div>
+    </div>
+    <p>La fricción está puesta donde es <strong>barata</strong> (media hora de preguntas a las 10:00) para evitar donde es <strong>cara</strong> (el lunes de Comercial reportando cupones rotos).</p>
+  </div>
+</section>
+
+<!-- 08 · replay discovery -->
+<section class="slide" data-section="Replay · discovery">
+  <div class="inner">
+    <div class="kicker"><span class="n">07</span> la misma historia, con método — acto 1</div>
+    <h2>Replay: Vale arranca con <span class="a">/uscha-discovery.</span></h2>
+    <p>Antes de tocar código, el interrogatorio. El skill no acuerda con todo — <strong>pregunta hasta que la forma queda clara</strong>: contradicciones, términos difusos, modos de falla. Una pregunta a la vez.</p>
+    <div class="term">
+      <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; claude — /uscha-discovery · viernes 10:00</div>
+      <div class="body">
+<span class="cy">discovery&gt;</span> <span class="a">¿Qué pasa exactamente con un cupón vencido hace una hora? ¿Rechazo</span><br>
+<span class="a">duro, o hay tolerancia de negocio?</span><br>
+<span class="u">&gt; buena pregunta… Comercial quiere 24hs de gracia. lo confirmo y te digo</span><br>
+<span class="cy">discovery&gt;</span> <span class="a">Confirmado entonces: lo escribo en la SPEC como regla explícita con su</span><br>
+<span class="a">porqué, y como criterio de aceptación testeable en ACCEPTANCE.md.</span>
+      </div>
+    </div>
+    <p>La pregunta que en la historia real <em>nadie hizo</em>, acá la hace el método — y la respuesta no muere en un chat.</p>
+    <div class="quote">Un entrevistador complaciente hereda tus puntos ciegos y te los devuelve formateados como plan. La fricción es el entregable.<small>regla operativa del discovery</small></div>
+  </div>
+</section>
+
+<!-- 09 · the package -->
+<section class="slide" data-section="El paquete en el repo">
+  <div class="inner">
+    <div class="kicker"><span class="n">08</span> lo que queda cuando la charla termina</div>
+    <h2>La charla se cristaliza<br>en <span class="a">archivos del repo.</span></h2>
+    <p>A medida que las decisiones se asientan, se escriben — no al final, no en el chat. <strong>El build lee archivos; el CI lee archivos; el próximo dev lee archivos.</strong></p>
+    <div class="grid3">
+      <div class="card"><h3><code>SPEC.md</code></h3><p>Comportamiento observable, I/O, errores, <em>la regla de gracia con su porqué</em>, rollback.</p></div>
+      <div class="card"><h3><code>docs/adr/*.md</code></h3><p>Una decisión durable por archivo: qué se eligió, contra qué alternativa, por qué. El código enlaza con <code>// ADR: &lt;slug&gt;</code>.</p></div>
+      <div class="card"><h3><code>ACCEPTANCE.md</code></h3><p>Los criterios como checkboxes testeables — <em>"cupón vencido hace &lt;24h → se acepta"</em>. Esto alimenta el readiness.</p></div>
+      <div class="card"><h3><code>CONTEXT.md</code></h3><p>El glosario del dominio: mata el lenguaje difuso antes de que llegue al código.</p></div>
+      <div class="card"><h3><code>CONSTITUTION.md</code></h3><p>Lo que NUNCA es aceptable, gane el trade-off que gane. Una violación se registra como BLOCKER (<code>flag-blocker</code>) y frena todo hasta decisión humana.</p></div>
+      <div class="card"><h3><code>RISKS · HANDOFF</code></h3><p>Riesgo residual y qué leer antes de codear — la carta al próximo dev, escrita cuando el contexto está fresco.</p></div>
+    </div>
+    <div class="quote" style="font-size:1.05rem">La verdad vive en archivos versionados. El chat es donde se piensa; el repo es donde se recuerda.</div>
+  </div>
+</section>
+
+<!-- 10 · replay dev-loop -->
+<section class="slide" data-section="Replay · dev-loop">
+  <div class="inner">
+    <div class="kicker"><span class="n">09</span> la misma historia, con método — acto 2</div>
+    <h2>Vale construye con <span class="a">/uscha-devloop:</span><br>evidencia, no narración.</h2>
+    <p>El orquestador toma la SPEC + ACCEPTANCE, construye, y corre un loop de QA que <strong>mide en vez de creer</strong>. Lo que BLOQUEA sale de artefactos reales parseados por <code>qa_ledger.py</code> — tests, coverage, linters, fact gates. Lo que el agente reporta de sí mismo se registra aparte, como narración — y <strong>un rojo medido siempre veta un verde narrado</strong>.</p>
+    <div class="grid3">
+      <div class="card good"><span class="pill good">medido</span><h3>Ledger</h3><p>Coverage, tests y findings de linters parseados de los XML reales. Lo auto-reportado queda registrado aparte: narración, no dato.</p></div>
+      <div class="card good"><span class="pill good">medido</span><h3>Fact gates</h3><p>gate-check (¿el cambio debilita tests/thresholds?) y demás gates se persisten con <code>log-gate</code>: uno rojo <strong>bloquea la convergencia</strong>.</p></div>
+      <div class="card good"><span class="pill good">humano</span><h3>Merge gate</h3><p>El loop abre el PR, muestra el readiness (KPI 0-100) con su desglose, <strong>y para</strong>. Mergea una persona. Siempre.</p></div>
+    </div>
+    <p>La regla de gracia ahora tiene su criterio en <code>ACCEPTANCE.md</code> y su test que la aserta explícitamente. Ya no es un <code>+ 24h</code> misterioso: es <strong>comportamiento especificado y pinneado</strong>.</p>
+  </div>
+</section>
+
+<!-- 11 · readiness KPI -->
+<section class="slide" data-section="El KPI: readiness">
+  <div class="inner">
+    <div class="kicker"><span class="n">10</span> lo que ves al terminar — el kpi</div>
+    <h2>Readiness: el estado <span class="a">medido,</span><br>no la sensación de "creo que está".</h2>
+    <div class="term">
+      <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; salida del comando (abreviada) — números del ejemplo de cupones</div>
+      <div class="body">
+<span class="u">$ python3 qa_ledger.py readiness</span><br>
+<span class="ok">READINESS: 87.0/100 — RELEASE CANDIDATE</span><br>
+<span class="dim">--- dimensions (weight | raw | contribution) ---</span><br>
+&nbsp;&nbsp;adr&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;30 | 0.90 | &nbsp;27.0&nbsp;&nbsp;<span class="dim">← 9/10 criterios de ACCEPTANCE.md</span><br>
+&nbsp;&nbsp;coverage&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;25 | 1.00 | &nbsp;25.0&nbsp;&nbsp;<span class="dim">← jacoco.xml, no palabra del agente</span><br>
+&nbsp;&nbsp;static_gate&nbsp;&nbsp;&nbsp;20 | 1.00 | &nbsp;20.0&nbsp;&nbsp;<span class="dim">← linters corridos y limpios (si nunca corren: 0.0)</span><br>
+&nbsp;&nbsp;convergence&nbsp;&nbsp;&nbsp;15 | 1.00 | &nbsp;15.0&nbsp;&nbsp;<span class="dim">← todas las tools + fact gates limpios</span><br>
+&nbsp;&nbsp;integration&nbsp;&nbsp;&nbsp;10 | 0.00 | &nbsp;&nbsp;0.0&nbsp;&nbsp;<span class="dim">← contract tests pendientes: se VE, no se esconde</span><br>
+<span class="dim">--- churn (not readiness): max cycle 2, regressions 0</span>
+      </div>
+    </div>
+    <div class="mapwrap">
+      <svg viewBox="0 0 1080 130" style="width:100%;height:auto" role="img" aria-label="bandas del readiness">
+        <g font-family="JetBrains Mono,monospace" font-size="10">
+          <rect x="60" y="40" width="460" height="22" rx="4" fill="#3a1a1c"/>
+          <rect x="520" y="40" width="270" height="22" fill="#3a2f12"/>
+          <rect x="790" y="40" width="135" height="22" fill="#152a33"/>
+          <rect x="925" y="40" width="55" height="22" rx="4" fill="#12352a"/>
+          <text x="290" y="55" text-anchor="middle" fill="#ff5d5d">NOT READY &lt;50</text>
+          <text x="655" y="55" text-anchor="middle" fill="#f5b13d">IN PROGRESS 50–79</text>
+          <text x="857" y="55" text-anchor="middle" fill="#4fd6c9">RC 80–94</text>
+          <text x="952" y="55" text-anchor="middle" fill="#4ddb95">≥95</text>
+          <polygon points="860,30 854,18 866,18" fill="#dbe8e6"/><text x="860" y="14" text-anchor="middle" fill="#dbe8e6" font-weight="700">87.0</text>
+          <line x1="382" y1="40" x2="382" y2="76" stroke="#ff5d5d" stroke-dasharray="3 3"/><text x="382" y="90" text-anchor="middle" fill="#ff5d5d">techo 35: tests rojos</text>
+          <line x1="658" y1="40" x2="658" y2="76" stroke="#ff5d5d" stroke-dasharray="3 3"/><text x="658" y="90" text-anchor="middle" fill="#ff5d5d">techo 65: BLOCKER/CRITICAL abierto</text>
+          <line x1="750" y1="40" x2="750" y2="62" stroke="#f5b13d" stroke-dasharray="3 3"/><text x="750" y="108" text-anchor="middle" fill="#f5b13d">techo 75: escalación sin resolver</text>
+        </g>
+      </svg>
+      <div class="caption">bandas y techos reales del engine — un techo no baja el trabajo hecho: le pone tope al número hasta que el hecho se resuelva</div>
+    </div>
+    <p>Lo clave: <strong>el score no se negocia</strong>. Podés tener 90 de laburo hecho — si hay un test rojo, el techo es 35.</p>
+  </div>
+</section>
+
+<!-- 12 · two-tier ledger -->
+<section class="slide" data-section="El ledger de dos pisos">
+  <div class="inner">
+    <div class="kicker"><span class="n">11</span> por qué le podés creer al número</div>
+    <h2>El ledger tiene <span class="a">dos pisos.</span></h2>
+    <div class="mapwrap">
+      <svg viewBox="0 0 1080 250" style="width:100%;height:auto" role="img" aria-label="ledger de dos pisos">
+        <defs><marker id="veto" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff5d5d"/></marker></defs>
+        <rect x="60" y="30" width="960" height="80" rx="12" fill="#12352a" stroke="#1e5540"/>
+        <text x="90" y="60" font-family="Chivo,sans-serif" font-weight="800" font-size="16" fill="#4ddb95">MEDIDO — puede bloquear</text>
+        <text x="90" y="86" font-family="JetBrains Mono,monospace" font-size="11" fill="#9db3b0">snapshots (surefire/jacoco XML) · ingest-gate (linters) · log-gate (golden-diff, gate-check, pit-check, simplicity)</text>
+        <rect x="60" y="140" width="960" height="80" rx="12" fill="#1d1512" stroke="#5e2a1e"/>
+        <text x="90" y="170" font-family="Chivo,sans-serif" font-weight="800" font-size="16" fill="#f5b13d">NARRADO — solo aconseja</text>
+        <text x="90" y="196" font-family="JetBrains Mono,monospace" font-size="11" fill="#9db3b0">log-step: lo que el agente cuenta de su propio pase (findings reportados/arreglados) — registro para la retrospectiva</text>
+        <path d="M900,110 L900,140" stroke="#ff5d5d" stroke-width="2.5" marker-end="url(#veto)"/>
+        <text x="915" y="132" font-family="JetBrains Mono,monospace" font-size="10.5" fill="#ff5d5d">el rojo medido VETA</text>
+      </svg>
+      <div class="caption">el contrato de dos pisos del qa_ledger — lo narrado se guarda; decide lo medido</div>
+    </div>
+    <p>Esta es la respuesta a la falla 3 de la historia: <em>"listo" era narración</em>. En el método, lo narrado se guarda — pero <strong>nunca decide</strong>. Decide lo parseado de los artefactos: el XML de surefire, el reporte de JaCoCo, la estructura del diff, los bytes del golden.</p>
+    <div class="quote" style="font-size:1.05rem">Una herramienta que no corrió jamás se inventa en verde. Ausente = sin evidencia, nunca "OK".</div>
+  </div>
+</section>
+
+<!-- 13 · replay handoff -->
+<section class="slide" data-section="Replay · el handoff">
+  <div class="inner">
+    <div class="kicker"><span class="n">12</span> la misma historia, con método — acto 3</div>
+    <h2>El handoff: Martín hereda<br><span class="a">archivos, no misterios.</span></h2>
+    <p>Tres semanas después, Martín agarra cupones. Su agente — el mismo setup compartido, las mismas skills — <strong>lee los mismos archivos que escribió el método</strong>: SPEC, ADRs, ACCEPTANCE.</p>
+    <div class="term">
+      <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; claude — sesión de martín · replay</div>
+      <div class="body">
+<span class="u">&gt; ¿por qué la validación de expiración suma 24hs? parece un bug</span><br>
+<span class="a">No es un bug: SPEC.md §expiración documenta la gracia de 24 h pedida por</span><br>
+<span class="a">Comercial (2026-06-12), y hay un criterio de aceptación que la pinnea.</span><br>
+<span class="a">Si querés cambiarla, es una enmienda a la SPEC — no un fix silencioso.</span><br>
+<span class="ok">✓ la regla sobrevive</span> <span class="dim">· y si un agente borrara su test, gate-check lo marca BLOCKER</span>
+      </div>
+    </div>
+    <p>Doble defensa: la <strong>intención</strong> está escrita donde el agente la lee (archivos versionados), y aunque un agente intentara "arreglar" la regla, el test que la aserta se pone rojo y <code>gate-check</code> caza el intento de borrarlo o deshabilitarlo — un BLOCKER que la convergencia no deja pasar (debilitar los asserts queda flaggeado para revisión; <code>--strict</code> lo gatea).</p>
+  </div>
+</section>
+
+<!-- 14 · 10 steps deviations -->
+<section class="slide" data-section="El método espera el desvío">
+  <div class="inner">
+    <div class="kicker"><span class="n">13</span> no es que todo salga bien de una</div>
+    <h2>En el ejemplo de manual, <span class="a">6 de 10 pasos</span><br>son falla o refinamiento.</h2>
+    <p>Ejemplo de manual del método — una feature mínima, <code>applyDiscount(monto, %)</code>, recorrida entera. La metodología <strong>no promete que no te desvíes: promete que cada desvío tenga un gate que lo cace</strong>.</p>
+    <div class="mapwrap">
+      <svg viewBox="0 0 1080 230" style="width:100%;height:auto" role="img" aria-label="10 pasos con desvíos">
+        <line x1="60" y1="80" x2="1020" y2="80" stroke="#22403f" stroke-width="3"/>
+        <g font-family="JetBrains Mono,monospace" font-size="10" text-anchor="middle">
+          <circle cx="90" cy="80" r="11" fill="#dbe8e6"/><text x="90" y="85" fill="#0c1618" font-weight="700">1</text><text x="90" y="115" fill="#9db3b0">discovery</text>
+          <circle cx="192" cy="80" r="11" fill="#f5b13d"/><text x="192" y="85" fill="#0c1618" font-weight="700">2</text><text x="192" y="150" fill="#f5b13d">⚠ spec vago</text><text x="192" y="166" fill="#638079">→ testeable</text>
+          <circle cx="294" cy="80" r="11" fill="#f5b13d"/><text x="294" y="85" fill="#0c1618" font-weight="700">3</text><text x="294" y="115" fill="#f5b13d">⚠ sin out-of-scope</text><text x="294" y="131" fill="#638079">→ se agrega</text>
+          <circle cx="396" cy="80" r="11" fill="#dbe8e6"/><text x="396" y="85" fill="#0c1618" font-weight="700">4</text><text x="396" y="150" fill="#9db3b0">ADR redondeo</text>
+          <circle cx="498" cy="80" r="11" fill="#4fd6c9"/><text x="498" y="85" fill="#0c1618" font-weight="700">5</text><text x="498" y="115" fill="#9db3b0">build</text>
+          <circle cx="600" cy="80" r="11" fill="#ff5d5d"/><text x="600" y="85" fill="#0c1618" font-weight="700">6</text><text x="600" y="150" fill="#ff5d5d">⚠ coverage mentía</text><text x="600" y="166" fill="#638079">pit-check lo caza</text>
+          <circle cx="702" cy="80" r="11" fill="#ff5d5d"/><text x="702" y="85" fill="#0c1618" font-weight="700">7</text><text x="702" y="115" fill="#ff5d5d">⚠ threshold bajado</text><text x="702" y="131" fill="#638079">gate-check BLOCKER</text>
+          <circle cx="804" cy="80" r="11" fill="#ff5d5d"/><text x="804" y="85" fill="#0c1618" font-weight="700">8</text><text x="804" y="150" fill="#ff5d5d">⚠ caso implícito</text><text x="804" y="166" fill="#638079">→ enmienda a la SPEC</text>
+          <circle cx="906" cy="80" r="11" fill="#ff5d5d"/><text x="906" y="85" fill="#0c1618" font-weight="700">9</text><text x="906" y="115" fill="#ff5d5d">⚠ OVERBUILT</text><text x="906" y="131" fill="#638079">simplicity: recortá</text>
+          <circle cx="990" cy="80" r="11" fill="#4ddb95"/><text x="990" y="85" fill="#0c1618" font-weight="700">10</text><text x="990" y="150" fill="#4ddb95">ship</text>
+        </g>
+        <g font-family="JetBrains Mono,monospace" font-size="10">
+          <rect x="60" y="200" width="12" height="12" rx="3" fill="#dbe8e6"/><text x="80" y="210" fill="#9db3b0">avanza</text>
+          <rect x="160" y="200" width="12" height="12" rx="3" fill="#f5b13d"/><text x="180" y="210" fill="#9db3b0">refina la SPEC (advisory o estructural)</text>
+          <rect x="480" y="200" width="12" height="12" rx="3" fill="#ff5d5d"/><text x="500" y="210" fill="#9db3b0">un gate te frena → arreglás y seguís</text>
+          <rect x="790" y="200" width="12" height="12" rx="3" fill="#4ddb95"/><text x="810" y="210" fill="#9db3b0">ship</text>
+        </g>
+      </svg>
+    </div>
+    <p>Fijate el paso 7: el agente bajó un threshold para pasar — <strong>y el gate que lo cazó existe porque los agentes hacen exactamente eso</strong>. El método no asume buena conducta: la verifica.</p>
+  </div>
+</section>
+
+<!-- 15 · facts vs prose -->
+<section class="slide" data-section="Hechos vs prosa">
+  <div class="inner">
+    <div class="kicker"><span class="n">14</span> la regla que ordena todo</div>
+    <h2>Los hechos bloquean.<br><span class="a">Las conjeturas solo aconsejan.</span></h2>
+    <p>Un gate que lee un HECHO (bytes, XML, estructura de diff) puede frenar el trabajo. Un gate que adivina sobre prosa solo puede susurrar — porque un gate con falsos positivos se apaga, y un gate muerto es peor que ninguno.</p>
+    <table>
+      <thead><tr><th>Gate</th><th>Lee</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>gate-check</td><td>estructura del diff: tests borrados/deshabilitados, thresholds bajados o eliminados</td><td class="ok">BLOQUEA</td></tr>
+        <tr><td>golden-diff</td><td>bytes vs <code>.approved</code> (migraciones — el único artefacto que el agente no escribe: un hook PreToolUse se lo bloquea)</td><td class="ok">BLOQUEA</td></tr>
+        <tr><td>simplicity-check</td><td>presupuesto del diff: tamaño, anidación, hunks (OVERBUILT = recortá)</td><td class="ok">BLOQUEA</td></tr>
+        <tr><td>spec-check estructural</td><td>¿hay sección out-of-scope? ¿hay criterios de aceptación? (existe o no existe)</td><td class="ok">BLOQUEA</td></tr>
+        <tr><td>spec-check prosa</td><td>heurística: criterios vagos, sin métrica</td><td class="no">ACONSEJA</td></tr>
+        <tr><td>readiness</td><td>KPI 0-100 del estado (con caps duros: tests rojos ≤35, BLOCKER/CRITICAL abierto ≤65)</td><td class="rep">REPORTA</td></tr>
+      </tbody>
+    </table>
+    <p>Y la que cierra el círculo de la historia de Vale y Martín: <strong>lo medido vence a lo narrado</strong> — un snapshot de tests rojo veta el "tests verdes" que reporte cualquier agente.</p>
+  </div>
+</section>
+
+<!-- 16 · rigor scales -->
+<section class="slide" data-section="El rigor escala">
+  <div class="inner">
+    <div class="kicker"><span class="n">15</span> antes de gastarle rigor a un cambio</div>
+    <h2>El rigor escala con<br><span class="a">lo que puede romper.</span></h2>
+    <p>La pregunta de apertura de cualquier cambio: <em>¿qué puede romper esto, y cuánto cuesta la rotura?</em> La respuesta dimensiona el aparato — <strong>no arrastramos toda la máquina detrás de un ajuste de config</strong>.</p>
+    <table>
+      <thead><tr><th>Perfil</th><th>Ejemplo</th><th>Gates mínimos</th></tr></thead>
+      <tbody>
+        <tr><td>A · Bajo</td><td>UI menor / config</td><td>build + test relevante — y nada más</td></tr>
+        <tr><td>B · Normal</td><td>feature local / bugfix</td><td>tests + estático + review</td></tr>
+        <tr><td>C · Crítico</td><td>pagos / seguridad</td><td>unit + integración + <strong>seguridad</strong> + rollback</td></tr>
+        <tr><td>D · Multi-sistema</td><td>API pública / eventos</td><td>contract tests + versionado</td></tr>
+        <tr><td>E · Legacy</td><td>refactor / migración</td><td><strong>golden</strong> + no-regresión</td></tr>
+      </tbody>
+    </table>
+    <p><span class="pill warn">heurística de proceso — no mecanizada</span></p>
+    <p>La tabla la aplicamos NOSOTROS al clasificar el cambio (no hay un flag <code>--profile</code> que seleccione gates solo). La feature de cupones era B; si tocara el cobro, C — y el discovery lo pregunta.</p>
+  </div>
+</section>
+
+<!-- 17 · what changes -->
+<section class="slide" data-section="Qué cambia en tu día">
+  <div class="inner">
+    <div class="kicker"><span class="n">16</span> adopción honesta</div>
+    <h2>Qué cambia en tu día<br><span class="a">(y qué NO).</span></h2>
+    <div class="vs">
+      <div class="card good">
+        <span class="pill good">cambia — 4 hábitos</span>
+        <ul class="v">
+          <li><strong>Antes de codear algo no-trivial:</strong> <code>/uscha-discovery</code> (idea nueva) o <code>/uscha-adr-refine</code> (feature conocida). Dejate interrogar.</li>
+          <li><strong>Las decisiones van al repo</strong> en el momento: SPEC, ADR, ACCEPTANCE. No al final, no al chat.</li>
+          <li><strong>El QA lo corre el loop y lo persiste</strong>: <code>/uscha-devloop</code> mide con el ledger; los fact gates se registran con <code>log-gate</code>.</li>
+          <li><strong>El PR para en el merge.</strong> Mergea un humano leyendo el diff — nunca el agente.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="pill info">NO cambia</span>
+        <ul class="v">
+          <li><strong>Cambios triviales</strong> (one-liner, config): build + test y listo. El método NO se arrastra detrás de un fix de una línea.</li>
+          <li><strong>Spikes y prototipos</strong>: sin SPEC. Anotás lo aprendido; se especifica solo lo que sobrevive.</li>
+          <li><strong>Hotfix P0</strong>: primero arreglás. La SPEC/ADR retroactiva se debe dentro de las 24 h — válvula de escape diseñada, no improvisada.</li>
+          <li><strong>Tu forma de pensar.</strong> El método no codea por vos: te obliga a decir qué querés ANTES, y a probar que salió DESPUÉS.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 18 · legacy golden -->
+<section class="slide" data-section="Legacy: el golden">
+  <div class="inner">
+    <div class="kicker"><span class="n">17</span> el caso especial que más nos duele</div>
+    <h2>Legacy y migraciones:<br>el <span class="a">golden</span> es el ancla.</h2>
+    <p>Cuando tocás código viejo que nadie entiende del todo, el riesgo no es romper lo que sabés que hace — es <strong>perder el comportamiento que nadie sabía que era intencional</strong> (la "gracia de 24h" de otro, de hace cinco años).</p>
+    <div class="grid3">
+      <div class="card"><span class="pill info">1 · capturar</span><p><code>/uscha-characterize</code> ejecuta el código ORIGINAL con corpus real y emite fixtures <code>.received</code> — comportamiento observado, no razonado. <strong>Y PARA.</strong></p></div>
+      <div class="card"><span class="pill warn">2 · humano aprueba</span><p>Un humano revisa y los consagra como <code>.approved</code>. El agente <strong>no puede escribirlos</strong>: un hook PreToolUse le bloquea la escritura. Es el único artefacto fuera de su alcance — y esa es su razón de existir.</p></div>
+      <div class="card"><span class="pill good">3 · migrar con red</span><p>Cada pass corre <code>golden-diff</code>: byte a byte contra lo aprobado. DIVERGE = se frena. Sin fixtures = NOT-RUN, <em>nunca</em> "pasó".</p></div>
+    </div>
+    <div class="quote" style="font-size:1.05rem">Si el agente authoreara el golden, codificaría el mismo entendimiento parcial que perdió la lógica — y aprobaría contra su propio error.</div>
+  </div>
+</section>
+
+<!-- 19 · objections -->
+<section class="slide" data-section="Las objeciones">
+  <div class="inner">
+    <div class="kicker"><span class="n">18</span> lo que estás pensando</div>
+    <h2>Las tres objeciones<br><span class="a">(y las respuestas honestas).</span></h2>
+    <div class="grid3">
+      <div class="card"><span class="pill warn">"es más ceremonia"</span><p><strong>El rigor escala con el blast radius.</strong> Un fix de UI corre build+test y nada más. La máquina completa es para lo que puede romper cosas caras — y ahí la ceremonia es más barata que el incidente de cupones.</p></div>
+      <div class="card"><span class="pill warn">"me va a frenar"</span><p><strong>Te frena 30 minutos al principio</strong> — donde la fricción es barata — para ahorrarte la falla cara: un build confiado de la forma equivocada. Lo que perdió Martín debuggeando el lunes fue MÁS que todo el discovery de Vale.</p></div>
+      <div class="card"><span class="pill warn">"mi forma funciona"</span><p><strong>Funciona en solitario.</strong> Se rompe en el handoff — y acá nadie trabaja solo. El método no reemplaza tu criterio: lo hace legible para el que sigue. Tu yo de dentro de 3 meses también es "el que sigue".</p></div>
+    </div>
+    <div class="quote">El comportamiento se replica; la memoria se gana. Lo primero lo resuelve el setup compartido — lo segundo, los archivos en el repo.</div>
+  </div>
+</section>
+
+<!-- 20 · getting started -->
+<section class="slide" data-section="Cómo arrancamos">
+  <div class="inner">
+    <div class="kicker"><span class="n">19</span> arranque concreto</div>
+    <h2>Cómo arrancamos <span class="a">esta semana.</span></h2>
+    <div class="term">
+      <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; setup — una vez por máquina, 5 minutos</div>
+      <div class="body">
+<span class="dim"># 1. skills del kit (uscha-kit 1.21.0) al Claude Code de cada uno</span><br>
+cp -r uscha-kit/.claude/skills/* ~/.claude/skills/<br>
+<span class="dim"># 2. el repo queda methodology-ready: protocolo + invariantes</span><br>
+cp uscha-kit/templates/CLAUDE.md uscha-kit/templates/CONSTITUTION.md &lt;repo&gt;/<br>
+cp uscha-kit/uscha-devloop.config.json &lt;repo&gt;/   <span class="dim"># repos, umbrales, gates</span><br>
+<span class="dim"># 3. (migraciones) el golden queda protegido: gitattributes + hook</span><br>
+cp uscha-kit/templates/.gitattributes &lt;repo&gt;/  <span class="dim"># + registrar hooks/block-approved-writes.ps1 como PreToolUse en settings.json</span><br>
+<span class="dim"># 4. verificar</span><br>
+bash uscha-kit/workbench-doctor.sh
+      </div>
+    </div>
+    <ul class="v">
+      <li><strong>Mismo CLAUDE.md, mismas skills, misma CONSTITUTION</strong> para todos → el agente de cualquiera se comporta igual sobre este repo.</li>
+      <li><strong>Ojo:</strong> las skills de QA que el loop orquesta (code-review / judgment-day / improve) <strong>no vienen en el kit</strong> — el equipo también las comparte, mismo set para todos. Si cada uno usa las suyas, volvemos al problema de la slide 2.</li>
+      <li><strong>Piloto:</strong> elegimos UNA feature de la próxima sprint y la corremos completa con el método — discovery → SPEC → dev-loop → PR.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 21 · pilot metrics -->
+<section class="slide" data-section="Qué medimos del piloto">
+  <div class="inner">
+    <div class="kicker"><span class="n">20</span> nos auto-aplicamos el método</div>
+    <h2>El piloto también se mide<br><span class="a">con hechos, no con sensaciones.</span></h2>
+    <p>Adoptar el método "porque se siente mejor" sería exactamente el vicio que el método combate. Criterios definidos ANTES de correrlo, medibles al cierre — y que también pueden dar que NO:</p>
+    <div class="grid2">
+      <div class="card good"><span class="pill good">criterio 1 · el test de handoff</span><p><strong>Al terminar, otra persona del equipo extiende la feature leyendo SOLO los archivos del repo.</strong> Si necesita preguntarle al autor, el método falló en su promesa central — y lo anotamos como hallazgo, no lo excusamos.</p></div>
+      <div class="card good"><span class="pill good">criterio 2 · gates que trabajaron</span><p><strong>¿Algún gate frenó algo real</strong> que sin método hubiera pasado (un threshold bajado, un test debilitado, un criterio vago)? Si en todo el piloto ningún gate cazó nada, el aparato no se ganó su costo — también es un dato.</p></div>
+      <div class="card"><span class="pill warn">criterio 3 · fricción improductiva</span><p><strong>Anotamos cada falso positivo y cada paso que estorbó</strong> sin aportar. Un método que solo se elogia es un método que no se está probando. Con eso se ajustan presupuestos y umbrales.</p></div>
+      <div class="card"><span class="pill info">criterio 4 · el estado final</span><p><strong>Readiness del PR con su desglose</strong> (y qué techo lo capeó, si alguno) + churn aparte. No para premiar el número: para ver si el KPI cuenta la historia real del estado del trabajo.</p></div>
+    </div>
+    <p class="foot-sign">si el piloto falla los criterios, se ajusta el método o se descarta — eso también es el método funcionando.</p>
+  </div>
+</section>
+
+<!-- 22 · close -->
+<section class="slide" data-section="Cierre">
+  <div class="inner">
+    <div class="kicker"><span class="n">21</span> cierre</div>
+    <h2>No es para que codees distinto.<br><span class="a">Es para que el equipo recuerde.</span></h2>
+    <p class="lead">Cada uno sigue usando Claude Code — con toda su potencia. Lo que cambia es dónde vive la verdad: <strong>en archivos versionados que cualquier agente y cualquier persona pueden leer</strong>, con evidencia medida en vez de narrada, y con un humano dueño de cada merge.</p>
+    <div class="quote" style="font-size:1.5rem;margin-top:2rem">La herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</div>
+    <p class="foot-sign" style="margin-top:2.5rem">Uscha · instanciado en Claude Code vía uscha-kit 1.21.0 · preguntas → ahora</p>
+  </div>
+</section>
+
+<div class="nav">
+  <span>← → · espacio · Home/End</span>
+  <div class="btns">
+    <button id="prev" aria-label="anterior">‹</button>
+    <span class="pos"><span id="cur">1</span>/<span id="total">?</span></span>
+    <button id="next" aria-label="siguiente">›</button>
+  </div>
+</div>
+
+<script>
+const slides = Array.from(document.querySelectorAll('.slide'));
+const cur = document.getElementById('cur');
+const total = document.getElementById('total');
+const curTop = document.getElementById('curTop');
+const totalTop = document.getElementById('totalTop');
+const section = document.getElementById('section');
+const progress = document.getElementById('progress');
+let idx = 0;
+total.textContent = slides.length;
+totalTop.textContent = slides.length;
+function showSlide(i){
+  idx = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, n) => s.classList.toggle('active', n === idx));
+  cur.textContent = idx + 1; curTop.textContent = idx + 1;
+  section.textContent = slides[idx].dataset.section || '—';
+  progress.style.width = (((idx + 1) / slides.length) * 100).toFixed(2) + '%';
+  location.hash = String(idx + 1).padStart(2, '0');
+  const a = document.querySelector('.slide.active'); if (a) a.scrollTop = 0;
+}
+document.getElementById('next').addEventListener('click', () => showSlide(idx + 1));
+document.getElementById('prev').addEventListener('click', () => showSlide(idx - 1));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); showSlide(idx + 1); }
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); showSlide(idx - 1); }
+  if (e.key === 'Home') showSlide(0);
+  if (e.key === 'End') showSlide(slides.length - 1);
+});
+const fromHash = parseInt(location.hash.replace('#',''), 10);
+if (!Number.isNaN(fromHash) && fromHash >= 1 && fromHash <= slides.length) showSlide(fromHash - 1); else showSlide(0);
+</script>
+</body>
+</html>

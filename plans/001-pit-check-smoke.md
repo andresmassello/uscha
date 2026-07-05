@@ -6,7 +6,7 @@
 > row for this plan in `plans/README.md`.
 >
 > **Drift check (run first)**: from the repo root
-> `git diff --stat b803c98..HEAD -- dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py dev-loop-kit/tests/smoke-engine.sh`
+> `git diff --stat b803c98..HEAD -- uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py uscha-kit/tests/smoke-engine.sh`
 > If either file changed since this plan was written, compare the "Current state"
 > excerpts below against the live code before proceeding; on a mismatch, treat it as a
 > STOP condition.
@@ -33,8 +33,8 @@ nothing would catch it. This plan gives it a deterministic smoke test, closing t
 
 ## Current state
 
-The engine is one file: `dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py`.
-The tests are one bash suite: `dev-loop-kit/tests/smoke-engine.sh` (161 checks today,
+The engine is one file: `uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py`.
+The tests are one bash suite: `uscha-kit/tests/smoke-engine.sh` (161 checks today,
 blocks labelled `T1`..`T47`; it prints `RESULTADO: <PASS> ok · <FAIL> fail` and exits
 non-zero if any check failed).
 
@@ -69,7 +69,7 @@ unparseable. The `--json` output shape:
 `{"verdict": "PASS"|"BELOW-GATE", "report": ..., "min_score": ..., "metrics": {"total","killed","survived","no_coverage","excluded","mutation_score","test_strength"}, "hotspots": [...]}`.
 
 **The smoke suite's conventions you must match** — read the top of
-`dev-loop-kit/tests/smoke-engine.sh` (lines 1-90). Key facts:
+`uscha-kit/tests/smoke-engine.sh` (lines 1-90). Key facts:
 - It runs inside a temp sandbox; `cd "$SB"` is already done. Create fixture files/dirs
   with relative paths (they land in the sandbox).
 - Helper `run() { PYTHONIOENCODING=utf-8 "$PY" "$QL" "$@"; }` invokes the engine.
@@ -85,8 +85,8 @@ unparseable. The `--json` output shape:
 
 | Purpose            | Command                                        | Expected on success |
 |--------------------|------------------------------------------------|---------------------|
-| Run the test suite | `bash dev-loop-kit/tests/smoke-engine.sh`      | last line `RESULTADO: <N> ok · 0 fail`, exit 0 |
-| Parse-check engine (only if you had to touch it — you should NOT) | `python -c "import ast; ast.parse(open('dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py',encoding='utf-8').read())"` | exit 0 |
+| Run the test suite | `bash uscha-kit/tests/smoke-engine.sh`      | last line `RESULTADO: <N> ok · 0 fail`, exit 0 |
+| Parse-check engine (only if you had to touch it — you should NOT) | `python -c "import ast; ast.parse(open('uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py',encoding='utf-8').read())"` | exit 0 |
 
 Run from the repo root `C:\Work\AI\SpecLoop`. `bash` is available (Git Bash). If `python`
 is not on PATH, try `py` or `python3` — the suite auto-detects, but your standalone
@@ -95,13 +95,13 @@ parse-check may need the working one.
 ## Scope
 
 **In scope** (the only file you modify):
-- `dev-loop-kit/tests/smoke-engine.sh` — add ONE new block, `T48`.
+- `uscha-kit/tests/smoke-engine.sh` — add ONE new block, `T48`.
 
 **Out of scope** (do NOT touch):
-- `dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py` — the engine. This plan
+- `uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py` — the engine. This plan
   only ADDS a test for existing behavior. If the test reveals a real bug, that is a STOP
   condition (see below), not a licence to edit the engine.
-- Any `VERSION` / `dev-loop.config.json` / `CHANGELOG` / `plugin.json` /
+- Any `VERSION` / `uscha.config.json` / `CHANGELOG` / `plugin.json` /
   `marketplace.json` — no version bump: adding a smoke test is not a release.
 - The `== T44 sync quintuple ==` block and everything after it — your block goes
   **before** T44 so the version-sync check stays last.
@@ -117,7 +117,7 @@ parse-check may need the working one.
 
 ### Step 1: Locate the insertion point
 
-Open `dev-loop-kit/tests/smoke-engine.sh` and find the line:
+Open `uscha-kit/tests/smoke-engine.sh` and find the line:
 
 ```
 echo "== T44 sync quintuple de version: VERSION = config = plugin.json = marketplace.json =="
@@ -163,35 +163,35 @@ sys.exit(0 if ok else 1)" \
 chk "report inexistente -> exit 2 (no evidencia)" 2 run pit-check --report no-such.xml --min-score 60
 ```
 
-**Verify**: `bash dev-loop-kit/tests/smoke-engine.sh` → last line `RESULTADO: 165 ok · 0
+**Verify**: `bash uscha-kit/tests/smoke-engine.sh` → last line `RESULTADO: 165 ok · 0
 fail`, exit 0. (161 existing + 4 new checks in T48 = 165. If your local baseline was not
 161, the total is baseline+4 — confirm `0 fail` and that the four `T48` lines all print
 `ok`.)
 
 ### Step 3: Confirm only the intended block was added
 
-**Verify**: `git diff --stat dev-loop-kit/tests/smoke-engine.sh` shows only that file
+**Verify**: `git diff --stat uscha-kit/tests/smoke-engine.sh` shows only that file
 changed, additions ≈ 30 lines, 0 deletions. `git status --short` shows no other modified
 tracked file.
 
 ## Test plan
 
-- New block `T48` in `dev-loop-kit/tests/smoke-engine.sh`, covering: (a) PASS at/above
+- New block `T48` in `uscha-kit/tests/smoke-engine.sh`, covering: (a) PASS at/above
   the gate, (b) BELOW-GATE below it, (c) the metric math incl. the NON_VIABLE/RUN_ERROR
   exclusion and the `detected=true` override, (d) the missing-report exit-2 path.
 - Structural pattern to follow: the existing `T46` block (fixtures + `chk` + `--json`/`$PY`
   assertion).
-- Verification: `bash dev-loop-kit/tests/smoke-engine.sh` → `0 fail`, four new `ok` lines
+- Verification: `bash uscha-kit/tests/smoke-engine.sh` → `0 fail`, four new `ok` lines
   under the `== T48` header.
 
 ## Done criteria
 
 Machine-checkable. ALL must hold:
 
-- [ ] `bash dev-loop-kit/tests/smoke-engine.sh` exits 0 and prints `· 0 fail`.
+- [ ] `bash uscha-kit/tests/smoke-engine.sh` exits 0 and prints `· 0 fail`.
 - [ ] The run's total ok count is exactly the previous baseline + 4.
-- [ ] `grep -c "== T48" dev-loop-kit/tests/smoke-engine.sh` returns `1`.
-- [ ] `git status --short` shows ONLY `dev-loop-kit/tests/smoke-engine.sh` modified (no
+- [ ] `grep -c "== T48" uscha-kit/tests/smoke-engine.sh` returns `1`.
+- [ ] `git status --short` shows ONLY `uscha-kit/tests/smoke-engine.sh` modified (no
       engine file, no version files).
 - [ ] `plans/README.md` status row for 001 updated to DONE.
 

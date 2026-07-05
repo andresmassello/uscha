@@ -2,7 +2,7 @@
 
 Momentos observados en sesiones reales de trabajo con LLM coding agents donde el método
 habría intervenido (o donde intervino). Cada entrada registra HECHOS del transcript —
-no impresiones — y mapea el mecanismo exacto de spec-loop que aplica.
+no impresiones — y mapea el mecanismo exacto de Uscha que aplica.
 
 Regla de la bitácora: se anota el comportamiento, anonimizado (sin nombres de proyectos,
 clientes ni dominios). El valor está en el patrón, no en el culpable.
@@ -40,7 +40,7 @@ escala silenciosamente a "diseño cerrado + producción tocada". A veces el resu
 correcto y bienvenido; a veces es el incidente de cupones. Sin gobernanza, no se puede
 saber cuál de los dos va a ser — y ese es el costo.
 
-### Qué habría hecho spec-loop distinto
+### Qué habría hecho Uscha distinto
 
 | Momento | Mecanismo | Efecto |
 |---------|-----------|--------|

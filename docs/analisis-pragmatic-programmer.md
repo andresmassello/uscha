@@ -1,11 +1,11 @@
-# The Pragmatic Programmer (20th Anniversary Ed.) × spec-loop
+# The Pragmatic Programmer (20th Anniversary Ed.) × Uscha
 
 Análisis del libro completo (Hunt & Thomas, 497 pp) contra la metodología:
-12 lectores en paralelo con el contexto de spec-loop, síntesis con dedupe
+12 lectores en paralelo con el contexto de Uscha, síntesis con dedupe
 (148 conceptos crudos → lo de abajo). Fuente verificada:
 <https://pragprog.com/titles/tpp20/the-pragmatic-programmer-20th-anniversary-edition/>
 
-Tres baldes: **valida** (el libro defiende algo que spec-loop ya hace),
+Tres baldes: **valida** (el libro defiende algo que Uscha ya hace),
 **mejora** (cambio concreto que el kit podría adoptar — backlog 2.0),
 **tensión** (fricción real con el diseño, con su resolución propuesta).
 
@@ -99,7 +99,7 @@ Spike formal: en discovery, cada item de RISKS con incertidumbre alta dispara la
 *Dónde vive:* skill discovery (pregunta sobre RISKS) + engine (gate-check sobre ramas/labels spike) + doc ADR (tipo 'spike learnings')
 
 
-## Tensiones (el libro contra spec-loop — con resolución propuesta)
+## Tensiones (el libro contra Uscha — con resolución propuesta)
 
 1. **Preface 1ª ed. ('no hay best solution, solo sistemas apropiados a las circunstancias') + Topic 8 ('ETC es un VALOR que guía el juicio, no una regla mecánica')**
    Los caps del readiness KPI y los presupuestos del simplicity-check son números universales hardcodeados — para el libro, receta de gurú aplicada a ciegas. La resolución respeta el propio lema del kit: el conteo medido es HECHO, pero el umbral es OPINIÓN; los números del engine deben ser defaults advisory y solo bloquear cuando el humano los declaró en la SPEC (ahí son requerimiento, cf. Tip 8). El principio del fact-gate es universal; el número, no.
@@ -120,10 +120,10 @@ Spike formal: en discovery, cada item de RISKS con incertidumbre alta dispara la
    El engine trata tests verdes y coverage como HECHO fuerte, pero el libro demuestra que son evidencia muestral débil e invitan al Goodhart del agente — pulir la métrica sin acercarse a la solución es EL modo de falla típico de un LLM. Resolución: asimetría explícita en el KPI (coverage bajo capa hacia abajo; coverage alto NO suma evidencia positiva), readiness dominado por criterios de ACCEPTANCE cerrados, y dimensión complementaria de 'test strength' vía mutation smoke (Tip 92) y property tests derivados de invariantes de CONSTITUTION.
 
 7. **Topic 23: Design by Contract — 'Dynamic Contracts and Agents' (los agentes autónomos pueden RECHAZAR y renegociar contratos)**
-   El libro imagina agentes con autoridad para renegociar el contrato; spec-loop fija la autoridad contractual en el humano (gate de merge, .approved que el agente jamás escribe, escalación capa el KPI a 75). Resolución que preserva 'humano dirige': formalizar el canal — un 'SPEC change request' estructurado que el agente puede emitir al escalar (nunca editar SPEC/CONSTITUTION en silencio), con el humano como único firmante. Convierte la renegociación implícita del libro en un paso auditable del loop.
+   El libro imagina agentes con autoridad para renegociar el contrato; Uscha fija la autoridad contractual en el humano (gate de merge, .approved que el agente jamás escribe, escalación capa el KPI a 75). Resolución que preserva 'humano dirige': formalizar el canal — un 'SPEC change request' estructurado que el agente puede emitir al escalar (nunca editar SPEC/CONSTITUTION en silencio), con el humano como único firmante. Convierte la renegociación implícita del libro en un paso auditable del loop.
 
 8. **Topic 25: Assertive Programming — sidebar 'Use Assertions in Production, Win Big Money'**
-   El feedback de mayor valor llega DESPUÉS del ship (usuarios reales cazan lo que ningún test encontró), pero dev-loop se detiene en el merge por diseño y UNMEASURED solo rige en build-time: post-merge todo es silencio y spec-loop no lo cuenta. Decisión a tomar explícitamente: o documentar ese out-of-scope en la CONSTITUTION, o agregar el tipo de entrada 'production finding' al ledger que alimente el próximo ciclo de discovery.
+   El feedback de mayor valor llega DESPUÉS del ship (usuarios reales cazan lo que ningún test encontró), pero dev-loop se detiene en el merge por diseño y UNMEASURED solo rige en build-time: post-merge todo es silencio y Uscha no lo cuenta. Decisión a tomar explícitamente: o documentar ese out-of-scope en la CONSTITUTION, o agregar el tipo de entrada 'production finding' al ledger que alimente el próximo ciclo de discovery.
 
 9. **Chapter 7 intro: While You Are Coding ('tratar el código como transcripción mecánica del diseño es la mayor causa de fracaso')**
    'Humano dirige / IA ejecuta' + SPEC con criterios verificables puede degenerar en tratar el build como transcripción, cuando hay decisiones de juicio cada minuto. Resolución: finding tipo 'spec-doubt' que el builder levanta cuando la SPEC choca con la realidad del código — aconseja (guess) y capea readiness hasta que el humano lo revise, en vez de que el agente elija en silencio entre desviarse o transcribir mal.
@@ -135,7 +135,7 @@ Spike formal: en discovery, cada item de RISKS con incertidumbre alta dispara la
    characterize consagra TODO el comportamiento observado como contrato, incluidas las coincidencias (el kit ya tiene el caso real: el QR que replica un bug de prod). Es programar por coincidencia institucionalizada. Mitigación: al aprobar los .approved, el humano etiqueta cada comportamiento como 'intended' vs 'observed-accidental', para que una limpieza futura sepa qué es contrato y qué es accidente congelado — sin debilitar el byte-compare de hoy.
 
 12. **Topic 48 ('There Can Never Be an Agile Process' + Tip 85 'la reflexión de proceso hay que AGENDARLA') + Topic 49 (Team Tracer Bullets: los gates-handoff son waste)**
-   Un proceso codificado con gates y caps fijos que jamás experimenta consigo mismo es Agile-in-a-Box, y el libro condena los gates donde el trabajo se detiene esperando humanos y papeleo. Defensa parcial de spec-loop: sus gates son checks automáticos de hechos que corren en segundos dentro del loop, y el ÚNICO handoff humano (el merge) es deliberado y de alto valor. Lo que falta: retro post-merge AGENDADA que mida el propio kit desde el ledger (tasa de falsos positivos por gate, latencia por gate, caps que nunca disparan, iteraciones desperdiciadas por oscilación), con tuning de thresholds explícito y humano-aprobado — gate-check ya impide bajarlos en silencio, así que el canal legítimo de adaptación existe; falta el ritual que lo alimente.
+   Un proceso codificado con gates y caps fijos que jamás experimenta consigo mismo es Agile-in-a-Box, y el libro condena los gates donde el trabajo se detiene esperando humanos y papeleo. Defensa parcial de Uscha: sus gates son checks automáticos de hechos que corren en segundos dentro del loop, y el ÚNICO handoff humano (el merge) es deliberado y de alto valor. Lo que falta: retro post-merge AGENDADA que mida el propio kit desde el ledger (tasa de falsos positivos por gate, latencia por gate, caps que nunca disparan, iteraciones desperdiciadas por oscilación), con tuning de thresholds explícito y humano-aprobado — gate-check ya impide bajarlos en silencio, así que el canal legítimo de adaptación existe; falta el ritual que lo alimente.
 
 
 ## Estado

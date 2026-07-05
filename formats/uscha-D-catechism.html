@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uscha · The Catechism</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#edf0ee; --panel:#f7f9f7; --ink:#14201c; --ink-soft:#3d4a45; --mute:#7c8a84;
+  --mag:#c81e78; --mag-deep:#9c145c; --mag-soft:#f7e3ee; --rule:#d6ddd8; --card:#fdfefd;
+  --serif:"DM Serif Display",Georgia,serif; --body:"Public Sans",sans-serif; --mono:"JetBrains Mono",monospace;
+  --measure:44rem;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.66;-webkit-font-smoothing:antialiased}
+
+/* top strip */
+.strip{position:sticky;top:0;z-index:30;background:rgba(237,240,238,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;padding:11px 26px;font-family:var(--mono);font-size:.72rem;letter-spacing:.04em}
+.strip .mk{font-family:var(--body);font-weight:700;font-size:1rem;letter-spacing:-.02em}
+.strip .mk b{color:var(--mag)}
+.strip .cc{color:var(--mute)}
+
+/* dot nav */
+.dots{position:fixed;right:20px;top:50%;transform:translateY(-50%);z-index:25;display:flex;flex-direction:column;gap:9px}
+.dots a{width:8px;height:8px;border-radius:50%;background:var(--rule);transition:.18s;display:block}
+.dots a:hover{background:var(--mute);transform:scale(1.3)}
+.dots a.on{background:var(--mag);transform:scale(1.35)}
+@media(max-width:1080px){.dots{display:none}}
+
+.wrap{max-width:var(--measure);margin:0 auto;padding:0 26px 16vh}
+
+/* hero */
+.hero{padding:12vh 0 7vh;border-bottom:1px solid var(--rule)}
+.hero .ov{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;color:var(--mag);margin-bottom:2rem}
+.hero h1{font-family:var(--serif);font-weight:400;font-size:clamp(2.6rem,6.5vw,4.6rem);line-height:1.0;letter-spacing:-.01em}
+.hero h1 em{font-style:italic;color:var(--mag)}
+.hero .dek{margin-top:1.8rem;font-size:1.2rem;color:var(--ink-soft);max-width:38rem}
+.hero .note{margin-top:2rem;font-family:var(--mono);font-size:.76rem;color:var(--mute);line-height:1.7}
+.hero .note b{color:var(--mag-deep)}
+
+/* Q/A */
+.qa{padding:5rem 0 0;position:relative}
+.qa .qhead{display:flex;gap:1rem;align-items:flex-start}
+.qa .qmark{font-family:var(--serif);font-size:2.2rem;line-height:.8;color:var(--mag);flex-shrink:0;padding-top:.2rem}
+.qa .qmark .qn{display:block;font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;color:var(--mute);margin-top:.5rem;font-weight:500}
+.qa h2{font-family:var(--serif);font-weight:400;font-size:clamp(1.6rem,3.4vw,2.2rem);line-height:1.12;letter-spacing:-.01em;color:var(--ink)}
+.qa .ans{margin-top:1.4rem;padding-left:calc(2.2rem + 1rem)}
+.qa .ans .amark{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mag);display:block;margin-bottom:.8rem}
+p{margin-bottom:1rem;color:var(--ink-soft)}
+p strong,li strong{color:var(--ink);font-weight:700}
+em{font-style:normal;color:var(--mag-deep);font-weight:600}
+code{font-family:var(--mono);font-size:.82em;background:#e2e8e4;padding:1px 5px;border-radius:4px;color:var(--ink);white-space:nowrap}
+h3{font-family:var(--body);font-weight:700;font-size:1.02rem;margin:1.6rem 0 .5rem;color:var(--ink)}
+
+.keyline{font-family:var(--serif);font-style:italic;font-size:1.4rem;line-height:1.32;color:var(--ink);margin:1.6rem 0;padding-left:1.2rem;border-left:3px solid var(--mag)}
+.keyline b{font-style:normal;color:var(--mag);font-weight:400}
+
+ul{list-style:none;margin:.8rem 0 1.1rem}
+ul li{position:relative;padding-left:1.5rem;margin-bottom:.55rem;color:var(--ink-soft)}
+ul li::before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;background:var(--mag);border-radius:50%}
+ul.x li::before{content:"✕";background:none;color:var(--mag-deep);top:0;left:0;font-weight:700}
+
+pre{font-family:var(--mono);font-size:.78rem;line-height:1.6;background:#152420;color:#d6e4df;padding:1.1rem 1.3rem;border-radius:10px;overflow-x:auto;margin:1.2rem 0}
+pre .c{color:#6f8c83;font-style:italic}
+pre .g{color:#7fd0a8}
+
+table{width:100%;border-collapse:collapse;font-size:.86rem;margin:1.1rem 0;background:var(--card);border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+th{background:var(--ink);color:var(--paper);text-align:left;font-weight:600;padding:.55rem .8rem;font-size:.8rem}
+td{padding:.5rem .8rem;border-top:1px solid var(--rule);vertical-align:top;color:var(--ink-soft)}
+td:first-child{font-family:var(--mono);font-size:.8rem;color:var(--mag-deep);white-space:nowrap}
+.ok{color:#1f7a4d;font-weight:700}.no{color:var(--mag);font-weight:700}
+
+.aside{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:1rem 1.2rem;margin:1.2rem 0}
+.aside.hi{background:var(--mag-soft);border-color:#eec4da}
+.aside .tag{font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mag);margin-bottom:.4rem}
+.aside p:last-child{margin-bottom:0}
+
+.foot{max-width:var(--measure);margin:0 auto;padding:4rem 26px 8rem;border-top:1px solid var(--rule);font-family:var(--mono);font-size:.74rem;color:var(--mute);line-height:1.7}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media(max-width:620px){.qa .ans{padding-left:0}}
+</style>
+</head>
+<body>
+
+<div class="strip">
+  <span class="mk">spec<b>·</b>loop</span>
+  <span class="cc">the catechism · <span id="cc">01</span>/17</span>
+</div>
+
+<nav class="dots" id="dots"></nav>
+
+<div class="wrap">
+
+  <section class="hero" id="q0">
+    <div class="ov">The catechism · a methodology, questioned</div>
+    <h1>Every good method survives <em>being interrogated.</em></h1>
+    <p class="dek">So here it is, put to the question. Uscha is spec-driven, tool-agnostic, and — its one heresy — it begins before the spec. The answers below are the method defending itself.</p>
+    <p class="note">Instantiated in Claude Code via <b>uscha-kit</b>. Status is named where it matters: <b>in the kit</b> (implemented) · <b>new</b> (this version) · <b>proposal</b> (agreed, not yet coded).</p>
+  </section>
+
+  <!-- 1 -->
+  <section class="qa" id="q1">
+    <div class="qhead"><div class="qmark">Q<span class="qn">01</span></div><h2>Why begin before the specification exists?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>Because the costly mistake isn't a bad implementation — it's a <em>confident implementation of the wrong shape</em>. A spec written over a misunderstood problem doesn't fix the misunderstanding; it makes it permanent and hard to see. So the first move is Discovery: turn a vague idea plus reference material into a proposed shape — entities, endpoints, boundaries — that the human accepts, bends, or rejects.</p>
+      <p class="keyline">The order <b>is</b> the argument: idea → discovery → shape → spec → build → verify → evidence → human gate.</p>
+      <p>Only after the shape is agreed does anything get written down, and from there every step advances on captured evidence, halting short of the merge.</p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="qa" id="q2">
+    <div class="qhead"><div class="qmark">Q<span class="qn">02</span></div><h2>Why should the discovery interview argue with me?</h2></div>
+    <div class="ans"><span class="amark">Answer · in the kit</span>
+      <p>Because an agreeable interviewer just inherits your blind spots and hands them back formatted as a plan. Two skills sit at the front — <code>/discovery</code> for when you have an idea but no shape, <code>/adr-refine</code> for when the shape is known and only the edges need drawing. Neither writes code; both run on <code>Read, Write, Glob, Grep</code>.</p>
+      <div class="aside hi"><div class="tag">the rule that defines them</div><p><strong>Grill, don't agree.</strong> A discovery where the assistant agreed with everything has failed. The value lives in the questions — the contradictions, the fuzzy terms, the missing failure modes, the constraints you never said aloud. Friction is the product.</p></div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="qa" id="q3">
+    <div class="qhead"><div class="qmark">Q<span class="qn">03</span></div><h2>If it's all one chat, why write files at all?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>Because the chat is the first thing to disappear. A new session, a <code>/clear</code>, a context compaction — each severs the assistant from everything merely said. Sub-agents can't read a conversation they weren't in; CI can't build from a memory; a teammate next week has no transcript. So discovery crystallizes the conversation straight into the repo as decisions settle:</p>
+      <table><tbody>
+        <tr><td>CONTEXT.md</td><td>Domain glossary — kills fuzzy language.</td></tr>
+        <tr><td>DOMAIN-MODEL.md</td><td>The approved shape: entities and relations.</td></tr>
+        <tr><td>SPEC.md</td><td>Behavior, I/O, errors, acceptance, rollback.</td></tr>
+        <tr><td>docs/adr/*.md</td><td>One per durable decision — executable.</td></tr>
+        <tr><td>ACCEPTANCE.md</td><td>DoD as <code>- [ ]</code>; what readiness measures.</td></tr>
+        <tr><td>RISKS · HANDOFF</td><td>Residual risk; what to read first.</td></tr>
+      </tbody></table>
+      <p class="keyline">Chat is where thinking happens. <b>The repository is where it's remembered.</b></p>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="qa" id="q4">
+    <div class="qhead"><div class="qmark">Q<span class="qn">04</span></div><h2>What's the difference between a SPEC and an ADR?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>If it describes <strong>observable behavior</strong> — what must happen, with which inputs, outputs, and errors — it's a SPEC. If it justifies a <strong>choice between alternatives</strong> — why this shape and not another — it's an ADR. Nearly every non-trivial change needs a SPEC; only some warrant a formal ADR.</p>
+      <h3>When is an ADR worth writing?</h3>
+      <p>Only when the decision is <em>hard to reverse</em>, <em>surprising without context</em>, and <em>the result of a real trade-off</em> — all three, or it's noise that buries the decisions that matter. The Implementation Plan is what makes it executable: the agent reads it and builds without re-asking, and code links back with <code>// ADR: &lt;slug&gt;</code> so a later supersede finds everything it governed.</p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="qa" id="q5">
+    <div class="qhead"><div class="qmark">Q<span class="qn">05</span></div><h2>And what sits above the ADRs?</h2></div>
+    <div class="ans"><span class="amark">Answer · in the kit</span>
+      <p>The CONSTITUTION. An ADR <em>chooses</em>; the constitution <em>forbids</em> — it records the invariants no decision may override, whatever trade-off wins. An ADR may legitimately pick one datastore over another; an ADR may never pick "store the certificate in plaintext," because the constitution vetoed that before the alternatives were even discussed.</p>
+      <pre><span class="c"># CONSTITUTION.md — invariants, CWE-mapped</span>
+- Secrets never in logs or repo      <span class="c"># CWE-532/798</span>
+- Parameterized SQL only             <span class="c"># CWE-89</span>
+- Idempotency mandatory on CAE issue
+- No merge without a human gate</pre>
+      <p>Since 1.1.0 it's a versioned layer. A violation logs a <strong>BLOCKER</strong> — it caps readiness at ≤65 and blocks convergence by construction.</p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="qa" id="q6">
+    <div class="qhead"><div class="qmark">Q<span class="qn">06</span></div><h2>Doesn't all this rigor slow down small changes?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>It would, if it were uniform — which is why it isn't. Every change opens with one question: <em>what can this break, and what does the break cost?</em> The answer sizes the apparatus. A profile-A tweak never drags the full machine behind it.</p>
+      <table><thead><tr><th>Profile</th><th>Example</th><th>Minimum gates</th></tr></thead><tbody>
+        <tr><td>A · Low</td><td>minor UI / config</td><td>build + test</td></tr>
+        <tr><td>B · Normal</td><td>feature / bugfix</td><td>tests + static + review</td></tr>
+        <tr><td>C · Critical</td><td>payments / security</td><td>+integration +security +rollback</td></tr>
+        <tr><td>D · Multi-system</td><td>public API / events</td><td>contract tests + versioning</td></tr>
+        <tr><td>E · Legacy</td><td>refactor / migration</td><td><strong>characterization</strong> + no-regression</td></tr>
+      </tbody></table>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="qa" id="q7">
+    <div class="qhead"><div class="qmark">Q<span class="qn">07</span></div><h2>How does the build loop avoid running forever?</h2></div>
+    <div class="ans"><span class="amark">Answer · in the kit</span>
+      <p>By being engineered to <em>converge</em> rather than to perfect. The <code>/dev-loop</code> takes the ADRs plus acceptance, builds, and runs a severity-gated review cycle governed by three laws: <em>converge, don't chase zero</em>; <em>tests are a guardrail, not the finale</em>; <em>generating tests is not running them</em>.</p>
+      <p>It moves through plan → coverage gate (thin coverage triggers characterization tests) → build (one commit per step) → the QA loop (code-review, judgment-day, improve; apply fixes at or above the gate, defer the rest) → cross-repo integration → a final coverage pass → the PR, where it <strong>stops</strong>. An agent told to drive findings to zero will oscillate forever, so the loop watches for a period-2 fingerprint repeat and treats a clean cycle plus a clean static gate as done enough.</p>
+      <div class="aside"><div class="tag">the failure it guards</div><p>The <strong>Ralph Wiggum loop</strong>: the agent emits the "done" token too early. Only an objective gate — never an opinion — closes it.</p></div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="qa" id="q8">
+    <div class="qhead"><div class="qmark">Q<span class="qn">08</span></div><h2>Why not let the agent report whether it passed?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>Because if the maker writes its own report card, it can log <code>exit_code: 0</code> having run nothing — not from malice, just the path of least resistance. So the ledger refuses to read the agent's account of reality. <code>qa_ledger.py</code> parses the actual artifacts:</p>
+      <pre>coverage ← jacoco.xml
+tests    ← surefire-reports/TEST-*.xml
+static   ← checkstyle · pmd · spotbugs · findsecbugs</pre>
+      <p class="keyline"><b>Absent is not "OK."</b> A tool that didn't run is never invented as green.</p>
+      <p>This is <em>maker ≠ checker</em>: the one who makes doesn't graduate the work — a checker in fresh context does. It's Anthropic's evaluator-optimizer, articulated December 2024.</p>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="qa" id="q9">
+    <div class="qhead"><div class="qmark">Q<span class="qn">09</span></div><h2>Which checks are allowed to stop the work?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>Only the ones that read a fact. A gate over a <em>fact</em> — a byte comparison, a mutation result, a coverage number — may block. A gate that <em>guesses over prose</em> may only advise. The reason is behavioral: a natural-language heuristic that blocks throws false positives, the developer turns it off, and now there's a dead gate where a live one used to be.</p>
+      <table><thead><tr><th>Gate</th><th>Reads</th><th></th></tr></thead><tbody>
+        <tr><td>golden-diff</td><td>bytes vs .approved</td><td class="ok">BLOCKS</td></tr>
+        <tr><td>pit-check</td><td>mutation XML</td><td class="ok">BLOCKS</td></tr>
+        <tr><td>static gate</td><td>4 linters, normalized</td><td class="ok">BLOCKS</td></tr>
+        <tr><td>spec-check</td><td>prose heuristic</td><td class="no">ADVISES</td></tr>
+      </tbody></table>
+      <p>Osmani's finding sharpens it: one uncorrelated checker caught 93.4% of what four caught. Stack <em>different</em> opinions, not four similar linters — and run fact gates in CI, not in the developer's face.</p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="qa" id="q10">
+    <div class="qhead"><div class="qmark">Q<span class="qn">10</span></div><h2>If the agent writes everything, what checks the agent?</h2></div>
+    <div class="ans"><span class="amark">Answer · new</span>
+      <p>The golden test — the one artifact the agent cannot author, which is precisely why it exists. A golden captures what the old code <em>actually does</em>, bugs and quirks included, by running it rather than reasoning about it, and freezes that as a human-approved <code>.approved</code> reference. After a migration, the new output is diffed against it byte for byte.</p>
+      <div class="aside hi"><div class="tag">why it's sacred</div><p>If the agent authored the golden, it would encode the same partial understanding that lost the logic in the first place — and the diff would pass against its own mistake. It's a check <em>on</em> the agent, not one it grants itself.</p></div>
+      <ul class="x">
+        <li><strong>Never</strong> let the agent generate or edit <code>.approved</code> — a <code>PreToolUse</code> hook blocks the write outright.</li>
+      </ul>
+      <ul>
+        <li>Capture by executing against real production corpus, never by reasoning about output.</li>
+        <li>Pin locale <code>es-AR</code>, freeze clocks, normalize GUIDs and map-order before serializing; add <code>*.approved.* binary</code> to <code>.gitattributes</code> or line endings will lie.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="qa" id="q11">
+    <div class="qhead"><div class="qmark">Q<span class="qn">11</span></div><h2>When is it safe to let the loop run itself?</h2></div>
+    <div class="ans"><span class="amark">Answer · proposal</span>
+      <p>Only when all four conditions hold, because failing one makes the loop cost more than a good prompt by hand:</p>
+      <ul>
+        <li><strong>The task repeats</strong> (weekly+).</li>
+        <li><strong>Automated verification exists</strong> — a test/build/linter that fails the work without you.</li>
+        <li><strong>The budget absorbs the waste</strong> — it re-reads and retries regardless.</li>
+        <li><strong>The agent has senior tools</strong> — logs, a repro environment, the ability to run what it writes.</li>
+      </ul>
+      <p>The outer loop is a heartbeat — <code>/loop</code> sets cadence, <code>/goal</code> continues until a <em>separate</em> model verifies the condition true — wrapping the inner <code>/dev-loop</code>, with the human still owning merge. And an unattended loop is an unattended attack surface, so autonomy arrives with an operational tax: secret-scan and dependency-audit before any PR, an origin check on every skill (520 of 17,022 audited leaked credentials), non-verbose logs, permissions re-audited on a schedule, sessions rotated before they bloat.</p>
+      <div class="aside"><div class="tag">the honest verdict</div><p>Fiscal/ARCA, payments, critical retail all sit on the "do not autonomize" side the playbook itself marks. Gated-by-design isn't a gap — it's the decision. The metric once you do automate is <em>cost per accepted change</em>; below 50% accept, the loop is handing back the review it came to remove.</p></div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="qa" id="q12">
+    <div class="qhead"><div class="qmark">Q<span class="qn">12</span></div><h2>When should I NOT use Uscha?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>A mature method names its own edges. Skip it for a <strong>spike</strong> — throwaway code to learn, no SPEC, just a note of what you learned; and for a <strong>throwaway prototype</strong> — marked, isolated, given a death date. For a <strong>P0 hotfix</strong>, you fix first, but the minimum evidence and a retroactive SPEC/ADR are due within 24 hours.</p>
+      <p class="keyline">A designed escape valve keeps the method honest under pressure. <b>An improvised one destroys it.</b></p>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="qa" id="q13">
+    <div class="qhead"><div class="qmark">Q<span class="qn">13</span></div><h2>What actually runs it, and how do I set it up?</h2></div>
+    <div class="ans"><span class="amark">Answer · in the kit</span>
+      <p>Claude Code + Python + git/gh + the skills. The stack-specific parts (JDK/Maven, MSSQL, the linters) are the project's <em>adapter</em>, living in each repo's <code>CLAUDE.md</code> — not in the workbench.</p>
+      <pre><span class="c"># native installer — no Node, self-updating</span>
+curl -fsSL https://claude.ai/install.sh | bash
+cp -r uscha-kit/.claude/skills/* ~/.claude/skills/
+scoop install gentle-ai      <span class="c"># own bucket first — the missed step</span>
+claude --version &amp;&amp; claude doctor</pre>
+      <p>Cloning to a teammate is <strong>seven layers</strong>, not one file: config, plugins, skills, agents+commands, hooks, the external CLI, MCP servers. Watch the gotcha — <code>settings.json</code> hardcodes <code>C:\Users\…</code>, so the bootstrap tokenizes the path on export and rewrites it on import. And <em>memory is not shared</em>: engram and MEMORY.md are per-machine and earned as you work.</p>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section class="qa" id="q14">
+    <div class="qhead"><div class="qmark">Q<span class="qn">14</span></div><h2>What does one full run actually look like?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>A CAE gateway for ARCA — Java 21, Spring Boot, React, MSSQL — from idea to PR in a single session:</p>
+      <pre>&gt; /discovery
+  <span class="g">✓</span> CONTEXT · DOMAIN-MODEL · SPEC-001 · ADR-001/2/3
+  <span class="g">✓</span> ACCEPTANCE · RISKS · HANDOFF
+&gt; /dev-loop
+  <span class="c">plan → coverage → build → QA loop → integration</span>
+  <span class="g">CONVERGED</span> · PR opened. Stop at the merge.
+&gt; readiness --acceptance ACCEPTANCE.md
+  <span class="g">88/100 — RELEASE CANDIDATE</span></pre>
+      <p class="keyline">The tool executes. The method governs. <b>The evidence decides. The human approves.</b></p>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section class="qa" id="q15">
+    <div class="qhead"><div class="qmark">Q<span class="qn">15</span></div><h2>Isn't this just chasing whatever's trending?</h2></div>
+    <div class="ans"><span class="amark">Answer</span>
+      <p>The opposite — it reached the durable ideas independently. "Loop engineering" surfaced in a single week of June 2026 and converged on the same principles this method already held: done-criteria that can fail, a hard iteration ceiling, maker ≠ checker, state externalized to disk, oscillation detection. The one deliberate difference is that a <em>person</em> pulls the trigger, not a cron — which is a decision, not a gap. And <em>maker ≠ checker</em> being Anthropic's evaluator-optimizer from December 2024 is the tell: this is the settled stuff, not the hype.</p>
+    </div>
+  </section>
+
+  <!-- 16 -->
+  <section class="qa" id="q16">
+    <div class="qhead"><div class="qmark">Q<span class="qn">16</span></div><h2>Where did these ideas come from?</h2></div>
+    <div class="ans"><span class="amark">Answer · credit</span>
+      <p>As a matter of principle: not from nowhere. Birgitta Böckeler (maintainability sensors), Addy Osmani (loop engineering, the uncorrelated checker), Martin Fowler (the technical-debt quadrant), Vlad Khononov (DDD modularity), John Maeda (Reduce), Andrej Karpathy (simplicity first), Geoffrey Huntley (the Ralph Wiggum loop), and Anthropic (evaluator-optimizer). Under-attributing impoverishes; over-attributing lies — so both are avoided on purpose.</p>
+    </div>
+  </section>
+
+</div>
+
+<div class="foot">Uscha · the catechism · a spec-driven, tool-agnostic methodology · instantiated in Claude Code via uscha-kit · the truth lives in versioned files.</div>
+
+<script>
+const secs=[...document.querySelectorAll('.qa,.hero')];
+const dots=document.getElementById('dots');
+const cc=document.getElementById('cc');
+secs.forEach((s,i)=>{const a=document.createElement('a');a.href='#'+s.id;a.dataset.i=i;dots.appendChild(a);});
+const das=[...dots.children];
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){
+  const i=secs.indexOf(e.target);
+  das.forEach(d=>d.classList.remove('on'));
+  if(das[i])das[i].classList.add('on');
+  cc.textContent=String(i).padStart(2,'0');
+}});},{rootMargin:'-30% 0px -60% 0px'});
+secs.forEach(s=>obs.observe(s));
+</script>
+</body>
+</html>

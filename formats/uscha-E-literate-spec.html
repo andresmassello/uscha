@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uscha · Literate Spec</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#fbfbf8; --editor:#ffffff; --gutter:#f2f2ec; --ink:#22252c; --ink-soft:#4a4e58; --mute:#9296a0;
+  --line:#e7e7df; --sel:#fff4e0;
+  --cmt:#8a9099; --kw:#8b3ad6; --str:#0e8e7f; --num:#2563eb; --sym:#c2410c; --fn:#b91c6b;
+  --amber:#d97706; --amber-bg:#fdf3e3; --red:#c8362a; --red-bg:#fbe9e7; --green:#177a4e; --green-bg:#e8f4ee;
+  --mono:"JetBrains Mono",monospace; --body:"Public Sans",sans-serif;
+  --tree:238px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.62;-webkit-font-smoothing:antialiased}
+
+/* file tree */
+.tree{position:fixed;top:0;left:0;bottom:0;width:var(--tree);background:var(--gutter);border-right:1px solid var(--line);overflow-y:auto;padding:16px 0;z-index:20}
+.tree .proj{font-family:var(--mono);font-size:.74rem;font-weight:700;color:var(--ink);padding:0 16px 12px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.tree .proj .dot{width:9px;height:9px;border-radius:50%;background:var(--fn)}
+.tree .grp{font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);padding:12px 16px 4px}
+.tree a{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:.76rem;color:var(--ink-soft);text-decoration:none;padding:3px 16px 3px 22px;border-left:2px solid transparent}
+.tree a:hover{background:#eaeae2;color:var(--ink)}
+.tree a.on{background:#e4e4da;color:var(--ink);border-left-color:var(--amber);font-weight:600}
+.tree a::before{content:"›";color:var(--mute);font-weight:700}
+.tree a.on::before{color:var(--amber)}
+
+.main{margin-left:var(--tree);max-width:1000px;padding:0 40px 20vh}
+
+/* header comment / hero */
+.hero{padding:8vh 0 4vh}
+.hero .path{font-family:var(--mono);font-size:.74rem;color:var(--mute);margin-bottom:1.4rem}
+.hero h1{font-family:var(--body);font-weight:700;font-size:clamp(2rem,4.4vw,3.1rem);line-height:1.04;letter-spacing:-.03em}
+.hero h1 .c{color:var(--fn)}
+.hero .banner{margin-top:1.6rem;font-family:var(--mono);font-size:.82rem;line-height:1.75;color:var(--cmt);background:var(--editor);border:1px solid var(--line);border-left:3px solid var(--fn);border-radius:0 8px 8px 0;padding:1rem 1.2rem;max-width:74ch}
+.hero .banner .k{color:var(--kw)}
+.hero .legend{margin-top:1.4rem;display:flex;gap:8px;flex-wrap:wrap;font-family:var(--mono);font-size:.66rem}
+.hero .legend span{padding:3px 9px;border-radius:4px}
+.lk{background:var(--green-bg);color:var(--green)} .ln{background:var(--red-bg);color:var(--red)} .lp{background:var(--amber-bg);color:var(--amber)}
+
+/* module */
+.mod{margin-top:3.4rem;scroll-margin-top:20px}
+.mod .mh{font-family:var(--mono);font-size:.72rem;color:var(--mute);display:flex;align-items:center;gap:.7rem;margin-bottom:.5rem}
+.mod .mh .num{background:var(--ink);color:var(--bg);border-radius:4px;padding:1px 7px;font-weight:700}
+.mod .mh .st{margin-left:auto;padding:1px 8px;border-radius:4px;letter-spacing:.05em}
+.mod h2{font-family:var(--body);font-weight:700;font-size:1.55rem;letter-spacing:-.02em;margin-bottom:.9rem}
+.mod h3{font-family:var(--mono);font-size:.92rem;font-weight:700;color:var(--kw);margin:1.6rem 0 .5rem}
+p{color:var(--ink-soft);margin-bottom:.9rem;max-width:74ch}
+p strong{color:var(--ink);font-weight:600}
+em{font-style:normal;color:var(--fn);font-weight:600}
+code{font-family:var(--mono);font-size:.85em;background:var(--gutter);padding:1px 5px;border-radius:4px;color:var(--sym)}
+
+/* code block styled as editor with line numbers */
+.code{background:var(--editor);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:1.1rem 0;max-width:80ch}
+.code .cbar{background:var(--gutter);border-bottom:1px solid var(--line);padding:.4rem .9rem;font-family:var(--mono);font-size:.7rem;color:var(--mute);display:flex;gap:.5rem;align-items:center}
+.code .cbar .fdot{width:8px;height:8px;border-radius:50%}
+.code pre{font-family:var(--mono);font-size:.8rem;line-height:1.72;padding:.9rem 1.1rem;overflow-x:auto;color:var(--ink);counter-reset:ln}
+.code pre .l{display:block;white-space:pre}
+.code pre .l::before{content:counter(ln);counter-increment:ln;display:inline-block;width:2ch;margin-right:1.4ch;color:var(--mute);text-align:right;user-select:none}
+.c-cmt{color:var(--cmt);font-style:italic}
+.c-kw{color:var(--kw)}.c-str{color:var(--str)}.c-num{color:var(--num)}.c-fn{color:var(--fn)}.c-sym{color:var(--sym)}
+
+/* commentary annotation */
+.note{font-family:var(--body);font-size:.9rem;color:var(--ink-soft);background:var(--editor);border:1px solid var(--line);border-radius:8px;padding:.8rem 1rem;margin:1rem 0;max-width:76ch;display:flex;gap:.7rem}
+.note::before{content:"//";font-family:var(--mono);color:var(--cmt);font-weight:700;flex-shrink:0}
+.note b{color:var(--ink)}
+
+/* diagnostic bubble */
+.diag{font-family:var(--mono);font-size:.82rem;border-radius:8px;padding:.7rem 1rem;margin:1rem 0;max-width:76ch;display:flex;gap:.6rem;align-items:flex-start;line-height:1.55}
+.diag .ic{font-weight:700;flex-shrink:0}
+.diag.block{background:var(--red-bg);color:#7a1f16;border:1px solid #edc9c4} .diag.block .ic{color:var(--red)}
+.diag.warn{background:var(--amber-bg);color:#7a4a08;border:1px solid #eed9b0} .diag.warn .ic{color:var(--amber)}
+.diag.ok{background:var(--green-bg);color:#0f4d31;border:1px solid #bfe0cd} .diag.ok .ic{color:var(--green)}
+.diag b{font-weight:700}
+
+table{width:100%;border-collapse:collapse;font-size:.85rem;margin:1rem 0;max-width:80ch;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--editor)}
+th{background:var(--gutter);text-align:left;font-family:var(--mono);font-weight:700;font-size:.76rem;padding:.5rem .8rem;color:var(--ink)}
+td{padding:.5rem .8rem;border-top:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+td:first-child{font-family:var(--mono);color:var(--kw);white-space:nowrap;font-size:.8rem}
+.ok{color:var(--green);font-weight:700}.no{color:var(--red);font-weight:700}
+
+.foot{margin-left:var(--tree);border-top:1px solid var(--line);padding:2rem 40px 6rem;font-family:var(--mono);font-size:.72rem;color:var(--mute);line-height:1.7}
+
+@media(max-width:900px){
+  :root{--tree:0px}
+  .tree{position:static;width:100%;height:auto;bottom:auto}
+  .tree a{display:none} .tree .grp{display:none}
+  .main{margin-left:0;padding:0 20px 14vh}
+  .foot{margin-left:0;padding:2rem 20px 5rem}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<aside class="tree">
+  <div class="proj"><span class="dot"></span>Uscha/</div>
+  <div class="grp">00 · foundations</div>
+  <a href="#m0">README.md</a>
+  <a href="#m1">discovery.skill</a>
+  <a href="#m2">package/</a>
+  <a href="#m3">spec_vs_adr.rs</a>
+  <a href="#m4">constitution.lock</a>
+  <div class="grp">01 · execution</div>
+  <a href="#m5">risk.config</a>
+  <a href="#m6">dev_loop.orchestrator</a>
+  <a href="#m7">evidence.assert</a>
+  <a href="#m8">gates.policy</a>
+  <a href="#m9">golden.anchor</a>
+  <div class="grp">02 · autonomy</div>
+  <a href="#m10">outer_loop.proposal</a>
+  <a href="#m11">not_applicable.md</a>
+  <div class="grp">03 · ops</div>
+  <a href="#m12">workbench.sh</a>
+  <a href="#m13">reproduce.bootstrap</a>
+</aside>
+
+<main class="main">
+
+  <section class="hero" id="m0">
+    <div class="path">~/Uscha · README.md · literate edition</div>
+    <h1>You bring the idea.<br><span class="c">// the method builds the rest.</span></h1>
+    <div class="banner">
+      <span class="k">module</span> Uscha — a spec-driven, tool-agnostic methodology.<br>
+      Read it like source: each block is the method expressed as code, each note is the commentary that explains it.<br>
+      Instantiated in Claude Code via uscha-kit.
+    </div>
+    <div class="legend"><span class="lk">in the kit</span><span class="ln">new</span><span class="lp">proposal</span></div>
+  </section>
+
+  <!-- 0 -->
+  <section class="mod" id="m1">
+    <div class="mh"><span class="num">00</span> the entry point <span class="st lk">in the kit</span></div>
+    <h2>The method starts before the spec.</h2>
+    <p>Most spec-driven work assumes the shape is known. Uscha treats that assumption as the bug. The expensive failure is a <em>confident build of the wrong shape</em>, so the pipeline runs Discovery first — idea plus references in, a proposed shape out, human decides — and only then specifies.</p>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--fn)"></span>pipeline.flow</div>
+<pre><span class="l"><span class="c-cmt"># the order is the contract — do not skip stages</span></span><span class="l"><span class="c-kw">flow</span> = idea <span class="c-sym">→</span> discovery <span class="c-sym">→</span> ready <span class="c-sym">→</span> spec <span class="c-sym">→</span> adr? <span class="c-sym">→</span> build</span><span class="l">            <span class="c-sym">→</span> verify <span class="c-sym">→</span> evidence <span class="c-sym">→</span> <span class="c-fn">human_gate</span>  <span class="c-cmt"># halts here</span></span></pre></div>
+  </section>
+
+  <!-- 1 -->
+  <section class="mod" id="m1b">
+    <div class="mh"><span class="num">01</span> discovery.skill <span class="st lk">in the kit</span></div>
+    <h2>The interview compiles clarity, not code.</h2>
+    <p>Two entry skills produce artifacts only: <code>/discovery</code> (idea → shape) and <code>/adr-refine</code> (known shape → sharp edges). Both run with a read/write/search toolset and touch no code.</p>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--kw)"></span>discovery.skill</div>
+<pre><span class="l"><span class="c-kw">allowed_tools</span>: [Read, Write, Glob, Grep]   <span class="c-cmt"># +WebFetch for discovery</span></span><span class="l"><span class="c-kw">invariant</span>: <span class="c-str">"grill, don't agree"</span></span><span class="l"><span class="c-cmt"># a discovery where the assistant agreed with everything FAILED.</span></span><span class="l"><span class="c-cmt"># value = the questions: contradictions, fuzzy terms,</span></span><span class="l"><span class="c-cmt">#         missing failure modes, unspoken constraints.</span></span><span class="l"><span class="c-kw">emit</span>: <span class="c-num">none</span> <span class="c-kw">until</span> converged_on_shape</span></pre></div>
+    <div class="note"><span>An agreeable interviewer inherits your blind spots and returns them formatted as a plan. <b>Friction is the product.</b></span></div>
+  </section>
+
+  <!-- 2 -->
+  <section class="mod" id="m2">
+    <div class="mh"><span class="num">02</span> package/ </div>
+    <h2>Truth is serialized to the repo, not held in chat.</h2>
+    <p>As decisions settle they're written straight to disk. The build reads files; the chat is volatile and dies on the next <code>/clear</code>, compaction, or new session.</p>
+    <table><tbody>
+      <tr><td>CONTEXT.md</td><td>Domain glossary — resolves fuzzy language.</td></tr>
+      <tr><td>DOMAIN-MODEL.md</td><td>Approved entities + relations (the shape).</td></tr>
+      <tr><td>SPEC.md</td><td>Behavior, I/O, errors, acceptance, rollback.</td></tr>
+      <tr><td>docs/adr/*.md</td><td>One per durable decision; executable.</td></tr>
+      <tr><td>ACCEPTANCE.md</td><td>DoD as <code>- [ ]</code>; the readiness input.</td></tr>
+      <tr><td>RISKS · HANDOFF</td><td>Residual risk; read-before-coding rules.</td></tr>
+    </tbody></table>
+    <div class="note"><span>Sub-agents read files. CI builds from files. A teammate next week has files, not your transcript. <b>The truth lives in versioned files.</b></span></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="mod" id="m3">
+    <div class="mh"><span class="num">03</span> spec_vs_adr.rs</div>
+    <h2>Two document types, sorted by what they answer.</h2>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--num)"></span>classify.fn</div>
+<pre><span class="l"><span class="c-kw">fn</span> <span class="c-fn">classify</span>(fact) {</span><span class="l">  <span class="c-kw">if</span> describes_observable_behavior(fact) <span class="c-kw">=&gt;</span> SPEC</span><span class="l">  <span class="c-kw">if</span> justifies_choice_between(fact)     <span class="c-kw">=&gt;</span> ADR</span><span class="l">}</span><span class="l"><span class="c-cmt">// write an ADR only if ALL three hold:</span></span><span class="l"><span class="c-kw">let</span> write_adr = hard_to_reverse</span><span class="l">             <span class="c-sym">&amp;&amp;</span> surprising_without_context</span><span class="l">             <span class="c-sym">&amp;&amp;</span> real_tradeoff;   <span class="c-cmt">// else it's noise</span></span></pre></div>
+    <p>The <strong>Implementation Plan</strong> makes an ADR executable — the agent reads it and builds without re-asking. Code links back with <code>// ADR: &lt;slug&gt;</code>, which makes a later <em>supersede</em> safe.</p>
+  </section>
+
+  <!-- 4 -->
+  <section class="mod" id="m4">
+    <div class="mh"><span class="num">04</span> constitution.lock <span class="st lk">in the kit</span></div>
+    <h2>Invariants no decision may override.</h2>
+    <p>An ADR <em>chooses</em>; the CONSTITUTION <em>forbids</em>. It's the hierarchy of truth: SPEC says what must happen, ADR says why this shape, CONSTITUTION says what's never acceptable.</p>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--sym)"></span>CONSTITUTION.md</div>
+<pre><span class="l"><span class="c-cmt"># non-negotiable — CWE-mapped since v1.1.0</span></span><span class="l">secrets_in_logs      = <span class="c-num">forbidden</span>   <span class="c-cmt"># CWE-532/798</span></span><span class="l">sql_concatenation    = <span class="c-num">forbidden</span>   <span class="c-cmt"># CWE-89</span></span><span class="l">cae_idempotency      = <span class="c-num">required</span></span><span class="l">merge_without_human  = <span class="c-num">forbidden</span></span></pre></div>
+    <div class="diag block"><span class="ic">⛔ BLOCKER</span><span>An ADR may pick MSSQL vs Redis. It may <b>not</b> pick "cert in plaintext" — the constitution vetoes it before alternatives are discussed. A violation caps readiness ≤65 and blocks convergence by construction.</span></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="mod" id="m5">
+    <div class="mh"><span class="num">05</span> risk.config</div>
+    <h2>Rigor scales to blast radius.</h2>
+    <p>Opening question for any change: <em>what can this break, and what does the break cost?</em> The answer sizes the apparatus.</p>
+    <table><thead><tr><th>profile</th><th>example</th><th>min_gates</th></tr></thead><tbody>
+      <tr><td>A.low</td><td>minor UI / config</td><td>build + test</td></tr>
+      <tr><td>B.normal</td><td>feature / bugfix</td><td>tests + static + review</td></tr>
+      <tr><td>C.critical</td><td>payments / security</td><td>+integration +security +rollback</td></tr>
+      <tr><td>D.multi</td><td>public API / events</td><td>contract tests + versioning</td></tr>
+      <tr><td>E.legacy</td><td>refactor / migration</td><td>characterization + no-regression</td></tr>
+    </tbody></table>
+    <div class="note"><span>Profile <b>E</b> requires a golden baseline before any change — see <code>golden.anchor</code>.</span></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="mod" id="m6">
+    <div class="mh"><span class="num">06</span> dev_loop.orchestrator <span class="st lk">in the kit</span></div>
+    <h2>A loop engineered to converge, not to chase zero.</h2>
+    <p>Takes the ADR set + <code>ACCEPTANCE.md</code>, builds, and runs a severity-gated review cycle that stops at the merge gate.</p>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--kw)"></span>dev_loop.orchestrator</div>
+<pre><span class="l"><span class="c-cmt"># three laws</span></span><span class="l"><span class="c-str">"converge, don't chase zero"</span></span><span class="l"><span class="c-str">"tests are a guardrail, not the finale"</span></span><span class="l"><span class="c-str">"generating tests != running tests"</span></span><span class="l"></span><span class="l">phases = [plan, coverage_gate, build, qa_loop,</span><span class="l">          integration, verify, <span class="c-fn">PR_then_STOP</span>, smoke, docs]</span><span class="l"><span class="c-kw">while</span> !converged: run(qa_tools); apply(fixes &gt;= gate)</span><span class="l">  <span class="c-kw">if</span> fingerprint(N) == fingerprint(N-<span class="c-num">2</span>): <span class="c-fn">oscillation</span>()</span></pre></div>
+    <div class="diag warn"><span class="ic">⚠ RALPH_WIGGUM</span><span>Silent failure: the agent emits the "done" token too early. Only an objective gate closes it — never an opinion.</span></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="mod" id="m7">
+    <div class="mh"><span class="num">07</span> evidence.assert</div>
+    <h2>The ledger parses files. It never trusts the narrator.</h2>
+    <p>If the maker writes its own report card, it can log success having run nothing. So <code>qa_ledger.py</code> (pure stdlib) reads the real artifacts instead of the agent's claims.</p>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--str)"></span>qa_ledger.py</div>
+<pre><span class="l">coverage = parse(<span class="c-str">"jacoco.xml"</span>)</span><span class="l">tests    = parse(<span class="c-str">"surefire-reports/TEST-*.xml"</span>)</span><span class="l">static   = parse(checkstyle, pmd, spotbugs, findsecbugs)</span><span class="l"><span class="c-kw">assert</span> report.exists <span class="c-kw">else</span> <span class="c-fn">NO_EVIDENCE</span>  <span class="c-cmt"># never "OK"</span></span></pre></div>
+    <div class="diag ok"><span class="ic">✓ maker ≠ checker</span><span>The one who makes doesn't graduate the work; a checker in fresh context validates it. Anthropic's evaluator-optimizer, Dec 2024. <b>Absent = no evidence.</b></span></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="mod" id="m8">
+    <div class="mh"><span class="num">08</span> gates.policy</div>
+    <h2>Facts may block; guesses may only advise.</h2>
+    <p>A gate over a fact can stop the work; a gate that guesses over prose can only advise. Break this and false positives kill the gate — the dev disables it and you're worse off.</p>
+    <table><thead><tr><th>gate</th><th>reads</th><th>effect</th></tr></thead><tbody>
+      <tr><td>golden-diff</td><td>bytes vs .approved</td><td class="ok">BLOCKS</td></tr>
+      <tr><td>pit-check</td><td>mutation XML</td><td class="ok">BLOCKS</td></tr>
+      <tr><td>static_gate</td><td>4 linters, normalized</td><td class="ok">BLOCKS</td></tr>
+      <tr><td>spec-check</td><td>prose heuristic</td><td class="no">ADVISES</td></tr>
+    </tbody></table>
+    <div class="note"><span>One uncorrelated checker caught <b>93.4%</b> of what four caught (Osmani). Stack different opinions, not similar linters. Fact gates run in CI, not in the dev's face.</span></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="mod" id="m9">
+    <div class="mh"><span class="num">09</span> golden.anchor <span class="st ln">new</span></div>
+    <h2>The one artifact the agent cannot author.</h2>
+    <p>Everything else is agent-authored. A golden captures what the old code <em>actually does</em> by running it, freezes it as human-approved <code>.approved</code>, and diffs the migration against it byte-for-byte.</p>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--red)"></span>golden.anchor · hooks</div>
+<pre><span class="l"><span class="c-cmt"># capture by EXECUTION, never by reasoning</span></span><span class="l">received = run(old_code, real_corpus)</span><span class="l">normalize(locale=<span class="c-str">"es-AR"</span>, clock, guids, map_order)</span><span class="l"><span class="c-kw">on</span> PreToolUse(write, <span class="c-str">"*.approved.*"</span>): <span class="c-fn">DENY</span></span><span class="l">gitattributes += <span class="c-str">"*.approved.* binary"</span>  <span class="c-cmt"># or line endings lie</span></span></pre></div>
+    <div class="diag block"><span class="ic">⛔ SACRED</span><span>If the agent authored the golden, it'd encode the same partial understanding that lost the logic — and pass against its own mistake. It's a check <b>on</b> the agent, not one it grants itself.</span></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="mod" id="m10">
+    <div class="mh"><span class="num">10</span> outer_loop.proposal <span class="st lp">proposal</span></div>
+    <h2>Autonomy compiles only when four conditions pass.</h2>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--amber)"></span>outer_loop.guard</div>
+<pre><span class="l"><span class="c-kw">let</span> may_automate = task_repeats_weekly</span><span class="l">    <span class="c-sym">&amp;&amp;</span> automated_verification_exists</span><span class="l">    <span class="c-sym">&amp;&amp;</span> budget_absorbs_waste</span><span class="l">    <span class="c-sym">&amp;&amp;</span> agent_has_senior_tools;  <span class="c-cmt"># logs, repro env</span></span><span class="l"></span><span class="l"><span class="c-cmt"># heartbeat wraps the inner loop; human still owns merge</span></span><span class="l"><span class="c-fn">/loop</span> 0 3 * * *  <span class="c-sym">|</span>  <span class="c-fn">/goal</span> readiness&gt;=<span class="c-num">80</span> &amp; 0 CRITICAL</span><span class="l">  stop = goal_met(fresh_checker) <span class="c-sym">||</span> budget_out</span></pre></div>
+    <div class="diag warn"><span class="ic">⚠ SECURITY_TAX</span><span>Unattended loop = unattended attack surface. SAST + secret-scan + dep-audit before any PR; vet every skill (520/17,022 leaked creds); non-verbose logs; re-audit perms every 30d, start read-only; rotate the session before it bloats.</span></div>
+    <div class="note"><span>Fiscal/ARCA, payments, critical retail sit on the "do NOT autonomize" side. Gated-by-design is the decision, not a gap. Metric once automated: <b>cost per accepted change</b> — below 50% accept, the loop is losing.</span></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="mod" id="m11">
+    <div class="mh"><span class="num">11</span> not_applicable.md</div>
+    <h2>Where the method deliberately steps aside.</h2>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--cmt)"></span>skip.rules</div>
+<pre><span class="l">spike       <span class="c-sym">=&gt;</span> no spec; note what you learned</span><span class="l">prototype   <span class="c-sym">=&gt;</span> mark + isolate + death_date</span><span class="l">p0_hotfix   <span class="c-sym">=&gt;</span> fix first;</span><span class="l">               min_evidence + retro_spec <span class="c-kw">within</span> <span class="c-num">24h</span></span></pre></div>
+    <div class="note"><span>A designed escape valve keeps the method honest under pressure. <b>An improvised one destroys it</b> — people cargo-cult the throwaways.</span></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="mod" id="m12">
+    <div class="mh"><span class="num">12</span> workbench.sh <span class="st lk">in the kit</span></div>
+    <h2>The generic layer that runs the method.</h2>
+    <p>Claude Code + Python + git/gh + skills. Stack-specific bits (JDK/Maven, MSSQL, linters) are the per-repo <em>adapter</em> in each <code>CLAUDE.md</code> — not the workbench.</p>
+    <div class="code"><div class="cbar"><span class="fdot" style="background:var(--green)"></span>workbench.sh</div>
+<pre><span class="l"><span class="c-cmt"># native installer — no Node, self-updating</span></span><span class="l">curl -fsSL https://claude.ai/install.sh <span class="c-sym">|</span> bash</span><span class="l">cp -r uscha-kit/.claude/skills/* ~/.claude/skills/</span><span class="l">scoop install gentle-ai   <span class="c-cmt"># own bucket first — the missed step</span></span><span class="l">claude --version <span class="c-sym">&amp;&amp;</span> claude doctor</span></pre></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="mod" id="m13">
+    <div class="mh"><span class="num">13</span> reproduce.bootstrap</div>
+    <h2>Behavior is seven layers, not one file.</h2>
+    <p>Cloning to a teammate means config, plugins, skills, agents+commands, hooks, the external CLI, and MCP servers — copying <code>settings.json</code> alone isn't enough.</p>
+    <div class="diag block"><span class="ic">⛔ GOTCHA</span><span><code>settings.json</code> hardcodes <code>C:\Users\…</code>. The bootstrap tokenizes the path on export and rewrites it to the local user on import.</span></div>
+    <div class="diag ok"><span class="ic">✓ earned, not copied</span><span>Memory is <b>not</b> shared: engram + MEMORY.md are per-machine and build themselves as you work. Behavior is replicated; memory is earned.</span></div>
+    <p style="margin-top:1.6rem;font-family:var(--mono);font-size:.86rem;color:var(--ink)">// The tool executes. The method governs. The evidence decides. The human approves.</p>
+  </section>
+
+</main>
+
+<div class="foot">Uscha · literate edition · a spec-driven, tool-agnostic methodology · Claude Code + uscha-kit<br>credit: Böckeler · Osmani · Fowler · Khononov · Maeda · Karpathy · Huntley · Anthropic (evaluator-optimizer)</div>
+
+<script>
+const links=[...document.querySelectorAll('.tree a')];
+const ids=links.map(a=>a.getAttribute('href').slice(1));
+const map=new Map();
+links.forEach(a=>map.set(a.getAttribute('href').slice(1),a));
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){
+  links.forEach(l=>l.classList.remove('on'));
+  const a=map.get(e.target.id); if(a)a.classList.add('on');
+}});},{rootMargin:'-15% 0px -75% 0px'});
+document.querySelectorAll('.mod,.hero').forEach(s=>{if(map.has(s.id))obs.observe(s);});
+</script>
+</body>
+</html>

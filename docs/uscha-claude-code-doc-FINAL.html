@@ -1,0 +1,1176 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uscha · Claude Code — documentación completa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c1618; --bg-deep:#102023; --ink:#dbe8e6; --ink-soft:#9db3b0; --ink-mute:#638079;
+  --red:#ff6b4a; --red-deep:#e8552f; --red-soft:#3a1d17;
+  --green:#4ddb95; --green-soft:#12352a; --amber:#f5b13d; --amber-soft:#3a2f12;
+  --rule:#22403f; --card:#14282b; --code-bg:#081012; --code-fg:#c6dad7; --code-accent:#4fd6c9;
+  --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --disp:"Chivo",sans-serif;
+  --mono:"JetBrains Mono","Courier New",monospace;
+  --sidebar:280px; --topbar:46px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;background:
+  radial-gradient(1300px 600px at 82% -10%,rgba(255,107,74,.08),transparent 60%),
+  radial-gradient(1000px 600px at -5% 110%,rgba(79,214,201,.06),transparent 60%);pointer-events:none;z-index:0}
+
+/* topbar */
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar);background:rgba(12,22,24,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);color:var(--ink);display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;z-index:40;font-family:var(--mono);font-size:.78rem;letter-spacing:.06em}
+.topbar .wordmark{font-family:var(--disp);font-weight:800;letter-spacing:-.02em;text-transform:lowercase;font-size:1.1rem;color:var(--ink)}
+.topbar .wordmark .p{color:var(--red)}
+.topbar .right{display:flex;align-items:center;gap:1rem;color:var(--ink-soft)}
+.topbar .tag{background:var(--red);color:var(--bg);padding:3px 10px;border-radius:4px;font-weight:700;letter-spacing:.08em}
+
+/* layout */
+.shell{display:flex;max-width:1280px;margin:0 auto;padding-top:var(--topbar);position:relative;z-index:1}
+.toc{position:fixed;top:var(--topbar);bottom:0;width:var(--sidebar);overflow-y:auto;padding:1.6rem 1rem 3rem 1.4rem;border-right:1px solid var(--rule);background:rgba(12,22,24,.85);backdrop-filter:blur(4px)}
+.toc h4{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-mute);margin:1.4rem 0 .5rem;padding-left:.2rem}
+.toc h4:first-child{margin-top:0}
+.toc a{display:block;font-size:.85rem;color:var(--ink-soft);text-decoration:none;padding:.3rem .55rem;border-radius:6px;border-left:2px solid transparent;line-height:1.3}
+.toc a:hover{background:var(--bg-deep);color:var(--ink)}
+.toc a.active{color:var(--red);border-left-color:var(--red);background:var(--red-soft);font-weight:600}
+.content{margin-left:var(--sidebar);flex:1;min-width:0;padding:2.4rem clamp(1.2rem,4vw,3.6rem) 6rem;max-width:920px}
+
+/* hero */
+.hero{border-bottom:2px solid var(--ink);padding-bottom:2rem;margin-bottom:2.6rem}
+.hero .eyebrow{font-family:var(--mono);font-size:.74rem;color:var(--red-deep);text-transform:uppercase;letter-spacing:.16em;margin-bottom:1rem}
+.hero h1{font-family:var(--disp);font-weight:900;font-size:clamp(2.4rem,5vw,3.8rem);line-height:.98;letter-spacing:-.035em;margin-bottom:1.1rem}
+.hero h1 .accent{color:var(--red)}
+.hero p.lead{font-size:1.25rem;line-height:1.4;color:var(--ink);font-weight:500;max-width:60ch}
+.hero .stampline{margin-top:1.6rem;font-family:var(--mono);font-size:.78rem;color:var(--ink-mute);display:flex;flex-wrap:wrap;gap:.5rem 1.2rem}
+.hero .stampline .dot{color:var(--red)}
+
+/* sections */
+section{scroll-margin-top:calc(var(--topbar) + 1rem);margin-bottom:3.2rem}
+section>.kicker{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-mute);display:flex;align-items:center;gap:.6rem;margin-bottom:.7rem}
+section>.kicker .n{background:var(--red);color:var(--bg);border-radius:4px;padding:1px 7px;font-weight:700}
+h2{font-family:var(--disp);font-weight:800;font-size:clamp(1.7rem,3.2vw,2.4rem);line-height:1.05;letter-spacing:-.025em;margin-bottom:1rem}
+h2 .accent{color:var(--red)}
+h3{font-family:var(--disp);font-weight:700;font-size:1.18rem;margin:1.6rem 0 .6rem;letter-spacing:-.01em}
+p{color:var(--ink-soft);margin-bottom:.9rem;max-width:74ch}
+strong{color:var(--ink);font-weight:700}
+em{color:var(--ink);font-style:italic}
+a.ext{color:var(--red-deep);text-decoration:none;border-bottom:1px solid var(--red-soft)}
+a.ext:hover{border-bottom-color:var(--red)}
+code.in{font-family:var(--mono);font-size:.86em;background:var(--bg-deep);padding:1px 6px;border-radius:4px;color:var(--ink);white-space:nowrap}
+.small{font-size:.85rem;color:var(--ink-mute)}
+.mono{font-family:var(--mono)}
+
+ul.clean{list-style:none;margin:.6rem 0 1rem}
+ul.clean li{position:relative;padding-left:1.4rem;margin-bottom:.5rem;color:var(--ink-soft)}
+ul.clean li::before{content:"→";position:absolute;left:0;color:var(--red);font-weight:700}
+ul.check li::before{content:"✓";color:var(--green)}
+ul.cross li::before{content:"✗";color:var(--red)}
+ol.steps{list-style:none;counter-reset:s;margin:.8rem 0 1rem}
+ol.steps li{position:relative;padding-left:2.2rem;margin-bottom:.7rem;counter-increment:s;color:var(--ink-soft)}
+ol.steps li::before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;background:var(--ink);color:var(--bg);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.78rem;font-weight:700}
+
+pre{background:var(--code-bg);color:var(--code-fg);padding:1rem 1.2rem;border-radius:10px;overflow-x:auto;font-family:var(--mono);font-size:.79rem;line-height:1.55;margin:.9rem 0;border-left:4px solid var(--code-accent)}
+pre .c{color:#7e8796;font-style:italic}
+pre .k{color:#ff8f75}
+pre .s{color:#9ad4a0}
+pre .o{color:#34d399}
+
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--rule);border-radius:10px;overflow:hidden;font-size:.88rem;margin:.9rem 0}
+th{background:#183034;color:var(--ink);text-align:left;padding:.6rem .8rem;font-weight:600}
+td{padding:.55rem .8rem;border-top:1px solid var(--rule);vertical-align:top;color:var(--ink-soft)}
+tr:nth-child(even) td{background:#102023}
+td .t{font-family:var(--mono);font-size:.82rem;color:var(--ink)}
+.ok{color:var(--green);font-weight:700}.no{color:var(--red);font-weight:700}
+
+.card{background:linear-gradient(180deg,var(--card),var(--bg-deep));border:1px solid var(--rule);border-radius:12px;padding:1.1rem 1.2rem;margin:.9rem 0;box-shadow:0 10px 24px -18px rgba(0,0,0,.5)}
+.card h3{margin-top:0}
+.card.accent{border-top:4px solid var(--red)}
+.card.warn{border-left:4px solid var(--red);background:var(--red-soft)}
+.card.good{border-left:4px solid var(--green);background:var(--green-soft)}
+.card.note{border-left:4px solid var(--amber);background:var(--amber-soft)}
+.card p:last-child{margin-bottom:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:.9rem 0}
+.tagrow{display:flex;flex-wrap:wrap;gap:.4rem;margin:.7rem 0}
+.chip{font-family:var(--mono);font-size:.76rem;background:var(--bg-deep);border:1px solid var(--rule);border-radius:7px;padding:.35rem .6rem}
+.chip.red{background:var(--red);color:var(--bg);border-color:var(--red)}
+
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;margin:1rem 0;font-family:var(--mono);font-size:.76rem}
+.flow .node{background:var(--card);border:1.5px solid var(--ink);padding:.4rem .7rem;border-radius:7px}
+.flow .node.red{background:var(--red);color:var(--bg);border-color:var(--red)}
+.flow .node.soft{background:var(--bg-deep);border-color:var(--rule)}
+.flow .ar{color:var(--ink-mute);font-weight:800}
+
+.kpi{background:linear-gradient(180deg,#183034,var(--bg-deep));border:1px solid var(--rule);border-radius:14px;padding:1.2rem 1.3rem;color:var(--ink);margin:1rem 0;box-shadow:0 16px 40px -24px rgba(0,0,0,.6)}
+.kpi .hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--rule);padding-bottom:.6rem;margin-bottom:.8rem}
+.kpi .score{font-size:2.4rem;font-weight:900;letter-spacing:-.03em;line-height:1}
+.kpi .score small{font-size:1rem;color:var(--ink-soft);font-weight:600}
+.kpi .status{font-family:var(--mono);font-size:.7rem;padding:4px 10px;border-radius:6px;font-weight:700}
+.kpi .status.amber{background:var(--amber);color:var(--bg)}
+.kpi .dim{display:grid;grid-template-columns:8.5rem 1fr 3.5rem;gap:.5rem;align-items:center;font-family:var(--mono);font-size:.72rem;margin-bottom:.4rem;color:var(--ink-soft)}
+.kpi .track{height:8px;background:#22403f;border-radius:5px;overflow:hidden}
+.kpi .track i{display:block;height:100%;background:var(--red);border-radius:5px}
+.kpi .cap{margin-top:.7rem;font-family:var(--mono);font-size:.68rem;color:var(--amber)}
+
+.callout-status{display:inline-block;font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:4px;vertical-align:middle;margin-left:.5rem;font-weight:700}
+.callout-status.real{background:var(--green-soft);color:var(--green);border:1px solid #1e5540}
+.callout-status.new{background:var(--red-soft);color:var(--red);border:1px solid #5e2a1e}
+.callout-status.prop{background:var(--amber-soft);color:var(--amber);border:1px solid #5e4a1a}
+
+.footer{border-top:2px solid var(--ink);margin-top:3rem;padding-top:1.4rem;font-family:var(--mono);font-size:.76rem;color:var(--ink-mute)}
+
+@media (max-width:980px){
+  :root{--sidebar:0px}
+  .toc{display:none}
+  .content{margin-left:0;max-width:100%}
+  .grid2{grid-template-columns:1fr}
+  .kpi .dim{grid-template-columns:6.5rem 1fr 3rem}
+}
+@media print{
+  .topbar,.toc{display:none}
+  .content{margin-left:0;max-width:100%;padding:0}
+  body::before{display:none}
+  section{page-break-inside:avoid}
+}
+
+/* ===== deck chrome (pagination) ===== */
+:root{ --card:#14282b; --topbar:40px; }
+html,body{height:100%}
+body{overflow:hidden}
+body::before{content:"";position:fixed;inset:0;background:
+  radial-gradient(1300px 600px at 82% -10%,rgba(255,107,74,.08),transparent 60%),
+  radial-gradient(1000px 600px at -5% 110%,rgba(79,214,201,.06),transparent 60%);pointer-events:none;z-index:1}
+.topbar{position:fixed;top:0;left:0;right:0;height:40px;background:rgba(12,22,24,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);color:var(--ink);display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;z-index:30;font-family:var(--mono);font-size:.78rem;letter-spacing:.06em;margin:0}
+.topbar .left,.topbar .right{display:flex;align-items:center;gap:1rem}
+.wordmark{font-family:var(--disp);font-weight:800;letter-spacing:-.02em;text-transform:lowercase;font-size:1.05rem;color:var(--ink)}
+.wordmark .p{color:var(--red)}
+.topbar .current-section{color:var(--ink-soft);font-size:.76rem}
+.topbar .counter-big{background:var(--red);color:var(--bg);padding:4px 12px;border-radius:4px;font-weight:700;font-size:.82rem;letter-spacing:.08em}
+.topbar .counter-big .sep{opacity:.65;margin:0 4px}
+.topbar .progress-inline{width:150px;height:4px;background:rgba(255,255,255,.16);border-radius:2px;overflow:hidden}
+.topbar .progress-inline .fill{height:100%;background:var(--red);width:0%;transition:width .3s ease}
+.deck{position:relative;width:100vw;height:100vh;overflow:hidden;z-index:2}
+.deck>.slide{position:absolute;inset:0;padding:calc(var(--topbar) + 4vh) clamp(1.4rem,8vw,6rem) 7vh;display:none;flex-direction:column;overflow-y:auto;border:0;margin:0;max-width:none;animation:fadeIn .35s ease-out}
+.deck>.slide.active{display:flex}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.deck>.slide.title-slide{justify-content:center}
+.deck>.slide>.hero{border-bottom:0;padding-bottom:0;margin-bottom:0;max-width:none}
+.nav{position:fixed;bottom:1.4rem;right:2rem;display:flex;gap:.5rem;z-index:20;font-family:var(--mono);font-size:.75rem}
+.nav button{background:var(--card);border:1px solid var(--rule);color:var(--ink);width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:1rem;transition:all .15s;box-shadow:0 4px 10px -6px rgba(0,0,0,.3)}
+.nav button:hover{background:var(--red);color:var(--bg);border-color:var(--red)}
+.counter{background:var(--card);border:1px solid var(--rule);padding:0 .8rem;display:flex;align-items:center;border-radius:19px;color:var(--ink-mute);letter-spacing:.08em}
+.hint{position:fixed;bottom:1.5rem;left:2rem;font-family:var(--mono);font-size:.68rem;color:var(--ink-mute);z-index:20;letter-spacing:.06em}
+@media (max-width:900px){ .hint{display:none} .topbar .current-section{display:none} }
+@media print{ html,body{height:auto;overflow:visible} .topbar,.nav,.hint{display:none} .deck{height:auto;overflow:visible} .deck>.slide{position:relative;display:flex!important;page-break-after:always;min-height:100vh} body::before{display:none} }
+
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="left"><span class="wordmark" style="color:#4FC3F7;text-transform:none">Andres Massello</span><span class="current-section" id="section">—</span></div>
+  <div class="right"><div class="progress-inline"><div class="fill" id="progress"></div></div><span class="counter-big"><span id="curTop">1</span><span class="sep">/</span><span id="totalTop">0</span></span></div>
+</div>
+
+<div class="deck" id="deck">
+
+<section class="slide title-slide active" data-section="Inicio"><div class="hero" id="overview">
+  <div class="eyebrow">Documentación completa · instanciación en Claude Code</div>
+  <h1>Uscha: traés la idea, <span class="accent">el método arma el resto.</span></h1>
+  <p class="lead">Una metodología spec-driven, tool-agnóstica, que empieza <em>antes</em> de la SPEC: de una idea vaga + material de referencia, el asistente propone la forma del sistema, vos decidís, y recién ahí se especifica, se construye y se avanza solo con evidencia. Este doc cubre la instanciación en Claude Code con el <code class="in">uscha-kit</code>.</p>
+  <div class="stampline">
+    <span><span class="dot">●</span> Idea → Discovery → Ready → SPEC → ADR? → Build → Verify → Evidence → Human gate</span>
+  </div>
+  <p class="small" style="margin-top:1rem;max-width:74ch">
+    Convención de este doc: <span class="callout-status real">en el kit</span> ya está implementado · <span class="callout-status new">nuevo</span> incorporado en esta versión · <span class="callout-status prop">propuesta</span> diseño acordado, todavía no en código. Sin humo: lo que no existe se marca.
+  </p>
+</div></section>
+
+<section class="slide" data-section="El mapa del sistema">
+  <div class="kicker"><span class="n">◆</span> el mapa primero, después el territorio</div>
+  <h2>El mapa del <span class="accent">sistema.</span></h2>
+  <p>Todo el territorio en un diagrama: la línea del flujo, su <strong>loop interno</strong> (converger sin perseguir el cero), la <strong>frontera</strong> del loop externo, y la CONSTITUTION que ninguna estación puede violar. Primero el mapa; después el doc lo recorre estación por estación.</p>
+  <div style="margin-top:1.2rem;background:var(--card);border:1px solid var(--rule);border-radius:16px;padding:1.4rem 1.3rem">
+    <div style="font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:.6rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem"><span>Mapa del sistema — el flujo, su loop interno, y la frontera</span><span>el humano es dueño del final</span></div>
+    <svg viewBox="0 0 1080 300" style="width:100%;height:auto" role="img" aria-label="Mapa del sistema Uscha">
+      <defs>
+        <marker id="smapAH" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#638079"/></marker>
+        <marker id="smapAO" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ff6b4a"/></marker>
+      </defs>
+      <rect x="40" y="20" width="1000" height="30" rx="8" fill="#183034" stroke="#22403f"/>
+      <text x="540" y="40" text-anchor="middle" font-family="Chivo,sans-serif" font-weight="800" font-size="14" fill="#dbe8e6">CONSTITUTION — invariantes que ninguna estación puede violar</text>
+      <line x1="70" y1="150" x2="1010" y2="150" stroke="#22403f" stroke-width="3"/>
+      <g font-family="JetBrains Mono,monospace" font-size="11" fill="#9db3b0" text-anchor="middle">
+        <circle cx="80" cy="150" r="9" fill="#ff6b4a"/><text x="80" y="180">Idea</text><text x="80" y="130" fill="#638079" font-size="9">01</text>
+        <circle cx="210" cy="150" r="9" fill="#dbe8e6"/><text x="210" y="180">Discovery</text><text x="210" y="130" fill="#638079" font-size="9">02</text>
+        <circle cx="330" cy="150" r="9" fill="#dbe8e6"/><text x="330" y="180">Ready</text><text x="330" y="130" fill="#638079" font-size="9">03</text>
+        <circle cx="450" cy="150" r="9" fill="#dbe8e6"/><text x="450" y="180">SPEC / ADR</text><text x="450" y="130" fill="#638079" font-size="9">04</text>
+        <circle cx="600" cy="150" r="9" fill="#dbe8e6"/><text x="600" y="180">Build</text><text x="600" y="130" fill="#638079" font-size="9">05</text>
+        <rect x="712" y="141" width="18" height="18" rx="3" fill="#4ddb95"/><text x="721" y="180">Verify</text><text x="721" y="130" fill="#638079" font-size="9">06</text>
+        <rect x="832" y="141" width="18" height="18" rx="3" fill="#4ddb95"/><text x="841" y="180">Evidence</text><text x="841" y="130" fill="#638079" font-size="9">07</text>
+        <circle cx="1000" cy="150" r="11" fill="#ff6b4a" stroke="#e8552f" stroke-width="2"/><text x="1000" y="182" font-weight="600">Human gate</text><text x="1000" y="128" fill="#638079" font-size="9">08</text>
+      </g>
+      <path d="M841,141 C841,90 600,90 600,141" fill="none" stroke="#638079" stroke-width="2" marker-end="url(#smapAH)"/>
+      <text x="720" y="82" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#9db3b0">loop interno · convergé, no persigas el cero</text>
+      <path d="M1000,164 C1000,250 210,250 210,164" fill="none" stroke="#ff6b4a" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#smapAO)"/>
+      <text x="605" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#ff6b4a">loop externo · latido (propuesta) — el merge sigue siendo del humano</text>
+    </svg>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:.7rem;color:var(--ink-soft);margin-top:.9rem">
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:15px;height:3px;border-radius:2px;display:inline-block;background:#dbe8e6"></i> estación</span>
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:15px;height:3px;border-radius:2px;display:inline-block;background:#4ddb95"></i> gate de evidencia</span>
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:15px;height:3px;border-radius:2px;display:inline-block;background:#ff6b4a"></i> del humano</span>
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:15px;height:3px;border-radius:2px;display:inline-block;background:#638079"></i> loop interno</span>
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:16px;height:0;border-top:2px dashed #ff6b4a;display:inline-block"></i> loop externo</span>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="La especificación">
+<div class="kicker"><span class="n">◆</span> overview visual</div>
+<h2>La especificación, <span class="accent">de un vistazo.</span></h2>
+<p>El motor de evidencia al centro, las fases del flujo a la izquierda, las seis capas de verificación a la derecha, los principios en la franja, y las piezas de Claude Code que lo sostienen abajo.</p>
+<div style="margin-top:1.1rem;display:flex;justify-content:center">
+<svg viewBox="0 108 1200 772" style="width:100%;max-width:1080px;height:auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama de la especificacion Uscha">
+<style>
+  .h1{font-family:var(--sans);font-weight:800;font-size:40px}
+  .sub{font-family:var(--sans);font-weight:500;font-size:16.5px;fill:var(--ink-soft)}
+  .ct{font-family:var(--sans);font-weight:700;font-size:16.5px;fill:var(--ink)}
+  .cd{font-family:var(--sans);font-weight:400;font-size:12.5px;fill:var(--ink-soft)}
+  .num{font-family:var(--sans);font-weight:800;font-size:15px;fill:var(--bg)}
+  .hubt{font-family:var(--sans);font-weight:800;font-size:23px;fill:var(--red)}
+  .hubs{font-family:var(--sans);font-weight:700;font-size:15px;fill:var(--ink)}
+  .hubd{font-family:var(--sans);font-weight:400;font-size:11.5px;fill:var(--ink-soft)}
+  .st{font-family:var(--sans);font-weight:700;font-size:13.5px;fill:var(--ink)}
+  .sd{font-family:var(--sans);font-weight:400;font-size:11px;fill:var(--ink-soft)}
+  .ft{font-family:var(--sans);font-weight:700;font-size:12px;fill:var(--ink)}
+  .fd{font-family:var(--mono);font-weight:400;font-size:9.5px;fill:var(--ink-mute)}
+  .card{fill:var(--card);stroke:var(--rule);stroke-width:1.5}
+  .ico{fill:none;stroke:var(--red);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .icod{fill:none;stroke:var(--ink-soft);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .icof{fill:var(--red);stroke:none}
+  .spoke{stroke:var(--red);stroke-width:1.5;fill:none;opacity:.55}
+  .dot{fill:var(--red)}
+  .ring{fill:var(--card);stroke:var(--red);stroke-width:1.5}
+</style>
+
+
+<!-- ===== spokes (hub-and-spoke) ===== -->
+<g>
+  <line class="spoke" x1="380" y1="188" x2="470" y2="283"/><line class="spoke" x1="380" y1="286" x2="470" y2="327"/>
+  <line class="spoke" x1="380" y1="384" x2="470" y2="371"/><line class="spoke" x1="380" y1="482" x2="470" y2="415"/>
+  <line class="spoke" x1="380" y1="580" x2="470" y2="459"/>
+  <line class="spoke" x1="820" y1="165" x2="730" y2="272"/><line class="spoke" x1="820" y1="247" x2="730" y2="309"/>
+  <line class="spoke" x1="820" y1="329" x2="730" y2="346"/><line class="spoke" x1="820" y1="411" x2="730" y2="383"/>
+  <line class="spoke" x1="820" y1="493" x2="730" y2="420"/><line class="spoke" x1="820" y1="575" x2="730" y2="457"/>
+  <circle class="dot" cx="380" cy="188" r="4"/><circle class="dot" cx="380" cy="286" r="4"/><circle class="dot" cx="380" cy="384" r="4"/><circle class="dot" cx="380" cy="482" r="4"/><circle class="dot" cx="380" cy="580" r="4"/>
+  <circle class="dot" cx="820" cy="165" r="4"/><circle class="dot" cx="820" cy="247" r="4"/><circle class="dot" cx="820" cy="329" r="4"/><circle class="dot" cx="820" cy="411" r="4"/><circle class="dot" cx="820" cy="493" r="4"/><circle class="dot" cx="820" cy="575" r="4"/>
+  <circle class="ring" cx="470" cy="283" r="4"/><circle class="ring" cx="470" cy="327" r="4"/><circle class="ring" cx="470" cy="371" r="4"/><circle class="ring" cx="470" cy="415" r="4"/><circle class="ring" cx="470" cy="459" r="4"/>
+  <circle class="ring" cx="730" cy="272" r="4"/><circle class="ring" cx="730" cy="309" r="4"/><circle class="ring" cx="730" cy="346" r="4"/><circle class="ring" cx="730" cy="383" r="4"/><circle class="ring" cx="730" cy="420" r="4"/><circle class="ring" cx="730" cy="457" r="4"/>
+</g>
+
+<!-- ===== HUB ===== -->
+<circle cx="600" cy="360" r="152" fill="none" stroke="var(--ink-mute)" stroke-width="1.2" stroke-dasharray="3 6" opacity="0.4"/>
+<circle cx="600" cy="360" r="120" fill="none" stroke="var(--red)" stroke-width="1.2" opacity="0.45"/>
+<circle cx="600" cy="360" r="104" fill="var(--card)" stroke="var(--rule)" stroke-width="1.5"/>
+<g transform="translate(600,302)">
+  <rect class="ico" x="-13" y="-7" width="26" height="9" rx="2"/><rect class="ico" x="-13" y="4" width="26" height="9" rx="2"/>
+  <circle class="icof" cx="-8" cy="-2.5" r="1.4"/><circle class="icof" cx="-8" cy="8.5" r="1.4"/>
+  <path class="ico" d="M16 -3 a18 18 0 0 1 5 14" opacity="0.8"/><path class="ico" d="M-16 16 a18 18 0 0 0 -3 -12" opacity="0.8"/>
+</g>
+<text class="hubt" x="600" y="350" text-anchor="middle">Uscha</text>
+<text class="hubs" x="600" y="372" text-anchor="middle">Motor de evidencia</text>
+<text class="hubd" x="600" y="392" text-anchor="middle">orquesta · construye · verifica</text>
+<text class="hubd" x="600" y="406" text-anchor="middle">y prueba con evidencia real</text>
+
+<!-- ===== LEFT: las fases ===== -->
+<!-- 1 Discovery -->
+<rect class="card" x="80" y="151" width="300" height="74" rx="14"/>
+<circle cx="80" cy="188" r="17" fill="var(--red)"/><text class="num" x="80" y="193" text-anchor="middle">1</text>
+<g class="ico" transform="translate(120,188)"><circle cx="-3" cy="-3" r="7"/><line x1="2.5" y1="2.5" x2="9" y2="9"/></g>
+<text class="ct" x="150" y="183">Discovery</text>
+<text class="cd" x="150" y="201">De la idea a la forma del sistema:</text>
+<text class="cd" x="150" y="216">propone, vos decidís.</text>
+<!-- 2 SPEC -->
+<rect class="card" x="80" y="249" width="300" height="74" rx="14"/>
+<circle cx="80" cy="286" r="17" fill="var(--red)"/><text class="num" x="80" y="291" text-anchor="middle">2</text>
+<g class="ico" transform="translate(120,286)"><rect x="-8" y="-10" width="16" height="20" rx="2"/><line x1="-4" y1="-4" x2="4" y2="-4"/><line x1="-4" y1="0" x2="4" y2="0"/><line x1="-4" y1="4" x2="1" y2="4"/></g>
+<text class="ct" x="150" y="281">SPEC</text>
+<text class="cd" x="150" y="299">Qué debe pasar: comportamiento</text>
+<text class="cd" x="150" y="314">verificable y testeable.</text>
+<!-- 3 ADR / CONSTITUTION -->
+<rect class="card" x="80" y="347" width="300" height="74" rx="14"/>
+<circle cx="80" cy="384" r="17" fill="var(--red)"/><text class="num" x="80" y="389" text-anchor="middle">3</text>
+<g class="ico" transform="translate(120,384)"><path d="M0 -10 L9 -6 V2 C9 8 0 11 0 11 C0 11 -9 8 -9 2 V-6 Z"/><path d="M-3.5 0 L-1 3 L4 -3"/></g>
+<text class="ct" x="150" y="379">ADR · CONSTITUTION</text>
+<text class="cd" x="150" y="397">Por qué esta forma ·</text>
+<text class="cd" x="150" y="412">qué nunca se viola.</text>
+<!-- 4 Build -->
+<rect class="card" x="80" y="445" width="300" height="74" rx="14"/>
+<circle cx="80" cy="482" r="17" fill="var(--red)"/><text class="num" x="80" y="487" text-anchor="middle">4</text>
+<g class="ico" transform="translate(120,482)"><polyline points="-3,-7 -10,0 -3,7"/><polyline points="3,-7 10,0 3,7"/></g>
+<text class="ct" x="150" y="477">Build</text>
+<text class="cd" x="150" y="495">Construye contra el plan,</text>
+<text class="cd" x="150" y="510">commit a commit.</text>
+<!-- 5 Verify -->
+<rect class="card" x="80" y="543" width="300" height="74" rx="14"/>
+<circle cx="80" cy="580" r="17" fill="var(--red)"/><text class="num" x="80" y="585" text-anchor="middle">5</text>
+<g class="ico" transform="translate(120,580)"><circle cx="0" cy="0" r="10"/><path d="M-4.5 0 L-1 3.5 L5 -4"/></g>
+<text class="ct" x="150" y="575">Verify</text>
+<text class="cd" x="150" y="593">Evidencia producida por la</text>
+<text class="cd" x="150" y="608">ejecución, no narrada.</text>
+
+<!-- ===== RIGHT: las 6 capas de verificación ===== -->
+<!-- Funcional -->
+<rect class="card" x="820" y="130" width="300" height="70" rx="14"/>
+<g class="ico" transform="translate(852,165)"><circle r="10"/><circle r="5"/><circle class="icof" r="1.4"/></g>
+<text class="ct" x="884" y="160">Funcional</text>
+<text class="cd" x="884" y="180">¿Cumple la SPEC y el acceptance?</text>
+<!-- Técnica -->
+<rect class="card" x="820" y="212" width="300" height="70" rx="14"/>
+<g class="ico" transform="translate(852,247)"><polyline points="-2,-7 -9,0 -2,7"/><polyline points="2,-7 9,0 2,7"/><line x1="-1" y1="8" x2="2" y2="-8"/></g>
+<text class="ct" x="884" y="242">Técnica</text>
+<text class="cd" x="884" y="262">¿Compila, tests, estándares, sin bugs?</text>
+<!-- Regresiva -->
+<rect class="card" x="820" y="294" width="300" height="70" rx="14"/>
+<g class="ico" transform="translate(852,329)"><path d="M8 -3 A9 9 0 1 0 9 4"/><polyline points="9,-8 9,-3 4,-3"/></g>
+<text class="ct" x="884" y="324">Regresiva</text>
+<text class="cd" x="884" y="344">¿No rompió lo que ya andaba?</text>
+<!-- Contractual -->
+<rect class="card" x="820" y="376" width="300" height="70" rx="14"/>
+<g class="ico" transform="translate(852,411)"><rect x="-10" y="-4" width="12" height="8" rx="4"/><rect x="-2" y="-4" width="12" height="8" rx="4"/></g>
+<text class="ct" x="884" y="406">Contractual</text>
+<text class="cd" x="884" y="426">¿No rompió APIs, schemas, eventos?</text>
+<!-- Seguridad -->
+<rect class="card" x="820" y="458" width="300" height="70" rx="14"/>
+<g class="ico" transform="translate(852,493)"><rect x="-7" y="-1" width="14" height="11" rx="2"/><path d="M-4 -1 V-5 a4 4 0 0 1 8 0 V-1"/></g>
+<text class="ct" x="884" y="488">Seguridad</text>
+<text class="cd" x="884" y="508">¿Sin findings HIGH/CRITICAL nuevos?</text>
+<!-- Operacional -->
+<rect class="card" x="820" y="540" width="300" height="70" rx="14"/>
+<g class="ico" transform="translate(852,575)"><rect x="-9" y="-9" width="18" height="7" rx="1.5"/><rect x="-9" y="2" width="18" height="7" rx="1.5"/><circle class="icof" cx="-5" cy="-5.5" r="1.1"/><circle class="icof" cx="-5" cy="5.5" r="1.1"/></g>
+<text class="ct" x="884" y="570">Operacional</text>
+<text class="cd" x="884" y="590">¿Se despliega, observa y revierte?</text>
+
+<!-- column captions -->
+<text class="sd" x="230" y="142" text-anchor="middle" style="font-weight:700;fill:var(--red-deep);letter-spacing:.04em">EL FLUJO (lo que se hace)</text>
+<text class="sd" x="970" y="120" text-anchor="middle" style="font-weight:700;fill:var(--red-deep);letter-spacing:.04em">LAS 6 CAPAS DE VERDAD (cómo se verifica)</text>
+
+<!-- ===== benefit strip: principios ===== -->
+<rect x="70" y="648" width="1060" height="92" rx="18" fill="var(--red-soft)" stroke="#5e2a1e" stroke-width="1.5"/>
+<!-- 1 -->
+<g class="ico" transform="translate(108,694)"><path d="M0 -10 L9 -6 V2 C9 8 0 11 0 11 C0 11 -9 8 -9 2 V-6 Z"/><path d="M-3.5 0 L-1 3 L4 -3"/></g>
+<text class="st" x="130" y="684">Evidencia, no confianza</text>
+<text class="sd" x="130" y="701">Lo afirma la ejecución</text>
+<text class="sd" x="130" y="715">(CI / script), no el autor.</text>
+<!-- 2 -->
+<g class="ico" transform="translate(372,694)"><circle cx="0" cy="-3" r="4"/><path d="M-7 9 a7 7 0 0 1 14 0"/><path d="M9 -2 l2.5 2.5 l4 -4"/></g>
+<text class="st" x="396" y="684">El humano aprueba</text>
+<text class="sd" x="396" y="701">Merge y release los</text>
+<text class="sd" x="396" y="715">decide una persona.</text>
+<!-- 3 -->
+<g class="ico" transform="translate(636,694)"><path d="M8 -3 A9 9 0 1 0 9 4"/><polyline points="9,-8 9,-3 4,-3"/></g>
+<text class="st" x="660" y="684">Converge, no el cero</text>
+<text class="sd" x="660" y="701">Frena cuando queda</text>
+<text class="sd" x="660" y="715">limpio, no "perfecto".</text>
+<!-- 4 -->
+<g class="ico" transform="translate(900,694)"><polygon points="0,-9 9,-4 0,1 -9,-4" fill="none"/><polyline points="-9,0 0,5 9,0"/><polyline points="-9,4 0,9 9,4"/></g>
+<text class="st" x="924" y="684">Legacy-aware</text>
+<text class="sd" x="924" y="701">Congela la deuda vieja,</text>
+<text class="sd" x="924" y="715">bloquea la nueva.</text>
+
+<!-- ===== bottom row: piezas de Claude Code ===== -->
+<line x1="247" y1="792" x2="247" y2="852" stroke="var(--rule)" stroke-width="1"/>
+<line x1="424" y1="792" x2="424" y2="852" stroke="var(--rule)" stroke-width="1"/>
+<line x1="601" y1="792" x2="601" y2="852" stroke="var(--rule)" stroke-width="1"/>
+<line x1="778" y1="792" x2="778" y2="852" stroke="var(--rule)" stroke-width="1"/>
+<line x1="955" y1="792" x2="955" y2="852" stroke="var(--rule)" stroke-width="1"/>
+<!-- 1 CLAUDE.md -->
+<g class="icod" transform="translate(90,818)"><rect x="-7" y="-9" width="14" height="18" rx="2"/><line x1="-3" y1="-4" x2="3" y2="-4"/><line x1="-3" y1="0" x2="3" y2="0"/><line x1="-3" y1="4" x2="1" y2="4"/></g>
+<text class="ft" x="110" y="810">CLAUDE.md / AGENTS.md</text>
+<text class="fd" x="110" y="825">protocolo estable</text>
+<text class="fd" x="110" y="837">del repo</text>
+<!-- 2 Skills -->
+<g class="icod" transform="translate(267,818)"><rect x="-9" y="-7" width="18" height="14" rx="2"/><polyline points="-5,-2 -1,1 -5,4"/><line x1="1" y1="4" x2="5" y2="4"/></g>
+<text class="ft" x="287" y="810">Skills (/comando)</text>
+<text class="fd" x="287" y="825">las 7 skills del kit</text>
+<text class="fd" x="287" y="837">discovery → rubric</text>
+<!-- 3 Sub-agentes -->
+<g class="icod" transform="translate(444,818)"><circle cx="0" cy="-6" r="2.5"/><circle cx="-6" cy="5" r="2.5"/><circle cx="6" cy="5" r="2.5"/><line x1="-1.4" y1="-3.8" x2="-5" y2="2.8"/><line x1="1.4" y1="-3.8" x2="5" y2="2.8"/></g>
+<text class="ft" x="464" y="810">Sub-agentes</text>
+<text class="fd" x="464" y="825">QA en paralelo,</text>
+<text class="fd" x="464" y="837">contexto limpio</text>
+<!-- 4 Hooks -->
+<g class="icod" transform="translate(621,818)"><path d="M0 -9 V3 a5 5 0 0 1 -10 0"/><circle cx="0" cy="-9" r="2"/></g>
+<text class="ft" x="641" y="810">Hooks</text>
+<text class="fd" x="641" y="825">gates automáticos,</text>
+<text class="fd" x="641" y="837">evidencia real</text>
+<!-- 5 Multi-repo -->
+<g class="icod" transform="translate(798,818)"><polygon points="0,-8 9,-3 0,2 -9,-3" fill="none"/><polyline points="-9,1 0,6 9,1"/></g>
+<text class="ft" x="818" y="810">Multi-repo (--add-dir)</text>
+<text class="fd" x="818" y="825">QA de integración</text>
+<text class="fd" x="818" y="837">entre repos</text>
+<!-- 6 qa_ledger -->
+<g class="icod" transform="translate(975,818)"><line x1="-8" y1="8" x2="8" y2="8"/><rect x="-6" y="0" width="3.4" height="8"/><rect x="-1" y="-4" width="3.4" height="12"/><rect x="4" y="-7" width="3.4" height="15"/></g>
+<text class="ft" x="995" y="810">qa_ledger.py</text>
+<text class="fd" x="995" y="825">mide y puntúa:</text>
+<text class="fd" x="995" y="837">readiness + rebuild</text>
+
+<!-- footer accent -->
+<line x1="70" y1="866" x2="555" y2="866" stroke="var(--red)" stroke-width="1.5" opacity="0.5"/>
+<line x1="645" y1="866" x2="1130" y2="866" stroke="var(--red)" stroke-width="1.5" opacity="0.5"/>
+<g class="ico" transform="translate(600,866)"><path d="M7 -3 A8 8 0 1 0 8 4"/><polyline points="8,-7 8,-3 4,-3"/></g>
+</svg>
+</div>
+</section>
+
+<section class="slide" data-section="El flujo de una mirada">
+  <div class="kicker"><span class="n">01</span> de la idea a producto, con evidencia</div>
+  <h2>El flujo de <span class="accent">una mirada.</span></h2>
+  <p>El ciclo completo es una sola línea, ejecutable por una persona, un agente o el CI. La herramienta ejecuta; la metodología gobierna; la evidencia decide; el humano aprueba.</p>
+  <div class="flow">
+    <span class="node soft">Idea</span><span class="ar">→</span>
+    <span class="node">Discovery</span><span class="ar">→</span>
+    <span class="node">Ready</span><span class="ar">→</span>
+    <span class="node">SPEC</span><span class="ar">→</span>
+    <span class="node soft">ADR?</span><span class="ar">→</span>
+    <span class="node red">Build</span><span class="ar">→</span>
+    <span class="node">Verify</span><span class="ar">→</span>
+    <span class="node">Evidence</span><span class="ar">→</span>
+    <span class="node red">Human gate</span>
+  </div>
+  <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en siete skills invocables (kit 1.27.0) y un motor de medición en Python.</p>
+  <div class="tagrow">
+    <span class="chip red">/uscha-discovery</span><span class="chip red">/uscha-adr-refine</span><span class="chip red">/uscha-devloop</span><span class="chip red">/uscha-sysdoc</span><span class="chip red">/uscha-reverse-discovery</span><span class="chip red">/uscha-characterize</span><span class="chip">qa_ledger.py</span>
+  </div>
+</section>
+
+<section class="slide" data-section="Dos frentes: discovery / adr-refine">
+  <div class="kicker"><span class="n">02</span> el método tiene dos modos de conversación</div>
+  <h2>Dos frentes: <span class="accent">discovery vs adr-refine.</span></h2>
+  <p>El error clásico es pedirte que escribas entidades, endpoints y casos de error desde el inicio. Pero un sistema nuevo arranca antes: solo sabés <em>qué querés lograr</em>. Por eso hay dos frentes, cada uno con su paquete: <code class="in">/uscha-discovery</code> escribe el paquete completo (CONTEXT, DOMAIN-MODEL/CONSTITUTION, SPEC, docs/adr, ACCEPTANCE, RISKS/HANDOFF); <code class="in">/uscha-adr-refine</code> emite <code class="in">docs/adr/*.md</code> + <code class="in">ACCEPTANCE.md</code> (y opcionalmente extiende la CONSTITUTION). Elegís por punto de partida.</p>
+  <div class="grid2">
+    <div class="card accent"><h3><code class="in">/uscha-discovery</code> — "no sé el cómo"</h3><p>Greenfield. Traés idea + restricciones + material de referencia. El asistente <strong>propone</strong> dominio, superficie de API y opciones de arquitectura; vos reaccionás y decidís. La inversión clave: <em>vos no autorás la estructura, la aprobás</em>. Una pregunta a la vez, cada una con su respuesta recomendada.</p></div>
+    <div class="card accent"><h3><code class="in">/uscha-adr-refine</code> — "sé el qué, falta precisión"</h3><p>Feature dentro de un sistema existente. La forma ya se conoce; la entrevista adversarial pinta los bordes: casos sucios, errores, idempotencia, restricciones inviolables, out-of-scope. No emite artefactos hasta converger.</p></div>
+  </div>
+  <p class="small">Ambos skills tienen <code class="in">allowed-tools: Read, Write, Glob, Grep</code> (discovery suma <code class="in">WebFetch</code> para leer manuales/PDFs/URLs). Ninguno de los dos toca código: generan claridad, no implementación.</p>
+  <div class="card note"><h3>El principio que los define</h3><p>Grill, don't agree. Un discovery donde estuviste de acuerdo con todo, falló — un entrevistador complaciente hereda tus puntos ciegos y te los devuelve formateados como plan. El valor está en las preguntas — contradicciones, términos difusos, modos de falla faltantes, restricciones no dichas — no en validar. La falla cara que esto evita: un <strong>build confiado de la forma equivocada</strong>.</p></div>
+</section>
+
+<section class="slide" data-section="El paquete documental">
+  <div class="kicker"><span class="n">03</span> la conversación se vuelve archivos en el repo</div>
+  <h2>El paquete <span class="accent">documental.</span></h2>
+  <p>El frente termina escribiendo el paquete <em>directo en el repo</em> a medida que las decisiones se cristalizan — no junta todo para el final. El build lo lee de los archivos, no del chat.</p>
+  <table>
+    <thead><tr><th>Archivo</th><th>Qué contiene</th></tr></thead>
+    <tbody>
+      <tr><td class="t">CONTEXT.md</td><td>Glosario del dominio. Se crea con el primer término resuelto; afila lenguaje difuso ("¿'cuenta' es Customer o User?").</td></tr>
+      <tr><td class="t">DOMAIN-MODEL.md</td><td>Las entidades núcleo propuestas y sus relaciones — la "forma" que propusiste y el humano aprobó.</td></tr>
+      <tr><td class="t">SPEC.md</td><td>Objetivo/valor, riesgo, scope/out-of-scope, comportamiento, entradas/salidas/errores, acceptance, test plan, operación, rollback.</td></tr>
+      <tr><td class="t">docs/adr/*.md</td><td>Una por decisión durable. Incluye <strong>Implementation Plan</strong> + <strong>Verification</strong> (checkboxes) → es una spec ejecutable.</td></tr>
+      <tr><td class="t">ACCEPTANCE.md</td><td>Definition of Done como <code class="in">- [ ]</code> + métricas de éxito. <strong>Es el archivo que el readiness KPI mide</strong> río abajo.</td></tr>
+      <tr><td class="t">RISKS.md</td><td>Riesgos residuales, supuestos, puntos que necesitan aprobación humana.</td></tr>
+      <tr><td class="t">HANDOFF.md</td><td>Qué leer antes de codear + reglas duras de "no hacer" + evidencia requerida.</td></tr>
+    </tbody>
+  </table>
+  <p>Por qué importa aunque sea todo Claude Code: el contexto se resetea (una sesión nueva, un <code class="in">/clear</code> o una compactación no tienen el chat), los sub-agentes leen archivos, un compañero o el CI construyen desde el repo, y la auditoría queda durable. <strong>La verdad vive en archivos versionados.</strong></p>
+</section>
+
+<section class="slide" data-section="SPEC ≠ ADR">
+  <div class="kicker"><span class="n">04</span> trabajan juntos, responden cosas distintas</div>
+  <h2>SPEC ≠ ADR.</h2>
+  <p>Si describe <strong>comportamiento observable</strong>, va en SPEC. Si justifica una <strong>elección entre alternativas</strong>, va en ADR. Casi todo cambio no trivial necesita SPEC; solo algunos necesitan ADR formal.</p>
+  <div class="grid2">
+    <div class="card"><h3>SPEC — ¿qué debe pasar?</h3><p>Comportamiento, reglas, entradas/salidas/errores, criterios de aceptación, tests, operación. Es el contrato de construcción y verificación.</p></div>
+    <div class="card"><h3>ADR — ¿por qué así?</h3><p>Una decisión técnica, las alternativas descartadas y las consecuencias. Memoria arquitectónica, no lista de tareas.</p></div>
+  </div>
+  <h3>El ADR se escribe con criterio</h3>
+  <p>Solo si la decisión cumple <strong>las tres</strong>: difícil de revertir, sorprendente sin contexto, y fruto de un trade-off real. Si no, es ruido que entierra a los importantes.</p>
+  <pre><span class="c"># docs/adr/ADR-NNN-&lt;slug&gt;.md</span>
+## Estado: Aceptado            <span class="c"># proposed/accepted/deprecated/superseded</span>
+## Contexto / Fuerzas
+## Alternativas: A) … B) … C) …
+## Decisión
+## Razones
+## Consecuencias (+ / -)
+## Implementation Plan          <span class="c"># affected paths · patrones · tests</span>
+## Verification
+- [ ] &lt;criterio chequeable por un agente&gt;</pre>
+  <p>El <strong>Implementation Plan</strong> es lo que vuelve al ADR ejecutable: Claude Code lo lee y lo implementa sin volver a preguntar. Durante el build, el código linkea: <code class="in">// ADR: &lt;slug&gt; — see docs/adr/ADR-NNN-&lt;slug&gt;.md</code>, lo que hace seguro hacer <em>supersede</em> (encontrás todo lo que el ADR gobierna).</p>
+</section>
+
+<section class="slide" data-section="CONSTITUTION">
+  <div class="kicker"><span class="n">05</span> por encima de los ADR <span class="callout-status real">en el kit</span></div>
+  <h2>La capa <span class="accent">CONSTITUTION.</span></h2>
+  <p>El ADR <em>elige entre alternativas</em>. La CONSTITUTION <em>prohíbe</em>: registra los invariantes que ningún ADR ni SPEC puede violar, gane el trade-off que gane. Es la jerarquía de la verdad del proyecto.</p>
+  <div class="card accent"><p><strong>SPEC</strong> dice qué debe pasar. <strong>ADR</strong> dice por qué se eligió esta forma. <strong>CONSTITUTION</strong> dice qué <em>nunca</em> es aceptable. Un ADR puede elegir <code class="in">Postgres vs Redis</code> para cachear un token de sesión; un ADR <strong>no puede</strong> elegir "guardar el certificado en texto plano" — eso lo veta la CONSTITUTION antes de discutir alternativas.</p></div>
+  <pre><span class="c">## CONSTITUTION.md — invariantes del proyecto</span>
+<span class="c"># Seguridad (no-negociable)</span>
+- Secretos nunca en logs ni en repo        <span class="c"># CWE-532 / CWE-798</span>
+- Toda entrada externa validada             <span class="c"># CWE-20</span>
+- Solo SQL parametrizado, nunca concat      <span class="c"># CWE-89</span>
+<span class="c"># Dominio (ejemplo — completar por proyecto)</span>
+- Idempotencia obligatoria en operaciones críticas
+- Invariantes de negocio que no se rompen jamás
+- Nunca dos efectos por un mismo requestId
+<span class="c"># Operación</span>
+- Sin migration destructiva sin rollback explícito
+- Ningún merge sin human gate</pre>
+  <div class="card good"><h3>Estado real en el kit <span class="callout-status real">en el kit</span></h3><p>Es una capa propia: <code class="in">templates/CONSTITUTION.md</code> versionada con invariantes mapeados a CWE. <code class="in">/uscha-discovery</code> y <code class="in">/uscha-adr-refine</code> la escriben/extienden (un ADR no puede contradecirla: se escala, no se aprueba); <code class="in">/uscha-devloop</code> la lee en Fase 0 y la consulta antes de tocar áreas gobernadas. El motor <strong>no</strong> lee CONSTITUTION.md solo: detectar la violación es deber del agente/humano, que <strong>debe</strong> loguearla vía <code class="in">flag-blocker --kind constitution</code>; una vez logueada, capea readiness ≤65 y bloquea convergencia hasta <code class="in">--resolve</code> (humano).</p></div>
+  <div class="card good"><h3>Por qué es el patrón correcto</h3><p>No es un agregado suelto: es donde aterrizó el SOTA. Spec Kit tiene <code class="in">/speckit.constitution</code>; el OSS <code class="in">dpolivaev/Uscha</code> (mismo nombre que el tuyo) define sus reglas en <code class="in">CONSTITUTION.md</code> con gates de aprobación humana. Formalizarlo te alinea con la convergencia del campo.</p></div>
+</section>
+
+<section class="slide" data-section="Workflow por riesgo">
+  <div class="kicker"><span class="n">06</span> no todo cambio pesa igual <span class="callout-status prop">proceso, no mecanizado</span></div>
+  <h2>Workflow basado en <span class="accent">riesgo.</span></h2>
+  <p>Pregunta inicial: <em>¿qué puede romper esto y cuánto cuesta si se rompe?</em> El riesgo escala el aparato — el perfil A no arrastra toda la maquinaria. Es una <strong>heurística de proceso</strong>: no existe un concepto de "perfil" en código ni config, y ningún perfil selecciona gates automáticamente — lo aplicás vos al decidir qué documentos y gates exigirle al cambio.</p>
+  <table>
+    <thead><tr><th>Perfil</th><th>Ejemplo</th><th>Documentos</th><th>Gates mínimos</th></tr></thead>
+    <tbody>
+      <tr><td class="t">A · Bajo</td><td>UI menor, config no crítica</td><td>SPEC mini</td><td>build + test relevante</td></tr>
+      <tr><td class="t">B · Normal</td><td>feature local, bugfix</td><td>SPEC + acceptance</td><td>tests + static + review</td></tr>
+      <tr><td class="t">C · Crítico</td><td>pagos, facturación, seguridad</td><td>SPEC formal + ADR</td><td>unit+integration+<strong>security</strong>+rollback</td></tr>
+      <tr><td class="t">D · Multi-sistema</td><td>API pública, eventos</td><td>SPEC + contratos + ADR</td><td>contract tests + versionado</td></tr>
+      <tr><td class="t">E · Legacy grande</td><td>refactor, migración</td><td>SPEC incremental + baseline</td><td>characterization + no regression</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="slide" data-section="/uscha-devloop fase por fase">
+  <div class="kicker"><span class="n">07</span> el orquestador <span class="callout-status real">en el kit</span></div>
+  <h2><code class="in" style="font-size:.7em">/uscha-devloop</code> <span class="accent">fase por fase.</span></h2>
+  <p>El <code class="in">uscha-devloop</code> es un orquestador spec-driven multi-repo. Toma el ADR set + <code class="in">ACCEPTANCE.md</code> como input, construye, y corre un loop de review severity-gated que <strong>converge en vez de loopear para siempre</strong>, con los tests como guardrail entre pasos. Para en el merge gate. Tres principios no-negociables lo gobiernan: convergé no persigas el cero; los tests son guardrail no finale; generar tests no es correr tests.</p>
+  <ol class="steps">
+    <li><strong>Setup.</strong> <code class="in">qa_ledger.py init --config uscha.config.json</code>. La config lista cada repo y su tipo (maven/flutter/python/node/go/rust/dotnet/cpp/gradle/swift). En multi-repo, los otros repos se montan con <code class="in">--add-dir</code>.</li>
+    <li><strong>Fase 0 — Plan (ADR-first).</strong> El ADR set + ACCEPTANCE son el input. Si faltan criterios de aceptación, para y corré <code class="in">/uscha-adr-refine</code> primero. Los acceptance criteria se vuelven los contract tests de la fase 1.</li>
+    <li><strong>Fase 1 — Coverage gate → characterization condicional (por repo).</strong> <code class="in">snapshot --phase pre</code> + <code class="in">check-coverage</code>. Si coverage ≥ umbral, la suite existente es el guardrail. Si está por debajo (o no hay reporte): escribís characterization/contract tests <em>en el borde</em> (API pública, endpoints) — que el humano revise antes de confiar en ellos.</li>
+    <li><strong>Fase 2 — Build.</strong> Implementás por el plan, commit por paso lógico (conventional commits). Aplica la disciplina de ADR: consultá antes de tocar áreas gobernadas; pará y proponé ADR ante una dependencia nueva, patrón nuevo, alternativa no obvia o contradicción de un ADR aceptado.</li>
+    <li><strong>Fase 3 — QA loop (por repo).</strong> Corré las tools de <code class="in">qa_tools_order</code> (default: code-review → judgment-day → improve). Un pase de todas = un ciclo. Tras cada tool: aplicá solo fixes ≥ severity gate (el resto a <code class="in">ISSUES-DEFERRED.md</code>), corré los tests, logueá con <code class="in">log-step</code>, ingestá el static gate con <code class="in">ingest-gate</code>, y persistí cada veredicto de fact gate (golden-diff / gate-check / pit-check / simplicity) con <code class="in">log-gate</code> — un fail persistido bloquea convergencia. <code class="in">waste-check</code> (reuse-first, 1.26.0) corre sobre el diff para detectar clones Type-1/2 contra el repo — advisory salvo <code class="in">--gate</code>. Chequeos advisory de fin de ciclo: <code class="in">converged</code> y <code class="in">oscillation</code>.</li>
+    <li><strong>Fase 4 — Integration / contract (multi-repo).</strong> Con todos los repos montados, corré los contract tests cross-repo. Las roturas de contrato son findings gated. Se loguea bajo <code class="in">--repo integration</code>. Es la segunda capa de la arquitectura de QA: per-repo verde no implica que las costuras estén verdes.</li>
+    <li><strong>Fase 5 — Verify (coverage, una vez).</strong> Con el código estable, <code class="in">/improve test</code> escribe el coverage fino que diferiste. Suite completa verde + coverage ≥ umbral antes de seguir.</li>
+    <li><strong>Fase 6 — PR (para en el merge).</strong> Abrís el PR, confirmás CI verde, y <strong>parás</strong>. El humano hace el merge.</li>
+    <li><strong>Fase 7 — Smoke list.</strong> Producís un checklist de smoke manual (rutas reales, endpoints, flujos de device).</li>
+    <li><strong>Fase 8 — Docs + retrospectiva.</strong> <code class="in">summary</code> + <code class="in">readiness</code>; si lo pedís, <code class="in">/uscha-sysdoc</code> arma el deck (reporting opcional a pedido, no fase obligatoria del pipeline). Retrospectiva sacada del ledger.</li>
+  </ol>
+</section>
+
+<section class="slide" data-section="Evidencia capturada">
+  <div class="kicker"><span class="n">08</span> el corazón anti-alucinación</div>
+  <h2>Evidencia <span class="accent">capturada, no narrada.</span></h2>
+  <p>La grieta que el método cierra: si el mismo agente que hace el cambio <em>escribe</em> el ledger, puede poner <code class="in">exit_code: 0</code> sin correr nada. La garantía solo vale si la evidencia la <strong>produce la ejecución</strong> — el <code class="in">qa_ledger.py</code> parsea artefactos reales (JaCoCo XML, Surefire XML, los reportes de los linters), no transcribe lo que el agente dice.</p>
+  <pre><span class="c"># el ledger NO confía en el agente: parsea archivos</span>
+coverage  ← target/site/jacoco/jacoco.xml   (LINE counter)
+tests     ← target/surefire-reports/TEST-*.xml
+static    ← checkstyle-result.xml · pmd.xml · spotbugsXml.xml
+LOC       ← conteo propio (prod vs test), stdlib pura</pre>
+  <div class="card warn"><h3>Regla dura</h3><p>Ausente = sin evidencia, nunca "OK". Un reporte de linter que <em>existe</em> pero está vacío acredita el fix; un reporte <em>ausente</em> no se trata como limpio (significa que el gate no corrió). Una herramienta que no corrió no se inventa en verde.</p></div>
+</section>
+
+<section class="slide" data-section="qa_ledger.py — comandos">
+  <div class="kicker"><span class="n">09</span> el motor de medición <span class="callout-status real">en el kit</span></div>
+  <h2><code class="in" style="font-size:.7em">qa_ledger.py</code> <span class="accent">— referencia de comandos.</span></h2>
+  <p>Stdlib pura, Python 3.8+, sin dependencias. Es dueño de todo lo que <strong>debe ser exacto y reproducible</strong>. Los fact gates (golden-diff, gate-check, simplicity-check, pit-check) salen 0/1 y sus veredictos se persisten con <code class="in">log-gate</code>; los juicios (¿oscila? ¿hay que escalar?) los hace el skill leyendo estos datos, con helpers advisory deterministas.</p>
+  <table>
+    <thead><tr><th>Subcomando</th><th>Qué hace</th></tr></thead>
+    <tbody>
+      <tr><td class="t">doctor</td><td>Diagnóstico de la instalación (espíritu flutter doctor): python/git, las 7 skills junto al engine, hook INV-GOLDEN-01 registrado, config/ACCEPTANCE/ledger del proyecto y toolchains por type. Exit 1 solo con errores (1.22.0).</td></tr>
+      <tr><td class="t">init</td><td>Crea el ledger desde <code class="in">uscha.config.json</code> (repos, umbrales, comandos).</td></tr>
+      <tr><td class="t">snapshot</td><td>Mide coverage / tests / LOC de un repo (<code class="in">--phase pre|post</code>).</td></tr>
+      <tr><td class="t">check-coverage</td><td>Exit 0 si ≥ umbral, 1 si está por debajo. Es el gate de la fase 1.</td></tr>
+      <tr><td class="t">log-step</td><td>Registra un pase de una QA tool: reported / gated-reported / fixed / deferred / suppressed / tests-passed / files-changed / fingerprint.</td></tr>
+      <tr><td class="t">ingest-gate</td><td>Parsea Checkstyle/PMD/SpotBugs/FindSecBugs, normaliza severidades y computa el <code class="in">fixed</code> real diffeando finding-IDs contra el pase anterior.</td></tr>
+      <tr><td class="t">converged</td><td>Exit 0 = convergió: último paso de agente de <strong>cada</strong> tool de <code class="in">qa_tools_order</code> limpio + todos los linters limpios + todos los fact gates persistidos limpios. Un snapshot medido rojo veta el verde narrado (rellenar la ventana no ayuda).</td></tr>
+      <tr><td class="t">log-gate</td><td>Persiste el veredicto de un fact gate: <code class="in">--kind golden-diff|gate-check|pit-check|simplicity|regression --verdict pass|fail|not-run</code>. Un <code class="in">fail</code> bloquea convergencia y capea readiness ≤65; un <code class="in">not-run</code> queda registrado pero nunca cuenta como verde.</td></tr>
+      <tr><td class="t">flag-blocker</td><td>Registra un blocker (p. ej. <code class="in">--kind constitution</code> por violación de la CONSTITUTION): capea readiness ≤65 y bloquea convergencia hasta <code class="in">--resolve</code> (humano).</td></tr>
+      <tr><td class="t">resolve-escalation</td><td>Cierra una escalación registrada; hasta entonces readiness queda capeado ≤75.</td></tr>
+      <tr><td class="t">oscillation</td><td>Advisory. Detecta que el fingerprint de findings de una tool se repite con período 2 (pase N == pase N-2).</td></tr>
+      <tr><td class="t">escalate</td><td>Registra un evento de escalación humana con razón.</td></tr>
+      <tr><td class="t">summary</td><td>Métricas retrospectivas (<code class="in">--json</code> lo consume <code class="in">/uscha-sysdoc</code>). Incluye el <strong>first-time yield</strong> (FTY, 1.27.0): % de repos que pasaron QA en el primer ciclo, sin rework ni escalación — métrica Lean informativa, jamás gatea.</td></tr>
+      <tr><td class="t">readiness</td><td>El KPI de estado del proyecto: score 0–100 con pesos y caps duros. <strong>Reporta</strong> (siempre exit 0); no es un gate exit 0/1. <strong>Veredicto único</strong> (anti-ceremonia, 1.25.0): por default UNA pantalla — veredicto + una línea <code class="in">--- gates:</code> colapsada; <code class="in">--verbose</code> expande las dimensiones y el detalle por repo.</td></tr>
+      <tr><td class="t">rebuild</td><td>El rebuild test: completitud de la SPEC. <code class="in">--mode baseline</code> firma el sistema; <code class="in">--mode compare</code> puntúa la regeneración (COVERS/PARTIAL/DIVERGE).</td></tr>
+      <tr><td class="t">regression-check</td><td>Find Bugs Once (1.16.0): findings cerrados sin línea nueva de test = NARRATED — avisa; <code class="in">--strict</code> gatea; se persiste con <code class="in">log-gate --kind regression</code>.</td></tr>
+      <tr><td class="t">waste-check</td><td>Reuse-first (1.26.0): detección determinística de clones Type-1/2 del diff contra el <strong>repositorio</strong> — la duplicación que <code class="in">simplicity-check</code> no ve (puntúa el diff aislado). Cada flag nombra el <code class="in">file:line</code> a reusar. Advisory salvo <code class="in">--gate</code> o <code class="in">defaults.waste.gate</code>. Raíz: muda Lean (Poppendieck) + el +81% de duplicación de GitClear.</td></tr>
+      <tr><td class="t">phase</td><td>Estado del workflow DERIVADO del ledger (plan/build/qa/escalated/pr-ready), jamás declarado. <code class="in">--require pr-ready</code> gatea el PR y veta ramas <code class="in">spike/*</code> (1.18.0–1.19.0).</td></tr>
+    </tbody>
+  </table>
+  <pre><span class="c"># un pase típico del loop</span>
+QL=./.claude/skills/uscha-devloop/qa_ledger.py
+python3 $QL init --config uscha.config.json
+python3 $QL snapshot --repo backend-api --phase pre
+python3 $QL check-coverage --repo backend-api          <span class="c"># exit 0/1</span>
+<span class="c"># ...build + una tool de QA...</span>
+python3 $QL log-step --repo backend-api --tool code-review --iteration 1 \
+  --reported 12 --gated-reported 4 --fixed 9 --deferred 2 --suppressed 1 \
+  --tests-passed true --files-changed 7 --fingerprint a,b,c
+python3 $QL ingest-gate --repo backend-api --iteration 1
+python3 $QL converged --repo backend-api --tools-per-cycle 3</pre>
+</section>
+
+<section class="slide" data-section="Static gate + ingest">
+  <div class="kicker"><span class="n">10</span> java-qa-gate, normalizado a una escala</div>
+  <h2>Static gate <span class="accent">+ ingest.</span></h2>
+  <p>El static gate (tu <code class="in">java-qa-gate</code>: Checkstyle/PMD/SpotBugs/FindSecBugs) <strong>no se cuenta a mano</strong>. Corrés el gate para que escriba sus XML, y <code class="in">ingest-gate</code> los parsea, normaliza a una escala de severidad común, separa FindSecBugs de SpotBugs, y computa el <code class="in">fixed</code> real por diff de IDs.</p>
+  <table>
+    <thead><tr><th>Linter</th><th>Severidad nativa → escala común</th></tr></thead>
+    <tbody>
+      <tr><td class="t">Checkstyle</td><td>error → HIGH · warning → MEDIUM · info → INFO</td></tr>
+      <tr><td class="t">PMD</td><td>priority 1 → BLOCKER · 2 → CRITICAL · 3 → HIGH · 4 → MEDIUM · 5 → LOW</td></tr>
+      <tr><td class="t">SpotBugs</td><td>priority 1 → HIGH · 2 → MEDIUM · 3 → LOW</td></tr>
+      <tr><td class="t">FindSecBugs</td><td>findings categoría SECURITY → piso <strong>HIGH</strong> (se separan bajo tool <code class="in">findsecbugs</code>)</td></tr>
+    </tbody>
+  </table>
+  <p>Escala completa, de menor a mayor: <code class="in">INFO · LOW · MEDIUM · HIGH · CRITICAL · BLOCKER</code>. El severity gate por defecto bloquea en <code class="in">BLOCKER / CRITICAL / HIGH</code>; todo lo de abajo va a <code class="in">ISSUES-DEFERRED.md</code>, nunca al loop. Granularidad de finding-ID configurable (<code class="in">file</code> o <code class="in">line</code>) para el diffing de <code class="in">fixed</code> y oscilación.</p>
+  <div class="card note"><h3>Alternativa hosteada: plugin SonarQube</h3><p>El <code class="in">java-qa-gate</code> local es autosuficiente (stdlib + linters, cero servidor). Si el equipo ya corre <strong>SonarQube</strong>, el plugin <code class="in">sonarqube@claude-plugins-official</code> expone el mismo rol (issues, coverage, quality-gate) como tools MCP — mismo gate, ingest distinto. Normalizá su severidad a esta misma escala común.</p></div>
+</section>
+
+<section class="slide" data-section="Readiness KPI">
+  <div class="kicker"><span class="n">11</span> estado manda; el número es derivado <span class="callout-status real">en el kit</span></div>
+  <h2>Readiness <span class="accent">KPI.</span></h2>
+  <p>Mide el <strong>estado del resultado</strong>, nunca el esfuerzo. Score ponderado 0–100 con <strong>caps duros</strong> que pisan el promedio. <strong>Reporta, no gatea</strong>: siempre sale exit 0 — el que corta la cadena es <code class="in">rebuild</code> (exit 1 salvo COVERS). Los ciclos/regresiones son <em>churn</em> (salud del proceso) y se reportan aparte — nunca suben el readiness. Mostralo después de cualquier tarea, no solo de runs completos.</p>
+  <div class="kpi">
+    <div class="hd"><div class="score">88<small>/100</small></div><div class="status amber">RELEASE CANDIDATE</div></div>
+    <div class="dim"><span>acceptance (medida)</span><div class="track"><i style="width:100%"></i></div><span>30</span></div>
+    <div class="dim"><span>static gate</span><div class="track"><i style="width:100%"></i></div><span>20</span></div>
+    <div class="dim"><span>adr (relato)</span><div class="track"><i style="width:100%"></i></div><span>15</span></div>
+    <div class="dim"><span>coverage</span><div class="track"><i style="width:92%"></i></div><span>15</span></div>
+    <div class="dim"><span>convergence</span><div class="track"><i style="width:100%"></i></div><span>10</span></div>
+    <div class="dim"><span>integration</span><div class="track"><i style="width:60%"></i></div><span>10</span></div>
+    <div class="cap">cap activo si: tests rojos → ≤35 · BLOCKER/CRITICAL abierto → ≤65 · escalación sin resolver → ≤75 — cada cap dice su procedencia: requerimiento (config) u opinión default del kit (1.17.0)</div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Dimensiones y pesos (kit 1.10.0+)</h3><ul class="clean"><li>acceptance — <strong>30</strong>, la dominante: criterios AC-n cerrados por <em>testcase verde MEDIDO</em> en los JUnit, no por checkbox (un <code class="in">[x]</code> sin test = <code class="in">narrated_only</code>, no cierra)</li><li>static gate — <strong>20</strong> (llega a 0 con 10 findings gated abiertos)</li><li>ADR / checkbox completion — <strong>15</strong> (el relato, relegado)</li><li>coverage — <strong>15</strong> (vs umbral, default 60%)</li><li>convergence — <strong>10</strong> · integration — <strong>10</strong> (peso redistribuido si está deshabilitado)</li></ul></div>
+    <div class="card"><h3>Bands y caps</h3><ul class="clean"><li>&lt;50 NOT READY · 50–79 IN PROGRESS · 80–94 RELEASE CANDIDATE · 95–100 READY</li><li>cap tests rojos → ≤35</li><li>cap BLOCKER/CRITICAL abierto → ≤65</li><li>cap escalación sin resolver → ≤75 (hasta <code class="in">resolve-escalation</code>)</li><li>acceptance no encontrado → ≤65 (y la dimensión ADR = 0)</li><li>el silencio no es éxito: repo lint-capaz cuyo static gate nunca corrió → UNMEASURED (0.0) en esa dimensión, nunca 1.0</li><li>dos advisories (1.14.0, jamás gatean): <strong>stall</strong> — findings planos/subiendo 3 ciclos → volver a ADR; <strong>stop-signal</strong> — todo convergido y cero facts bloqueantes → candidato a PR</li></ul></div>
+  </div>
+  <p class="small"><strong>Veredicto único (anti-ceremonia, 1.25.0):</strong> por default <code class="in">readiness</code> es UNA pantalla — el veredicto + una línea <code class="in">--- gates:</code> colapsada; el desglose de dimensiones que ves arriba, la acceptance, el churn y el detalle por repo viven detrás de <code class="in">--verbose</code>. Un meta-invariante en la CONSTITUTION gobierna que los gates futuros sigan callados-por-default y colapsen dentro del readiness. Los blockers que capean sí hablan siempre (condicionales: "hablan solo cuando importa"). Sin fórmula, no hay número: eso sería la numerología que el método evita.</p>
+</section>
+
+<section class="slide" data-section="El rebuild test">
+  <div class="kicker"><span class="n">12</span> ¿la SPEC alcanza para reconstruir? <span class="callout-status real">en el kit</span></div>
+  <h2>El <span class="accent">rebuild test.</span></h2>
+  <p>El ledger prueba <strong>corrección</strong> (este build pasó). El rebuild test prueba <strong>completitud</strong> (la SPEC es suficiente para volver a generar el sistema). Dos preguntas distintas. Es el benchmark de completitud que se está estandarizando en el SOTA.</p>
+  <p>La mecánica: en un árbol limpio, una sesión <em>fresca</em> apunta solo al paquete (SPEC/ADR/ACCEPTANCE — no al chat) y regenera. Si reconstruye y pasa acceptance + tests → la SPEC cubre. Si diverge → la SPEC tiene huecos: casi siempre decisiones implícitas (códigos de error, estrategia de cache, elección de librería) que vivían en tu cabeza y nunca llegaron a la SPEC.</p>
+  <pre><span class="c"># rebuild test — subcomando real (1.4.0+)</span>
+<span class="c"># 1) tree ORIGINAL: capturá la firma</span>
+$ python3 $QL rebuild --mode baseline --config uscha.config.json
+  → REBUILD-BASELINE.json
+<span class="c"># 2) tree LIMPIO / sesión fresca: regenerá SOLO producción desde</span>
+<span class="c">#    SPEC/ADR/ACCEPTANCE, PRESERVANDO los tests, y corré la suite</span>
+<span class="c"># 3) puntuá el tree regenerado contra la baseline</span>
+$ python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json
+  <span class="o">REBUILD: 72.2/100 — PARTIAL</span>
+  ! 1 test(s) fail on regenerated code — behavior the SPEC left implicit
+  ! coverage 45.0% vs baseline 80.0% (tolerance 5)</pre>
+  <div class="card good"><h3>Estado real en el kit <span class="callout-status real">en el kit</span></h3><p>Implementado y probado (kit 1.4.0+). Pesos: <strong>tests 60 · acceptance 20 · coverage 15 · surface 5</strong>. Veredictos: <code class="in">COVERS ≥90 · PARTIAL ≥70 · DIVERGE &lt;70</code> (exit 0 solo si COVERS; <code class="in">--json</code> lo consume <code class="in">/uscha-sysdoc</code>). La señal dominante es la suite preservada: un test que pasaba y falla en el código regenerado = comportamiento que la SPEC dejó implícito. Cuándo correrlo: perfil C+ y E, o de forma periódica (lo disparás vos) — es el QA del <em>output del Discovery</em>.</p></div>
+</section>
+
+<section class="slide" data-section="Change budget + escalación">
+  <div class="kicker"><span class="n">13</span> los loops necesitan límites <span class="callout-status real">en el kit</span></div>
+  <h2>Change budget <span class="accent">+ escalación.</span></h2>
+  <p>No limpiar todo; no empeorar nada. La deuda legacy se congela, la nueva se bloquea. Y el loop tiene techo: superarlo no es seguir solo, es escalar.</p>
+  <div class="grid2">
+    <div class="card"><h3>Legacy baseline</h3><ul class="check"><li class="" >0 findings HIGH/CRITICAL nuevos</li><li>0 regresiones en tests existentes</li><li>archivos tocados: sin warnings nuevos</li><li>deuda fuera de scope → backlog</li><li>refactor solo con characterization</li></ul></div>
+    <div class="card"><h3>Change budget (config)</h3><ul class="clean"><li><code class="in">max_iterations</code>: 5 · <code class="in">tools_per_cycle</code>: 3</li><li>0 cambios de schema sin ADR</li><li>0 dependencias nuevas sin aprobación</li></ul></div>
+  </div>
+  <h3>Contrato de escalación — pará y preguntá cuando</h3>
+  <ul class="clean">
+    <li>el cap de iteraciones se alcanza sin convergencia</li>
+    <li>se detecta oscilación (un set de findings vuelve)</li>
+    <li>un test que pasaba ahora falla y el fix no es trivial</li>
+    <li>dos tools dan directivas contradictorias sobre el mismo código</li>
+    <li>un fix requeriría una decisión arquitectónica (cambio nivel-ADR)</li>
+  </ul>
+  <div class="card good"><p><strong>Escalar no es fallar:</strong> es que apareció una decisión humana. El proceso detectó que no debía seguir solo. Nunca auto-merge, nunca exceder el cap en silencio, nunca arreglar por debajo del gate para que el número quede mejor.</p></div>
+</section>
+
+<section class="slide" data-section="La invariante SIMPLICITY">
+  <div class="kicker"><span class="n">−</span> reduce como gate, no como filosofía <span class="callout-status real">en el kit</span></div>
+  <h2>La invariante <span class="accent">SIMPLICITY.</span></h2>
+  <p>Las <em>Laws of Simplicity</em> de Maeda son filosofía de diseño, no un ciclo de dev. Mapear las 10 leyes a gates es tentador — y es la trampa: <strong>construir 13 checks para "hacer las cosas simples" viola la Ley 1 (Reduce)</strong>. El framework se auto-refuta. De todo el combo, una sola pieza tiene dientes — y esa pieza son en realidad <strong>dos cosas con un mismo abrigo</strong>. Separalas, o reconstruís la misma mezcla, más chica:</p>
+  <table>
+    <thead><tr><th>Qué</th><th>¿Determinístico?</th><th>¿Ya lo tenés?</th></tr></thead>
+    <tbody>
+      <tr><td>Budgets numéricos: +líneas de diff (400 default), crecimiento neto, archivos tocados, profundidad de anidación, hunk más grande</td><td><span class="ok">SÍ</span> — medible, se enforce</td><td><span class="ok">SÍ</span> — <code class="in">simplicity-check</code></td></tr>
+      <tr><td>"¿Esta abstracción era necesaria? ¿Es especulativa?"</td><td><span class="no">NO</span> — juicio del checker</td><td><span class="ok">SÍ</span> — es <code class="in">simplify</code> + maker≠checker</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+    <div class="card good"><h3>Lo que SÍ se construye</h3><ul class="clean"><li>Invariante <code class="in">SIMPLICITY</code> en la CONSTITUTION: presupuesto de complejidad con caps duros.</li><li>Subcomando <code class="in">qa_ledger.py simplicity-check</code> que puntúa y frena — determinístico, cero opinión. Una dimensión pesada &gt;1.5× su budget fuerza el veredicto a OVERBUILT: las dimensiones baratas no la promedian.</li><li>El conteo/densidad de abstracciones es <strong>advisory</strong> (deliberadamente sin peso en el score). No hay cap de deps nuevas ni de complejidad ciclomática/largo de método.</li><li>Normalizado a la misma escala de severidad que el static gate.</li></ul></div>
+    <div class="card warn"><h3>Lo que NO se construye</h3><ul class="clean"><li>El mapeo de las 10 leyes → invariantes: <strong>branding, no enforcement</strong>. ~70% renombra lo que la CONSTITUTION + uscha-devloop ya hacen.</li><li>Un "simplicity-check" subjetivo: ya es <code class="in">simplify</code> (skill oficial, post-diff) + el checker separado.</li></ul></div>
+  </div>
+  <pre><span class="c"># la invariante como gate objetivo, no como filosofía</span>
+$ python3 .claude/skills/uscha-devloop/qa_ledger.py simplicity-check --diff HEAD
+  <span class="c"># budgets: +lines (400), net growth, files, nesting, largest hunk</span>
+  <span class="o">SIMPLICITY: PASS</span> · diff 47L / budget 400 · anidación 3 · hunk mayor 22L</pre>
+  <div class="card note"><h3>Maeda, donde rinde: una línea, no un framework</h3><p>La Ley 10 vale más que las otras nueve juntas. Va como norte arriba de la CONSTITUTION, no como checklist:</p><p style="font-weight:600;color:var(--ink)">"Simplicity is about subtracting the obvious and adding the meaningful."</p></div>
+</section>
+
+<section class="slide" data-section="Sensores de mantenibilidad">
+  <div class="kicker"><span class="n">◉</span> sensores para agentes (Böckeler) <span class="callout-status new">nuevo</span></div>
+  <h2>Sensores: <span class="accent">feedback que el agente puede leer.</span></h2>
+  <p>Un <em>sensor</em> es un check automático que le devuelve feedback accionable al agente para que se auto-corrija — antes del review humano. Es tu "evidencia capturada, no narrada" con otro nombre. Se ordenan por <strong>cuándo</strong> corren y por <strong>qué</strong> los evalúa:</p>
+  <table>
+    <thead><tr><th>Timing</th><th>Naturaleza</th><th>Ejemplos</th></tr></thead>
+    <tbody>
+      <tr><td>Durante la sesión (rápido)</td><td>computacional</td><td>type-check, linters, reglas de capas, tests, secret-scan</td></tr>
+      <tr><td>Pipeline (confirmación)</td><td>computacional</td><td>los mismos, en infra limpia</td></tr>
+      <tr><td>Reviews programados (drift)</td><td>inferencial (LLM)</td><td>modularidad, seguridad, freshness de dependencias</td></tr>
+    </tbody>
+  </table>
+  <p>Tres hallazgos que le agregan dientes a tu kit:</p>
+  <div class="grid2">
+    <div class="card accent"><h3>1 · Coverage miente → mutation testing</h3><p>100% de coverage con <strong>13 mutantes vivos</strong>: código que corre pero que ningún test <em>aserta</em>. Coverage mide ejecución, no verificación. <strong>Tapa un hueco de tu rebuild test</strong>: si los tests preservados no asertan, el rebuild pasa al vacío. Tool Java: <code class="in">PIT</code>. Caro → tier <em>scheduled</em>, no inner loop.</p></div>
+    <div class="card"><h3>2 · Mensajes que enseñan</h3><p>El agente refactorizó complejidad <strong>solo cuando el mensaje le dijo cómo y cuándo</strong>. Un pass/fail pelado no cambia conducta. Sumá el <em>escape hatch documentado</em>: suprimir con justificación, no muro binario. Tus flags de <code class="in">simplicity-check</code> ya van por acá.</p></div>
+  </div>
+  <div class="card good"><h3>3 · Computacional adentro del archivo, inferencial cross-file</h3><p>Las métricas determinísticas ganan a nivel archivo (largo, complejidad, args); para lo cross-cutting (acoplamiento) las métricas crudas <strong>dan ruido</strong> — el review LLM que <em>lee</em> el código les gana. Regla de diseño: los caps de archivo son gate; el juicio de "¿esto está sobre-arquitecturado?" va al checker inferencial, no a un regex. <em>(Es exactamente por qué <code class="in">new_abstractions</code> da falsos positivos con records/DTOs en Java.)</em></p></div>
+  <div class="card warn"><h3>Cuidado: el sesgo de falsa seguridad</h3><p>Un montón de sensores puede crear <strong>ilusión de calidad</strong> tapando lo semántico que el análisis estático no ve. Más sensores ≠ más calidad. Y correr un review inferencial <strong>dos veces</strong> da issues distintos: una sola pasada no alcanza.</p></div>
+</section>
+
+<section class="slide" data-section="Anti gate-gaming">
+  <div class="kicker"><span class="n">◆</span> proteger el aparato que mide (Osmani) <span class="callout-status real">en el kit</span></div>
+  <h2>Anti <span class="accent">gate-gaming.</span></h2>
+  <p>Tu kit mide todo — pero <strong>nada chequeaba que el cambio no DEBILITÓ la medición</strong>. Un maker corriendo como optimizador toma el camino más barato a "verde", y editar el gate suele ser lo más barato. Tres guardas cierran el exploit más directo de un gate automático: modificar el gate.</p>
+  <div class="grid2">
+    <div class="card accent"><h3>1 · Integridad del gate <span class="callout-status real">en el kit</span></h3><p>Un diff que <strong>borra tests (incluso archivos enteros), los deshabilita, o baja/borra thresholds</strong> (matcheado cross-hunk) es BLOCKER — <code class="in">qa_ledger.py gate-check</code>, determinístico, exit 1. Supresiones de lint, asserts reescritos y una caída medida del conteo de tests ejecutados (<code class="in">--repo</code>) son REVIEW soft: se gatean con <code class="in">--strict</code>. <em>El aparato que mide la correctitud no lo modifica el cambio que mide.</em></p></div>
+    <div class="card"><h3>2 · Checker no-correlacionado</h3><p>Afila <code class="in">maker ≠ checker</code>: para cambios de alto blast-radius conviene que el checker tenga <strong>puntos ciegos distintos</strong> — otra familia de agente o, al menos, otro perfil precisión-recall. Es disciplina de proceso, no lo enforcea el código. Dato: <strong>93,4% de los defectos los cazó exactamente 1 de 4 tools</strong>. El loop que produjo el cambio no es su único aprobador.</p></div>
+  </div>
+  <div class="card good"><h3>3 · Leer diffs de tests más estricto que los de producción</h3><p>Heurística barata ANTES del <code class="in">pit-check</code>: priorizar los hunks de archivos de test y flaggear la reescritura masiva de asserts existentes — la red de seguridad editada para aceptar lo roto. El mutation testing sigue siendo la autoridad sobre si un test detectaría el defecto.</p></div>
+  <div class="card note"><h3>Crédito honesto</h3><p>Osmani (<em>Agentic Code Review</em>) enumera estos red-flags para <strong>revisores humanos</strong>; el detector automático y el principio "el aparato es inmutable por el cambio que mide" son <strong>síntesis del kit</strong>, no recomendación suya. El dato 93,4% (1 de 4 tools) sí es del artículo.</p></div>
+</section>
+
+<section class="slide" data-section="Golden testing">
+  <div class="kicker"><span class="n">◆</span> el árbitro que el agente no authorea <span class="callout-status real">en el kit</span></div>
+  <h2>Golden <span class="accent">testing.</span></h2>
+  <p>En el Uscha casi todo lo authorea el agente (discovery, ADRs, spec, código, tests). <strong>El golden suite es la ÚNICA pieza que el agente no puede authorear — y esa es su razón de existir.</strong> Si el agente escribe el test que lo juzga, codifica el mismo blind spot que ya perdió lógica una vez.</p>
+  <div class="card accent"><h3>La regla dura</h3><p>El golden se captura ejecutando el código <strong>ORIGINAL</strong> con inputs reales, mecánicamente, por un script. Los <code class="in">.approved</code> son <strong>verdad de campo</strong>: los aprueba un HUMANO, nunca el agente. <code class="in">qa_ledger.py golden-diff</code> byte-compara <code class="in">.received</code> vs <code class="in">.approved</code> — un hecho, no un juicio. Cualquier no-match = DIVERGE, corta la cadena.</p></div>
+  <div class="grid2">
+    <div class="card"><h3>INV-GOLDEN-01 (CWE-440)</h3><p>Ningún módulo entra en migración/modernización sin golden capturado y commiteado ANTES de tocarlo. La spec de la migración se escribe <em>contra</em> ese golden.</p></div>
+    <div class="card note"><h3>Determinismo o el diff miente</h3><p>Congelá reloj, seeds, orden de maps, GUIDs, y sobre todo <strong>el locale objetivo</strong> (separador decimal, formato de fecha — alto riesgo entre máquinas con locale distinto). La foto sale byte a byte idéntica cuando el comportamiento es idéntico.</p></div>
+  </div>
+  <p class="small">Directamente aplicable a cualquier migración de un sistema legacy con caminos críticos (byte-equivalence), donde la pérdida silenciosa de lógica es el riesgo real. <strong>Ya en el kit:</strong> front brownfield <code class="in">uscha-reverse-discovery</code> (mapa + hechos), skill <code class="in">uscha-characterize</code> (captura), gate <code class="in">golden-diff</code>, hook <code class="in">block-approved-writes.ps1</code> (bloquea que el agente toque un <code class="in">.approved</code>) y <code class="in">.gitattributes</code>.</p>
+</section>
+
+<section class="slide" data-section="Destilación: hechos vs prosa">
+  <div class="kicker"><span class="n">◆</span> que no sea un diamante inútil <span class="callout-status real">principio rector</span></div>
+  <h2>Hechos <span class="accent">vs prosa.</span></h2>
+  <p>Un kit lleno de gates puede volverse un diamante: hermoso e impráctico. El principio que lo evita — tu regla Böckeler (computacional vs inferencial) aplicada a la propia metodología:</p>
+  <div class="card accent"><p style="font-size:1.1rem;font-weight:600;color:var(--ink)">Los gates que leen HECHOS bloquean; los que ADIVINAN sobre prosa, avisan.</p></div>
+  <table>
+    <thead><tr><th>Gate</th><th>Lee</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="t">golden-diff</td><td>byte-comparison vs <code class="in">.approved</code> — exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN (cero fixtures = NOT-RUN, nunca CLEAN); volátiles declarados en <code class="in">golden.scrub.json</code> enmascaran con masking VISIBLE, aprobado por el humano (1.15.0)</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">pit-check</td><td>XML de PIT (mutation testing) — tier scheduled/incremental, no inner-loop; si el reporte existe y falla, se persiste con <code class="in">log-gate</code></td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">gate-check</td><td>estructura del diff: tests borrados/deshabilitados, thresholds bajados o borrados, <strong>secretos agregados</strong> (PEM/AKIA/tokens/contenedores de claves — 1.12.0)</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">rebuild</td><td>baseline vs regenerado; COVERS/PARTIAL/DIVERGE — exit 1 salvo COVERS</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">simplicity · budgets</td><td>líneas/archivos/anidación/hunk mayor — los tests quedan FUERA del presupuesto (1.11.0): escribir tests nunca penaliza</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">spec-check · estructural</td><td>hechos: out-of-scope faltante, acceptance ausente/vacío, cero criterios AC-n trazables o IDs duplicados — exit 1</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">phase --require pr-ready</td><td>estado del workflow DERIVADO del ledger (convergencia + tests verdes + 0 BLOCKER/CRITICAL), jamás declarado; rama <code class="in">spike/*</code> nunca pasa (1.18.0–1.19.0)</td><td class="ok">BLOQUEA</td></tr>
+      <tr><td class="t">readiness</td><td>KPI 0–100 con caps duros; siempre exit 0</td><td class="no">REPORTA</td></tr>
+      <tr><td class="t">regression-check</td><td>cierre de findings sin línea nueva de test = NARRATED (Find Bugs Once, 1.16.0) — <code class="in">--strict</code> lo gatea</td><td class="no">AVISA</td></tr>
+      <tr><td class="t">waste-check</td><td>clones Type-1/2 del diff vs el repositorio (reuse-first, 1.26.0) — la duplicación que <code class="in">simplicity-check</code> no ve; flags con <code class="in">file:line</code> a reusar — gatea SOLO con <code class="in">--gate</code> o <code class="in">defaults.waste.gate</code></td><td class="no">AVISA</td></tr>
+      <tr><td class="t">rubric-ingest</td><td>grade de la rúbrica: criterio cualitativo versionado con evidencia obligatoria (1.23.0) — gatea SOLO si el humano lo declara (<code class="in">defaults.rubric.gate</code>)</td><td class="no">AVISA</td></tr>
+      <tr><td class="t">spec-check · prosa / abstracciones</td><td>heurística sobre prosa (términos vagos, EARS) / "tipos nuevos" — <code class="in">--strict</code> las gatea</td><td class="no">AVISA</td></tr>
+    </tbody>
+  </table>
+  <div class="card warn"><p>Un heurístico sobre lenguaje natural que <strong>bloquea</strong> tira falsos positivos → el dev lo apaga → gate muerto (la erosión que gate-check combate). Por eso los heurísticos de prosa de <code class="in">spec-check</code> son advisory (sus dos checks estructurales — out-of-scope faltante, acceptance ausente/vacío — son hechos y bloquean) y las abstracciones salieron del score. <strong>Los gates de hechos los corre el agente inline en <code class="in">/uscha-devloop</code> y los persiste con <code class="in">log-gate</code> — no hay workflow de CI en el kit.</strong></p></div>
+</section>
+
+<section class="slide" data-section="El libro pasó por el kit">
+  <div class="kicker"><span class="n">◆</span> The Pragmatic Programmer contra el kit — 10 de 10 <span class="callout-status real">en el kit</span></div>
+  <h2>El libro pasó <span class="accent">por el kit.</span></h2>
+  <p>El cruce con Hunt &amp; Thomas (20th Anniversary, 497 pp) dio 8 validaciones, 12 tensiones y <strong>10 mejoras accionables — las 10 están implementadas</strong> (kits 1.10.0 → 1.19.0, cada una con review fresco y smoke verde). El análisis completo vive en <code class="in">docs/analisis-pragmatic-programmer.md</code>.</p>
+  <table>
+    <thead><tr><th>Tip / Topic</th><th>Qué quedó en el engine</th><th>Kit</th></tr></thead>
+    <tbody>
+      <tr><td class="t">Tip 87 · anécdota Sudoku</td><td><strong>Acceptance trazable</strong>: AC-n cierra por testcase verde MEDIDO, no por checkbox — la dimensión dominante del readiness</td><td>1.10.0</td></tr>
+      <tr><td class="t">Topic 51</td><td><strong>Tests fuera del presupuesto</strong> de simplicity: escribir tests nunca penaliza el gate</td><td>1.11.0</td></tr>
+      <tr><td class="t">Topic 43</td><td><strong>Secret-scan</strong> en gate-check: PEM/AKIA/tokens/contenedores agregados bloquean como hecho</td><td>1.12.0</td></tr>
+      <tr><td class="t">Topic 34</td><td><strong>Ledger atómico</strong>: checksum sha256 + carga blindada — mutación externa o JSON corrupto bloquea con mensaje de recuperación</td><td>1.13.0</td></tr>
+      <tr><td class="t">Topics 37 · 5</td><td><strong>Plateau/stop-signal</strong> (advisory): findings sin bajar 3 ciclos → "volvé a ADR"; todo convergido → "candidato a PR"</td><td>1.14.0</td></tr>
+      <tr><td class="t">Topic 41</td><td><strong>Golden scrub</strong>: volátiles declarados (timestamps/ids) enmascaran con masking visible, humano-aprobado</td><td>1.15.0</td></tr>
+      <tr><td class="t">Tips 94 · 31</td><td><strong>Regression-capture</strong>: cierre de findings sin test nuevo = NARRATED; resolver un blocker exige escape-analysis</td><td>1.16.0</td></tr>
+      <tr><td class="t">Tip 8</td><td><strong>Procedencia de umbrales</strong>: cada cap dice si es requerimiento (config) u opinión default del kit</td><td>1.17.0</td></tr>
+      <tr><td class="t">Topic 29</td><td><strong>FSM derivada</strong>: <code class="in">phase</code> computa el estado del ledger — el PR se gatea con <code class="in">--require pr-ready</code></td><td>1.18.0</td></tr>
+      <tr><td class="t">Tip 21</td><td><strong>Spikes formales</strong>: rama <code class="in">spike/*</code> jamás pasa el gate de PR; el output legítimo es un ADR con lecciones</td><td>1.19.0</td></tr>
+    </tbody>
+  </table>
+  <div class="card accent"><p>En las dos tensiones grandes el kit se apartó de la letra del libro para defender su propio principio: los caps <em>siguen</em> mordiendo (que existan es definición, el número es opinión — y ahora lo dice), y la FSM se <em>deriva</em> en vez de declararse — una FSM declarada sería estado narrado. <strong>Measured beats narrated, aplicado hasta al libro.</strong></p></div>
+</section>
+
+<section class="slide" data-section="Loop engineering: ¿lo alcanzamos?">
+  <div class="kicker"><span class="n">14</span> loop engineering (jun 2026) <span class="callout-status new">nuevo</span></div>
+  <h2>¿Lo alcanzamos? — <span class="accent">convergencia con el SOTA.</span></h2>
+  <p>"Loop engineering" explotó en una semana de junio 2026 (Steinberger, Cherny, Osmani): "no promptees agentes; diseñá loops que los prompteen". Cuando el frente lo bajó a spec-driven, <strong>convergió en estos mismos principios</strong>. Uscha no quedó atrás: llegó a la misma forma por separado.</p>
+  <table>
+    <thead><tr><th>Principio del loop autónomo trending</th><th>Uscha</th><th>Dónde vive en el kit</th></tr></thead>
+    <tbody>
+      <tr><td>Done-criteria que rechaza loops abiertos</td><td class="ok">✓</td><td>ACCEPTANCE.md (acceptance que puede fallar)</td></tr>
+      <tr><td>Iteration budget / techo duro</td><td class="ok">✓</td><td><code class="in">max_iterations: 5</code> · change budget</td></tr>
+      <tr><td>Maker ≠ checker: el que escribe no se autocalifica</td><td class="ok">✓</td><td>evidencia capturada (ledger parsea artefactos)</td></tr>
+      <tr><td>Estado externalizado a disco</td><td class="ok">✓</td><td>QA-LEDGER.json + paquete en el repo</td></tr>
+      <tr><td>Done solo con checker-pass + human sign-off</td><td class="ok">✓</td><td>fase 6: para en el merge (human gate)</td></tr>
+      <tr><td>Detección de oscilación / stuck</td><td class="ok">✓</td><td><code class="in">oscillation</code> (fingerprint período-2)</td></tr>
+      <tr><td>Outer loop auto-agendado (timer / routine)</td><td class="no">✗</td><td>deliberadamente no — lo disparás vos</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+    <div class="card good"><h3>Los 4 costos del loop engineering, neutralizados</h3><ul class="clean"><li><strong>verification debt</strong> → evidence ledger</li><li><strong>comprehension rot</strong> → repo + /uscha-sysdoc</li><li><strong>token blowout</strong> → change budget + max_iterations</li><li><strong>cognitive surrender</strong> → human gate</li></ul></div>
+    <div class="card accent"><h3>El veredicto</h3><p>No solo lo alcanzamos: llegamos a la misma forma por separado, y en integridad de verificación (maker ≠ checker) lo articulamos tan filoso como cualquiera. La única diferencia es que el loop lo dispara una persona, no un cron — y eso es <em>la decisión</em>, no la carencia.</p></div>
+  </div>
+</section>
+
+
+
+<section class="slide" data-section="Outer loop · ¿cuándo?">
+  <div class="kicker"><span class="n">↻</span> outer loop · cuándo automatizar <span class="callout-status new">nuevo</span></div>
+  <h2>El loop autónomo <span class="accent">se gana el costo, o cuesta más de lo que rinde.</span></h2>
+  <p>El playbook de loop engineering (Osmani / AlphaSignal, jun 2026) pone un test de 4 condiciones <em>antes</em> de automatizar nada: si falla una, el loop cuesta más que prompterar a mano. Uscha ya define "cuándo NO usarlo"; esto es el filtro de entrada para el <em>outer</em> loop.</p>
+  <div class="grid2">
+    <div class="card"><h3>Las 4 condiciones</h3><ul class="clean">
+      <li><strong>La tarea se repite</strong> (semanal+) — si no, un buen prompt único es más barato.</li>
+      <li><strong>Verificación automatizada</strong> — un test/build/linter que pueda fallar el trabajo sin vos en la sala.</li>
+      <li><strong>El presupuesto absorbe el desperdicio</strong> — el loop relee, reintenta, explora: quema tokens igual.</li>
+      <li><strong>El agente tiene herramientas de senior</strong> — logs, entorno de repro, correr lo que escribe.</li>
+    </ul></div>
+    <div class="card note"><h3>Buenos vs malos primeros loops</h3>
+      <p><strong>Buenos:</strong> triage de CI, dep bumps, lint-and-fix, repro de flaky tests, issue→PR sobre código bien testeado.</p>
+      <p><strong>Malos</strong> (humano en la silla): arquitectura, <strong>auth, pagos</strong>, deploys a producción, producto difuso.</p>
+    </div>
+  </div>
+  <div class="card accent"><h3>Por qué el gated-by-design se sostiene</h3><p>Los dominios de alto blast-radius —regulados, financieros, retail crítico, safety-critical— caen del lado de los "malos para autonomizar". El propio playbook dice: no pongas el loop a decidir en auth/payments/arquitectura. Eso es exactamente el <em>gated-by-design</em>: el artículo lo confirma desde el otro lado.</p></div>
+</section>
+
+<section class="slide" data-section="Outer loop · diseño">
+  <div class="kicker"><span class="n">↻</span> outer loop · el diseño <span class="callout-status prop">propuesta</span></div>
+  <h2>El outer loop de Uscha: <span class="accent">el latido que le falta.</span></h2>
+  <p>Uscha es hoy <em>human-triggered</em>: lo disparás vos. El playbook aporta el <strong>heartbeat</strong> — lo que convierte "una corrida" en un loop. La síntesis: Uscha es el <em>payload</em> ideal de ese latido, porque ya trae el gate, el estado, los skills y el maker ≠ checker. Solo falta el disparador.</p>
+  <pre><span class="c"># outer loop = schedule + /goal, envolviendo /uscha-devloop</span>
+&gt; /loop 0 3 * * *                 <span class="c"># cadencia: cada noche</span>
+  /goal  readiness ≥ 80 AND tests verdes en módulos tocados
+         AND 0 findings CRITICAL   <span class="c"># lo chequea un modelo aparte</span>
+  /guard 4-condition-test          <span class="c"># tarea repetitiva + verificación automática</span>
+  &gt; ejecutá /uscha-devloop sobre &lt;scope machine-checkable&gt;
+    gate     = qa_ledger.py ingest-gate + fact gates (log-gate)  <span class="c"># YA existe · readiness es KPI, no gate</span>
+    state    = QA-LEDGER.json + paquete en repo         <span class="c"># YA existe</span>
+    stop     = /goal cumplido (checker fresco) o change budget agotado
+    on-done  = abrir PR draft · escalar lo que toca la CONSTITUTION
+    human    = merge / deploy SIEMPRE con aprobación     <span class="c"># gate humano</span></pre>
+  <div class="grid2">
+    <div class="card"><h3>El heartbeat (lo nuevo a incorporar)</h3><ul class="clean"><li><code class="in">/loop</code> — re-corre en cadencia, mire o no el estado.</li><li><code class="in">/goal</code> — sigue hasta que una condición sea <em>verdadera</em>, verificada por un modelo aparte (maker ≠ checker en la condición de parada).</li><li>Routines / scheduled tasks — corridas que sobreviven al reinicio o a la laptop apagada.</li></ul></div>
+    <div class="card"><h3>Connectors (MCP) — actuar, no solo decir</h3><ul class="clean"><li><strong>GitHub</strong> — branch/PR, reaccionar a webhooks (el mayor win día-1).</li><li><strong>Linear/Jira</strong> — linkear ticket, cerrar al verificar.</li><li><strong>Slack</strong> — postear triage, pinguear escalaciones.</li><li><strong>Sentry</strong> — investigar alertas vivas, draftear fixes.</li></ul></div>
+  </div>
+</section>
+
+<section class="slide" data-section="Outer loop · seguridad">
+  <div class="kicker"><span class="n">↻</span> outer loop · el security tax <span class="callout-status prop">propuesta</span></div>
+  <h2>Un loop desatendido es una <span class="accent">superficie de ataque desatendida.</span></h2>
+  <p>Tu seguridad hoy es <em>build-time</em> (static gate + CONSTITUTION con CWE). Cuando el loop corre solo aparecen riesgos <em>operacionales</em> que el playbook documenta. Entran como una <strong>capa operacional de la CONSTITUTION</strong>: invariantes que el outer loop no puede violar.</p>
+  <table>
+    <thead><tr><th>Riesgo del loop desatendido</th><th>Invariante operacional (CONSTITUTION)</th></tr></thead>
+    <tbody>
+      <tr><td>Código generado mergeando sin revisar</td><td>El gate incluye SAST + secret-scan + dependency-audit; sin eso, no hay PR.</td></tr>
+      <tr><td>Skills como vector de inyección — un skill de origen dudoso puede filtrar credenciales</td><td>Auditar el origen de cada skill antes de instalar; allow-list de fuentes.</td></tr>
+      <tr><td>Secretos en logs (verbose en corridas largas)</td><td>Logging no-verbose en loops de producción; sanitizar lo que se loguea.</td></tr>
+      <tr><td>Permission scope creep (un "solo un permiso de escritura" que nadie re-auditó)</td><td>Re-auditar permisos cada 30 días; el loop arranca read-only por defecto.</td></tr>
+      <tr><td>Sesión que se infla en loops largos y se cuelga — evidencia perdida, loop muerto sin aviso</td><td>Rotar de sesión antes del umbral de tamaño; hook que avisa + rescate del transcript (tooling del autor — no viene en el kit). La <strong>higiene de sesión</strong> es parte del security tax.</td></tr>
+    </tbody>
+  </table>
+  <div class="card note"><h3>El Ralph Wiggum loop (Huntley)</h3><p>Falla silenciosa: el agente emite el token de "listo" antes de tiempo y el loop sale con el trabajo a medias. El antídoto es el que ya tenés: un <strong>gate objetivo</strong> (test/build/linter que devuelve pass o fail), no un verificador "con opinión". El loop no se cierra solo: lo cierran los gates <em>más el humano</em> en el merge gate; <code class="in">/goal</code> chequeado por un modelo fresco ayuda a detectarlo.</p></div>
+</section>
+
+<section class="slide" data-section="Outer loop · veredicto">
+  <div class="kicker"><span class="n">↻</span> outer loop · veredicto</div>
+  <h2>Dos capas, <span class="accent">una síntesis.</span></h2>
+  <p>El playbook y Uscha no compiten: son capas distintas. El artículo es el <strong>outer loop</strong> (el latido que dispara mantenimiento machine-checkable). Uscha es el <strong>inner loop riguroso + Discovery</strong> para sistemas críticos. La convergencia en principios (maker ≠ checker = el evaluator-optimizer de Anthropic, dic 2024) confirma que llegaste a lo durable, no al hype.</p>
+  <div class="grid2">
+    <div class="card good"><h3>Lo que Uscha lidera</h3><ul class="clean"><li><strong>Discovery</strong> — el upstream "idea → forma"; el artículo asume que ya sabés qué construir.</li><li><strong>Readiness</strong> con fórmula + caps + bandas, vs su métrica única.</li><li><strong>CONSTITUTION + perfiles de riesgo</strong> — operacionaliza su consejo de "no autonomices auth/pagos".</li><li><strong>Rebuild test + ADRs ejecutables</strong> — completitud de la spec; el artículo no lo cubre.</li></ul></div>
+    <div class="card accent"><h3>Lo que conviene robar</h3><ul class="clean"><li>El <strong>4-condition test</strong> como guard de entrada.</li><li>El <strong>heartbeat</strong> (Automations · /loop · /goal).</li><li><strong>Connectors MCP</strong> (GitHub/Linear/Slack/Sentry).</li><li>El <strong>security tax operacional</strong> en la CONSTITUTION.</li></ul></div>
+  </div>
+  <div class="card"><h3>La métrica cuando autonomices</h3><p><strong>Cost per accepted change</strong> — no tokens ni tareas intentadas. Si la tasa de cambios aceptados cae por debajo del 50%, el loop te está devolviendo el trabajo de revisión que vino a sacarte: ahí pierde. Uscha es el payload ideal del heartbeat justamente porque su gate sube esa tasa.</p></div>
+</section>
+
+<section class="slide" data-section="Cuándo NO usarlo">
+  <div class="kicker"><span class="n">15</span> una metodología madura define sus bordes</div>
+  <h2>Cuándo <span class="accent">NO</span> usar Uscha.</h2>
+  <div class="grid2">
+    <div class="card"><h3>Spike / exploración</h3><p>Código descartable para aprender. No SPEC; sí una nota de qué se aprendió. Lo que sobreviva, se especifica después.</p></div>
+    <div class="card"><h3>Prototipo throwaway</h3><p>Demo que no va a producción. Marcado como tal, aislado, con fecha de muerte.</p></div>
+  </div>
+  <div class="card warn"><h3>Hotfix P0 <span class="callout-status prop">regla de proceso</span></h3><p>Incidente en producción: arreglás primero. Pero la evidencia mínima (qué se cambió, cómo se revierte) y la SPEC/ADR retroactivos son obligatorios dentro de 24h — un compromiso que el equipo asume, no una feature que el kit enforcea. Sin válvula de escape, la gente le hace cargo-cult a los descartables o abandona el método bajo presión.</p></div>
+</section>
+
+<section class="slide" data-section="El workbench">
+  <div class="kicker"><span class="n">16</span> lo genérico que sirve para cualquier repo <span class="callout-status real">en el kit</span></div>
+  <h2>El <span class="accent">workbench.</span></h2>
+  <p>La capa genérica que hace correr la metodología: Claude Code + Python + git/gh + los skills. Lo específico del stack (JDK/Maven, la base de datos, los linters) es el <em>adapter</em> del proyecto y vive en el <code class="in">CLAUDE.md</code> de cada repo — no en el workbench.</p>
+  <table>
+    <thead><tr><th>Componente</th><th>Para qué</th><th>Mínimo</th></tr></thead>
+    <tbody>
+      <tr><td class="t">Claude Code</td><td>el agente / orquestador</td><td>cuenta Pro / Max / Team / Enterprise / Console</td></tr>
+      <tr><td class="t">Python 3.8+</td><td>corre qa_ledger.py (stdlib pura)</td><td><code class="in">python3</code> en PATH</td></tr>
+      <tr><td class="t">git</td><td>versionado</td><td>2.x con user.name/email</td></tr>
+      <tr><td class="t">gh</td><td>crear repo / abrir PR</td><td>opcional, recomendado</td></tr>
+      <tr><td class="t">skills del kit</td><td>uscha-discovery, uscha-adr-refine, uscha-devloop, uscha-sysdoc, uscha-reverse-discovery, uscha-characterize, uscha-rubric</td><td>en <code class="in">~/.claude/skills/</code></td></tr>
+      <tr><td class="t">skills de QA</td><td>code-review, judgment-day, improve</td><td>tus skills globales (el uscha-devloop los <strong>orquesta</strong>, no los trae)</td></tr>
+      <tr><td class="t">engram (plugin)</td><td>memoria persistente entre sesiones</td><td>marketplace <code class="in">Gentleman-Programming/engram</code></td></tr>
+      <tr><td class="t">sonarqube (plugin)</td><td>static gate hosteado (alternativa al java-qa-gate)</td><td>marketplace <code class="in">claude-plugins-official</code></td></tr>
+      <tr><td class="t">gentle-ai (CLI)</td><td>hook <code class="in">skill-registry</code> (refresca el índice de skills) — opcional, toolchain del autor; el kit no lo requiere</td><td>scoop, bucket <code class="in">gentleman</code></td></tr>
+    </tbody>
+  </table>
+  <pre><span class="c"># Claude Code (native installer — no requiere Node, se auto-actualiza)</span>
+curl -fsSL https://claude.ai/install.sh | bash       <span class="c"># macOS/Linux/WSL</span>
+irm https://claude.ai/install.ps1 | iex              <span class="c"># Windows PowerShell</span>
+claude                                                <span class="c"># login OAuth</span>
+<span class="c"># Skills del kit (global)</span>
+cp -r uscha-kit/.claude/skills/* ~/.claude/skills/
+<span class="c"># opcional — gentle-ai (toolchain del autor, el kit no lo requiere)</span>
+scoop bucket add gentleman https://github.com/Gentleman-Programming/scoop-bucket
+scoop install gentle-ai
+claude --version &amp;&amp; claude doctor                     <span class="c"># verificar</span></pre>
+  <p class="small">En Windows, WSL2 es el camino recomendado (instalás y corrés <code class="in">claude</code> dentro de WSL). Para headless/servidor: <code class="in">export ANTHROPIC_API_KEY=...</code></p>
+</section>
+
+<section class="slide" data-section="Piezas de Claude Code">
+  <div class="kicker"><span class="n">17</span> no es magia: son features concretas</div>
+  <h2>Las piezas de Claude Code <span class="accent">que lo sostienen.</span></h2>
+  <div class="grid2">
+    <div class="card"><h3>CLAUDE.md / AGENTS.md</h3><p>Protocolo estable del repo: comandos, no-go zones, DoD, cómo registrar evidencia. Lo permanente vive acá; lo puntual en SPEC/ADR.</p></div>
+    <div class="card"><h3>Skills (/comando)</h3><p>uscha-discovery, uscha-adr-refine, uscha-devloop, uscha-sysdoc, uscha-reverse-discovery, uscha-characterize en <code class="in">.claude/skills/</code>. Invocables, versionables, compartibles con el equipo.</p></div>
+    <div class="card"><h3>Sub-agentes</h3><p>Paralelizan las tools de QA (review, security, mejoras) sin ensuciar el contexto principal.</p></div>
+    <div class="card"><h3>Hooks</h3><p>Corren gates solos: tests post-edit, lint pre-commit. La evidencia se captura por ejecución, no se narra.</p></div>
+    <div class="card"><h3>Multi-repo (--add-dir)</h3><p>Montás varios repos en una sesión para QA de integración/contratos (multi-repo).</p></div>
+    <div class="card"><h3>Remote Control</h3><p>Seguís y manejás la sesión desde el celular mientras corre el loop. Sumá <code class="in">plan mode</code>, <code class="in">settings.local.json</code> para permisos, y <code class="in">ccusage</code> para monitorear uso.</p></div>
+    <div class="card"><h3>Memoria persistente (engram + MEMORY.md)</h3><p>La verdad sobrevive al cierre de la sesión: <code class="in">engram</code> guarda hechos y decisiones LLM-oriented por proyecto; <code class="in">MEMORY.md</code> es la auto-memoria en archivos. Es la regla <em>"la verdad vive en archivos"</em> extendida <strong>entre</strong> sesiones, no solo dentro del repo.</p></div>
+    <div class="card"><h3>Higiene de sesión</h3><p>Los <code class="in">/uscha-devloop</code> largos inflan el transcript hasta colgar la app — visto en vivo: <strong>77 MB = sesión perdida</strong>. Un hook que avisa por tamaño, un mapa con semáforo y un rescate del <code class="in">.jsonl</code> a Markdown legible (tooling del autor — no viene en el kit). Regla: rotá de sesión antes del umbral.</p></div>
+  </div>
+</section>
+
+<section class="slide" data-section="CLAUDE.md — reglas">
+  <div class="kicker"><span class="n">18</span> el protocolo permanente del repo <span class="callout-status real">en el kit</span></div>
+  <h2>CLAUDE.md — <span class="accent">las reglas innegociables.</span></h2>
+  <p>Reglas permanentes que Claude Code lee en cada sesión. Lo puntual de cada cambio vive en SPEC/ADR/ACCEPTANCE, no acá. (Si usás otros agentes, copiá este archivo como <code class="in">AGENTS.md</code>.)</p>
+  <ol class="steps">
+    <li><strong>No codear desde una idea vaga.</strong> Sin SPEC + ACCEPTANCE, primero modelar (<code class="in">/uscha-discovery</code> o <code class="in">/uscha-adr-refine</code>).</li>
+    <li><strong>La verdad vive en archivos, no en el chat.</strong> Antes de tocar código, leé SPEC/ACCEPTANCE/ADR.</li>
+    <li><strong>Convergé, no persigas el cero.</strong> Solo findings ≥ severity gate; el resto a ISSUES-DEFERRED.md.</li>
+    <li><strong>Disciplina de ADR durante el build.</strong> Pará y proponé ADR ante dependencia/patrón/alternativa/contradicción. Linkeá <code class="in">// ADR: &lt;slug&gt;</code>.</li>
+    <li><strong>Evidencia capturada, no narrada.</strong> La produce la ejecución. Ausente = sin evidencia.</li>
+    <li><strong>Legacy baseline.</strong> 0 HIGH/CRITICAL nuevos, 0 regresiones, sin warnings nuevos en archivos tocados.</li>
+    <li><strong>Change budget.</strong> Máx iteraciones/archivos; 0 schema sin ADR; 0 deps nuevas sin aprobación. Si se supera → escalá.</li>
+    <li><strong>Nunca edites la SPEC/ADR</strong> para que la implementación parezca correcta. Versionala y volvé a Ready.</li>
+    <li><strong>Human gate.</strong> No hagas merge ni release automático. Parás en el PR.</li>
+  </ol>
+  <div class="card note"><h3>Tracked-markdown protocol</h3><p>Antes de modificar cualquier <code class="in">.md</code> trackeado (CLAUDE.md, docs de plan/delta, docs/adr), pedí la versión actual del repo primero. Esos archivos llevan progreso real (checkboxes, notas); nunca los regeneres desde cero.</p></div>
+</section>
+
+<section class="slide" data-section="Una sesión, end to end">
+  <div class="kicker"><span class="n">19</span> de la idea al PR, sin salir de una sesión</div>
+  <h2>Una sesión, <span class="accent">end to end.</span></h2>
+  <p>Un servicio backend (Java, Spring Boot, React, SQL), de la idea al PR, todo en Claude Code:</p>
+  <pre><span class="c">claude code · sesión única</span>
+$ claude
+&gt; /uscha-discovery
+  <span class="c">grilla 1×1, propone entidades/endpoints, vos decidís 3 cosas</span>
+  <span class="o">✓</span> CONTEXT.md · DOMAIN-MODEL.md · SPEC-001 · ADR-001/2/3
+  <span class="o">✓</span> ACCEPTANCE.md · RISKS.md · HANDOFF.md
+&gt; /dev-loop
+  <span class="c">plan → coverage gate → build → QA loop (sub-agentes) → integration</span>
+  <span class="o">CONVERGED</span> · PR abierto. Paro en el merge.
+&gt; !python3 .claude/skills/uscha-devloop/qa_ledger.py readiness --acceptance ACCEPTANCE.md
+  <span class="o">READINESS: 88/100 — RELEASE CANDIDATE</span>
+&gt; /uscha-sysdoc                 <span class="c"># deck de dos vistas desde el ledger</span>
+<span class="c"># (vos) revisás el PR y mergeás — el human gate no se automatiza</span></pre>
+  <div class="card accent"><p style="font-size:1.1rem;font-weight:600;color:var(--ink)">La herramienta ejecuta. La metodología gobierna. La evidencia decide. El humano aprueba.</p></div>
+</section>
+
+<section class="slide" data-section="Ejemplo: 10 pasos con fallas">
+  <div class="kicker"><span class="n">◆</span> el ejemplo más simple, de punta a punta <span class="callout-status real">para empezar a verla</span></div>
+  <h2>La metodología en <span class="accent">10 pasos.</span></h2>
+  <p>Un feature mínimo — <code class="in">applyDiscount(monto, porcentaje)</code> — recorrido entero. <strong>6 de los 10 pasos son falla o refinamiento</strong> (marcados <span style="color:var(--red);font-weight:700">⚠</span>): la metodología no es que todo salga bien de una — es que cada desvío tiene un gate que lo caza.</p>
+  <ol class="steps">
+    <li><strong>Discovery.</strong> <code class="in">/uscha-discovery "applyDiscount(monto, porcentaje)"</code> → grilla 1×1 (¿redondeo? ¿límites del %?). Sale SPEC-001 + ACCEPTANCE + ADR-001.</li>
+    <li><strong style="color:var(--red-deep)">⚠ spec-check advisory.</strong> <code class="in">spec-check --spec SPEC-001.md</code> → criterio vago; lo reescribís testable: <em>"monto=100, %=20 → 80.00 (2 decimales)"</em>.</li>
+    <li><strong style="color:var(--red-deep)">⚠ out-of-scope.</strong> spec-check te exige la sección (check estructural — es un hecho y bloquea, exit 1); agregás <em>"fuera de alcance: cupones, impuestos"</em> → hay oráculo para "scoped-but-absent".</li>
+    <li><strong>adr-refine.</strong> <code class="in">/uscha-adr-refine "redondeo: ¿HALF_UP o HALF_EVEN?"</code> → ADR-002, con la alternativa registrada.</li>
+    <li><strong>uscha-devloop.</strong> <code class="in">/uscha-devloop</code> → plan → coverage → build → QA loop. Compila, happy path verde.</li>
+    <li><strong style="color:var(--red-deep)">⚠ pit-check.</strong> <code class="in">pit-check</code> (corrida scheduled/incremental, no inner-loop; el fail se persiste con <code class="in">log-gate</code>) → mutante vivo en el redondeo: el test corre pero no aserta el centavo. Sumás <code class="in">assertEquals("80.00", …)</code>. Coverage mentía.</li>
+    <li><strong style="color:var(--red-deep)">⚠ gate-check BLOQUEA.</strong> <code class="in">gate-check --from-git</code> → el agente bajó el threshold de cobertura en <code class="in">pom.xml</code> para pasar. Se revierte, se arregla el test de verdad.</li>
+    <li><strong style="color:var(--red-deep)">⚠ rebuild DIVERGE → amend-spec.</strong> <code class="in">rebuild --mode compare</code> → el caso <code class="in">%=120</code> quedó implícito. Enmendás la SPEC (">100 o &lt;0 → error"), regenerás, volvés a Ready. No parcheás el código.</li>
+    <li><strong style="color:var(--red-deep)">⚠ simplicity-check.</strong> <code class="in">simplicity-check --from-git</code> → OVERBUILT: la <code class="in">DiscountStrategyFactory</code> para 3 líneas infló el diff muy por encima del budget (una dimensión &gt;1.5× lo fuerza); el conteo de abstracciones lo señala como advisory. Se recorta.</li>
+    <li><strong>readiness + human gate.</strong> <code class="in">readiness --acceptance ACCEPTANCE.md</code> → 88/100 RELEASE CANDIDATE. Vos leés el diff, aprobás el merge (nunca auto). <code class="in">/uscha-sysdoc</code> arma el deck. Ship.</li>
+  </ol>
+  <div class="card note"><h3>Variante migración (legacy → nueva arquitectura)</h3><p>Si en vez de crear <code class="in">applyDiscount</code> la portás del legacy, el paso 1 es otro: <code class="in">/uscha-reverse-discovery</code> mapea el sistema viejo (hechos) y <code class="in">/uscha-characterize</code> captura el golden del código VIEJO con inputs reales. Después, <code class="in">golden-diff</code> byte-compara el nuevo vs <code class="in">.approved</code> — cualquier no-match = DIVERGE. El agente nunca authorea los <code class="in">.approved</code>.</p></div>
+</section>
+
+<section class="slide" data-section="Reproducir el entorno en el equipo">
+  <div class="kicker"><span class="n">20</span> mismo comportamiento en otra cuenta / otra PC <span class="callout-status prop">setup del autor — no viene en el kit</span></div>
+  <h2>Reproducir el entorno <span class="accent">en el equipo.</span></h2>
+  <p>Los skills son "compartibles con el equipo" — pero el comportamiento NO vive en un archivo. Esta taxonomía de <strong>7 capas</strong> + una CLI externa + un gotcha de paths describe el entorno completo <em>del autor</em>; el kit en sí solo requiere Claude Code, Python 3.8+, git (gh opcional), los skills copiados a <code class="in">~/.claude/skills/</code> y la config/permisos por repo. Copiar solo <code class="in">settings.json</code> no alcanza.</p>
+  <table>
+    <thead><tr><th>Capa</th><th>Qué es</th><th>Cómo se reproduce</th></tr></thead>
+    <tbody>
+      <tr><td class="t">Config</td><td>settings.json · CLAUDE.md · output-style · theme</td><td>copiar (+ arreglar paths)</td></tr>
+      <tr><td class="t">Plugins</td><td>engram · sonarqube</td><td>instalar desde marketplace</td></tr>
+      <tr><td class="t">Skills</td><td><code class="in">~/.claude/skills/</code> (uscha-discovery, uscha-devloop, QA...)</td><td>copiar la carpeta entera</td></tr>
+      <tr><td class="t">Agents + Commands</td><td>los <code class="in">sdd-*</code></td><td>copiar verbatim</td></tr>
+      <tr><td class="t">Hooks</td><td>gates + higiene de sesión (.ps1)</td><td>copiar (usan <code class="in">$env:USERPROFILE</code>, portables)</td></tr>
+      <tr><td class="t">CLI externa</td><td>gentle-ai (hook skill-registry)</td><td>scoop, bucket de Gentleman</td></tr>
+      <tr><td class="t">MCP servers</td><td>computer-use, chrome, preview...</td><td><span class="ok">gratis</span> con Claude Code Desktop</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+    <div class="card warn"><h3>Gotcha #1 — paths hardcodeados</h3><p><code class="in">settings.json</code> lleva el username literal (<code class="in">C:\Users\...</code>). En otra cuenta se rompe todo. El bootstrap (script del autor, no del kit) <strong>tokeniza</strong> el path al exportar y lo reemplaza por el usuario local al importar.</p></div>
+    <div class="card note"><h3>Opcional — gentle-ai (toolchain del autor)</h3><p>El kit no lo requiere. Si lo querés: no está en el bucket <code class="in">main</code> de scoop — primero el bucket propio de Gentleman, si no <code class="in">install</code> falla con "couldn't find manifest".</p></div>
+  </div>
+  <pre><span class="c"># bootstrap: un comando por lado</span>
+<span class="c"># en TU maquina — arma el bundle (sin secretos, sin memoria):</span>
+bootstrap-claude-setup.ps1 -Mode export -Bundle D:\claude-bundle
+<span class="c"># en la maquina NUEVA (bundle ya copiado ahi):</span>
+bootstrap-claude-setup.ps1 -Mode import -Bundle D:\claude-bundle
+<span class="c"># manual: gentle-ai (bucket propio) + los 2 plugins via /plugin</span>
+scoop bucket add gentleman https://github.com/Gentleman-Programming/scoop-bucket
+scoop install gentle-ai</pre>
+  <div class="card good"><p><strong>La memoria NO se comparte.</strong> engram + MEMORY.md son personales de cada máquina y se construyen solos al trabajar. <em>El comportamiento se replica; la memoria se gana.</em></p></div>
+</section>
+
+<section class="slide" data-section="Glosario">
+  <div class="kicker"><span class="n">§</span> anexo · referencia rápida</div>
+  <h2><span class="accent">Glosario</span> de términos.</h2>
+  <p>Para consultar al vuelo cuando un término aparece en las slides. No es lectura lineal: saltá acá cuando lo necesites (<code class="in">End</code> te trae al final).</p>
+
+  <h3>Artefactos — la verdad en archivos</h3>
+  <table>
+    <tbody>
+      <tr><td class="t">SPEC</td><td>Qué debe pasar. Requisitos verificables de un cambio.</td></tr>
+      <tr><td class="t">ADR</td><td>Architecture Decision Record. Por qué <em>esta</em> forma y no otra; una decisión con sus alternativas.</td></tr>
+      <tr><td class="t">CONSTITUTION</td><td>Invariantes que ningún ADR ni SPEC puede violar. Qué <strong>nunca</strong> es aceptable.</td></tr>
+      <tr><td class="t">ACCEPTANCE</td><td>Criterios de "done" verificables del cambio.</td></tr>
+      <tr><td class="t">CONTEXT · DOMAIN-MODEL · RISKS · HANDOFF</td><td>Paquete documental que produce <code class="in">/uscha-discovery</code>: contexto, modelo de dominio, riesgos, traspaso.</td></tr>
+      <tr><td class="t">ISSUES-DEFERRED.md</td><td>Findings por debajo del severity gate; no bloquean, se difieren.</td></tr>
+      <tr><td class="t">LEARNINGS.md</td><td>Correcciones compiladas a principios (learnings loop).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Fases y comandos</h3>
+  <table>
+    <tbody>
+      <tr><td class="t">/uscha-discovery</td><td>Modo idea→forma (greenfield): grilla 1×1, propone entidades/endpoints.</td></tr>
+      <tr><td class="t">/uscha-reverse-discovery</td><td>Front brownfield: extrae HECHOS del sistema viejo (mapa + golden), no propone forma. El humano infiere la SPEC.</td></tr>
+      <tr><td class="t">/uscha-characterize</td><td>Captura el golden del código ORIGINAL con inputs reales; para en la aprobación humana. El agente no authorea el <code class="in">.approved</code>.</td></tr>
+      <tr><td class="t">/uscha-adr-refine</td><td>Modo para pulir decisiones arquitectónicas.</td></tr>
+      <tr><td class="t">/uscha-devloop</td><td>El orquestador: plan → coverage gate → build → QA loop → integración.</td></tr>
+      <tr><td class="t">/uscha-sysdoc</td><td>Genera el deck de dos vistas desde el ledger. Reporting opcional, a pedido — no es fase obligatoria del pipeline.</td></tr>
+      <tr><td class="t">Human gate</td><td>El humano aprueba el merge/release; nunca automático.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Gates y medición</h3>
+  <table>
+    <tbody>
+      <tr><td class="t">qa_ledger.py</td><td>Motor de medición (stdlib): readiness, rebuild, simplicity-check, waste-check, pit-check, gate-check, spec-check, golden-diff, log-gate, flag-blocker, resolve-escalation.</td></tr>
+      <tr><td class="t">golden-diff / .approved</td><td>Gate de golden testing: byte-compara <code class="in">.received</code> vs <code class="in">.approved</code> (verdad de campo, aprobada por humano). El agente no lo authorea.</td></tr>
+      <tr><td class="t">hechos vs prosa</td><td>Principio rector: los gates que leen hechos bloquean; los que adivinan sobre prosa (spec-check, abstracciones) avisan.</td></tr>
+      <tr><td class="t">static gate (java-qa-gate)</td><td>Checkstyle / PMD / SpotBugs / FindSecBugs sobre el código.</td></tr>
+      <tr><td class="t">ingest-gate</td><td>Parsea los XML del static gate y los normaliza a una escala de severidad común.</td></tr>
+      <tr><td class="t">severity gate</td><td>Umbral que bloquea convergencia: BLOCKER / CRITICAL / HIGH.</td></tr>
+      <tr><td class="t">Readiness (KPI)</td><td>Score derivado del estado (tests / acceptance / coverage), con caps duros. Reporta (siempre exit 0); no es un gate.</td></tr>
+      <tr><td class="t">rebuild test</td><td>¿La SPEC alcanza para regenerar el sistema? Bandas COVERS / PARTIAL / DIVERGE (exit 1 salvo COVERS).</td></tr>
+      <tr><td class="t">change budget</td><td>Máx iteraciones / archivos / deps. Superarlo → escalación.</td></tr>
+      <tr><td class="t">SIMPLICITY (Reduce)</td><td>Invariante: presupuesto de complejidad del diff. Bandas SIMPLE / ACCEPTABLE / OVERBUILT.</td></tr>
+      <tr><td class="t">maker ≠ checker</td><td>El que hace no se gradúa; un checker en contexto fresco valida (evaluator-optimizer).</td></tr>
+      <tr><td class="t">evidencia capturada</td><td>La produce la ejecución (reports), no la narración. Ausente = sin evidencia.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Loops</h3>
+  <table>
+    <tbody>
+      <tr><td class="t">inner loop</td><td>El ciclo riguroso por cambio (Uscha).</td></tr>
+      <tr><td class="t">outer loop</td><td>El latido que dispara mantenimiento machine-checkable.</td></tr>
+      <tr><td class="t">heartbeat</td><td>El disparador del outer loop (Automations · <code class="in">/loop</code> · <code class="in">/goal</code>).</td></tr>
+      <tr><td class="t">Ralph Wiggum loop</td><td>Falla silenciosa: el agente emite el token de "listo" antes de tiempo. Lo cierran los gates objetivos + el humano, no el motor solo.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Memoria e higiene</h3>
+  <table>
+    <tbody>
+      <tr><td class="t">engram</td><td>Memoria persistente LLM-oriented, por proyecto, entre sesiones.</td></tr>
+      <tr><td class="t">MEMORY.md</td><td>Auto-memoria en archivos; índice destilado de hechos.</td></tr>
+      <tr><td class="t">higiene de sesión</td><td>Rotar de sesión antes de que el transcript la infle y la cuelgue.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Referencia externa</h3>
+  <table>
+    <tbody>
+      <tr><td class="t">CWE</td><td>Common Weakness Enumeration: catálogo estándar de debilidades de seguridad.</td></tr>
+      <tr><td class="t">YAGNI</td><td>"You Aren't Gonna Need It": no construir lo que no se pidió.</td></tr>
+      <tr><td class="t">progressive disclosure</td><td>Mostrar lo mínimo primero; diferir el detalle hasta que se necesite.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="slide" data-section="Referencias">
+  <div class="kicker"><span class="n">§</span> anexo · de dónde salieron las ideas</div>
+  <h2><span class="accent">Referencias</span> y crédito.</h2>
+  <p>Por una cuestión de principios: las ideas de este documento no salieron de la nada. Al concepto/idea que desarrollé, luego lo enriquecí con los siguientes aportes documentales:</p>
+  <table>
+    <thead><tr><th>Persona / fuente</th><th>Aporte a esta metodología</th></tr></thead>
+    <tbody>
+      <tr><td class="t">Birgitta Böckeler <span class="small">· martinfowler.com</span></td><td><a href="https://martinfowler.com/articles/sensors-for-coding-agents.html" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Maintainability sensors for coding agents"</a> — el marco de sensores (timing × naturaleza), coverage vs mutation testing, computacional vs inferencial.</td></tr>
+      <tr><td class="t">Addy Osmani</td><td><a href="https://addyosmani.com/blog/new-sdlc-vibe-coding/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"The New SDLC"</a>, <a href="https://addyosmani.com/blog/agentic-code-review/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Agentic Code Review"</a>, <a href="https://addyosmani.com/blog/loop-engineering/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Loop Engineering"</a> — anti gate-gaming (red-flags), checker no-correlacionado (93,4% = 1 de 4 tools), leer diffs de test más estricto, aislamiento por git worktree, fan-out ≤ review bandwidth.</td></tr>
+      <tr><td class="t">Martin Fowler</td><td><a href="https://martinfowler.com/bliki/TechnicalDebtQuadrant.html" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">Technical Debt Quadrant</a> (deuda inadvertida vs deliberada); su sitio es el hogar de buena parte de estas ideas.</td></tr>
+      <tr><td class="t">Vlad Khononov</td><td><a href="https://www.oreilly.com/library/view/learning-domain-driven-design/9781098100124/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)"><em>Learning Domain-Driven Design</em></a> — el marco de modularidad que fundamenta el review de modularidad.</td></tr>
+      <tr><td class="t">Dave Thomas &amp; Andy Hunt</td><td><a href="https://pragprog.com/titles/tpp20/the-pragmatic-programmer-20th-anniversary-edition/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)"><em>The Pragmatic Programmer</em> (20th Anniversary Ed.)</a> — convergencia verificada contra el libro completo: "Don’t Assume It — Prove It" (measured beats narrated), Design by Contract (CONSTITUTION), blackboards (el ledger), Crash Early (diseño fail-closed); "Find Bugs Once" y tracer bullets alimentan el backlog 2.0 (<code class="in">docs/analisis-pragmatic-programmer.md</code>).</td></tr>
+      <tr><td class="t">Andrej Karpathy</td><td><a href="https://github.com/forrestchang/andrej-karpathy-skills" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Simplicity First"</a> — KISS operacionalizado (mínimo código, cambios quirúrgicos, goal-driven).</td></tr>
+      <tr><td class="t">John Maeda</td><td><a href="https://lawsofsimplicity.com/" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)"><em>The Laws of Simplicity</em></a> — la Ley 1 (Reduce), norte de la invariante SIMPLICITY.</td></tr>
+      <tr><td class="t">Geoffrey Huntley</td><td>El <a href="https://ghuntley.com/ralph" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">"Ralph Wiggum loop"</a>: la falla silenciosa del token de "listo" prematuro.</td></tr>
+      <tr><td class="t">Anthropic</td><td><a href="https://www.anthropic.com/engineering/building-effective-agents" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)">Evaluator-optimizer</a> (maker ≠ checker, dic 2024); Claude Code; el skill <code class="in">simplify</code>.</td></tr>
+      <tr><td class="t">Gentleman Programming</td><td>Tooling del entorno: <a href="https://github.com/Gentleman-Programming/engram" style="color:var(--red);text-decoration:none;border-bottom:1px solid var(--rule)"><code class="in">engram</code></a> (memoria persistente) y <code class="in">gentle-ai</code>.</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Crédito honesto: la técnica de <em>mutation testing</em> se populariza con Stryker (JS) / PIT (Java); "Simplicity First" se operacionalizó públicamente en el repo de Forrest Chang (ene 2026), no lo endosó Karpathy. Atribuir de menos empobrece; atribuir de más miente.</p>
+</section>
+
+</div>
+
+<div class="nav"><button onclick="prevSlide()" aria-label="Anterior">&lsaquo;</button><div class="counter"><span id="cur">1</span>/<span id="total">0</span></div><button onclick="nextSlide()" aria-label="Siguiente">&rsaquo;</button></div>
+<div class="hint">&larr; &rarr; navegar &middot; Home inicio &middot; End final</div>
+
+<script>
+const slides = Array.from(document.querySelectorAll('.slide'));
+const cur = document.getElementById('cur');
+const total = document.getElementById('total');
+const curTop = document.getElementById('curTop');
+const totalTop = document.getElementById('totalTop');
+const section = document.getElementById('section');
+const progress = document.getElementById('progress');
+let idx = 0;
+total.textContent = slides.length;
+totalTop.textContent = slides.length;
+function showSlide(i){
+  idx = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, n) => s.classList.toggle('active', n === idx));
+  cur.textContent = idx + 1; curTop.textContent = idx + 1;
+  section.textContent = slides[idx].dataset.section || '—';
+  progress.style.width = (((idx + 1) / slides.length) * 100).toFixed(2) + '%';
+  location.hash = String(idx + 1).padStart(2, '0');
+  const a = document.querySelector('.slide.active'); if (a) a.scrollTop = 0;
+}
+function nextSlide(){ showSlide(idx + 1); }
+function prevSlide(){ showSlide(idx - 1); }
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); nextSlide(); }
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prevSlide(); }
+  if (e.key === 'Home') showSlide(0);
+  if (e.key === 'End') showSlide(slides.length - 1);
+});
+const fromHash = parseInt(location.hash.replace('#',''), 10);
+if (!Number.isNaN(fromHash) && fromHash >= 1 && fromHash <= slides.length) showSlide(fromHash - 1); else showSlide(0);
+</script>
+</body>
+</html>

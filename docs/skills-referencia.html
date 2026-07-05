@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>spec-loop · Referencia de skills</title>
+<title>Uscha · Referencia de skills</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -95,13 +95,13 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
   <div class="mk">spec-<b>loop</b> · skills</div>
   <div class="idx">
     <a href="#mapa">mapa</a>
-    <a href="#discovery">specloop-discovery</a>
-    <a href="#adr-refine">specloop-adr-refine</a>
-    <a href="#dev-loop">specloop-devloop</a>
-    <a href="#characterize">specloop-characterize</a>
-    <a href="#reverse-discovery">specloop-reverse-disc.</a>
-    <a href="#sys-doc">specloop-sysdoc</a>
-    <a href="#rubric">specloop-rubric</a>
+    <a href="#discovery">uscha-discovery</a>
+    <a href="#adr-refine">uscha-adr-refine</a>
+    <a href="#dev-loop">uscha-devloop</a>
+    <a href="#characterize">uscha-characterize</a>
+    <a href="#reverse-discovery">uscha-reverse-disc.</a>
+    <a href="#sys-doc">uscha-sysdoc</a>
+    <a href="#rubric">uscha-rubric</a>
     <a href="#transversales">transversales</a>
   </div>
 </nav>
@@ -109,32 +109,32 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 <div class="wrap">
 
 <header class="hero">
-  <div class="tag">referencia exhaustiva · dev-loop-kit 1.27.0</div>
+  <div class="tag">referencia exhaustiva · uscha-kit 1.27.0</div>
   <h1>Las siete skills <span class="a">del método.</span></h1>
   <p>Qué hace cada una, fase por fase: propósito, cuándo se invoca, principios no
   negociables, protocolo, artefactos, guardrails y relaciones. La fuente de verdad son
-  los siete <code>SKILL.md</code> de <code>dev-loop-kit/.claude/skills/</code> — este doc
+  los siete <code>SKILL.md</code> de <code>uscha-kit/.claude/skills/</code> — este doc
   los describe, no los reemplaza. Si algo acá contradice un SKILL.md, gana el SKILL.md.</p>
 </header>
 
 <section class="schematic" id="mapa">
   <div class="lbl">El mapa — cómo se encadenan</div>
   <div class="chain">
-    <span class="n hot">/specloop-discovery</span><span class="ar">greenfield: la skill PROPONE la forma, el humano aprueba</span>
+    <span class="n hot">/uscha-discovery</span><span class="ar">greenfield: la skill PROPONE la forma, el humano aprueba</span>
     <span class="gap"></span>
-    <span class="n hot">/specloop-reverse-discovery</span><span class="ar">brownfield: la skill EXTRAE hechos (usa</span><span class="n">/specloop-characterize</span><span class="ar">) y el humano escribe la SPEC</span>
+    <span class="n hot">/uscha-reverse-discovery</span><span class="ar">brownfield: la skill EXTRAE hechos (usa</span><span class="n">/uscha-characterize</span><span class="ar">) y el humano escribe la SPEC</span>
     <span class="gap"></span>
     <span class="n">paquete de spec</span><span class="ar">→</span>
-    <span class="n hot">/specloop-adr-refine</span><span class="ar">precisión sobre feature conocida →</span>
+    <span class="n hot">/uscha-adr-refine</span><span class="ar">precisión sobre feature conocida →</span>
     <span class="n">ADR set + ACCEPTANCE.md</span>
     <span class="gap"></span>
-    <span class="ar">→</span><span class="n hot">/specloop-devloop</span>
+    <span class="ar">→</span><span class="n hot">/uscha-devloop</span>
     <span class="ar">gates de hecho + ledger + convergencia →</span>
     <span class="n gate">phase --require pr-ready</span>
     <span class="ar">→ PR →</span>
     <span class="n hum">merge = HUMANO</span>
     <span class="gap"></span>
-    <span class="ar">QA-LEDGER.json →</span><span class="n hot">/specloop-sysdoc</span><span class="ar">deck comercial + técnico, a pedido</span>
+    <span class="ar">QA-LEDGER.json →</span><span class="n hot">/uscha-sysdoc</span><span class="ar">deck comercial + técnico, a pedido</span>
   </div>
   <p style="margin-top:1rem;color:var(--fg-soft);font-size:.9rem">La pieza transversal es el
   <strong style="color:var(--fg)">engine</strong> (<code>qa_ledger.py</code>, 24 subcomandos,
@@ -145,15 +145,15 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <!-- ══════════════════════ 1 · DISCOVERY ══════════════════════ -->
 <article class="play" id="discovery">
-  <div class="top"><div class="pn">01</div><div class="pt">specloop-discovery — de la idea pelada al paquete de spec</div><div class="status">frente greenfield</div></div>
+  <div class="top"><div class="pn">01</div><div class="pt">uscha-discovery — de la idea pelada al paquete de spec</div><div class="status">frente greenfield</div></div>
   <div class="body">
     <p><strong>Qué es.</strong> El humano trae la idea, las restricciones y el material de
     referencia; <strong>la skill trae la forma</strong>: interroga hasta que exista una forma
     compartida del sistema y escribe los documentos sobre la marcha — no le pide al humano
     que diseñe el sistema por ella.</p>
     <p><strong>Cuándo.</strong> "discovery", "modelá esto desde una idea", "solo tengo la idea,
-    no sé el cómo todavía". Cuándo NO: feature con forma clara → <code>specloop-adr-refine</code>;
-    sistema existente a migrar → <code>specloop-reverse-discovery</code>.</p>
+    no sé el cómo todavía". Cuándo NO: feature con forma clara → <code>uscha-adr-refine</code>;
+    sistema existente a migrar → <code>uscha-reverse-discovery</code>.</p>
 
     <h4>Principios no negociables</h4>
     <ul class="do">
@@ -180,7 +180,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
       <li><strong>Restricciones inviolables (→ CONSTITUTION.md)</strong> — un invariante por línea, CWE donde mapee; alimentan el severity gate y una violación es BLOCKER, nunca trade-off.</li>
       <li><strong>Out of scope</strong> — límites explícitos con referencias forward.</li>
       <li><strong>Acceptance / DoD</strong> — criterios concretos y chequeables + métricas.</li>
-      <li><strong>Quality bar (→ config, 1.17.0)</strong> — "¿qué nivel de calidad BASTA y qué es negociable?". Lo declarado va a <code>dev-loop.config.json</code> y lee como <em>requerimiento (config)</em>; lo no declarado queda como default del kit (opinión) y así se etiqueta. Declarar es commitear el config.</li>
+      <li><strong>Quality bar (→ config, 1.17.0)</strong> — "¿qué nivel de calidad BASTA y qué es negociable?". Lo declarado va a <code>uscha.config.json</code> y lee como <em>requerimiento (config)</em>; lo no declarado queda como default del kit (opinión) y así se etiqueta. Declarar es commitear el config.</li>
       <li><strong>Riesgos y dependencias</strong> — por cada riesgo de incertidumbre ALTA (1.19.0): "¿amerita un spike time-boxed?". El spike corre en rama <code>spike/*</code> y su único output legítimo es un ADR con lecciones — <code>phase --require pr-ready</code> rechaza esa rama, estilo INV-GOLDEN-01.</li>
     </ol>
 
@@ -215,19 +215,19 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <!-- ══════════════════════ 2 · ADR-REFINE ══════════════════════ -->
 <article class="play" id="adr-refine">
-  <div class="top"><div class="pn">02</div><div class="pt">specloop-adr-refine — entrevistar, después destilar</div><div class="status">precisión</div></div>
+  <div class="top"><div class="pn">02</div><div class="pt">uscha-adr-refine — entrevistar, después destilar</div><div class="status">precisión</div></div>
   <div class="body">
     <p><strong>Qué es.</strong> La misma entrevista aplicada a una feature CONOCIDA: la forma ya
     está clara, falta precisión. <strong>No es un generador: es un interrogador que
     destila.</strong> El valor está en las preguntas, no en acordar. Es la contraparte
-    front-half de specloop-devloop.</p>
+    front-half de uscha-devloop.</p>
     <p><strong>Cuándo.</strong> "refine the ADR", "let's spec this before coding", "ayudame a
     definir esto antes de desarrollar".</p>
 
     <h4>Principios no negociables</h4>
     <ul class="do">
       <li><strong>Interrogar, no validar</strong> — superficializar lo implícito y encontrar los agujeros.</li>
-      <li><strong>Converger, no quedarse sin preguntas</strong> — la entrevista termina por criterio OBJETIVO, no cuando el humano parece cansado. La misma disciplina del "converge, don't chase zero" de specloop-devloop, en el frente.</li>
+      <li><strong>Converger, no quedarse sin preguntas</strong> — la entrevista termina por criterio OBJETIVO, no cuando el humano parece cansado. La misma disciplina del "converge, don't chase zero" de uscha-devloop, en el frente.</li>
       <li><strong>Cero artefactos antes de converger</strong> — ante un "escribilo ya", primero se nombran los gaps abiertos.</li>
       <li><strong>Un tema por vez</strong> — lotes enfocados, reflejando "Decidido: … / Sigue abierto: …" antes de avanzar.</li>
       <li><strong>Los "decidilo vos" se registran</strong> — ante deferencia en decisión consecuente se devuelve el trade-off UNA vez; si insiste, queda como supuesto explícito en el ADR, jamás default silencioso.</li>
@@ -268,7 +268,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <!-- ══════════════════════ 3 · DEV-LOOP ══════════════════════ -->
 <article class="play" id="dev-loop">
-  <div class="top"><div class="pn">03</div><div class="pt">specloop-devloop — el orquestador de construcción + QA</div><div class="status">el motor</div></div>
+  <div class="top"><div class="pn">03</div><div class="pt">uscha-devloop — el orquestador de construcción + QA</div><div class="status">el motor</div></div>
   <div class="body">
     <p><strong>Qué es.</strong> Un ciclo disciplinado de desarrollo + QA sobre uno o más repos,
     con cada paso en un ledger determinístico (<code>QA-LEDGER.json</code>) y freno duro en el
@@ -279,7 +279,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     narrado.</strong></p>
     <p><strong>Para quién / cuándo NO.</strong> Un operador llevando UN cambio no trivial o con
     riesgo. NO para trabajo trivial — un fix de un archivo corre build+test y se saltea
-    discovery/ADR/specloop-sysdoc (tabla de perfiles del playbook).</p>
+    discovery/ADR/uscha-sysdoc (tabla de perfiles del playbook).</p>
 
     <h4>Principios no negociables</h4>
     <ul class="do">
@@ -293,7 +293,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
     <h4>Las fases</h4>
     <ol class="steps">
-      <li><strong>Setup</strong> — <code>init --config dev-loop.config.json</code>; cada repo con su type (maven·flutter·python·node·go·rust·dotnet·cpp·gradle·swift). Perfil E: instalar además el hook del golden + <code>.gitattributes</code>.</li>
+      <li><strong>Setup</strong> — <code>init --config uscha.config.json</code>; cada repo con su type (maven·flutter·python·node·go·rust·dotnet·cpp·gradle·swift). Perfil E: instalar además el hook del golden + <code>.gitattributes</code>.</li>
       <li><strong>Fase 0 — Plan (ADR-first).</strong> <code>CONSTITUTION.md</code> se lee PRIMERO. Input: ADR set + ACCEPTANCE.md. Sin criterios de acceptance → frenar y correr adr-refine. El loop apunta al plan, no a "cero issues".</li>
       <li><strong>Fase 1 — Coverage gate → caracterización condicional.</strong> <code>snapshot --phase pre</code> + <code>check-coverage</code>. Bajo el umbral → tests de contrato EN EL BORDE (no internals), revisados por el humano. Migración → golden ANTES de tocar nada; sin golden aprobado no hay build.</li>
       <li><strong>Fase 2 — Build.</strong> Commits convencionales por paso lógico. Disciplina ADR: consultar antes de tocar área gobernada; triggers proactivos de ADR nuevo; linkear código↔ADR; <strong>jamás editar la SPEC/ADR para que la implementación parezca correcta</strong>.</li>
@@ -322,7 +322,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <!-- ══════════════════════ 4 · CHARACTERIZE ══════════════════════ -->
 <article class="play" id="characterize">
-  <div class="top"><div class="pn">04</div><div class="pt">specloop-characterize — congelar el comportamiento actual como verdad de campo</div><div class="status">golden capture</div></div>
+  <div class="top"><div class="pn">04</div><div class="pt">uscha-characterize — congelar el comportamiento actual como verdad de campo</div><div class="status">golden capture</div></div>
   <div class="body">
     <p><strong>Qué es.</strong> Captura la suite golden/approval del comportamiento ACTUAL de un
     módulo — <strong>el único artefacto del loop que el agente no puede authorear, y esa es
@@ -330,8 +330,8 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     lo que el código "debería" devolver, codificaría la misma lectura parcial que pierde lógica
     en silencio. Se captura lo que el código HACE, mecánicamente, ejecutándolo.</p>
     <p><strong>Cuándo.</strong> "characterize", "golden-capture", "capturá el comportamiento
-    viejo" — antes de cualquier migración. specloop-devloop la dispara en Fase 1 (perfil E);
-    specloop-reverse-discovery la orquesta como su Fase 2.</p>
+    viejo" — antes de cualquier migración. uscha-devloop la dispara en Fase 1 (perfil E);
+    uscha-reverse-discovery la orquesta como su Fase 2.</p>
     <p><strong>La división de autoría:</strong> el agente PUEDE escribir el harness de captura;
     NO puede crear, renombrar ni editar ningún <code>.approved</code>.</p>
 
@@ -359,13 +359,13 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <p><strong>Stack de harness:</strong> Java → ApprovalTests.Java (JUnit 5,
     <code>JsonApprovals.verifyAsJson()</code>); C++/otros → dir de fixtures + serializador
     determinístico + runner custom. <strong>Relación:</strong> el <code>.approved</code> capturado
-    es el árbitro que <code>golden-diff</code> compara byte a byte durante specloop-devloop.</p>
+    es el árbitro que <code>golden-diff</code> compara byte a byte durante uscha-devloop.</p>
   </div>
 </article>
 
 <!-- ══════════════════════ 5 · REVERSE-DISCOVERY ══════════════════════ -->
 <article class="play" id="reverse-discovery">
-  <div class="top"><div class="pn">05</div><div class="pt">specloop-reverse-discovery — extraer los hechos de un sistema existente</div><div class="status">frente brownfield</div></div>
+  <div class="top"><div class="pn">05</div><div class="pt">uscha-reverse-discovery — extraer los hechos de un sistema existente</div><div class="status">frente brownfield</div></div>
   <div class="body">
     <p><strong>Qué es.</strong> El inverso de discovery: el sistema ya corre y su comportamiento
     observable ES la verdad. <strong>No se inventa nada — se caracteriza lo que ya está, como
@@ -385,7 +385,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <h4>Protocolo</h4>
     <ol class="steps">
       <li><strong>Map (hecho).</strong> Solo análisis estático → <code>SYSTEM-MAP.md</code>: cada endpoint/operación/topic público con su contrato · grafo de dependencias (ciclos y hubs flaggeados) · candidatos a módulo (observación del layout ACTUAL, NO propuesta del nuevo). Todo trazable a código: nada de "esto parece que…".</li>
-      <li><strong>Characterize (hecho).</strong> El golden en los bordes, delegando en la skill <code>specloop-characterize</code> (o siguiendo su contrato inline si no está instalada). Corpus insuficiente = PARTIAL.</li>
+      <li><strong>Characterize (hecho).</strong> El golden en los bordes, delegando en la skill <code>uscha-characterize</code> (o siguiendo su contrato inline si no está instalada). Corpus insuficiente = PARTIAL.</li>
       <li><strong>Summary (hechos, sin opinión).</strong> <code>DISCOVERY-SUMMARY.md</code>: el mapa + el reporte de cobertura del golden (qué bordes están aprobados, cuáles PARTIAL y por qué). La base de hechos que el humano lee para escribir la SPEC de migración. Sin editorializar.</li>
     </ol>
 
@@ -401,14 +401,14 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     Si un paso requiriera adivinar, salió del scope de la skill.</p></div>
 
     <p><strong>Flow de migración completo:</strong> reverse-discovery (hechos) → el humano escribe
-    la SPEC + specloop-adr-refine (decisiones de partición forward) → specloop-devloop (reestructura con
+    la SPEC + uscha-adr-refine (decisiones de partición forward) → uscha-devloop (reestructura con
     golden-diff verde todo el camino) → readiness + gate humano.</p>
   </div>
 </article>
 
 <!-- ══════════════════════ 6 · SYS-DOC ══════════════════════ -->
 <article class="play" id="sys-doc">
-  <div class="top"><div class="pn">06</div><div class="pt">specloop-sysdoc — el deck de sistema en dos vistas</div><div class="status">reporte</div></div>
+  <div class="top"><div class="pn">06</div><div class="pt">uscha-sysdoc — el deck de sistema en dos vistas</div><div class="status">reporte</div></div>
   <div class="body">
     <p><strong>Qué es.</strong> Genera UN <code>.html</code> autocontenido y navegable (estilo
     PowerPoint: teclado + click) que documenta un sistema en dos pistas conmutables:
@@ -416,7 +416,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     framing plata/tiempo/confiabilidad) y <strong>técnica</strong> (arquitectura, módulos,
     contratos, QA, cobertura, deferred).</p>
     <p><strong>Cuándo.</strong> "document this system", "make the system deck" — a pedido desde
-    specloop-devloop Fase 8 (es reporte, no parte del build verificado).</p>
+    uscha-devloop Fase 8 (es reporte, no parte del build verificado).</p>
 
     <div class="rule"><div class="rk">la regla de oro — métricas del ledger, verbatim</div>
     <p><code>summary --json</code> y <code>readiness --json</code> son autoritativos —
@@ -453,7 +453,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <!-- ══════════════════════ 7 · RUBRIC ══════════════════════ -->
 <article class="play" id="rubric">
-  <div class="top"><div class="pn">07</div><div class="pt">specloop-rubric — el ACCEPTANCE de lo no-testeable (adapter)</div><div class="status">rubric layer</div></div>
+  <div class="top"><div class="pn">07</div><div class="pt">uscha-rubric — el ACCEPTANCE de lo no-testeable (adapter)</div><div class="status">rubric layer</div></div>
   <div class="body">
     <p><strong>Qué es.</strong> Puntúa el cambio contra <code>RUBRIC.md</code> — criterio
     cualitativo VERSIONADO (convenciones, ergonomía de API, sanidad del error handling,
@@ -461,7 +461,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <strong>adapter FINO de Claude Code</strong>: el núcleo es agnóstico — el prompt neutro
     (<code>templates/rubric-grader-prompt.md</code>, corre en Codex/Gemini CLI/Cursor/curl/
     un humano) + el contrato JSON que <code>rubric-ingest</code> valida (kit 1.23.0).</p>
-    <p><strong>Cuándo.</strong> "grade the rubric", "evaluá la rúbrica" — y specloop-devloop
+    <p><strong>Cuándo.</strong> "grade the rubric", "evaluá la rúbrica" — y uscha-devloop
     la corre en Fase 3b cuando existe una rúbrica.</p>
     <h4>Protocolo</h4>
     <ol class="steps">
@@ -490,21 +490,21 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
       <thead><tr><th>Invariante</th><th>Qué exige</th><th>Dónde rige</th></tr></thead>
       <tbody>
         <tr><td>tracked-markdown</td><td>Antes de sobreescribir un <code>.md</code> trackeado que ya existe, pedir la versión actual — jamás reemplazar progreso real en silencio.</td><td>las 7</td></tr>
-        <tr><td>INV-GOLDEN-01</td><td>El agente jamás escribe/renombra/edita un <code>.approved</code>; un hook PreToolUse lo vuelve mecánicamente imposible. Vale incluso en tests: crear un fixture aprobado es un acto humano.</td><td>specloop-characterize · specloop-reverse-discovery · specloop-devloop</td></tr>
-        <tr><td>CONSTITUTION.md</td><td>Los invariantes están ARRIBA de los ADRs; una violación es BLOCKER y se escala, jamás se negocia. Enmendarla es una decisión humana explícita y separada.</td><td>specloop-discovery · specloop-adr-refine · specloop-devloop</td></tr>
+        <tr><td>INV-GOLDEN-01</td><td>El agente jamás escribe/renombra/edita un <code>.approved</code>; un hook PreToolUse lo vuelve mecánicamente imposible. Vale incluso en tests: crear un fixture aprobado es un acto humano.</td><td>uscha-characterize · uscha-reverse-discovery · uscha-devloop</td></tr>
+        <tr><td>CONSTITUTION.md</td><td>Los invariantes están ARRIBA de los ADRs; una violación es BLOCKER y se escala, jamás se negocia. Enmendarla es una decisión humana explícita y separada.</td><td>uscha-discovery · uscha-adr-refine · uscha-devloop</td></tr>
         <tr><td>hechos vs prosa</td><td>Los gates que leen hechos bloquean (golden-diff, gate-check, simplicity, spec-check estructural, phase); los que adivinan sobre prosa avisan (spec-check prosa, regression-check, advisories del readiness) — <code>--strict</code> los gatea cuando el equipo lo decide.</td><td>todas, vía engine</td></tr>
       </tbody>
     </table>
     <div class="rule go"><div class="rk">el humano en tres puntos fijos</div><p>Aprueba la
-    <strong>forma</strong> (specloop-discovery / specloop-adr-refine) · aprueba el <strong>golden</strong>
-    (specloop-characterize) · <strong>mergea</strong> (specloop-devloop). El agente propone, mide y frena;
+    <strong>forma</strong> (uscha-discovery / uscha-adr-refine) · aprueba el <strong>golden</strong>
+    (uscha-characterize) · <strong>mergea</strong> (uscha-devloop). El agente propone, mide y frena;
     el humano decide.</p></div>
   </div>
 </article>
 
 <footer class="foot">
   <p>la herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba</p>
-  <p style="margin-top:.5rem">fuente de verdad: dev-loop-kit/.claude/skills/*/SKILL.md · kit 1.27.0 · 2026-07</p>
+  <p style="margin-top:.5rem">fuente de verdad: uscha-kit/.claude/skills/*/SKILL.md · kit 1.27.0 · 2026-07</p>
 </footer>
 
 </div>

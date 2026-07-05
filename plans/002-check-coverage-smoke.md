@@ -5,7 +5,7 @@
 > When done, update this plan's row in `plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat b803c98..HEAD -- dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py dev-loop-kit/tests/smoke-engine.sh`
+> `git diff --stat b803c98..HEAD -- uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py uscha-kit/tests/smoke-engine.sh`
 > If either changed, compare the "Current state" excerpts against the live code before
 > proceeding; on a mismatch, STOP.
 
@@ -28,8 +28,8 @@ this a cheap win that closes a real gap: a regression in the threshold compariso
 
 ## Current state
 
-Engine: `dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py`. Tests:
-`dev-loop-kit/tests/smoke-engine.sh` (161 checks, `T1`..`T47`).
+Engine: `uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py`. Tests:
+`uscha-kit/tests/smoke-engine.sh` (161 checks, `T1`..`T47`).
 
 **What `check-coverage` does** — `cmd_check_coverage` at qa_ledger.py:1170-1188:
 
@@ -73,13 +73,13 @@ Exemplar for a fresh-ledger block: `T45` (search `== T45`) creates its own confi
 
 | Purpose            | Command                                    | Expected on success |
 |--------------------|--------------------------------------------|---------------------|
-| Run the test suite | `bash dev-loop-kit/tests/smoke-engine.sh`  | `RESULTADO: <N> ok · 0 fail`, exit 0 |
+| Run the test suite | `bash uscha-kit/tests/smoke-engine.sh`  | `RESULTADO: <N> ok · 0 fail`, exit 0 |
 
 Run from repo root `C:\Work\AI\SpecLoop`.
 
 ## Scope
 
-**In scope**: `dev-loop-kit/tests/smoke-engine.sh` — add ONE block, `T49`.
+**In scope**: `uscha-kit/tests/smoke-engine.sh` — add ONE block, `T49`.
 
 **Out of scope**: the engine (`qa_ledger.py`), all version/changelog/manifest files, and
 the `== T44 sync quintuple ==` block (your block goes before T44).
@@ -112,7 +112,7 @@ chk "coverage 85% < threshold 90 -> BELOW exit 1" 1 run check-coverage --repo co
 chk "sin report de coverage -> fail-closed exit 1" 1 run check-coverage --repo nocov --threshold 60 --ledger L-cc.json
 ```
 
-**Verify**: `bash dev-loop-kit/tests/smoke-engine.sh` → `· 0 fail`, exit 0, and three new
+**Verify**: `bash uscha-kit/tests/smoke-engine.sh` → `· 0 fail`, exit 0, and three new
 `ok` lines under `== T49`.
 
 ### Step 2 (only if the OK check fails with "NO coverage report found")
@@ -126,22 +126,22 @@ from what T13 implies and needs a human.
 
 ### Step 3: Confirm scope
 
-**Verify**: `git status --short` shows only `dev-loop-kit/tests/smoke-engine.sh` modified.
+**Verify**: `git status --short` shows only `uscha-kit/tests/smoke-engine.sh` modified.
 
 ## Test plan
 
 - New `T49` block covering: coverage above threshold (OK/exit 0), below threshold
   (BELOW/exit 1), and no report at all (fail-closed/exit 1).
 - Pattern to follow: `T45` (fresh config + `--out` ledger + `run` assertions).
-- Verification: `bash dev-loop-kit/tests/smoke-engine.sh` → `0 fail`, three new `ok` lines.
+- Verification: `bash uscha-kit/tests/smoke-engine.sh` → `0 fail`, three new `ok` lines.
 
 ## Done criteria
 
 ALL must hold:
 
-- [ ] `bash dev-loop-kit/tests/smoke-engine.sh` exits 0, prints `· 0 fail`.
+- [ ] `bash uscha-kit/tests/smoke-engine.sh` exits 0, prints `· 0 fail`.
 - [ ] Total ok count = previous baseline + 3.
-- [ ] `grep -c "== T49" dev-loop-kit/tests/smoke-engine.sh` returns `1`.
+- [ ] `grep -c "== T49" uscha-kit/tests/smoke-engine.sh` returns `1`.
 - [ ] `git status --short` shows ONLY the smoke file modified.
 - [ ] `plans/README.md` row for 002 updated to DONE.
 

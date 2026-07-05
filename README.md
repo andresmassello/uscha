@@ -1,8 +1,8 @@
 # SpecLoop
 
-Hogar del proyecto **spec-loop**: una metodología spec-driven, tool-agnóstica, para
+Hogar del proyecto **Uscha**: una metodología spec-driven, tool-agnóstica, para
 desarrollo con LLM coding agents — *vos traés la idea, el método construye el resto* —
-y de su instanciación en Claude Code, el **dev-loop-kit**.
+y de su instanciación en Claude Code, el **uscha-kit**.
 
 > La herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba.
 
@@ -10,20 +10,20 @@ y de su instanciación en Claude Code, el **dev-loop-kit**.
 
 ```
 SpecLoop/
-├── dev-loop-kit/          # ★ SOURCE canónico del kit (v1.24.0)
-│   ├── .claude/skills/    #   7 skills: specloop-discovery · specloop-adr-refine · specloop-devloop · specloop-sysdoc
-│   │                      #             specloop-reverse-discovery · specloop-characterize · specloop-rubric
-│   ├── .claude/skills/specloop-devloop/qa_ledger.py   # motor de evidencia (23 subcomandos, stdlib)
+├── uscha-kit/          # ★ SOURCE canónico del kit (v1.24.0)
+│   ├── .claude/skills/    #   7 skills: uscha-discovery · uscha-adr-refine · uscha-devloop · uscha-sysdoc
+│   │                      #             uscha-reverse-discovery · uscha-characterize · uscha-rubric
+│   ├── .claude/skills/uscha-devloop/qa_ledger.py   # motor de evidencia (23 subcomandos, stdlib)
 │   ├── hooks/             #   PreToolUse: el agente no escribe .approved (INV-GOLDEN-01)
 │   ├── templates/         #   CLAUDE.md · CONSTITUTION.md · .gitattributes · docs/adr
-│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (acceptance trazable) → 1.11.0 (tests fuera del presupuesto) → 1.12.0 (secret-scan) → 1.13.0 (ledger atómico) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (procedencia de umbrales) → 1.18.0 (FSM derivada) → 1.19.0 (spikes — backlog PragProg CERRADO) → 1.20.0 (instalación global) → 1.21.0 (namespace specloop-*) → 1.22.0 (doctor) → 1.23.0 (rubric layer) → 1.24.0 (plugin de Claude Code)
+│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (acceptance trazable) → 1.11.0 (tests fuera del presupuesto) → 1.12.0 (secret-scan) → 1.13.0 (ledger atómico) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (procedencia de umbrales) → 1.18.0 (FSM derivada) → 1.19.0 (spikes — backlog PragProg CERRADO) → 1.20.0 (instalación global) → 1.21.0 (namespace uscha-*) → 1.22.0 (doctor) → 1.23.0 (rubric layer) → 1.24.0 (plugin de Claude Code)
 ├── docs/                  # artefactos publicados (canónicos acá; Downloads = snapshots)
-│   ├── spec-loop-claude-code-doc-FINAL.html   # deck largo ES (36 slides)
-│   ├── spec-loop-claude-code-doc-EN.html      # deck largo EN
-│   ├── spec-loop-playbook{,-EN}.html          # Manual del Operador (trigger/move/gate)
-│   ├── spec-loop-onepager{,-EN}.html          # ficha de una página
-│   ├── spec-loop-team-pitch.html              # pitch de adopción para el equipo (historia Vale/Martín, 14 slides)
-│   ├── spec-loop-team-pitch-extended.html     # pitch extendido: + día-tipo, KPI readiness, ledger 2 pisos, piloto (22 slides)
+│   ├── uscha-claude-code-doc-FINAL.html   # deck largo ES (36 slides)
+│   ├── uscha-claude-code-doc-EN.html      # deck largo EN
+│   ├── uscha-playbook{,-EN}.html          # Manual del Operador (trigger/move/gate)
+│   ├── uscha-onepager{,-EN}.html          # ficha de una página
+│   ├── uscha-team-pitch.html              # pitch de adopción para el equipo (historia Vale/Martín, 14 slides)
+│   ├── uscha-team-pitch-extended.html     # pitch extendido: + día-tipo, KPI readiness, ledger 2 pisos, piloto (22 slides)
 │   ├── skills-referencia.html                 # referencia exhaustiva de las 7 skills (qué hace cada una, fase por fase)
 │   ├── casos-reales.md                        # bitácora: momentos reales donde el método interviene (anonimizados)
 │   ├── *.png                                  # mapa del sistema · 10 pasos · reverse-discovery
@@ -76,7 +76,7 @@ SpecLoop/
 ## Cómo se re-empaqueta el kit
 
 ```bash
-powershell -NoProfile -Command "Compress-Archive -Path 'dev-loop-kit' -DestinationPath 'dev-loop-kit-X.Y.Z.zip' -Force"
+powershell -NoProfile -Command "Compress-Archive -Path 'uscha-kit' -DestinationPath 'uscha-kit-X.Y.Z.zip' -Force"
 ```
 
 Los zips son artefactos de build: no se commitean. El source del kit en este repo es la verdad.

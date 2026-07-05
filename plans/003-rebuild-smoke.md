@@ -5,7 +5,7 @@
 > When done, update this plan's row in `plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat b803c98..HEAD -- dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py dev-loop-kit/tests/smoke-engine.sh`
+> `git diff --stat b803c98..HEAD -- uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py uscha-kit/tests/smoke-engine.sh`
 > If either changed, compare the "Current state" excerpts against the live code before
 > proceeding; on a mismatch, STOP.
 
@@ -31,8 +31,8 @@ mis-report how complete a specification is. This plan covers both modes and the 
 
 ## Current state
 
-Engine: `dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py`. Tests:
-`dev-loop-kit/tests/smoke-engine.sh` (161 checks).
+Engine: `uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py`. Tests:
+`uscha-kit/tests/smoke-engine.sh` (161 checks).
 
 **What `rebuild` does** — `cmd_rebuild` at qa_ledger.py:2438 dispatches to
 `_rebuild_baseline` (2444) or `_rebuild_compare` (2470). Both build a per-repo signature
@@ -78,13 +78,13 @@ CLI (argparse at qa_ledger.py:4521+): `rebuild --mode {baseline,compare}`
 
 | Purpose            | Command                                    | Expected on success |
 |--------------------|--------------------------------------------|---------------------|
-| Run the test suite | `bash dev-loop-kit/tests/smoke-engine.sh`  | `RESULTADO: <N> ok · 0 fail`, exit 0 |
+| Run the test suite | `bash uscha-kit/tests/smoke-engine.sh`  | `RESULTADO: <N> ok · 0 fail`, exit 0 |
 
 Run from repo root `C:\Work\AI\SpecLoop`.
 
 ## Scope
 
-**In scope**: `dev-loop-kit/tests/smoke-engine.sh` — add ONE block, `T50`.
+**In scope**: `uscha-kit/tests/smoke-engine.sh` — add ONE block, `T50`.
 
 **Out of scope**: the engine (`qa_ledger.py`), all version/changelog/manifest files, the
 `== T44` block (your block goes before T44).
@@ -145,12 +145,12 @@ sys.exit(0 if ok else 1)" \
   || { FAIL=$((FAIL+1)); echo "  FAIL compare no detecto la divergencia de tests"; }
 ```
 
-**Verify**: `bash dev-loop-kit/tests/smoke-engine.sh` → `· 0 fail`, exit 0, and six new
+**Verify**: `bash uscha-kit/tests/smoke-engine.sh` → `· 0 fail`, exit 0, and six new
 `ok` lines under `== T50`.
 
 ### Step 2: Confirm scope
 
-**Verify**: `git status --short` shows only `dev-loop-kit/tests/smoke-engine.sh` modified.
+**Verify**: `git status --short` shows only `uscha-kit/tests/smoke-engine.sh` modified.
 
 ## Test plan
 
@@ -158,15 +158,15 @@ sys.exit(0 if ok else 1)" \
   unchanged tree → COVERS/exit 0 with tests-dim 1.0; compare after the preserved suite
   starts failing → not-COVERS/exit 1 with a `tests fail` gap.
 - Patterns to follow: `T13` (coverage + junit fixtures) and `T45` (fresh config).
-- Verification: `bash dev-loop-kit/tests/smoke-engine.sh` → `0 fail`, six new `ok` lines.
+- Verification: `bash uscha-kit/tests/smoke-engine.sh` → `0 fail`, six new `ok` lines.
 
 ## Done criteria
 
 ALL must hold:
 
-- [ ] `bash dev-loop-kit/tests/smoke-engine.sh` exits 0, prints `· 0 fail`.
+- [ ] `bash uscha-kit/tests/smoke-engine.sh` exits 0, prints `· 0 fail`.
 - [ ] Total ok count = previous baseline + 6.
-- [ ] `grep -c "== T50" dev-loop-kit/tests/smoke-engine.sh` returns `1`.
+- [ ] `grep -c "== T50" uscha-kit/tests/smoke-engine.sh` returns `1`.
 - [ ] `git status --short` shows ONLY the smoke file modified.
 - [ ] `plans/README.md` row for 003 updated to DONE.
 

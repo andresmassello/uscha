@@ -1,15 +1,15 @@
 # CLAUDE.md — SpecLoop (desarrollo del método y del kit)
 
-Este repo es el **hogar del proyecto spec-loop**: el source del `dev-loop-kit` y sus
+Este repo es el **hogar del proyecto Uscha**: el source del `uscha-kit` y sus
 artefactos de documentación. Acá se desarrolla EL MÉTODO — y el método se aplica a sí
 mismo.
 
 ## Reglas del repo
 
-1. **El source canónico del kit es `dev-loop-kit/`.** Los zips en Downloads son builds;
+1. **El source canónico del kit es `uscha-kit/`.** Los zips en Downloads son builds;
    los docs en Downloads son snapshots. Ante conflicto, gana este repo.
 2. **Truth-pass obligatorio**: ningún doc de `docs/` puede afirmar algo que
-   `dev-loop-kit/.claude/skills/specloop-devloop/qa_ledger.py` no haga. Si cambiás el engine,
+   `uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py` no haga. Si cambiás el engine,
    actualizás los docs en el MISMO cambio (o marcás el claim como `propuesta`).
    *Under-claim, then wire, then re-claim.*
 3. **Los gemelos van juntos**: cada doc ES tiene su -EN. Un edit en uno exige el edit
@@ -17,11 +17,11 @@ mismo.
 4. **Cero referencias a proyectos/clientes**: el kit y los docs son genéricos
    (repos de ejemplo: `backend-api`/`mobile-app`). Verificar con grep antes de commitear
    (ojo: `rg` necesita `--hidden` para ver `.claude/`).
-5. **Cambios al engine llevan smoke test**: `bash dev-loop-kit/tests/smoke-engine.sh`
+5. **Cambios al engine llevan smoke test**: `bash uscha-kit/tests/smoke-engine.sh`
    tiene que salir 0 ANTES de commitear cualquier cambio a `qa_ledger.py`. Si el cambio
    agrega comportamiento, se agrega su check a la suite en el mismo commit.
-6. **Versionado**: bump de `VERSION` + `dev-loop.config.json` + `CHANGELOG-X.Y.Z.md`
-   + `dev-loop-kit/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`
+6. **Versionado**: bump de `VERSION` + `uscha.config.json` + `CHANGELOG-X.Y.Z.md`
+   + `uscha-kit/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`
    en el mismo commit. Los cinco tienen que coincidir (el smoke T44 lo verifica).
 7. **Commits convencionales** (`feat:`, `fix:`, `docs:`…), chicos y atómicos.
 8. **INV-GOLDEN-01 rige acá también**: nunca escribir/renombrar un `.approved`

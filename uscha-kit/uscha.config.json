@@ -1,0 +1,122 @@
+{
+  "version": "1.29.0",
+  "defaults": {
+    "coverage_threshold": 60,
+    "max_iterations": 5,
+    "tools_per_cycle": 3,
+    "severity_gate": [
+      "BLOCKER",
+      "CRITICAL",
+      "HIGH"
+    ],
+    "qa_tools_order": [
+      "code-review",
+      "judgment-day",
+      "improve"
+    ],
+    "test_command_maven": "mvn -q -DskipITs=false test",
+    "test_command_flutter": "flutter test --coverage",
+    "test_command_python": "pytest --cov --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml",
+    "test_command_node": "npx jest --coverage --reporters=default --reporters=jest-junit",
+    "test_command_go": "gotestsum --junitfile reports/junit.xml -- -coverprofile=coverage.out ./...",
+    "test_command_rust": "cargo llvm-cov nextest --cobertura --output-path reports/coverage.xml && cp target/nextest/default/junit.xml reports/junit.xml",
+    "test_command_dotnet": "dotnet test --logger \"junit;LogFilePath=$PWD/reports/junit.xml\" /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=$PWD/reports/coverage.xml",
+    "test_command_cpp": "ctest --test-dir build --output-junit ../reports/junit.xml && gcovr --cobertura reports/coverage.xml",
+    "test_command_gradle": "./gradlew test jacocoTestReport",
+    "test_command_swift": "swift test --enable-code-coverage --xunit-output reports/junit.xml",
+    "id_granularity": "file",
+    "acceptance_file": "ACCEPTANCE.md",
+    "readiness_weights": {
+      "acceptance": 30,
+      "adr": 15,
+      "coverage": 15,
+      "static_gate": 20,
+      "convergence": 10,
+      "integration": 10
+    },
+    "readiness_caps": {
+      "tests_red": 35,
+      "blocker_critical": 65,
+      "escalation": 75
+    },
+    "static_gate_zero_at": 10,
+    "constitution_file": "CONSTITUTION.md",
+    "rebuild": {
+      "coverage_tolerance": 5
+    },
+    "simplicity": {
+      "max_lines_added": 400,
+      "max_net_lines": 300,
+      "max_files_changed": 20,
+      "max_nesting_depth": 4,
+      "max_hunk_added": 120,
+      "max_new_abstractions": 8,
+      "max_abstraction_density": 3.0,
+      "indent_width": 4
+    },
+    "waste": {
+      "window_size": 5,
+      "max_dup_windows_vs_repo": 0,
+      "max_dup_ratio": 0.10,
+      "min_line_len": 8,
+      "allow_paths": [],
+      "gate": false
+    }
+  },
+  "repos": [
+    {
+      "name": "backend-api",
+      "path": "../backend-api",
+      "type": "maven"
+    },
+    {
+      "name": "mobile-app",
+      "path": "../mobile-app",
+      "type": "flutter"
+    },
+    {
+      "name": "data-lib",
+      "path": "../data-lib",
+      "type": "python"
+    },
+    {
+      "name": "web-app",
+      "path": "../web-app",
+      "type": "node"
+    },
+    {
+      "name": "api-svc",
+      "path": "../api-svc",
+      "type": "go"
+    },
+    {
+      "name": "core-lib",
+      "path": "../core-lib",
+      "type": "rust"
+    },
+    {
+      "name": "erp-svc",
+      "path": "../erp-svc",
+      "type": "dotnet"
+    },
+    {
+      "name": "native-core",
+      "path": "../native-core",
+      "type": "cpp"
+    },
+    {
+      "name": "jvm-service",
+      "path": "../jvm-service",
+      "type": "gradle"
+    },
+    {
+      "name": "mobile-kit",
+      "path": "../mobile-kit",
+      "type": "swift"
+    }
+  ],
+  "integration": {
+    "enabled": true,
+    "contract_tests_command": "mvn -q -pl integration-tests test"
+  }
+}

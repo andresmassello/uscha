@@ -1,16 +1,16 @@
 {
-  "name": "specloop",
-  "description": "spec-loop: metodologia spec-driven para LLM coding agents — el marketplace del dev-loop-kit",
+  "name": "uscha",
+  "description": "Uscha: metodologia spec-driven para LLM coding agents — el marketplace del uscha-kit",
   "owner": {
     "name": "Andres Massello",
     "url": "https://github.com/andresmassello"
   },
   "plugins": [
     {
-      "name": "specloop",
-      "source": "./dev-loop-kit",
-      "description": "7 skills (specloop-*) + qa_ledger.py (24 subcomandos, stdlib). Facts block, guesses advise; el humano aprueba.",
-      "version": "1.28.0",
+      "name": "uscha",
+      "source": "./uscha-kit",
+      "description": "7 skills (uscha-*) + qa_ledger.py (24 subcomandos, stdlib). Facts block, guesses advise; el humano aprueba.",
+      "version": "1.29.0",
       "author": { "name": "Andres Massello" },
       "homepage": "https://github.com/andresmassello/SPEC-LOOP",
       "repository": "https://github.com/andresmassello/SPEC-LOOP",
