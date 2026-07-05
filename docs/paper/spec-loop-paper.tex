@@ -15,7 +15,8 @@
 \author{Andr\'es Massello\thanks{This work is licensed under a Creative
 Commons Attribution 4.0 International (CC BY 4.0) license.}\\
 \small Independent Researcher --- C\'ordoba, Argentina\\
-\small \texttt{amassello@gmail.com} $\cdot$ \texttt{github.com/andresmassello}}
+\small \texttt{amassello@gmail.com} $\cdot$ \texttt{github.com/andresmassello}
+$\cdot$ \texttt{linkedin.com/in/amassello}}
 \date{July 2026}
 
 \begin{document}
@@ -153,15 +154,20 @@ an integrity-checksummed ledger; and platform dependence through the contract
 architecture and a dependency-free engine.
 
 \textbf{Practitioner doctrine.} The methodology's check classification adapts
-the computational-versus-inferential distinction discussed in the
-practitioner literature on generative AI in software
-delivery~\cite{fowler2023exploring}. Architecture decision records follow
-Nygard~\cite{nygard2011adr}, extended with machine-checkable implementation
-plans. Golden-master capture follows approval-testing
-practice~\cite{approvaltests}, with one addition central to the method: the
-agent may author the capture harness but is mechanically forbidden --- by a
-pre-tool-use hook, not by instruction --- from writing an approved fixture.
-The methodology was also systematically cross-examined against classical
+the computational-versus-inferential distinction from B\"ockeler's
+\emph{sensor} framework for coding agents~\cite{boeckeler2025sensors,fowler2023exploring}
+--- the axis on which ``facts block, guesses advise'' rests. Its gate-integrity
+stance --- that a change must not weaken the apparatus that measures it, and
+that a high-blast-radius change needs a checker uncorrelated with the maker ---
+follows the agentic-code-review red flags catalogued by Osmani~\cite{osmani2025agentic}.
+Architecture decision records follow Nygard~\cite{nygard2011adr}, extended with
+machine-checkable implementation plans. Golden-master capture follows
+approval-testing practice~\cite{approvaltests}, with one addition central to the
+method: the agent may author the capture harness but is mechanically forbidden
+--- by a pre-tool-use hook, not by instruction --- from writing an approved
+fixture. The simplicity gate operationalizes the ``Reduce'' law of
+Maeda~\cite{maeda2006simplicity}. The methodology was also systematically
+cross-examined against classical
 doctrine~\cite{thomas2019pragmatic}; \S\ref{sec:validation} reports the ten
 resulting improvements. The design stance throughout is an application of
 Goodhart's law~\cite{strathern1997improving} to agent verification: any signal
@@ -544,6 +550,18 @@ Edition. Addison-Wesley, 2019.
 \bibitem{nygard2011adr}
 M.~Nygard, ``Documenting Architecture Decisions,'' blog post, 2011.
 \url{https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions}
+
+\bibitem{boeckeler2025sensors}
+B.~B\"ockeler, ``Maintainability Sensors for Coding Agents,''
+martinfowler.com, 2025.
+\url{https://martinfowler.com/articles/sensors-for-coding-agents.html}
+
+\bibitem{osmani2025agentic}
+A.~Osmani, ``Agentic Code Review'' and ``Loop Engineering,'' addyosmani.com,
+2024--2025.
+
+\bibitem{maeda2006simplicity}
+J.~Maeda, \emph{The Laws of Simplicity}. MIT Press, 2006.
 
 \bibitem{fowler2023exploring}
 M.~Fowler et al., ``Exploring Generative AI,'' memo series,
