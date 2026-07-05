@@ -238,7 +238,7 @@ el repo es su propio marketplace y el hook INV-GOLDEN-01 se auto-registra al ins
 (cero edición de settings.json). Las skills quedan como `uscha:uscha-*`.
 
 ```
-/plugin marketplace add andresmassello/SPEC-LOOP
+/plugin marketplace add andresmassello/uscha
 /plugin install uscha@uscha
 ```
 

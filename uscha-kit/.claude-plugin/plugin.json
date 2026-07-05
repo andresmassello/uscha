@@ -8,8 +8,8 @@
     "name": "Andres Massello",
     "url": "https://github.com/andresmassello"
   },
-  "homepage": "https://github.com/andresmassello/SPEC-LOOP",
-  "repository": "https://github.com/andresmassello/SPEC-LOOP",
+  "homepage": "https://github.com/andresmassello/uscha",
+  "repository": "https://github.com/andresmassello/uscha",
   "license": "MIT",
   "keywords": ["spec-driven", "qa", "gates", "golden-testing", "readiness", "methodology"],
   "skills": "./.claude/skills/",

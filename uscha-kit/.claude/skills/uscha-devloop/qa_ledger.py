@@ -4170,7 +4170,7 @@ def cmd_doctor(args):
             err(f"skills faltantes en {skills_root}: {', '.join(missing)}",
                 "instalar: copia uscha-kit/.claude/skills/* a ~/.claude/skills/ "
                 "(README del kit > Instalacion, opcion B) - del zip uscha-kit-X.Y.Z "
-                "o de tu checkout del repo SPEC-LOOP")
+                "o de tu checkout del repo uscha")
         if mismatched:
             err(f"SKILL.md con frontmatter name distinto al directorio: {', '.join(mismatched)}")
 
