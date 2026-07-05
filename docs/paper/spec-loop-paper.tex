@@ -52,7 +52,7 @@ validation: two adversarial audits (231 agent evaluations) that initially found
 the central principle inverted in code and drove its re-wiring; a systematic
 cross-examination against classical software-engineering doctrine that produced
 ten shipped improvements; and sustained self-application, in which fresh-context
-reviews caught real defects in 15 of 17 releases before merge. We report design
+reviews repeatedly caught real defects before merge across the release series. We report design
 validation and self-application evidence only; controlled empirical evaluation
 remains future work.
 \end{abstract}
@@ -169,9 +169,14 @@ fixture. The simplicity gate operationalizes the ``Reduce'' law of
 Maeda~\cite{maeda2006simplicity}. The methodology was also systematically
 cross-examined against classical
 doctrine~\cite{thomas2019pragmatic}; \S\ref{sec:validation} reports the ten
-resulting improvements. The design stance throughout is an application of
-Goodhart's law~\cite{strathern1997improving} to agent verification: any signal
-the agent can see, it will eventually optimize.
+resulting improvements. Two agent-native failure modes complete the lineage:
+the premature ``done'' token --- Huntley's \emph{Ralph Wiggum
+loop}~\cite{huntley2025ralph} --- is exactly what the derived state machine and
+objective gates refuse to accept, and the maker-checker separation the review
+loop enforces is the evaluator-optimizer pattern~\cite{anthropic2024agents}.
+The design stance throughout is an application of Goodhart's
+law~\cite{strathern1997improving} to agent verification: any signal the agent
+can see, it will eventually optimize.
 
 \section{The Methodology}\label{sec:method}
 
@@ -408,7 +413,35 @@ loop. Third, the one mechanical prohibition (the agent must not write approved
 golden fixtures) is enforced by a pre-tool-use hook at the runtime boundary,
 not by instruction --- during development of the implementation itself the hook
 blocked one of its author's own commands, which is the property working as
-designed.
+designed. Table~\ref{tab:skills} maps the seven skills to the phase each serves.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}llp{6.4cm}@{}}
+\toprule
+\textbf{Skill} & \textbf{Front / phase} & \textbf{Role} \\
+\midrule
+\texttt{discovery} & greenfield front & idea $\to$ spec package, one question
+at a time; the agent \emph{proposes} the system shape \\
+\texttt{adr-refine} & known-feature front & Socratic interview $\to$ SPEC +
+decision records + acceptance for an already-scoped feature \\
+\texttt{reverse-discovery} & brownfield front & extract \emph{facts} only
+(system map + boundary golden); never authors an inferred spec \\
+\texttt{characterize} & pre-change & capture the approval suite of current
+behavior --- the one artifact the agent must not author \\
+\texttt{devloop} & the loop & plan $\to$ build $\to$ severity-gated review loop
+$\to$ derived PR gate; records every step in the ledger \\
+\texttt{sysdoc} & reporting & two-audience (commercial + technical) HTML deck
+generated from the ledger \\
+\texttt{rubric} & advisory gate & thin adapter that grades against a versioned
+\texttt{RUBRIC.md} via the vendor-neutral JSON contract \\
+\bottomrule
+\end{tabular}
+\caption{The seven agent skills. Each is a markdown instruction file readable by
+any instruction-following agent; the engine is invoked identically from each.}
+\label{tab:skills}
+\end{table}
 
 The implementation carries its process in executable form. A smoke suite of
 161 checks exercises the engine against a synthetic ledger --- including,
@@ -442,8 +475,8 @@ central finding that the core principle was \emph{inverted in the code} ---
 fact gates existed but were not wired to block. A second audit verified 171
 claims across documentation, code, and design intent. The response re-wired
 every fact gate into the engine and re-passed all documentation against the
-implemented reality (130 truthfulness edits), converting the principle from
-slogan to enforced property.
+implemented reality (a recorded truth-pass over the affected documents),
+converting the principle from slogan to enforced property.
 
 \textbf{Doctrine cross-examination.} The methodology was systematically read
 against classical software-engineering doctrine~\cite{thomas2019pragmatic},
@@ -461,10 +494,12 @@ definition; only the numbers are opinion, and they now state their
 provenance), and the workflow state machine is derived rather than declared.
 
 \textbf{Self-application.} The implementation is developed under its own
-process. Across eighteen releases, each engine change carried smoke checks in
-the same commit, a fresh-context review before merge, and a five-way version
-consistency check enforced by the suite. Fresh-context reviews found real
-defects prior to merge in 15 of 17 reviewed releases, including: test-file
+process. Across the eighteen releases of the self-application arc (versions
+1.10 through 1.27), each engine change carried smoke checks in the same commit,
+a fresh-context review before merge, and a five-way version consistency check
+enforced by the suite. These reviews repeatedly caught real defects prior to
+merge --- the changelogs record the resulting hardening across the series ---
+including: test-file
 classifier gaps that made a documented guarantee an overclaim; a blank-line
 loophole in regression-capture evidence (any non-blank test line counts as
 evidence --- a tripwire, not a judge --- but a blank line must not); a
@@ -498,14 +533,19 @@ the point of use, but disclosure is not elimination.
 
 \section{Future Work}\label{sec:future}
 
-Planned next steps are: read-only dry runs of all nine stack adapters against
-real repositories; a multi-project dogfooding study with operators other than
-the author; a controlled comparison against the frameworks
-in~\cite{demacedo2026prompt} along their six taxonomy dimensions, with
-particular attention to the validation and portability axes; and an
-evaluation of the rubric layer's inter-run variance under anchored versus
-unanchored criteria, connecting to the validation self-awareness agenda
-of~\cite{ma2026building}. A further direction extends the Lean lens beyond the
+The central gap is controlled evaluation. Concretely, we plan a study that
+assigns matched non-trivial changes to operators \emph{with} and \emph{without}
+the methodology and measures three outcomes the ledger already instruments:
+defect-escape rate at human review, rework (first-time yield across cycles),
+and time-to-merge --- against two baselines, ad-hoc agent use and the
+frameworks surveyed in~\cite{demacedo2026prompt} along their six taxonomy
+dimensions (with particular attention to the validation and portability axes).
+The missing pieces are operators other than the author and a controlled task
+set; the process instrumentation is already in place. Supporting steps:
+read-only dry runs of all nine stack adapters against real repositories; a
+multi-project dogfooding phase; and an evaluation of the rubric layer's
+inter-run variance under anchored versus unanchored criteria, connecting to the
+validation self-awareness agenda of~\cite{ma2026building}. A further direction extends the Lean lens beyond the
 inner loop: the reuse and anti-ceremony gates address two forms of waste
 (duplication and over-processing), but the ``shine'' discipline of 5S ---
 scheduled cleanup that keeps the legacy layer from silently freezing --- is a
@@ -562,6 +602,13 @@ A.~Osmani, ``Agentic Code Review'' and ``Loop Engineering,'' addyosmani.com,
 
 \bibitem{maeda2006simplicity}
 J.~Maeda, \emph{The Laws of Simplicity}. MIT Press, 2006.
+
+\bibitem{huntley2025ralph}
+G.~Huntley, ``The Ralph Wiggum Loop,'' blog post, 2025.
+
+\bibitem{anthropic2024agents}
+Anthropic, ``Building Effective Agents'' (the evaluator-optimizer workflow),
+2024. \url{https://www.anthropic.com/research/building-effective-agents}
 
 \bibitem{fowler2023exploring}
 M.~Fowler et al., ``Exploring Generative AI,'' memo series,

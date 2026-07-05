@@ -85,8 +85,8 @@ described, together with its design validation: two adversarial audits (231
 agent evaluations) that initially found the central principle inverted in code
 and drove its re-wiring; a systematic cross-examination against classical
 software-engineering doctrine that produced ten shipped improvements; and
-sustained self-application, in which fresh-context reviews caught real defects
-in 15 of 17 releases before merge. We report design validation and
+sustained self-application, in which fresh-context reviews repeatedly caught
+real defects before merge across the release series. We report design validation and
 self-application evidence only; controlled empirical evaluation remains future
 work.</p>
 </div>
@@ -201,9 +201,14 @@ agent may author the capture harness but is mechanically forbidden &mdash; by a
 pre-tool-use hook, not by instruction &mdash; from writing an approved fixture.
 The simplicity gate operationalizes the &ldquo;Reduce&rdquo; law of Maeda [13].
 The methodology was also systematically cross-examined against classical
-doctrine [4]; &sect;6 reports the ten resulting improvements. The design stance
-throughout is an application of Goodhart's law [8] to agent verification: any
-signal the agent can see, it will eventually optimize.</p>
+doctrine [4]; &sect;6 reports the ten resulting improvements. Two agent-native
+failure modes complete the lineage: the premature &ldquo;done&rdquo; token
+&mdash; Huntley's <i>Ralph Wiggum loop</i> [14] &mdash; is exactly what the
+derived state machine and objective gates refuse to accept, and the
+maker-checker separation the review loop enforces is the evaluator-optimizer
+pattern [15]. The design stance throughout is an application of Goodhart's law
+[8] to agent verification: any signal the agent can see, it will eventually
+optimize.</p>
 
 <h2>3&nbsp;&nbsp;The Methodology</h2>
 
@@ -404,7 +409,21 @@ loop. Third, the one mechanical prohibition (the agent must not write approved
 golden fixtures) is enforced by a pre-tool-use hook at the runtime boundary,
 not by instruction &mdash; during development of the implementation itself the
 hook blocked one of its author's own commands, which is the property working
-as designed.</p>
+as designed. Table&nbsp;3 maps the seven skills to the phase each serves.</p>
+
+<table class="tab">
+<tr><th>Skill</th><th>Front / phase</th><th>Role</th></tr>
+<tr><td><code>discovery</code></td><td>greenfield front</td><td>idea &rarr; spec package, one question at a time; the agent <i>proposes</i> the system shape</td></tr>
+<tr><td><code>adr-refine</code></td><td>known-feature front</td><td>Socratic interview &rarr; SPEC + decision records + acceptance for an already-scoped feature</td></tr>
+<tr><td><code>reverse-discovery</code></td><td>brownfield front</td><td>extract <i>facts</i> only (system map + boundary golden); never authors an inferred spec</td></tr>
+<tr><td><code>characterize</code></td><td>pre-change</td><td>capture the approval suite of current behavior &mdash; the one artifact the agent must not author</td></tr>
+<tr><td><code>devloop</code></td><td>the loop</td><td>plan &rarr; build &rarr; severity-gated review loop &rarr; derived PR gate; records every step in the ledger</td></tr>
+<tr><td><code>sysdoc</code></td><td>reporting</td><td>two-audience (commercial + technical) HTML deck generated from the ledger</td></tr>
+<tr class="last"><td><code>rubric</code></td><td>advisory gate</td><td>thin adapter that grades against a versioned <code>RUBRIC.md</code> via the vendor-neutral JSON contract</td></tr>
+</table>
+<div class="tabcap"><b>Table 3.</b> The seven agent skills. Each is a markdown
+instruction file readable by any instruction-following agent; the engine is
+invoked identically from each.</div>
 
 <p>The implementation carries its process in executable form. A smoke suite of
 161 checks exercises the engine against a synthetic ledger &mdash; including,
@@ -438,8 +457,8 @@ central finding that the core principle was <i>inverted in the code</i> &mdash;
 fact gates existed but were not wired to block. A second audit verified 171
 claims across documentation, code, and design intent. The response re-wired
 every fact gate into the engine and re-passed all documentation against the
-implemented reality (130 truthfulness edits), converting the principle from
-slogan to enforced property.</p>
+implemented reality (a recorded truth-pass over the affected documents),
+converting the principle from slogan to enforced property.</p>
 
 <p><b class="rh">Doctrine cross-examination.</b> The methodology was
 systematically read against classical software-engineering doctrine [4],
@@ -457,11 +476,12 @@ definition; only the numbers are opinion, and they now state their
 provenance), and the workflow state machine is derived rather than declared.</p>
 
 <p><b class="rh">Self-application.</b> The implementation is developed under
-its own process. Across eighteen releases, each engine change carried smoke
-checks in the same commit, a fresh-context review before merge, and the
-five-way version consistency check enforced by the suite. Fresh-context
-reviews found real defects prior to merge in 15 of 17 reviewed releases,
-including: test-file classifier gaps that made a documented guarantee an
+its own process. Across the eighteen releases of the self-application arc
+(versions 1.10 through 1.27), each engine change carried smoke checks in the
+same commit, a fresh-context review before merge, and the five-way version
+consistency check enforced by the suite. These reviews repeatedly caught real
+defects prior to merge &mdash; the changelogs record the resulting hardening
+across the series &mdash; including: test-file classifier gaps that made a documented guarantee an
 overclaim; a blank-line loophole in regression-capture evidence (any non-blank
 test line counts as evidence &mdash; a tripwire, not a judge &mdash; but a blank
 line must not); a review-suite check that passed for the wrong reason (its
@@ -495,13 +515,19 @@ disclosed at the point of use, but disclosure is not elimination.</p>
 
 <h2>8&nbsp;&nbsp;Future Work</h2>
 
-<p>Planned next steps are: read-only dry runs of all nine stack adapters
-against real repositories; a multi-project dogfooding study with operators
-other than the author; a controlled comparison against the frameworks in [3]
-along their six taxonomy dimensions, with particular attention to the
-validation and portability axes; and an evaluation of the rubric layer's
-inter-run variance under anchored versus unanchored criteria, connecting to
-the validation self-awareness agenda of [2]. A further direction extends the
+<p>The central gap is controlled evaluation. Concretely, we plan a study that
+assigns matched non-trivial changes to operators <i>with</i> and <i>without</i>
+the methodology and measures three outcomes the ledger already instruments:
+defect-escape rate at human review, rework (first-time yield across cycles),
+and time-to-merge &mdash; against two baselines, ad-hoc agent use and the
+frameworks surveyed in [3] along their six taxonomy dimensions (with particular
+attention to the validation and portability axes). The missing pieces are
+operators other than the author and a controlled task set; the process
+instrumentation is already in place. Supporting steps: read-only dry runs of
+all nine stack adapters against real repositories; a multi-project dogfooding
+phase; and an evaluation of the rubric layer's inter-run variance under
+anchored versus unanchored criteria, connecting to the validation
+self-awareness agenda of [2]. A further direction extends the
 Lean lens beyond the inner loop: the reuse and anti-ceremony gates address two
 forms of waste (duplication and over-processing), but the &ldquo;shine&rdquo;
 discipline of 5S &mdash; scheduled cleanup that keeps the legacy layer from
@@ -565,6 +591,12 @@ martinfowler.com/articles/sensors-for-coding-agents.html</p>
 Engineering,&rdquo; addyosmani.com, 2024&ndash;2025.</p>
 
 <p>[13] J. Maeda, <i>The Laws of Simplicity</i>. MIT Press, 2006.</p>
+
+<p>[14] G. Huntley, &ldquo;The Ralph Wiggum Loop,&rdquo; blog post, 2025.</p>
+
+<p>[15] Anthropic, &ldquo;Building Effective Agents&rdquo; (the
+evaluator-optimizer workflow), 2024.
+anthropic.com/research/building-effective-agents</p>
 </div>
 
 </body>
