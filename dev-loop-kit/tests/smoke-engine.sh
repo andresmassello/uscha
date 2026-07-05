@@ -940,6 +940,139 @@ sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   --json expone gates[] aditivo (latest limpio, blocking False)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL contrato gates[] en --json"; }
 
+echo "== T46 REUSE-FIRST (1.26.0): waste-check Type-1/2 clon-vs-repo, advisory-first, determinista =="
+mkdir -p wrepo/util
+cat > wrepo/util/money.py <<'EOF'
+def compute_total(items, rate):
+    subtotal = sum(x.price for x in items)
+    taxed = subtotal * (1 + rate)
+    shipping = 5 if taxed < 100 else 0
+    grand = round(taxed + shipping, 2)
+    return grand
+EOF
+# LEAN: archivo nuevo, codigo unico (no clona nada del repo)
+cat > lean.diff <<'EOF'
+diff --git a/service/report.py b/service/report.py
+new file mode 100644
+--- /dev/null
++++ b/service/report.py
+@@ -0,0 +1,6 @@
++def build_report(rows, header):
++    lines = [header.upper(), "----------"]
++    for entry in rows:
++        lines.append(entry.render_line())
++    joined = "\n".join(lines)
++    return joined
+EOF
+# CLON VS REPO: archivo nuevo que reimplementa wrepo/util/money.py exacto
+cat > clone.diff <<'EOF'
+diff --git a/service/checkout.py b/service/checkout.py
+new file mode 100644
+--- /dev/null
++++ b/service/checkout.py
+@@ -0,0 +1,6 @@
++def compute_total(items, rate):
++    subtotal = sum(x.price for x in items)
++    taxed = subtotal * (1 + rate)
++    shipping = 5 if taxed < 100 else 0
++    grand = round(taxed + shipping, 2)
++    return grand
+EOF
+# CLON INTERNO: el mismo bloque repetido dentro del propio diff (no en el repo)
+cat > internal.diff <<'EOF'
+diff --git a/service/dup.py b/service/dup.py
+new file mode 100644
+--- /dev/null
++++ b/service/dup.py
+@@ -0,0 +1,12 @@
++def parse_alpha(text, mode):
++    tokens = text.split(mode)
++    cleaned = [t.strip() for t in tokens]
++    filtered = [t for t in cleaned if t]
++    counted = len(filtered)
++    return counted, filtered
++def parse_beta(text, mode):
++    tokens = text.split(mode)
++    cleaned = [t.strip() for t in tokens]
++    filtered = [t for t in cleaned if t]
++    counted = len(filtered)
++    return counted, filtered
+EOF
+# CLON EN TEST: excluido (como simplicity) -> no cuenta
+cat > clone-test.diff <<'EOF'
+diff --git a/tests/test_checkout.py b/tests/test_checkout.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_checkout.py
+@@ -0,0 +1,6 @@
++def compute_total(items, rate):
++    subtotal = sum(x.price for x in items)
++    taxed = subtotal * (1 + rate)
++    shipping = 5 if taxed < 100 else 0
++    grand = round(taxed + shipping, 2)
++    return grand
+EOF
+chk "lean.diff -> exit 0 (advisory)" 0 run waste-check --diff lean.diff --repo-root wrepo
+run waste-check --diff lean.diff --repo-root wrepo --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['verdict'] == 'LEAN' and d['metrics']['dup_windows_vs_repo'] == 0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   codigo unico -> LEAN, 0 clones vs repo"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL lean mal clasificado"; }
+chk "clon vs repo -> exit 0 SIN gate (advisory-first)" 0 run waste-check --diff clone.diff --repo-root wrepo
+run waste-check --diff clone.diff --repo-root wrepo --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ok = (d['verdict'] == 'WASTEFUL' and d['metrics']['dup_windows_vs_repo'] >= 1
+      and d['gate'] is False and any('money.py' in f for f in d['flags']))
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   clon vs repo -> WASTEFUL + flag nombra el original (money.py)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL clon vs repo no detectado"; }
+chk "clon vs repo con --gate -> exit 1 (BLOCKER declarado)" 1 run waste-check --diff clone.diff --repo-root wrepo --gate
+run waste-check --diff internal.diff --repo-root wrepo --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['metrics']['dup_windows_internal'] >= 1 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   clon interno detectado (dup_windows_internal >= 1)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL clon interno no detectado"; }
+run waste-check --diff clone-test.diff --repo-root wrepo --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['verdict'] == 'LEAN' and d['metrics']['dup_windows_vs_repo'] == 0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   clon en archivo de test EXCLUIDO (como simplicity)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL test no excluido del waste-check"; }
+# SELF-MATCH: un diff que TOCA util/money.py y le agrega una copia de su PROPIO bloque
+# no debe matchearse contra si mismo (el archivo tocado se excluye del escaneo del repo)
+cat > selfmod.diff <<'EOF'
+diff --git a/util/money.py b/util/money.py
+--- a/util/money.py
++++ b/util/money.py
+@@ -6,0 +7,6 @@
++def compute_total(items, rate):
++    subtotal = sum(x.price for x in items)
++    taxed = subtotal * (1 + rate)
++    shipping = 5 if taxed < 100 else 0
++    grand = round(taxed + shipping, 2)
++    return grand
+EOF
+run waste-check --diff selfmod.diff --repo-root wrepo --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['metrics']['dup_windows_vs_repo'] == 0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   archivo tocado excluido del escaneo (no auto-match)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL self-match: el archivo tocado se comparo consigo mismo"; }
+# determinismo: misma entrada -> mismo score (sin azar, sin red, sin LLM)
+W1=$(run waste-check --diff clone.diff --repo-root wrepo --json 2>/dev/null | "$PY" -c "import json,sys;print(json.load(sys.stdin)['score'])")
+W2=$(run waste-check --diff clone.diff --repo-root wrepo --json 2>/dev/null | "$PY" -c "import json,sys;print(json.load(sys.stdin)['score'])")
+[ "$W1" = "$W2" ] && [ -n "$W1" ] \
+  && { PASS=$((PASS+1)); echo "  ok   determinista (score $W1 estable)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL no determinista ($W1 vs $W2)"; }
+# log-gate --kind waste persiste y entra al rollup de readiness (1.25.0)
+run log-gate --repo solo --iteration 3 --kind waste --verdict fail --count 2 --ledger L-ac.json >/dev/null 2>&1
+run readiness --ledger L-ac.json 2>/dev/null | grep -- "--- gates:" | grep -q "gate:waste" \
+  && { PASS=$((PASS+1)); echo "  ok   gate:waste persistido aparece en el veredicto unico"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL gate:waste no entra al rollup de readiness"; }
+
 echo "== T44 sync quintuple de version: VERSION = config = plugin.json = marketplace.json =="
 "$PY" -c "
 import json, sys, os, io

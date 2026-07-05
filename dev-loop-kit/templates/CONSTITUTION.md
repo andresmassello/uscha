@@ -47,6 +47,21 @@ el enforcement del registro sí es del engine. Nunca se resuelve "rodeándola" e
 - [ ] Cambio acotado al presupuesto (`defaults.simplicity`) — restar antes de sumar
 - [ ] "¿Un senior diría que esto está sobre-construido?" Si sí, se recorta antes de convergir
 
+## Reuso — "REUSE-FIRST" (principio; el proxy AVISA, gatea si se declara)
+
+> Muda de duplicacion (Poppendieck cap. 4): el codigo IA reinventa en vez de reusar
+> (GitClear *Maintainability Gap*: +81% de duplicacion desde 2023). `simplicity-check`
+> NO la ve — puntua el diff en AISLAMIENTO, nunca contra lo que ya existe. La mide
+> `qa_ledger.py waste-check` (clones Type-1/2 del diff vs el repo). El HECHO —un bloque
+> de 5+ lineas ya existe en `archivo:linea`— es medido; el VEREDICTO "wasteful" es
+> heuristica con falsos positivos conocidos (boilerplate, DTOs, SQL/JSON embebido), asi
+> que **avisa por default** y gatea SOLO con `defaults.waste.gate: true` o `--gate`
+> (procedencia: el config commiteado ES la declaracion). CWE-1041 / DRY.
+
+- [ ] No reimplementar lo que ya existe en el repo — reuso antes que clon
+- [ ] Duplicacion dentro del cambio acotada — extraer un helper antes de clonar
+- [ ] Un WASTEFUL, si el humano declaro el gate, se reusa/refactoriza, no se converge
+
 ## Tests efectivos — "coverage miente" (no-negociable)
 
 > Coverage dice que la línea *corrió*; no que un test la *verifica*. La efectividad se
@@ -108,6 +123,11 @@ el enforcement del registro sí es del engine. Nunca se resuelve "rodeándola" e
 - La invariante **Simplicidad** se mide sin criterio humano: `qa_ledger.py simplicity-check`
   puntúa el diff (minimalidad, anidación, abstracción) y devuelve `SIMPLE / ACCEPTABLE /
   OVERBUILT`. **OVERBUILT** = BLOCKER (exit 1): se recorta, no se converge.
+- La invariante **Reuso (REUSE-FIRST)** la mide `qa_ledger.py waste-check`: clones Type-1/2
+  del diff vs el repo (`dup_vs_repo` es la senal dominante). **Advisory por default** (avisa
+  con `archivo:linea` a reusar, exit 0); con `defaults.waste.gate: true` o `--gate` un
+  **WASTEFUL** es exit 1 y se persiste con `log-gate --kind waste --verdict fail` (cap de
+  readiness ≤ 65, bloquea convergencia). Proxy honesto Type-1/2, jamas semantico ni por AST.
 - La invariante **Tests efectivos** se mide con `qa_ledger.py pit-check`: si el mutation
   score cae bajo el gate o sobreviven mutantes en el camino crítico, es finding **BLOCKER** —
   coverage verde no alcanza. Caro → tier *scheduled / incremental*, no en el inner loop.

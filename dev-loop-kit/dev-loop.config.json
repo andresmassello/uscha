@@ -1,5 +1,5 @@
 {
-  "version": "1.25.0",
+  "version": "1.26.0",
   "defaults": {
     "coverage_threshold": 60,
     "max_iterations": 5,
@@ -53,6 +53,14 @@
       "max_new_abstractions": 8,
       "max_abstraction_density": 3.0,
       "indent_width": 4
+    },
+    "waste": {
+      "window_size": 5,
+      "max_dup_windows_vs_repo": 0,
+      "max_dup_ratio": 0.10,
+      "min_line_len": 8,
+      "allow_paths": [],
+      "gate": false
     }
   },
   "repos": [

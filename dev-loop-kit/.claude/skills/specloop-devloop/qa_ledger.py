@@ -2897,6 +2897,247 @@ def _pit_metrics(xml_path):
     }
 
 
+# --------------------------------------------------------------------------- #
+# waste-check (the "REUSE-FIRST" invariant, kit 1.26.0): DETERMINISTIC Type-1/Type-2
+# clone detection over the diff vs the repo — the muda `simplicity-check` cannot see,
+# because it scores the diff in ISOLATION and never looks at what already exists.
+# --------------------------------------------------------------------------- #
+# HONEST SCOPE: a Type-1/Type-2 proxy over NORMALIZED lines (strip + collapse
+# whitespace, drop comment-only), NOT semantic clone detection (Type-3/4) nor AST.
+# It reports a FACT (a byte-identical window of code exists elsewhere) but the VERDICT
+# "wasteful" is a heuristic with known false positives (boilerplate, DTOs, embedded
+# SQL/JSON). That is exactly why it is ADVISORY by default and gates ONLY when the
+# human declares it (`defaults.waste.gate: true` or `--gate`) — a natural-language-ish
+# gate that blocks on false positives gets disabled and dies (anti-ceremony rule 2).
+WASTE_WEIGHTS = {"repo_reuse": 55, "internal_dup": 45}
+WASTE_BANDS = [(85, "LEAN"), (65, "ACCEPTABLE"), (0, "WASTEFUL")]
+WASTE_DEFAULTS = {
+    "window_size": 5,               # GitClear def.: "5+ significant lines repeated"
+    "max_dup_windows_vs_repo": 0,   # budget for the score/cap; 0 = any repo clone is noteworthy
+    "max_dup_ratio": 0.10,          # dup_vs_repo / added_windows before the 2x hard cap bites
+    "min_line_len": 8,              # a normalized line shorter than this is not "significant"
+    "allow_paths": [],              # substrings to exclude (migrations/, generated/, *_pb2...)
+    "gate": False,                  # advisory-first: WASTEFUL blocks ONLY when declared
+}
+_WASTE_COMMENT = ("//", "#", "*", "--", "/*", "*/", '"""', "'''", ";;", "<!--")
+
+
+def _waste_band(score):
+    for floor, label in WASTE_BANDS:
+        if score >= floor:
+            return label
+    return "WASTEFUL"
+
+
+def _path_allowed(rel, allow_paths):
+    r = rel.replace("\\", "/")
+    return any(sub and sub in r for sub in allow_paths)
+
+
+def _waste_norm(body, min_line_len):
+    """Normalize a source line to its Type-1/Type-2 form, or None if not significant.
+    Same normalization is applied to BOTH the diff's added lines and the repo files,
+    so a byte-identical block hashes identically on both sides."""
+    s = " ".join(body.split())               # strip + collapse internal whitespace
+    if len(s) < min_line_len:
+        return None
+    if s.startswith(_WASTE_COMMENT):
+        return None
+    if not re.search(r"[A-Za-z_]\w*", s):     # pure punctuation / lone braces do not count
+        return None
+    return s
+
+
+def _waste_hashes(norm_lines, W):
+    """(start_index, sha1) for each window of W consecutive normalized lines."""
+    out = []
+    for i in range(len(norm_lines) - W + 1):
+        h = hashlib.sha1("\n".join(norm_lines[i:i + W]).encode("utf-8")).hexdigest()
+        out.append((i, h))
+    return out
+
+
+def _waste_added_by_file(diff_text, min_line_len, allow_paths):
+    """Added, normalized significant lines per PRODUCTION code file, plus the set of
+    files the diff touches (so the repo scan can exclude them and not match a clone to
+    itself). Tests and non-code files are excluded, as in simplicity-check."""
+    by_file, touched = {}, set()
+    counting, in_hunk = None, False
+    for raw in diff_text.splitlines():
+        if raw.startswith("diff --git"):
+            in_hunk, counting = False, None
+            continue
+        if raw.startswith("@@"):
+            in_hunk = True
+            continue
+        if not in_hunk:
+            if raw.startswith("+++ "):
+                path = raw[4:].strip().split("\t")[0]
+                if path == "/dev/null":
+                    counting = None
+                else:
+                    rel = path[2:] if path[:2] in ("a/", "b/") else path
+                    touched.add(rel.replace("\\", "/"))
+                    if (_is_simplicity_code_file(rel)
+                            and not _is_simplicity_test_file(rel)
+                            and not _path_allowed(rel, allow_paths)):
+                        counting = rel.replace("\\", "/")
+                        by_file.setdefault(counting, [])
+                    else:
+                        counting = None
+            continue
+        if counting is None:
+            continue
+        if raw.startswith("+"):
+            norm = _waste_norm(raw[1:], min_line_len)
+            if norm is not None:
+                by_file[counting].append(norm)
+    return by_file, touched
+
+
+def _waste_repo_hashes(repo_root, touched, W, min_line_len, allow_paths):
+    """hash -> 'rel:line' (first window seen) over every code file in the repo EXCEPT
+    the touched files (self-match) and allow-listed paths."""
+    seen = {}
+    for dirpath, dirnames, filenames in os.walk(repo_root):
+        dirnames[:] = [d for d in dirnames
+                       if d not in SKIP_DIRS and d not in _SIMPLICITY_SKIP]
+        for fn in filenames:
+            full = os.path.join(dirpath, fn)
+            rel = os.path.relpath(full, repo_root).replace("\\", "/")
+            if (rel in touched or not _is_simplicity_code_file(rel)
+                    or _is_simplicity_test_file(rel)
+                    or _path_allowed(rel, allow_paths)):
+                continue
+            try:
+                with open(full, "r", encoding="utf-8", errors="replace") as fh:
+                    raw_lines = fh.read().splitlines()
+            except OSError:
+                continue
+            norm, mapping = [], []
+            for lineno, rl in enumerate(raw_lines, 1):
+                n = _waste_norm(rl, min_line_len)
+                if n is not None:
+                    norm.append(n)
+                    mapping.append(lineno)
+            for i, h in _waste_hashes(norm, W):
+                seen.setdefault(h, f"{rel}:{mapping[i]}")
+    return seen
+
+
+def _waste_metrics(diff_text, repo_root, b):
+    W, mll, allow = b["window_size"], b["min_line_len"], b["allow_paths"]
+    by_file, touched = _waste_added_by_file(diff_text, mll, allow)
+    added_windows, counts = [], {}
+    sig_lines, call_lines = 0, 0
+    for rel, lines in by_file.items():
+        sig_lines += len(lines)
+        for l in lines:
+            if re.search(r"[A-Za-z_]\w*\s*\(", l):
+                call_lines += 1
+        for i, h in _waste_hashes(lines, W):
+            added_windows.append((rel, i, h))
+            counts[h] = counts.get(h, 0) + 1
+    total = len(added_windows)
+    dup_internal = sum(1 for _, _, h in added_windows if counts[h] > 1)
+    repo_hashes = _waste_repo_hashes(repo_root, touched, W, mll, allow) if repo_root else {}
+    vs_repo = [(rel, i, h) for (rel, i, h) in added_windows if h in repo_hashes]
+    examples, seen_ex = [], set()
+    for rel, _i, h in vs_repo:
+        if h not in seen_ex:
+            seen_ex.add(h)
+            examples.append({"added_in": rel, "clone_of": repo_hashes[h]})
+    return {
+        "added_windows": total,
+        "sig_lines_added": sig_lines,
+        "dup_windows_internal": dup_internal,
+        "dup_windows_vs_repo": len(vs_repo),
+        "dup_ratio": round(len(vs_repo) / total, 3) if total else 0.0,
+        "call_density": round(100.0 * call_lines / sig_lines, 1) if sig_lines else 0.0,
+        "files_added_to": len(by_file),
+        "examples_vs_repo": examples[:5],
+    }
+
+
+def _waste_score(m, b):
+    total = m["added_windows"]
+    reuse = 1.0 - min(1.0, m["dup_windows_vs_repo"] / total) if total else 1.0
+    internal = 1.0 - min(1.0, m["dup_windows_internal"] / total) if total else 1.0
+    dims = {"repo_reuse": reuse, "internal_dup": internal}
+    wsum = sum(WASTE_WEIGHTS.values())
+    score = (sum(WASTE_WEIGHTS[k] * dims[k] for k in WASTE_WEIGHTS) / wsum * 100
+             if wsum else 0.0)
+    # hard cap: a gross clone-vs-repo (over budget) or an internal-dup blowout can't be
+    # averaged into ACCEPTABLE by a clean internal (or reuse) dimension.
+    if (m["dup_windows_vs_repo"] > b["max_dup_windows_vs_repo"]
+            or m["dup_ratio"] > 2 * b["max_dup_ratio"]):
+        score = min(score, 60.0)
+    return round(score, 1), dims
+
+
+def _waste_flags(m, b):
+    flags = []
+    for ex in m["examples_vs_repo"]:
+        flags.append(f"bloque de {b['window_size']}+ lineas ya existe en "
+                     f"{ex['clone_of']} (agregado en {ex['added_in']}) — reusar, "
+                     f"no reimplementar (DRY / CWE-1041)")
+    if m["dup_windows_internal"]:
+        flags.append(f"{m['dup_windows_internal']} ventana(s) de {b['window_size']}+ "
+                     f"lineas duplicadas DENTRO del cambio — extraer un helper")
+    return flags
+
+
+def cmd_waste_check(args):
+    b = dict(WASTE_DEFAULTS)
+    declared = set()
+    if args.config and os.path.exists(args.config):
+        cfg = _load(args.config).get("defaults", {}).get("waste", {})
+        for k in b:
+            if k in cfg:
+                b[k] = cfg[k]
+                declared.add(k)
+    if args.window_size is not None:
+        b["window_size"] = args.window_size
+        declared.add("window_size")
+    if args.gate:
+        b["gate"] = True
+        declared.add("gate")
+    gate = bool(b.get("gate"))
+    repo_root = args.repo_root or "."
+    m = _waste_metrics(_read_diff(args), repo_root, b)
+    score, dims = _waste_score(m, b)
+    verdict = _waste_band(score)
+    flags = _waste_flags(m, b)
+    exit_code = 1 if (verdict == "WASTEFUL" and gate) else 0
+
+    out = {"score": score, "verdict": verdict, "gate": gate, "weights": WASTE_WEIGHTS,
+           "dimensions": {k: round(v, 3) for k, v in dims.items()},
+           "metrics": m, "budgets": b, "budgets_declared": sorted(declared),
+           "flags": flags}
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        sys.exit(exit_code)
+
+    mode = "gate declarado" if gate else "advisory (declara defaults.waste.gate para gatear)"
+    print(f"WASTE: {score}/100 — {verdict}  ({mode})")
+    print(f"--- ventanas de {b['window_size']} lineas normalizadas sobre {m['sig_lines_added']} "
+          f"lineas agregadas ({m['added_windows']} ventana(s), {m['files_added_to']} archivo(s)) ---")
+    print(f"  dup_vs_repo:      {m['dup_windows_vs_repo']} (budget {b['max_dup_windows_vs_repo']}"
+          f"{'*' if 'max_dup_windows_vs_repo' in declared else ''})   "
+          f"dup_interno: {m['dup_windows_internal']}   dup_ratio: {m['dup_ratio']}")
+    print(f"  (call_density: {m['call_density']}/100 — informativo, no puntua ni gatea)")
+    if not declared:
+        print("  (todos los presupuestos son defaults del kit — opinion, no "
+              "requerimiento: declara los tuyos en config.defaults.waste)")
+    if flags:
+        print("--- flags (REUSE-FIRST: que reusar en vez de clonar) ---")
+        for fl in flags:
+            print(f"  ! {fl}")
+    print("--- honesto: proxy Type-1/Type-2 sobre lineas normalizadas, NO clones "
+          "semanticos (Type-3/4) ni CC por AST ---")
+    sys.exit(exit_code)
+
+
 def cmd_pit_check(args):
     report = _find_pit_report(args.report)
     if not report or not os.path.exists(report):
@@ -4183,7 +4424,7 @@ def build_parser():
     plg.add_argument("--iteration", type=int, required=True)
     plg.add_argument("--kind", required=True,
                      choices=["golden-diff", "gate-check", "pit-check", "simplicity",
-                              "regression", "rubric"])
+                              "regression", "rubric", "waste"])
     plg.add_argument("--verdict", required=True, choices=["pass", "fail", "not-run"])
     plg.add_argument("--count", type=int, default=1,
                      help="failing finding count (fail only; default 1)")
@@ -4286,6 +4527,26 @@ def build_parser():
     ps2.add_argument("--indent-width", dest="indent_width", type=int)
     ps2.add_argument("--json", action="store_true")
     ps2.set_defaults(func=cmd_simplicity_check)
+
+    pw = sub.add_parser(
+        "waste-check",
+        help="REUSE-FIRST gate: deterministic Type-1/2 clone detection of the diff "
+             "vs the repo (the duplication simplicity-check cannot see). Advisory by "
+             "default; gates only with --gate or defaults.waste.gate")
+    pw.add_argument("--diff", help="path to a unified diff (else --from-git or stdin)")
+    pw.add_argument("--from-git", action="store_true",
+                    help="run `git diff --unified=0 <base>` for the diff")
+    pw.add_argument("--base", default=None, help="git base ref (default HEAD)")
+    pw.add_argument("--repo-root", dest="repo_root", default=".",
+                    help="repo root to scan for clones-vs-existing (default .)")
+    pw.add_argument("--config", default="dev-loop.config.json",
+                    help="read defaults.waste budgets from here if present")
+    pw.add_argument("--window-size", dest="window_size", type=int, default=None,
+                    help="normalized significant lines per window (default 5)")
+    pw.add_argument("--gate", action="store_true",
+                    help="make a WASTEFUL verdict exit 1 (default: advisory exit 0)")
+    pw.add_argument("--json", action="store_true")
+    pw.set_defaults(func=cmd_waste_check)
 
     pp = sub.add_parser(
         "pit-check",

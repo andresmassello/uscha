@@ -153,6 +153,32 @@ python3 $QL log-gate --repo <REPO> --iteration <N> --kind simplicity \
   --verdict <pass|fail> [--note "OVERBUILT: +612 lines vs 400 budget"]
 ```
 
+### Phase 2c — REUSE-FIRST gate (kit 1.26.0)
+
+Simplicity scores the diff in ISOLATION; it cannot see that the new block re-implements
+something the repo already has. `waste-check` closes that gap — deterministic Type-1/2
+clone detection of the diff **vs the repo** (the muda GitClear calls dominant in AI code):
+
+```bash
+python3 $QL waste-check --from-git --base <base> --repo-root . --config dev-loop.config.json
+```
+
+Reads `WASTE: NN/100 — LEAN | ACCEPTABLE | WASTEFUL`. **Advisory by default** (exit 0): the
+flags name the existing `file:line` to reuse instead of cloning. It reports a FACT (the block
+exists elsewhere) but "wasteful" is a heuristic with false positives (boilerplate, DTOs,
+embedded SQL/JSON), so it does NOT block unless the human declares it — `defaults.waste.gate:
+true` or `--gate`. When gated and WASTEFUL, reuse/refactor before the QA loop and persist:
+
+```bash
+python3 $QL log-gate --repo <REPO> --iteration <N> --kind waste \
+  --verdict <pass|fail> [--note "clona util/money.py:40 — reusar"]
+```
+
+It runs on **prod code only** (tests excluded, like simplicity) and skips the files the diff
+touches (no self-match). Honest scope: Type-1/2 over normalized lines, not semantic clones;
+tune `defaults.waste` (`allow_paths` for legit boilerplate, `window_size`, budgets). In risk
+profile A (trivial change) skip it. It **collapses into `readiness`** as a `gate:waste` line.
+
 ## Phase 3 — QA loop (per repo)
 
 Run the tools in `config.defaults.qa_tools_order` (default: code-review → judgment-day
