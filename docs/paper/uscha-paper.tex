@@ -76,7 +76,13 @@ their process as \emph{prose instructions that the agent may ignore}, and their
 verification signals rarely distinguish between what is mechanically verifiable
 and what is a model's opinion. Uscha\footnote{``Uscha'' is the name of the
 methodology; the pattern it operationalizes is a \emph{spec-loop} --- a
-specification-driven build-and-verify loop.} starts from that distinction and
+specification-driven build-and-verify loop. The name was chosen partly to avoid
+collision with \emph{spec-loop}~\cite{polivaev2026specloop}, an independently
+developed, actively maintained open-source project that shares the term and the
+spec-driven, review-per-increment philosophy while taking a different
+implementation path (shell-based reusable agent skills, task-local
+specifications); it was found late in this work's development, and the two are
+convergent rather than derivative.} starts from that distinction and
 makes it the organizing principle of the whole process. Figure~\ref{fig:system}
 shows the resulting pipeline: eight stations from idea to human gate, under a
 constitution of invariants that no station may violate, with an inner
@@ -661,6 +667,10 @@ the Software Development Life Cycle,'' arXiv:2605.15245 [cs.SE], 2026.
 V.~Tawosi, K.~Ramani, S.~Alamir, and X.~Liu,
 ``ALMAS: an Autonomous LLM-based Multi-Agent Software Engineering Framework,''
 arXiv:2510.03463 [cs.SE], 2025.
+
+\bibitem{polivaev2026specloop}
+D.~Polivaev, ``spec-loop: a design-first AI-assisted development framework,''
+open-source project, 2026. \url{https://github.com/dpolivaev/spec-loop}
 
 \end{thebibliography}
 

@@ -109,7 +109,13 @@ human review as mitigations [3], but they largely encode their process as
 signals rarely distinguish between what is mechanically verifiable and what is
 a model's opinion. Uscha (&ldquo;Uscha&rdquo; is the name of the methodology;
 the pattern it operationalizes is a <i>spec-loop</i> &mdash; a
-specification-driven build-and-verify loop) starts from that distinction and makes it the
+specification-driven build-and-verify loop. The name was chosen partly to avoid
+collision with <i>spec-loop</i> [18], an independently developed, actively
+maintained open-source project that shares the term and the spec-driven,
+review-per-increment philosophy while taking a different implementation path
+(shell-based reusable agent skills, task-local specifications); it was found
+late in this work's development, and the two are convergent rather than
+derivative) starts from that distinction and makes it the
 organizing principle of the whole process. Figure&nbsp;1 shows the resulting
 pipeline: eight stations from idea to human gate, under a constitution of
 invariants that no station may violate, with an inner convergence loop over the
@@ -627,6 +633,10 @@ across the Software Development Life Cycle,&rdquo; arXiv:2605.15245 [cs.SE],
 <p>[17] V. Tawosi, K. Ramani, S. Alamir, and X. Liu, &ldquo;ALMAS: an
 Autonomous LLM-based Multi-Agent Software Engineering Framework,&rdquo;
 arXiv:2510.03463 [cs.SE], 2025.</p>
+
+<p>[18] D. Polivaev, &ldquo;spec-loop: a design-first AI-assisted development
+framework,&rdquo; open-source project, 2026.
+github.com/dpolivaev/spec-loop</p>
 </div>
 
 </body>
