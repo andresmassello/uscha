@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mirador — estado del proyecto · Uscha</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f5f7; --paper:#ffffff; --ink:#14171c; --ink-soft:#3b424b; --ink-mute:#8b929b;
+  --red:#e30613; --red-deep:#b00410; --red-soft:#fff1f2;
+  --green:#1f9d57; --green-soft:#e9f7ef; --amber:#e0930c; --amber-soft:#fff5e1;
+  --terrain:#d9d2c4; --terrain-line:#c7bda9; --rule:#e6e9ee; --stone:#8b8578;
+  --sans:"Inter Tight",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(0,0,0,.022) 1px,transparent 0);background-size:5px 5px;pointer-events:none;z-index:0}
+.wrap{max-width:1140px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem);position:relative;z-index:1}
+
+/* topbar */
+.topbar{background:var(--ink);color:#fff;height:46px;display:flex;align-items:center}
+.topbar .wrap{display:flex;align-items:center;justify-content:space-between;width:100%}
+.brand{display:flex;align-items:center;gap:.55rem;font-weight:800;letter-spacing:-.02em}
+.brand .dot{width:11px;height:11px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(227,6,19,.25)}
+.brand .cmd{font-family:var(--mono);font-weight:500;font-size:.78rem;color:#aeb4bd;background:#22262e;padding:2px 8px;border-radius:5px;margin-left:.4rem}
+.topbar .meta{font-family:var(--mono);font-size:.72rem;color:#8b929b;letter-spacing:.04em}
+.topbar .meta b{color:#cbd2dc;font-weight:500}
+
+/* hero verdict + trail */
+.hero{padding:clamp(1.4rem,4vw,2.4rem) 0 .6rem}
+.verdict{display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:.2rem}
+.verdict .band{font-family:var(--mono);font-weight:700;font-size:.78rem;letter-spacing:.08em;padding:5px 12px;border-radius:7px}
+.verdict h1{font-weight:800;font-size:clamp(1.5rem,3.4vw,2.3rem);letter-spacing:-.03em;line-height:1.08}
+.verdict h1 .score{color:var(--ink-mute);font-weight:600;font-size:.62em}
+.verdict .sub{width:100%;color:var(--ink-soft);font-size:1.02rem;margin-top:.15rem}
+.verdict .sub b{color:var(--red-deep)}
+
+.trailcard{background:var(--paper);border:1px solid var(--rule);border-radius:18px;padding:.4rem .4rem 0;margin-top:1rem;box-shadow:0 24px 50px -40px rgba(0,0,0,.35);overflow:hidden}
+.trailcard .cap{display:flex;justify-content:space-between;align-items:center;padding:.7rem 1rem .1rem;font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute)}
+.trailcard .cap .legend{display:flex;gap:.9rem}
+.trailcard .cap .legend span{display:flex;align-items:center;gap:.32rem}
+.trailcard .cap .legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+svg{display:block;width:100%;height:auto}
+.moj{cursor:pointer}
+.moj:focus{outline:none}
+.moj:focus .stone{stroke:var(--ink);stroke-width:2.5}
+.moj .stone{transition:transform .15s}
+.moj:hover .stone{transform:translateY(-2px)}
+@media (prefers-reduced-motion: no-preference){
+  .pulse{animation:pulse 1.8s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+}
+.mlabel{font-family:var(--sans);font-weight:700;font-size:12.5px;fill:var(--ink)}
+.mcount{font-family:var(--mono);font-size:10.5px;fill:var(--ink-mute)}
+.mphase{font-family:var(--mono);font-size:9px;letter-spacing:.1em;fill:var(--ink-mute);text-transform:uppercase}
+
+/* timelapse */
+.lapse{display:flex;align-items:center;gap:1rem;padding:.7rem 1rem 1rem}
+.lapse label{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);white-space:nowrap}
+.lapse input[type=range]{flex:1;accent-color:var(--red)}
+.lapse .asof{font-family:var(--mono);font-size:.76rem;color:var(--ink);white-space:nowrap;min-width:120px;text-align:right}
+.lapse .asof b{color:var(--red-deep)}
+
+/* panels */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem;margin:1.2rem 0}
+.card{background:var(--paper);border:1px solid var(--rule);border-radius:14px;padding:1.1rem 1.15rem}
+.card h2{font-size:.72rem;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:.8rem;display:flex;justify-content:space-between;align-items:center}
+.card h2 .n{color:var(--ink);font-weight:700}
+.col6{grid-column:span 6}.col4{grid-column:span 4}.col12{grid-column:span 12}
+@media(max-width:820px){.col6,.col4{grid-column:span 12}}
+
+.speclist{display:flex;flex-direction:column;gap:.5rem}
+.spec{display:flex;align-items:center;gap:.7rem;font-size:.9rem}
+.spec .id{font-family:var(--mono);font-size:.76rem;color:var(--ink-mute);min-width:74px}
+.spec .t{flex:1;color:var(--ink-soft)}
+.spec .chip{font-family:var(--mono);font-size:.66rem;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:20px}
+.spec .acc{font-family:var(--mono);font-size:.72rem;color:var(--ink-mute);min-width:38px;text-align:right}
+.st-done{background:var(--green-soft);color:var(--green)}
+.st-prog{background:var(--amber-soft);color:var(--amber)}
+.st-block{background:var(--red-soft);color:var(--red-deep)}
+.st-todo{background:#eef1f4;color:var(--ink-mute)}
+
+.inv{display:flex;flex-wrap:wrap;gap:.5rem}
+.inv .item{display:flex;align-items:center;gap:.4rem;font-size:.82rem;background:#f7f9fb;border:1px solid var(--rule);border-radius:9px;padding:.4rem .6rem}
+.inv .item i{width:8px;height:8px;border-radius:50%}
+.ok i{background:var(--green)} .warn i{background:var(--amber)} .miss i{background:var(--red)}
+.ok{color:var(--ink)} .warn{color:var(--ink)} .miss{color:var(--ink)}
+
+.heat{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}
+.heat .cell{border-radius:10px;padding:.6rem;border:1px solid var(--rule)}
+.heat .cell .lab{font-size:.78rem;font-weight:600}
+.heat .cell .v{font-family:var(--mono);font-size:.68rem;margin-top:.15rem}
+.h-ok{background:var(--green-soft)} .h-ok .v{color:var(--green)}
+.h-warn{background:var(--amber-soft)} .h-warn .v{color:var(--amber)}
+.h-miss{background:var(--red-soft)} .h-miss .v{color:var(--red-deep)}
+
+.loop{display:flex;align-items:center;gap:.6rem;font-size:.86rem;margin-bottom:.55rem}
+.loop .mod{font-family:var(--mono);font-size:.78rem;min-width:96px;color:var(--ink)}
+.loop .bar{flex:1;display:flex;gap:3px}
+.loop .bar b{height:14px;border-radius:2px;flex:1;background:#e7ebef}
+.loop .bar b.on{background:var(--stone)}
+.loop .tag{font-family:var(--mono);font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:20px}
+
+/* subscores collapsed */
+.subs summary{cursor:pointer;font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);list-style:none;display:flex;align-items:center;gap:.5rem}
+.subs summary::-webkit-details-marker{display:none}
+.subs summary::before{content:"▸";color:var(--red);transition:transform .15s}
+.subs[open] summary::before{transform:rotate(90deg)}
+.subrow{display:grid;grid-template-columns:repeat(5,1fr);gap:.6rem;margin-top:.8rem}
+.subrow .s{text-align:center;background:#f7f9fb;border:1px solid var(--rule);border-radius:10px;padding:.6rem .3rem}
+.subrow .s .k{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;color:var(--ink-mute);text-transform:uppercase}
+.subrow .s .val{font-weight:800;font-size:1.25rem;margin-top:.15rem}
+.subrow .s .bd{font-family:var(--mono);font-size:.6rem;color:var(--ink-mute)}
+@media(max-width:560px){.subrow{grid-template-columns:repeat(2,1fr)}}
+
+/* evidence drawer */
+.drawer{position:fixed;top:0;right:0;height:100%;width:min(460px,92vw);background:var(--paper);border-left:1px solid var(--rule);box-shadow:-30px 0 60px -30px rgba(0,0,0,.4);transform:translateX(100%);transition:transform .28s ease;z-index:40;display:flex;flex-direction:column}
+.drawer.open{transform:translateX(0)}
+.drawer .dh{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;padding:1.2rem 1.3rem;border-bottom:1px solid var(--rule)}
+.drawer .dh .ey{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--red-deep)}
+.drawer .dh h3{font-size:1.15rem;letter-spacing:-.02em;margin-top:.25rem}
+.drawer .dh p{font-size:.85rem;color:var(--ink-soft);margin-top:.3rem}
+.drawer .x{background:none;border:1px solid var(--rule);border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;color:var(--ink-mute);flex-shrink:0}
+.drawer .receipt{flex:1;overflow:auto;padding:1.1rem 1.3rem}
+.drawer .receipt .rt{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:.5rem}
+.drawer pre{background:#14171c;color:#d7dbe0;border-radius:10px;padding:1rem;font-family:var(--mono);font-size:.76rem;line-height:1.55;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.drawer pre .g{color:#34d399}.drawer pre .r{color:#f87171}.drawer pre .a{color:#fbbf24}.drawer pre .m{color:#8b929b}
+.scrim{position:fixed;inset:0;background:rgba(20,23,28,.35);opacity:0;pointer-events:none;transition:opacity .28s;z-index:39}
+.scrim.open{opacity:1;pointer-events:auto}
+
+.foot{padding:1.4rem 0 3rem;font-family:var(--mono);font-size:.68rem;color:var(--ink-mute);text-align:center;line-height:1.7}
+.foot b{color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<header class="topbar"><div class="wrap">
+  <div class="brand"><span class="dot"></span>uscha<span class="cmd">/mirador</span></div>
+  <div class="meta"><b id="m-proj">—</b> · generado <b id="m-ts">—</b></div>
+</div></header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <div class="verdict">
+      <span class="band" id="v-band">—</span>
+      <h1 id="v-title">—</h1>
+      <div class="sub" id="v-sub">—</div>
+    </div>
+
+    <div class="trailcard">
+      <div class="cap">
+        <span>El sendero — de la idea a producción</span>
+        <span class="legend">
+          <span><i style="background:var(--green)"></i>verificado</span>
+          <span><i style="background:var(--amber)"></i>en curso</span>
+          <span><i style="background:var(--red)"></i>bloqueado</span>
+          <span><i style="background:#cfd5db"></i>por hacer</span>
+        </span>
+      </div>
+      <svg id="trail" viewBox="0 0 1060 300" role="img" aria-label="Sendero del proyecto"></svg>
+      <div class="lapse">
+        <label for="scrub">Time-lapse</label>
+        <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Reproducir la evolución del proyecto">
+        <span class="asof">al <b id="asof">—</b></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card col6">
+      <h2>Especificaciones <span class="n" id="spec-n">—</span></h2>
+      <div class="speclist" id="speclist"></div>
+    </div>
+
+    <div class="card col6">
+      <h2>ADRs <span class="n" id="adr-n">—</span></h2>
+      <div class="speclist" id="adrlist"></div>
+    </div>
+
+    <div class="card col6">
+      <h2>CONSTITUTION — invariantes</h2>
+      <div class="inv" id="inv"></div>
+    </div>
+
+    <div class="card col6">
+      <h2>Las 6 capas de verdad</h2>
+      <div class="heat" id="heat"></div>
+    </div>
+
+    <div class="card col6">
+      <h2>QA loops <span class="n" id="qa-n">—</span></h2>
+      <div id="loops"></div>
+    </div>
+
+    <div class="card col6">
+      <details class="subs">
+        <summary>Sub-scores (drill-down)</summary>
+        <div class="subrow" id="subrow"></div>
+      </details>
+      <p style="font-size:.8rem;color:var(--ink-mute);margin-top:.9rem;line-height:1.5">
+        El veredicto de arriba es lo único que necesitás mirar. Estos rollean ahí; están acá por si querés bufar.
+      </p>
+    </div>
+  </section>
+
+  <div class="foot">
+    generado por <b>qa_ledger.py dashboard --json</b> — read-only, la evidencia manda · click en un mojón para ver su recibo<br>
+    la herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba
+  </div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dh">
+    <div><div class="ey" id="d-ey">recibo</div><h3 id="d-title">—</h3><p id="d-desc">—</p></div>
+    <button class="x" id="d-close" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="receipt"><div class="rt">evidencia capturada por ejecución</div><pre id="d-pre"></pre></div>
+</aside>
+
+<script>
+/* ==== DATA — simula la salida de `qa_ledger.py dashboard --json` (determinístico) ==== */
+/*MIRADOR_DATA_START*/
+const DATA = {
+  project: "backend-api + mobile-app",
+  generated: "2026-07-05 14:22 UTC",
+  readiness: { score:88, band:"CASI LISTO",
+    title:"Casi listo para release",
+    sub:"No sale todavía — <b>1 blocker: falta validar el rollback en producción</b> (capa Operacional en rojo)." },
+  subscores:[
+    {k:"simplicity",val:92,bd:"SIMPLE"},
+    {k:"waste",val:78,bd:"ACEPTABLE"},
+    {k:"rebuild",val:90,bd:"COVERS"},
+    {k:"golden",val:100,bd:"OK"},
+    {k:"coverage",val:81,bd:"81%"},
+  ],
+  phases:[
+    {key:"idea",   label:"Idea",        phase:"00", status:"done",  count:"", risk:0},
+    {key:"disc",   label:"Discovery",   phase:"01", status:"done",  count:"seed + ready", risk:0},
+    {key:"spec",   label:"SPEC",        phase:"02", status:"done",  count:"6/7 specs", risk:1},
+    {key:"adr",    label:"ADR · CONST", phase:"03", status:"done",  count:"4 ADR · 6 inv", risk:1},
+    {key:"build",  label:"Build",       phase:"04", status:"prog",  count:"5/7 módulos", risk:2},
+    {key:"qa",     label:"QA loop",     phase:"05", status:"prog",  count:"3 loops · 1 escalado", risk:2},
+    {key:"verify", label:"Verify",      phase:"06", status:"block", count:"1 blocker", risk:2},
+    {key:"prod",   label:"Producción",  phase:"07", status:"todo",  count:"human gate", risk:3},
+  ],
+  specs:[
+    {id:"SPEC-001",t:"Alta de comprobante",status:"done",acc:100},
+    {id:"SPEC-002",t:"Numeración sin huecos",status:"done",acc:100},
+    {id:"SPEC-003",t:"Reintento idempotente",status:"done",acc:100},
+    {id:"SPEC-004",t:"Cierre de caja",status:"prog",acc:70},
+    {id:"SPEC-005",t:"Exportación fiscal",status:"prog",acc:55},
+    {id:"SPEC-006",t:"Rollback de despliegue",status:"block",acc:20},
+    {id:"SPEC-007",t:"Reporte de conciliación",status:"todo",acc:0},
+  ],
+  adrs:[
+    {id:"ADR-001",t:"Almacenamiento append-only",status:"done"},
+    {id:"ADR-002",t:"Idempotencia por request-id",status:"done"},
+    {id:"ADR-003",t:"Cola de reintentos con backoff",status:"done"},
+    {id:"ADR-004",t:"Estrategia de rollback",status:"prog"},
+  ],
+  inv:[
+    {name:"Seguridad",status:"ok"},{name:"Dominio",status:"ok"},
+    {name:"Simplicidad",status:"ok"},{name:"Reuso",status:"warn"},
+    {name:"Golden",status:"ok"},{name:"Tests efectivos",status:"ok"},
+    {name:"Integridad del gate",status:"ok"},
+  ],
+  capas:[
+    {name:"Funcional",status:"ok",v:"cumple SPEC"},
+    {name:"Técnica",status:"ok",v:"tests + lint"},
+    {name:"Regresiva",status:"ok",v:"sin romper"},
+    {name:"Contractual",status:"warn",v:"1 schema drift"},
+    {name:"Seguridad",status:"ok",v:"0 críticos"},
+    {name:"Operacional",status:"miss",v:"rollback sin validar"},
+  ],
+  loops:[
+    {mod:"pagos",iters:4,max:6,state:"converged"},
+    {mod:"ticket",iters:6,max:6,state:"oscillating"},
+    {mod:"auth",iters:2,max:6,state:"escalated"},
+  ],
+  /* time-lapse: cada snapshot = readiness + hasta qué fase se había llegado */
+  snapshots:[
+    {date:"jun 18",readiness:12,reached:1},
+    {date:"jun 23",readiness:34,reached:2},
+    {date:"jun 27",readiness:51,reached:3},
+    {date:"jul 01",readiness:69,reached:4},
+    {date:"jul 03",readiness:80,reached:5},
+    {date:"jul 05",readiness:88,reached:7},
+  ],
+  evidence:{
+    verify:{ey:"gate · verify",title:"Verify — 1 blocker",desc:"Capa Operacional en rojo: el rollback no se validó en un entorno real.",
+      pre:"<span class='m'>$ qa_ledger.py ingest-gate --layer operational</span>\nOPERATIONAL: <span class='r'>MISS</span>\n  ! deploy rollback drill: <span class='r'>NOT RUN</span>\n  ! SPEC-006 acceptance: 20% (&lt; 100%)\n<span class='m'># readiness cap aplicado: operational MISS =&gt; no supera RELEASE</span>\n<span class='r'>BLOCKER</span> — se requiere drill de rollback + human approval"},
+    prod:{ey:"human gate",title:"Producción — requiere aprobación",desc:"La automatización nunca despliega sola. El paso a producción lo aprueba una persona.",
+      pre:"<span class='m'>estado:</span> BLOQUEADO por gate humano\n<span class='m'>requisitos previos:</span>\n  <span class='g'>✓</span> tests verdes\n  <span class='g'>✓</span> 0 findings críticos\n  <span class='r'>✗</span> rollback validado\n  <span class='r'>✗</span> aprobación humana\n<span class='m'># se habilita cuando readiness ≥ 95 y 0 blockers</span>"},
+    build:{ey:"fase · build",title:"Build — 5/7 módulos",desc:"Construcción contra el plan, commit a commit. Dos módulos en curso.",
+      pre:"<span class='m'>módulos:</span>\n  <span class='g'>✓</span> pagos        (SPEC-001..003)\n  <span class='g'>✓</span> ticket\n  <span class='g'>✓</span> promos\n  <span class='a'>◐</span> cierre-caja  (SPEC-004, 70%)\n  <span class='a'>◐</span> export-fiscal(SPEC-005, 55%)\n  <span class='r'>·</span> rollback     (SPEC-006, 20%)\n  <span class='m'>·</span> conciliación (SPEC-007, todo)"},
+    qa:{ey:"fase · qa loop",title:"QA loop — 3 loops",desc:"Iteración maker≠checker por módulo hasta converger. Uno escaló a humano.",
+      pre:"<span class='m'>$ qa_ledger.py converged / oscillation / escalate</span>\n  pagos   : <span class='g'>CONVERGED</span>  (4 iters)\n  ticket  : <span class='a'>OSCILLATING</span> (6 iters, sin converger)\n  auth    : <span class='r'>ESCALATED</span>   (2 iters → humano)\n<span class='m'># ticket alterna entre 2 estados: candidato a revisión humana</span>"},
+    spec:{ey:"fase · spec",title:"SPEC — 6/7",desc:"Qué debe pasar, verificable. Una spec bloqueada (rollback).",
+      pre:"<span class='m'>$ qa_ledger.py spec-check</span>\n  6/7 specs con acceptance criteria testeables\n  <span class='g'>✓</span> SPEC-001..003 (100%)\n  <span class='a'>◐</span> SPEC-004 (70%) · SPEC-005 (55%)\n  <span class='r'>✗</span> SPEC-006 rollback (20%)"},
+    disc:{ey:"fase · discovery",title:"Discovery — ready",desc:"De la idea a la forma del sistema. Vos decidiste el alcance.",
+      pre:"<span class='m'>discovery/</span>\n  <span class='g'>✓</span> seed document\n  <span class='g'>✓</span> restricciones inviolables → CONSTITUTION\n  <span class='g'>✓</span> perfil de riesgo asignado (fiscal = C+)\n  <span class='g'>✓</span> READY — aprobado para SPEC"},
+    adr:{ey:"fase · adr · constitution",title:"ADR · CONSTITUTION",desc:"Por qué esta forma, y qué nunca se viola.",
+      pre:"<span class='m'>docs/adr/</span>\n  <span class='g'>✓</span> ADR-001 append-only\n  <span class='g'>✓</span> ADR-002 idempotencia\n  <span class='g'>✓</span> ADR-003 reintentos\n  <span class='a'>◐</span> ADR-004 rollback (proposed)\n<span class='m'>CONSTITUTION:</span> 6/7 invariantes OK · <span class='a'>Reuso: WARN</span>"},
+    idea:{ey:"origen",title:"Idea",desc:"El punto de partida. Traés la idea; el método la cruza.",
+      pre:"<span class='m'># el sendero arranca acá.</span>\n\"API fiscal que autoriza cada comprobante,\n sin numeración con huecos ni facturas duplicadas.\""},
+  },
+};
+/*MIRADOR_DATA_END*/
+
+/* ==== helpers ==== */
+const $ = s => document.querySelector(s);
+const statusColor = {done:"var(--green)",prog:"var(--amber)",block:"var(--red)",todo:"#cfd5db"};
+const chipClass = {done:"st-done",prog:"st-prog",block:"st-block",todo:"st-todo"};
+const chipText  = {done:"listo",prog:"en curso",block:"bloqueado",todo:"por hacer"};
+
+/* ==== header + verdict ==== */
+$("#m-proj").textContent = DATA.project;
+$("#m-ts").textContent = DATA.generated;
+const bandColors = {"CASI LISTO":["var(--amber-soft)","var(--amber)"],"LISTO":["var(--green-soft)","var(--green)"],"NO LISTO":["var(--red-soft)","var(--red-deep)"],
+  "READY":["var(--green-soft)","var(--green)"],"RELEASE CANDIDATE":["var(--amber-soft)","var(--amber)"],"IN PROGRESS":["var(--amber-soft)","var(--amber)"],"NOT READY":["var(--red-soft)","var(--red-deep)"]};
+function paintVerdict(score, band, title, sub){
+  const b=$("#v-band"); const c=bandColors[band]||["#eef1f4","var(--ink-mute)"];
+  b.textContent=band; b.style.background=c[0]; b.style.color=c[1];
+  $("#v-title").innerHTML = (title||"") + ' <span class="score">'+score+'/100</span>';
+  $("#v-sub").innerHTML = sub||"";
+}
+paintVerdict(DATA.readiness.score, DATA.readiness.band, DATA.readiness.title, DATA.readiness.sub);
+
+/* ==== el sendero (SVG) ==== */
+const VB={w:1060,h:300}, base=232, pad=70;
+const riskY=[0,26,60,92]; // más riesgo = más alto (paso de montaña)
+const N=DATA.phases.length;
+function nodeXY(i,risk){const r=(riskY[risk]==null?0:riskY[risk]);const x=pad+i*((VB.w-2*pad)/(N-1));const y=base-r;return [x,y];}
+function smoothPath(pts){
+  let d="M "+pts[0][0]+" "+pts[0][1];
+  for(let i=0;i<pts.length-1;i++){
+    const [x0,y0]=pts[i],[x1,y1]=pts[i+1];const mx=(x0+x1)/2;
+    d+=" C "+mx+" "+y0+" "+mx+" "+y1+" "+x1+" "+y1;
+  }
+  return d;
+}
+function renderTrail(activeReached){
+  const svg=$("#trail"); svg.innerHTML="";
+  const pts=DATA.phases.map((p,i)=>nodeXY(i,p.risk));
+  const ns="http://www.w3.org/2000/svg";
+  // terreno (silueta) + contornos suaves
+  const terr=document.createElementNS(ns,"path");
+  terr.setAttribute("d", smoothPath(pts)+" L "+pts[N-1][0]+" "+VB.h+" L "+pts[0][0]+" "+VB.h+" Z");
+  terr.setAttribute("fill","var(--terrain)"); terr.setAttribute("opacity",".4"); svg.appendChild(terr);
+  for(let k=1;k<=3;k++){
+    const c=document.createElementNS(ns,"path");
+    c.setAttribute("d", smoothPath(pts.map(([x,y])=>[x,y+k*14])));
+    c.setAttribute("fill","none");c.setAttribute("stroke","var(--terrain-line)");c.setAttribute("stroke-width","1");c.setAttribute("opacity",".5");
+    svg.appendChild(c);
+  }
+  // trail line
+  const trail=document.createElementNS(ns,"path");
+  trail.setAttribute("d",smoothPath(pts));trail.setAttribute("fill","none");
+  trail.setAttribute("stroke","var(--stone)");trail.setAttribute("stroke-width","3");
+  trail.setAttribute("stroke-dasharray","2 7");trail.setAttribute("stroke-linecap","round");trail.setAttribute("opacity",".8");
+  svg.appendChild(trail);
+  // mojones
+  DATA.phases.forEach((p,i)=>{
+    const [x,y]=pts[i];
+    // estado efectivo según time-lapse
+    let st=p.status;
+    if(activeReached!==null){
+      if(i<activeReached) st="done";
+      else if(i===activeReached) st=(p.status==="block"?"block":"prog");
+      else st="todo";
+    }
+    const g=document.createElementNS(ns,"g");
+    g.setAttribute("class","moj");g.setAttribute("tabindex","0");
+    g.setAttribute("role","button");
+    g.setAttribute("aria-label",p.label+" — "+chipText[st]);
+    g.dataset.key=p.key;
+    // halo estado
+    const halo=document.createElementNS(ns,"circle");
+    halo.setAttribute("cx",x);halo.setAttribute("cy",y);halo.setAttribute("r","18");
+    halo.setAttribute("fill",statusColor[st]);halo.setAttribute("opacity",".16");
+    if(st==="prog"||st==="block")halo.setAttribute("class","pulse");
+    g.appendChild(halo);
+    // piedra (mojón)
+    const stone=document.createElementNS(ns,"path");
+    const s=11;
+    stone.setAttribute("d",`M ${x-s} ${y+s} L ${x-s+2} ${y-s+3} Q ${x} ${y-s-3} ${x+s-2} ${y-s+3} L ${x+s} ${y+s} Z`);
+    stone.setAttribute("class","stone");
+    stone.setAttribute("fill", st==="todo"?"#eef1f4":"#fff");
+    stone.setAttribute("stroke",statusColor[st]);stone.setAttribute("stroke-width","2.5");
+    g.appendChild(stone);
+    // dot central
+    const dot=document.createElementNS(ns,"circle");
+    dot.setAttribute("cx",x);dot.setAttribute("cy",y);dot.setAttribute("r","3.4");
+    dot.setAttribute("fill",statusColor[st]);g.appendChild(dot);
+    // textos
+    const ph=document.createElementNS(ns,"text");
+    ph.setAttribute("x",x);ph.setAttribute("y",y-24);ph.setAttribute("text-anchor","middle");
+    ph.setAttribute("class","mphase");ph.textContent=p.phase;g.appendChild(ph);
+    const lab=document.createElementNS(ns,"text");
+    lab.setAttribute("x",x);lab.setAttribute("y",base+38);lab.setAttribute("text-anchor","middle");
+    lab.setAttribute("class","mlabel");lab.textContent=p.label;g.appendChild(lab);
+    if(p.count){
+      const cnt=document.createElementNS(ns,"text");
+      cnt.setAttribute("x",x);cnt.setAttribute("y",base+53);cnt.setAttribute("text-anchor","middle");
+      cnt.setAttribute("class","mcount");cnt.textContent=p.count;g.appendChild(cnt);
+    }
+    g.addEventListener("click",()=>openEvidence(p.key));
+    g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openEvidence(p.key);}});
+    svg.appendChild(g);
+  });
+}
+
+/* ==== specs / adrs / inv / heat / loops / subs ==== */
+function renderSpecs(){
+  $("#spec-n").textContent = DATA.specs.filter(s=>s.status==="done").length+"/"+DATA.specs.length;
+  $("#speclist").innerHTML = DATA.specs.map(s=>`
+    <div class="spec">
+      <span class="id">${s.id}</span>
+      <span class="t">${s.t}</span>
+      <span class="chip ${chipClass[s.status]}">${chipText[s.status]}</span>
+      <span class="acc">${s.acc}%</span>
+    </div>`).join("");
+}
+function renderAdrs(){
+  $("#adr-n").textContent = DATA.adrs.filter(a=>a.status==="done").length+"/"+DATA.adrs.length;
+  $("#adrlist").innerHTML = DATA.adrs.map(a=>`
+    <div class="spec">
+      <span class="id">${a.id}</span>
+      <span class="t">${a.t}</span>
+      <span class="chip ${chipClass[a.status]}">${a.status==="done"?"accepted":a.status==="prog"?"proposed":chipText[a.status]}</span>
+    </div>`).join("");
+}
+function renderInv(){
+  $("#inv").innerHTML = DATA.inv.map(v=>`<span class="item ${v.status}"><i></i>${v.name}</span>`).join("");
+}
+function renderHeat(){
+  const cls={ok:"h-ok",warn:"h-warn",miss:"h-miss"};
+  $("#heat").innerHTML = DATA.capas.map(c=>`
+    <div class="cell ${cls[c.status]}"><div class="lab">${c.name}</div><div class="v">${c.v}</div></div>`).join("");
+}
+function renderLoops(){
+  $("#qa-n").textContent = DATA.loops.length;
+  const tag={converged:["st-done","converge"],oscillating:["st-prog","oscila"],escalated:["st-block","escaló"],active:["st-prog","en curso"]};
+  $("#loops").innerHTML = DATA.loops.map(l=>{
+    const mx=l.max||l.iters||0;
+    let bars=""; for(let i=0;i<mx;i++)bars+=`<b class="${i<l.iters?'on':''}"></b>`;
+    const t=tag[l.state]||["st-todo","—"];
+    return `<div class="loop"><span class="mod">${l.mod}</span><span class="bar">${bars}</span><span class="tag ${t[0]}">${t[1]}</span></div>`;
+  }).join("");
+}
+function renderSubs(){
+  const band=v=>(v==null?"var(--ink-mute)":v>=85?"var(--green)":v>=65?"var(--amber)":"var(--red)");
+  $("#subrow").innerHTML = DATA.subscores.map(s=>`
+    <div class="s"><div class="k">${s.k}</div><div class="val" style="color:${band(s.val)}">${s.val==null?"—":s.val}</div><div class="bd">${s.bd==null?"":s.bd}</div></div>`).join("");
+}
+
+/* ==== evidence drawer ==== */
+function openEvidence(key){
+  const e=DATA.evidence[key]; if(!e)return;
+  $("#d-ey").textContent=e.ey; $("#d-title").textContent=e.title; $("#d-desc").textContent=e.desc;
+  $("#d-pre").innerHTML=e.pre;
+  $("#drawer").classList.add("open"); $("#drawer").setAttribute("aria-hidden","false");
+  $("#scrim").classList.add("open");
+}
+function closeDrawer(){$("#drawer").classList.remove("open");$("#drawer").setAttribute("aria-hidden","true");$("#scrim").classList.remove("open");}
+$("#d-close").addEventListener("click",closeDrawer);
+$("#scrim").addEventListener("click",closeDrawer);
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
+
+/* ==== time-lapse ==== */
+const scrub=$("#scrub"); const snaps=DATA.snapshots||[];
+if(snaps.length){ scrub.max=snaps.length-1; scrub.value=snaps.length-1; }
+else { scrub.max=0; scrub.value=0; scrub.disabled=true; }
+function applySnapshot(i){
+  const s=snaps[i]; if(!s) return;
+  $("#asof").textContent=s.date;
+  const isLatest = i===snaps.length-1;
+  if(isLatest){ paintVerdict(DATA.readiness.score,DATA.readiness.band,DATA.readiness.title,DATA.readiness.sub); renderTrail(null); }
+  else{
+    const band=s.readiness>=95?"LISTO":s.readiness>=50?"CASI LISTO":"NO LISTO";
+    paintVerdict(s.readiness,band,"Historial",'Reconstruido del snapshot del <b>'+s.date+'</b> — el ledger guarda cada corrida.');
+    renderTrail(s.reached);
+  }
+}
+scrub.addEventListener("input",()=>applySnapshot(+scrub.value));
+
+/* ==== init ==== */
+renderSpecs(); renderAdrs(); renderInv(); renderHeat(); renderLoops(); renderSubs();
+$("#asof").textContent = snaps.length ? snaps[snaps.length-1].date : "sin historial (readiness --record)";
+renderTrail(null);
+</script>
+</body>
+</html>

@@ -1293,6 +1293,50 @@ sys.exit(1 if bad else 0)" "$(dirname "$QL")" \
   && { PASS=$((PASS+1)); echo "  ok   los READMEs declaran la version actual (doc drift bloqueado)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doc-version drift: un README no coincide con VERSION"; }
 
+echo "== T53 dashboard (1.32.0): contrato mirador desde el ledger, truth-pass (null sin fuente) =="
+mkdir -p repo-mir/reports docs/adr-mir
+printf 'def a():\n    return 1\n' > repo-mir/x.py
+printf -- "# ADR-001 Append-only\n\nStatus: accepted\n" > docs/adr-mir/ADR-001.md
+printf -- "# ADR-002 Rollback\n\nStatus: proposed\n" > docs/adr-mir/ADR-002.md
+printf -- "# ACCEPTANCE\n\n- [x] AC-01 alta\n" > acc-mir.md
+printf '{ "defaults": { "acceptance_file": "acc-mir.md" },\n  "repos": [ {"name":"backend-api","path":"repo-mir","type":"python"} ], "integration": {"enabled": false} }\n' > mir.json
+run init --config mir.json --out L-mir.json >/dev/null 2>&1
+run dashboard --ledger L-mir.json --adr-dir docs/adr-mir --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+keys = ['project','generated','readiness','subscores','phases','specs','adrs','inv','capas','loops','snapshots','evidence']
+assert all(k in d for k in keys), 'faltan claves: ' + str([k for k in keys if k not in d])
+assert isinstance(d['readiness']['score'], (int, float)), 'readiness.score'
+assert d['specs'] == [] and d['capas'] == [], 'specs/capas deben ser [] (truth-pass, sin fuente)'
+assert len(d['adrs']) == 2 and d['adrs'][0]['status'] == 'done' and d['adrs'][1]['status'] == 'prog', 'adrs glob'
+assert d['snapshots'] == [], 'snapshots vacio antes de --record'
+assert len(d['phases']) == 8 and len(d['inv']) == 7, 'esqueleto phases(8)/inv(7)'
+sys.exit(0)" \
+  && { PASS=$((PASS+1)); echo "  ok   contrato completo; specs/capas []; adrs del glob; snapshots vacio pre-record"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL contrato dashboard mal formado"; }
+DS=$(run dashboard --ledger L-mir.json --adr-dir docs/adr-mir --json 2>/dev/null | "$PY" -c "import json,sys;print(json.load(sys.stdin)['readiness']['score'])")
+RS=$(run readiness --ledger L-mir.json --json 2>/dev/null | "$PY" -c "import json,sys;print(json.load(sys.stdin)['score'])")
+[ "$DS" = "$RS" ] \
+  && { PASS=$((PASS+1)); echo "  ok   readiness del dashboard == readiness --json ($DS, reuso verbatim sin drift)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift readiness dashboard($DS) vs readiness($RS)"; }
+run readiness --ledger L-mir.json --record >/dev/null 2>&1
+run dashboard --ledger L-mir.json --adr-dir docs/adr-mir --json 2>/dev/null | "$PY" -c "
+import json, sys
+s = json.load(sys.stdin)['snapshots']
+sys.exit(0 if len(s) == 1 and isinstance(s[0]['readiness'], (int, float)) and 'date' in s[0] else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   readiness --record puebla el time-lapse (add-on prospectivo)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL time-lapse no se poblo tras --record"; }
+# inv mapea el gate persistido por su kind REAL (pit-check, no 'pit'): sin este check
+# un typo de kind deja el invariante en null en silencio (regresion muda).
+run log-gate --ledger L-mir.json --repo backend-api --iteration 1 --kind pit-check --verdict fail --count 2 >/dev/null 2>&1
+run log-gate --ledger L-mir.json --repo backend-api --iteration 1 --kind simplicity --verdict pass >/dev/null 2>&1
+run dashboard --ledger L-mir.json --adr-dir docs/adr-mir --json 2>/dev/null | "$PY" -c "
+import json, sys
+inv = {i['name']: i['status'] for i in json.load(sys.stdin)['inv']}
+sys.exit(0 if inv.get('Tests efectivos') == 'miss' and inv.get('Simplicidad') == 'ok' else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   inv mapea el gate por su kind real (pit-check->Tests efectivos miss, simplicity->ok)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL inv no mapea el gate persistido (kind mal escrito?)"; }
+
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"

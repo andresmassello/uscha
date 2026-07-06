@@ -2091,6 +2091,189 @@ def _is_stalled(node, qa_order=None, window=STALL_WINDOW):
     return all(tail[i] <= tail[i + 1] for i in range(len(tail) - 1))
 
 
+# --------------------------------------------------------------------------- #
+# mirador — bird's-eye status view (kit 1.32.0). Agrega SOLO hechos que el ledger
+# ya tiene al contrato DATA del template. Read-only, determinista, cero narracion
+# del LLM. Truth-pass: un campo sin fuente se emite null/[] (el template degrada),
+# jamas inventado.
+_MIRADOR_PHASES = [
+    ("idea", "Idea", "00"), ("disc", "Discovery", "01"),
+    ("spec", "SPEC", "02"), ("adr", "ADR . CONST", "03"),
+    ("build", "Build", "04"), ("qa", "QA loop", "05"),
+    ("verify", "Verify", "06"), ("prod", "Produccion", "07"),
+]
+_MIRADOR_TITLE = {
+    "READY": "Listo para release",
+    "RELEASE CANDIDATE": "Casi listo para release",
+    "IN PROGRESS": "En construccion",
+    "NOT READY": "Todavia no arranca",
+}
+# los 7 invariantes de la CONSTITUTION (lista fija: el engine NO lee CONSTITUTION.md
+# por diseno). El status se infiere del gate persistido donde hay mapeo; los que no
+# tienen gate (Seguridad, Dominio) quedan null — nunca se inventan.
+_MIRADOR_INV = ["Seguridad", "Dominio", "Simplicidad", "Reuso", "Golden",
+                "Tests efectivos", "Integridad del gate"]
+_INV_GATE = {"Simplicidad": "simplicity", "Reuso": "waste", "Golden": "golden",
+             "Tests efectivos": "pit-check", "Integridad del gate": "gate-check"}
+
+
+def _reached_index(score):
+    """Proyecta un readiness MEDIDO sobre el sendero de 8 nodos (idea..prod) para el
+    time-lapse. Transformacion determinista del score (como la band), NO un dato
+    independiente de milestones — el engine no trackea completitud por fase."""
+    if score is None:
+        return 0
+    for floor, idx in ((95, 7), (80, 6), (65, 5), (50, 4), (35, 3), (20, 2), (1, 1)):
+        if score >= floor:
+            return idx
+    return 0
+
+
+def _mirador_adrs(adr_dir):
+    """Glob read-only de docs/adr/*.md (add-on 1.32.0). id de un token ADR-<n>, titulo
+    del primer heading, status de una linea 'Status:' o frontmatter. [] si no hay dir
+    (truth-pass: sin dir, sin dato)."""
+    out = []
+    if not adr_dir or not os.path.isdir(adr_dir):
+        return out
+    _st = {"accepted": "done", "approved": "done", "done": "done", "final": "done",
+           "proposed": "prog", "draft": "prog", "wip": "prog",
+           "rejected": "todo", "superseded": "todo", "deprecated": "todo"}
+    for f in sorted(glob.glob(os.path.join(adr_dir, "*.md"))):
+        base = os.path.basename(f)
+        if base.lower() in ("readme.md", "template.md", "index.md", "_index.md"):
+            continue
+        try:
+            body = open(f, encoding="utf-8").read()
+        except OSError:
+            continue
+        mid = re.search(r"ADR[-_]?0*(\d+)", base) or re.search(r"ADR[-_]?0*(\d+)", body)
+        aid = "ADR-%03d" % int(mid.group(1)) if mid else base[:-3]
+        mt = re.search(r"(?m)^#\s+(.+)$", body)
+        title = mt.group(1).strip() if mt else base[:-3]
+        title = re.sub(r"(?i)^ADR[-_]?0*\d+[\s:.—–-]*", "", title).strip() or title
+        ms = re.search(r"(?im)^\s*(?:[-*]\s*)?status\s*[:=]\s*([A-Za-z]+)", body)
+        status = _st.get(ms.group(1).lower(), "todo") if ms else "todo"
+        out.append({"id": aid, "t": title, "status": status})
+    return out
+
+
+def cmd_dashboard(args):
+    """mirador — vista bird's-eye del estado. Agrega SOLO hechos que el ledger ya tiene
+    al contrato DATA del template. Read-only, determinista, cero narracion. Campos sin
+    fuente -> null/[] (el template degrada), jamas inventados. --json imprime el
+    contrato; sin flags, un veredicto de una linea."""
+    import contextlib
+    import io as _io
+    ledger = _load(args.ledger)
+    cfg = ledger.get("config", {})
+
+    # readiness: se reusan los numeros de `readiness --json` VERBATIM (mismo KPI, sin
+    # drift posible) capturando su salida. --record OFF: el dashboard NUNCA escribe.
+    _r = argparse.Namespace(**vars(args))
+    _r.json = True
+    _r.verbose = False
+    _r.record = False
+    _buf = _io.StringIO()
+    try:
+        with contextlib.redirect_stdout(_buf):
+            cmd_readiness(_r)
+    except SystemExit:
+        pass
+    rd = json.loads(_buf.getvalue())
+
+    score = rd.get("score")
+    band = rd.get("status")
+    cap = rd.get("cap_reason")
+    readiness = {"score": score, "band": band,
+                 "title": _MIRADOR_TITLE.get(band),
+                 "sub": (f"cap: {cap}" if cap else None)}
+
+    # subscores: coverage es numerico real; los gates persistidos (simplicity/waste/
+    # golden) guardan pass/fail + note, NO un score 0-100 -> val=null (truth-pass),
+    # bd = el estado persistido. (golden se persiste como kind 'golden-diff'.)
+    covp = rd.get("facts", {}).get("coverage_pct")
+    subscores = [{"k": "coverage",
+                  "val": round(covp) if isinstance(covp, (int, float)) else None,
+                  "bd": (f"{round(covp)}%" if isinstance(covp, (int, float)) else None)}]
+    gate_block, gate_note = {}, {}
+    for g in rd.get("gates", []):
+        kind = (g.get("tool") or "").replace("gate:", "")
+        key = "golden" if kind.startswith("golden") else kind
+        gate_block[key] = gate_block.get(key, False) or bool(g.get("blocking"))
+        if g.get("note") and key not in gate_note:
+            gate_note[key] = g.get("note")
+    for key in ("simplicity", "waste", "golden"):
+        if key in gate_block:
+            subscores.append({"k": key, "val": None,
+                              "bd": gate_note.get(key) or ("FAIL" if gate_block[key] else "OK")})
+
+    # phases: esqueleto fijo de 8 nodos; status = proyeccion determinista del readiness
+    # (nodos < alcanzado = done; el alcanzado = block si hay cap, si no prog; resto todo).
+    # count/risk sin fuente -> null.
+    ridx = _reached_index(score)
+    phases = []
+    for i, (key, label, ph) in enumerate(_MIRADOR_PHASES):
+        st = "done" if i < ridx else ("todo" if i > ridx else ("block" if cap else "prog"))
+        phases.append({"key": key, "label": label, "phase": ph,
+                       "status": st, "count": None, "risk": None})
+
+    # inv: nombres fijos; status del gate persistido donde mapea, si no null.
+    inv = []
+    for name in _MIRADOR_INV:
+        gk = _INV_GATE.get(name)
+        if gk and gk in gate_block:
+            inv.append({"name": name, "status": "miss" if gate_block[gk] else "ok"})
+        else:
+            inv.append({"name": name, "status": None})
+
+    # loops: iters + estado por repo (escalated > converged > active). max sin fuente.
+    by_repo = rd.get("by_repo", {})
+    unresolved = {e.get("repo") for e in ledger.get("escalations", [])
+                  if not e.get("resolved_at")}
+    loops = []
+    for name, rnode in ledger.get("repos", {}).items():
+        iters = max((it.get("iteration", 0) for it in rnode.get("iterations", [])),
+                    default=0)
+        conv = by_repo.get(name, {}).get("facts", {}).get("converged")
+        state = ("escalated" if name in unresolved
+                 else "converged" if conv else "active")
+        loops.append({"mod": name, "iters": iters, "max": None, "state": state})
+
+    # snapshots: time-lapse del historial persistido por `readiness --record` (add-on
+    # 1.32.0). Solo hacia adelante; [] hasta que se registre. reached = proyeccion.
+    snapshots = [{"date": h.get("at"), "readiness": h.get("score"),
+                  "reached": _reached_index(h.get("score"))}
+                 for h in ledger.get("readiness_history", [])]
+
+    names = [r.get("name") for r in cfg.get("repos", []) if r.get("name")]
+    out = {
+        "project": " + ".join(names) if names else None,
+        "generated": _now(),
+        "readiness": readiness,
+        "subscores": subscores,
+        "phases": phases,
+        "specs": [],          # NO SOURCE: el engine trackea AC-nn, no SPEC-nnn
+        "adrs": _mirador_adrs(getattr(args, "adr_dir", "docs/adr")),
+        "inv": inv,
+        "capas": [],          # NO SOURCE: el engine no puntua las 6 capas de verdad
+        "loops": loops,
+        "snapshots": snapshots,
+        "evidence": {},       # NO SOURCE: steps[] es log plano, no output por fase
+    }
+    if getattr(args, "json", False):
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+    head = (f"MIRADOR: readiness {score}/100 — {band}"
+            if score is not None else "MIRADOR: sin readiness medido")
+    if cap:
+        head += f" (cap: {cap})"
+    print(head)
+    print(f"  {sum(1 for p in phases if p['status'] == 'done')}/8 fases . "
+          f"{len(loops)} loop(s) . {len(out['adrs'])} ADR . "
+          f"{len(snapshots)} snapshot(s) en el time-lapse")
+
+
 def cmd_readiness(args):
     ledger = _load(args.ledger)
     defaults = ledger["config"].get("defaults", {})
@@ -2247,6 +2430,14 @@ def cmd_readiness(args):
                   for s in node["iterations"]] + [0])
     regressions = sum((s.get("new_regressions") or 0) for node in ledger["repos"].values()
                       for s in node["iterations"])
+
+    # time-lapse (kit 1.32.0, opt-in): --record persiste el readiness del momento en un
+    # historial top-level para el mirador. readiness sigue read-only por default; solo
+    # hacia adelante (no backfillea). El dashboard lo consume, nunca escribe.
+    if getattr(args, "record", False):
+        ledger.setdefault("readiness_history", []).append(
+            {"at": _now(), "score": round(final, 1)})
+        _save(args.ledger, ledger)
 
     out = {
         "score": round(final, 1), "raw": round(raw, 1), "status": _band(final),
@@ -4612,11 +4803,28 @@ def build_parser():
                     help="only count checkboxes under headings matching this text")
     pr.add_argument("--tools-per-cycle", type=int, default=3)
     pr.add_argument("--json", action="store_true")
+    pr.add_argument("--record", action="store_true",
+                    help="append the current readiness score to the ledger's "
+                         "readiness_history (opt-in; feeds the mirador time-lapse). "
+                         "Default is read-only.")
     pr.add_argument("--verbose", action="store_true",
                     help="expand the collapsed sub-scores (dimensions table, "
                          "acceptance/coverage summary, churn, per-repo breakdown); "
                          "default is the single-verdict view (anti-ceremony)")
     pr.set_defaults(func=cmd_readiness)
+
+    pdash = sub.add_parser("dashboard",
+                           help="mirador: bird's-eye status as the template DATA "
+                                "contract (read-only, deterministic)")
+    add_ledger(pdash)
+    pdash.add_argument("--acceptance", default=None,
+                       help="acceptance task list (markdown); overrides config default")
+    pdash.add_argument("--section", default=None)
+    pdash.add_argument("--tools-per-cycle", type=int, default=3)
+    pdash.add_argument("--adr-dir", default="docs/adr",
+                       help="directory globbed for ADR markdown (mirador ADR panel)")
+    pdash.add_argument("--json", action="store_true")
+    pdash.set_defaults(func=cmd_dashboard)
 
     pb = sub.add_parser("rebuild",
                         help="rebuild test: is the SPEC complete enough to "
