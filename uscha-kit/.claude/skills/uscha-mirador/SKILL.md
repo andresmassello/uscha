@@ -27,6 +27,14 @@ wires the JSON the engine emits into the template. Read-only.
   `/*MIRADOR_DATA_START*/` and `/*MIRADOR_DATA_END*/`; the sample `const DATA` it ships
   with is the **offline fallback**. The skill replaces ONLY that region; it does not
   touch the rest of the HTML.
+- **Session telemetry (optional, vendor-reported):** if `.uscha/telemetry.jsonl` exists,
+  the skill aggregates it and MERGES a `telemetry` object into `DATA`. This is the ONE
+  panel that is **narrated by the vendor (Claude Code), not measured by the engine** —
+  tokens, wall time, model, effort — so it renders in a **segregated strip** labeled as
+  such, never mixed with the measured panels. `dashboard --json` NEVER emits it; it enters
+  only through this adapter. Absent file → no strip (degrades). This is the doctrinal
+  line: telemetry is neither a fact-gate nor a guess-advisor, so it must not dilute
+  *measured beats narrated*.
 
 ## Flow
 
@@ -46,25 +54,73 @@ wires the JSON the engine emits into the template. Read-only.
    (opt-in) at the loop's checkpoints; if nothing has been recorded yet, `snapshots`
    comes out `[]` and the time-lapse stays empty (it is prospective, not backfilled).
 
-4. **Inject into the template.** Read `mirador.template.html`, replace EVERYTHING between
+4. **Merge session telemetry (optional, vendor-reported).** If `.uscha/telemetry.jsonl`
+   exists, read it (one JSON object per line, schema below) and aggregate into a single
+   object, then add it to the state JSON under the key `telemetry`:
+   ```
+   telemetry = { source: "Claude Code",
+                 sessions: <line count>,
+                 tokens_in: <sum>, tokens_out: <sum>, ms: <sum wall-time>,
+                 model: <the model, or a "+"-joined list if several>,
+                 effort: <the latest effort>,
+                 by_model: [ {model}, ... ] }
+   ```
+   The engine's `dashboard` NEVER produces this — it is vendor telemetry, wired in ONLY
+   here. If the file is absent, do NOT add the key (the strip stays hidden). To record the
+   current session before reading, run `telemetry-extract.py` on the Claude Code transcript
+   (see **Session telemetry** below). Aggregate across lines: sum `tokens_in`/`tokens_out`/
+   `ms`, count lines as `sessions`, and MERGE `by_model` (sum tokens per model) so the strip
+   can break the cost down per LLM.
+
+5. **Inject into the template.** Read `mirador.template.html`, replace EVERYTHING between
    `/*MIRADOR_DATA_START*/` and `/*MIRADOR_DATA_END*/` (including the old `const DATA`)
    with:
    ```
    /*MIRADOR_DATA_START*/
-   const DATA = <the JSON from .mirador-data.json>;
+   const DATA = <the dashboard JSON, with the `telemetry` key merged in if present>;
    /*MIRADOR_DATA_END*/
    ```
    Do not touch anything outside that region. Write the result as `mirador.html` at the
    project root.
 
-5. **Open the file** (best-effort, does not fail if it can't — headless/CI):
+6. **Open the file** (best-effort, does not fail if it can't — headless/CI):
    - Windows: `start "" mirador.html`
    - macOS: `open mirador.html`
    - Linux: `xdg-open mirador.html`
 
    ALWAYS print the absolute path of `mirador.html` (even if it can't be opened).
 
-6. **Cleanup:** delete `.mirador-data.json` (temporary).
+7. **Cleanup:** delete `.mirador-data.json` (temporary). Keep `.uscha/telemetry.jsonl` —
+   it is the persistent sidecar, not a temp file.
+
+## Session telemetry — sidecar contract
+
+`.uscha/telemetry.jsonl` is an **append-only** file, one JSON object per session/run:
+
+```jsonl
+{"at": "2026-07-05T23:40:00Z", "model": "claude-opus-4-8", "tokens_in": 240000, "tokens_out": 41000, "ms": 4200000, "by_model": [{"model": "claude-opus-4-8", "tokens_in": 240000, "tokens_out": 41000}], "note": "mirador build"}
+```
+
+`effort` and `note` are **optional** and are NOT produced by `telemetry-extract.py` (a Claude
+Code transcript carries no reliable effort label) — add them by hand if you want them; the
+strip shows `—` when `effort` is absent. `by_model` is per-**tokens** (session-level `ms` only).
+
+- **Who writes it:** the AGENT / operator, NEVER the engine (the engine is model-agnostic
+  and cannot see tokens). Two honest sources:
+  - **`telemetry-extract.py <transcript.jsonl>`** (shipped in this skill folder): parses a
+    Claude Code session transcript — each assistant turn carries a `usage` block
+    (`input_tokens` / `cache_*_input_tokens` / `output_tokens`) and a `model` — sums per
+    model, computes wall time from the timestamps, and appends one line (with a `by_model`
+    breakdown). Real, vendor-native data. Best-effort: unknown/older schemas degrade, never
+    crash; no usage found → nothing appended.
+  - **Manual append**: paste the session's numbers from Claude Code's own cost view.
+- **Persistence:** the file itself IS the history (portable, diffable, greppable). Add it to
+  the project's `.gitignore` — it is per-machine telemetry, not repo state. (A pure-client
+  alternative is `localStorage` inside `mirador.html`, but the sidecar survives regeneration,
+  so it is the default.)
+- **Boundary (non-negotiable):** this is the ONLY place vendor-narrated numbers enter the
+  mirador. They are shown, never gated, never fed into readiness — telemetry answers "what
+  did it cost", the measured panels answer "is it correct". Keep them apart.
 
 ## Rules
 

@@ -1337,6 +1337,25 @@ sys.exit(0 if inv.get('Tests efectivos') == 'miss' and inv.get('Simplicidad') ==
   && { PASS=$((PASS+1)); echo "  ok   inv mapea el gate por su kind real (pit-check->Tests efectivos miss, simplicity->ok)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL inv no mapea el gate persistido (kind mal escrito?)"; }
 
+echo "== T54 telemetry-extract (1.33.0): transcript CC -> sidecar (vendor adapter, FUERA del engine) =="
+EXTRACT="$(dirname "$(dirname "$QL")")/uscha-mirador/telemetry-extract.py"
+mkdir -p tele
+cat > tele/t.jsonl <<'EOF'
+{"type":"assistant","timestamp":"2026-07-05T20:00:00Z","message":{"model":"claude-opus-4-8","usage":{"input_tokens":10000,"cache_read_input_tokens":40000,"output_tokens":3000}}}
+{"type":"assistant","timestamp":"2026-07-05T20:10:00Z","message":{"model":"claude-haiku-4-5","usage":{"input_tokens":4000,"output_tokens":1500}}}
+{bad json se saltea}
+EOF
+"$PY" "$EXTRACT" tele/t.jsonl --sidecar tele/telemetry.jsonl >/dev/null 2>&1
+"$PY" -c "
+import json, sys
+d = json.loads(open('tele/telemetry.jsonl', encoding='utf-8').readline())
+ok = (d['tokens_in'] == 54000 and d['tokens_out'] == 4500 and d['ms'] == 600000
+      and len(d['by_model']) == 2
+      and {m['model'] for m in d['by_model']} == {'claude-opus-4-8', 'claude-haiku-4-5'})
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   suma tokens (input+cache) + wall time + by_model desde el transcript"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL extractor no resume bien el transcript CC"; }
+
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"
