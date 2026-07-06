@@ -30,7 +30,7 @@ is in the questions, not in agreeing.
    exit condition is met. If asked to "just write it" early, name the open gaps first.
 4. **One topic at a time.** Never dump 20 questions. Walk the agenda below, a focused
    batch at a time, and reflect back what you heard before moving on.
-5. **Record deferrals as explicit assumptions.** If the human says "decidilo vos" on a
+5. **Record deferrals as explicit assumptions.** If the human says "you decide" on a
    consequential decision, push back once with the trade-off; if they still defer,
    record it as an explicit assumption in the ADR, never as a silent default.
 
@@ -39,15 +39,15 @@ is in the questions, not in agreeing.
 Start from the human's initial context. Work the agenda in order; skip a topic only if
 it's already fully answered. Keep a running list of OPEN GAPS and resolved decisions.
 
-1. **Problema y por qué ahora.** What job does this remove? What does it cost to NOT do
+1. **Problem and why now.** What job does this remove? What does it cost to NOT do
    it (money, time, risk)? If "why now" has no answer, the priority is suspect.
-2. **Decisiones implícitas.** Surface the choices the request assumed: sync vs async,
+2. **Implicit decisions.** Surface the choices the request assumed: sync vs async,
    storage, protocol, idempotency, transactional boundaries, who owns state. For each,
    force an explicit decision and at least one considered alternative.
-3. **Comportamiento.** Happy path first, then the DIRTY cases: provider/timeout failures,
+3. **Behavior.** Happy path first, then the DIRTY cases: provider/timeout failures,
    retries and backoff, 4xx vs 5xx, concurrency, partial/terminal states, what must NOT
    happen. A feature without its failure behavior is half-specified.
-4. **Restricciones inviolables (→ `CONSTITUTION.md`).** Domain + security + operation
+4. **Inviolable constraints (→ `CONSTITUTION.md`).** Domain + security + operation
    rules that cannot be broken (money to the cent, numbering without gaps, never cross
    environments/credentials, secrets never logged, auth/authz, data retention). Write/extend
    `CONSTITUTION.md` (one invariant per line, CWE ref where it maps); these feed the
@@ -55,12 +55,12 @@ it's already fully answered. Keep a running list of OPEN GAPS and resolved decis
    CONSTITUTION** — if a decision would, it's escalated, not recorded.
 5. **Out of scope.** Explicit boundaries, with forward references ("X goes to a later
    spec"). What you exclude is as important as what you include.
-6. **Definición de Hecho + cómo medimos éxito.** Concrete, checkable acceptance criteria
+6. **Definition of Done + how we measure success.** Concrete, checkable acceptance criteria
    (tests green, documented, metrics published, runbook) AND success metrics (p95,
    cost ceiling, zero orphaned records). Each item must be verifiable, not a feeling.
-7. **Dependencias.** Which other specs/systems/credentials this needs to exist first.
+7. **Dependencies.** Which other specs/systems/credentials this needs to exist first.
 
-After each batch, reflect: "Decidido: … / Sigue abierto: …". Move on only when the
+After each batch, reflect: "Decided: … / Still open: …". Move on only when the
 current topic is closed.
 
 ## Convergence — exit conditions (ALL must hold)
@@ -72,8 +72,8 @@ current topic is closed.
 - No OPEN GAP you raised remains unresolved (resolved = decided OR recorded as an
   explicit assumption).
 
-State plainly when you've converged ("Cerró: cada decisión tiene fundamento, los fallos
-tienen comportamiento, el scope tiene límite y la DoD es verificable.") before Phase B.
+State plainly when you've converged ("Closed: every decision has a rationale, the failures
+have behavior, the scope has a boundary and the DoD is verifiable.") before Phase B.
 
 ## Phase B — Distill the artifacts
 
@@ -84,27 +84,27 @@ ADR where it could later be "traded away"):
 1. **One ADR per decision worth recording** at `docs/adr/ADR-NNN-<slug>.md`, format:
 
 ```markdown
-# ADR-NNN: <título de la decisión>
-## Estado: Aceptado
-## Contexto
-<el problema + las opciones consideradas: A) … B) … C) …>
-## Decisión
-<la opción elegida>
-## Razones
-- <por qué, punto por punto>
-## Consecuencias
-+ <lo bueno>
-- <el costo / lo que nos obliga>
+# ADR-NNN: <title of the decision>
+## Status: Accepted
+## Context
+<the problem + the considered options: A) … B) … C) …>
+## Decision
+<the chosen option>
+## Reasons
+- <why, point by point>
+## Consequences
++ <the good>
+- <the cost / what it forces on us>
 ## Implementation Plan
-- Affected paths: <archivos/dirs>
-- Patterns: <patrón a seguir>
-- Tests: <qué tests prueban la decisión>
+- Affected paths: <files/dirs>
+- Patterns: <pattern to follow>
+- Tests: <which tests prove the decision>
 ## Verification
-- [ ] <criterio chequeable por un agente>
+- [ ] <criterion checkable by an agent>
 ```
 
    Number ADRs continuing from the highest existing one in `docs/adr/` (glob first).
-   Negative decisions count: "lo que NO vamos a usar y por qué" is a valid ADR.
+   Negative decisions count: "what we are NOT going to use and why" is a valid ADR.
 
 2. **`ACCEPTANCE.md`** at the repo root (or the path in `uscha.config.json` →
    `defaults.acceptance_file`). This is the file dev-loop's readiness measures — it MUST
@@ -112,15 +112,15 @@ ADR where it could later be "traded away"):
 
 ```markdown
 # Acceptance — <feature>
-## Definición de hecho
-- [ ] <criterio verificable>
+## Definition of Done
+- [ ] <verifiable criterion>
 - [ ] …
-## Cómo medimos éxito
-- <métrica objetiva: p95, costo, cero huérfanos, …>
+## How we measure success
+- <objective metric: p95, cost, zero orphans, …>
 ## Out of scope
-- <límite> → <spec futura>
-## Decisiones registradas
-- ADR-NNN — <título>
+- <boundary> → <future spec>
+## Recorded decisions
+- ADR-NNN — <title>
 ```
 
 **Where to write:** with file tools available (Claude Code), write the files to disk.
@@ -135,16 +135,16 @@ for its current version before overwriting — never silently replace.
 
 Close with the handoff prompt so the build phase starts by planning, not improvising:
 
-> "Leé el ADR set y ACCEPTANCE.md. Antes de tocar código: 1) resumime el plan de
-> archivos a crear/modificar, 2) confirmame qué decisiones quedaron implícitas, 3)
-> mostrame el primer test que escribirías."
+> "Read the ADR set and ACCEPTANCE.md. Before touching code: 1) summarize the plan of
+> files to create/modify, 2) confirm which decisions were left implicit, 3)
+> show me the first test you would write."
 
 Two-command flow end to end: `/uscha-adr-refine` → (ADR set + ACCEPTANCE.md) → `/uscha-devloop`.
 
 ## Anti-patterns (do not do)
 
 - Generate an ADR from a one-line request without interviewing.
-- Accept "hacelo como quieras" on a consequential decision without recording the
+- Accept "do it however you want" on a consequential decision without recording the
   assumption.
-- Write an ACCEPTANCE item that isn't objectively checkable ("que funcione bien").
+- Write an ACCEPTANCE item that isn't objectively checkable ("that it works well").
 - Emit artifacts before the convergence conditions are met.

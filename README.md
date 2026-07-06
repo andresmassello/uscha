@@ -1,93 +1,91 @@
 # Uscha
 
-**Uscha** es una metodología spec-driven, tool-agnóstica, para desarrollo con
-LLM coding agents — *vos traés la idea, el método construye el resto* — con su
-instanciación en Claude Code, el **uscha-kit**.
+**Uscha** is a spec-driven, tool-agnostic methodology for development with
+LLM coding agents — *you bring the idea, the method builds the rest* — with its
+instantiation in Claude Code, the **uscha-kit**.
 
-> **Uscha** es el nombre; el patrón que operacionaliza es un *spec-loop* — un loop
-> spec-driven de build-and-verify. "spec-loop" es el **concepto**, no el naming.
-> (El checkout local conserva el path `SpecLoop`.)
+> **On the name.** *Uscha* is the methodology's name; the pattern it operationalizes is a *spec-loop* — the concept, not the branding. The name was chosen partly to avoid collision with [spec-loop](https://github.com/dpolivaev/spec-loop) by D. Polivaev — an independently developed, actively maintained project that shares the term and the spec-driven, review-per-increment philosophy while taking a different implementation path (shell-based agent skills via npx). It was found late in this project's development; the two are convergent, not derivative. (The local checkout keeps the path `SpecLoop`.)
 
-> La herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba.
+> The tool executes · the method governs · evidence decides · the human approves.
 
-## Mapa del repo
+## Repo map
 
 ```
 SpecLoop/
-├── uscha-kit/          # ★ SOURCE canónico del kit (v1.32.0)
+├── uscha-kit/          # ★ canonical SOURCE of the kit (v1.32.0)
 │   ├── .claude/skills/    #   8 skills: uscha-discovery · uscha-adr-refine · uscha-devloop · uscha-sysdoc
 │   │                      #             uscha-reverse-discovery · uscha-characterize · uscha-rubric · uscha-mirador
-│   ├── .claude/skills/uscha-devloop/qa_ledger.py   # motor de evidencia (25 subcomandos, stdlib)
-│   ├── hooks/             #   PreToolUse: el agente no escribe .approved (INV-GOLDEN-01)
+│   ├── .claude/skills/uscha-devloop/qa_ledger.py   # evidence engine (25 subcommands, stdlib)
+│   ├── hooks/             #   PreToolUse: the agent never writes .approved (INV-GOLDEN-01)
 │   ├── templates/         #   CLAUDE.md · CONSTITUTION.md · .gitattributes · docs/adr
-│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (acceptance trazable) → 1.11.0 (tests fuera del presupuesto) → 1.12.0 (secret-scan) → 1.13.0 (ledger atómico) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (procedencia de umbrales) → 1.18.0 (FSM derivada) → 1.19.0 (spikes — backlog PragProg CERRADO) → 1.20.0 (instalación global) → 1.21.0 (namespace uscha-*) → 1.22.0 (doctor) → 1.23.0 (rubric layer) → 1.24.0 (plugin de Claude Code) → 1.25.0 (anti-ceremonia) → 1.26.0 (waste-check REUSE-FIRST) → 1.27.0 (FTY) → 1.28.0 (acceptance medido %) → 1.29.0 (rebrand → Uscha) → 1.30.0 (gate de dependencias) → 1.31.0 (freshness de evidencia + gate de doc-version) → 1.32.0 (mirador — vista bird's-eye + dashboard --json)
-├── docs/                  # artefactos publicados (canónicos acá; Downloads = snapshots)
-│   ├── uscha-claude-code-doc-FINAL.html   # deck largo ES (36 slides)
-│   ├── uscha-claude-code-doc-EN.html      # deck largo EN
-│   ├── uscha-playbook{,-EN}.html          # Manual del Operador (trigger/move/gate)
-│   ├── uscha-onepager{,-EN}.html          # ficha de una página
-│   ├── uscha-team-pitch.html              # pitch de adopción para el equipo (historia Vale/Martín, 14 slides)
-│   ├── uscha-team-pitch-extended.html     # pitch extendido: + día-tipo, KPI readiness, ledger 2 pisos, piloto (22 slides)
-│   ├── skills-referencia.html                 # referencia exhaustiva de las 8 skills (qué hace cada una, fase por fase)
-│   ├── casos-reales.md                        # bitácora: momentos reales donde el método interviene (anonimizados)
-│   ├── *.png                                  # mapa del sistema · 10 pasos · reverse-discovery
-│   └── diagram-sources/                       # HTML fuente de los PNG (re-renderizables)
-├── formats/               # 6 exploraciones de formato (A-F); se adoptaron playbook + atlas-map
-└── audits/                # outputs de las auditorías adversariales (2026-07)
-    ├── audit-metodologia-7-lentes.json        # 33 debilidades confirmadas / 13 refutadas
-    ├── audit-fidelidad-doc-codigo-idea.json   # 171 claims verificados doc↔código↔idea
-    ├── truth-pass-6-docs.json                 # 130 edits de veracidad post-cableado
-    └── verificacion-team-pitch.json           # 3 lentes sobre el pitch
+│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (traceable acceptance) → 1.11.0 (tests outside the budget) → 1.12.0 (secret-scan) → 1.13.0 (atomic ledger) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (threshold provenance) → 1.18.0 (derived FSM) → 1.19.0 (spikes — PragProg backlog CLOSED) → 1.20.0 (global install) → 1.21.0 (namespace uscha-*) → 1.22.0 (doctor) → 1.23.0 (rubric layer) → 1.24.0 (Claude Code plugin) → 1.25.0 (anti-ceremony) → 1.26.0 (waste-check REUSE-FIRST) → 1.27.0 (FTY) → 1.28.0 (measured acceptance %) → 1.29.0 (rebrand → Uscha) → 1.30.0 (dependency gate) → 1.31.0 (evidence freshness + doc-version gate) → 1.32.0 (mirador — bird's-eye view + dashboard --json)
+├── docs/                  # published artifacts (canonical here; Downloads = snapshots)
+│   ├── uscha-claude-code-doc-FINAL.html   # long deck ES (36 slides)
+│   ├── uscha-claude-code-doc-EN.html      # long deck EN
+│   ├── uscha-playbook{,-EN}.html          # Operator's Manual (trigger/move/gate)
+│   ├── uscha-onepager{,-EN}.html          # one-page sheet
+│   ├── uscha-team-pitch.html              # team adoption pitch (Vale/Martín story, 14 slides)
+│   ├── uscha-team-pitch-extended.html     # extended pitch: + typical day, readiness KPI, 2-story ledger, pilot (22 slides)
+│   ├── skills-referencia.html                 # exhaustive reference of the 8 skills (what each does, phase by phase)
+│   ├── casos-reales.md                        # logbook: real moments where the method intervenes (anonymized)
+│   ├── *.png                                  # system map · 10 steps · reverse-discovery
+│   └── diagram-sources/                       # source HTML of the PNGs (re-renderable)
+├── formats/               # 6 format explorations (A-F); playbook + atlas-map were adopted
+└── audits/                # outputs of the adversarial audits (2026-07)
+    ├── audit-metodologia-7-lentes.json        # 33 weaknesses confirmed / 13 refuted
+    ├── audit-fidelidad-doc-codigo-idea.json   # 171 claims verified doc↔code↔idea
+    ├── truth-pass-6-docs.json                 # 130 truthfulness edits post-wiring
+    └── verificacion-team-pitch.json           # 3 lenses over the pitch
 ```
 
-## Estado (2026-07-05)
+## Status (2026-07-05)
 
-- **Kit v1.32.0** <!-- uscha:version --> — los fact gates están CABLEADOS al engine (1.3.0: `log-gate`,
-  `flag-blocker`, `resolve-escalation`; UNMEASURED; convergencia per-tool con veto de
-  snapshot medido) y el engine mide repos **Python** (1.4.0: pytest/Cobertura + ruff +
-  mypy) **TypeScript/JS** (1.5.0: lcov + jest-junit + eslint + tsc) **Go** (1.6.0: cover profile
-  nativo + gotestsum + golangci via checkstyle), **Rust** (1.7.0: Cobertura +
+- **Kit v1.32.0** <!-- uscha:version --> — the fact-gates are WIRED into the engine (1.3.0: `log-gate`,
+  `flag-blocker`, `resolve-escalation`; UNMEASURED; per-tool convergence with a veto from
+  the measured snapshot) and the engine measures **Python** repos (1.4.0: pytest/Cobertura + ruff +
+  mypy) **TypeScript/JS** (1.5.0: lcov + jest-junit + eslint + tsc) **Go** (1.6.0: native cover
+  profile + gotestsum + golangci via checkstyle), **Rust** (1.7.0: Cobertura +
   nextest + clippy) **C#/.NET** (1.7.0: coverlet + junit
   logger + SARIF/Roslyn), **C++** (1.8.0: gcovr/Cobertura + ctest junit +
-  clang-tidy), **Kotlin/JVM Gradle** y **Swift** (1.9.0: cero parsers nuevos —
-  JaCoCo/lcov/JUnit/checkstyle reusados; detekt + SwiftLint). **Acceptance trazable** (1.10.0: AC-n cierra por testcase
-  MEDIDO, dimensión dominante del readiness — M2 del backlog PragProg). **Tests fuera
-  del presupuesto de simplicity** (1.11.0: escribir tests no penaliza el gate — M9).
-  **Secret-scan en gate-check** (1.12.0: claves privadas/tokens/contenedores agregados
-  bloquean como hecho — M8). **Ledger atómico** (1.13.0: checksum de integridad + carga
-  blindada — M3). **Plateau/stop-signal** (1.14.0: stall y candidato-a-PR como
-  advisories — M6). **Golden scrub** (1.15.0: volátiles declarados enmascaran con
-  masking visible — M7). **Regression-capture** (1.16.0: cierre de findings sin test =
-  narrado; escape-analysis obligatoria al resolver blockers — M1). **Procedencia de
-  umbrales** (1.17.0: cada umbral se etiqueta por procedencia — requerimiento
-  declarado en config vs opinión default del kit; el cap que muerde lo dice en el
-  headline — M5). **FSM derivada** (1.18.0: `phase` computa el estado del workflow
-  desde los hechos del ledger, jamás declarado; el PR se gatea con `--require
-  pr-ready` — M4). **Spikes formales** (1.19.0: rama `spike/*` jamás pasa el gate de
-  PR; el output legítimo es un ADR con lecciones — M10). Smoke suite 189/189 verde.
-  **El backlog PragProg está CERRADO: 10 de 10** (ver
+  clang-tidy), **Kotlin/JVM Gradle** and **Swift** (1.9.0: zero new parsers —
+  JaCoCo/lcov/JUnit/checkstyle reused; detekt + SwiftLint). **Traceable acceptance** (1.10.0: AC-n closes on a
+  MEASURED testcase, the dominant dimension of readiness — M2 of the PragProg backlog). **Tests outside
+  the simplicity budget** (1.11.0: writing tests does not penalize the gate — M9).
+  **Secret-scan in gate-check** (1.12.0: added private keys/tokens/containers
+  block as a fact — M8). **Atomic ledger** (1.13.0: integrity checksum + hardened
+  load — M3). **Plateau/stop-signal** (1.14.0: stall and PR-candidate as
+  advisories — M6). **Golden scrub** (1.15.0: declared volatiles are masked with
+  visible masking — M7). **Regression-capture** (1.16.0: closing findings without a test =
+  narrated; escape-analysis mandatory when resolving blockers — M1). **Threshold
+  provenance** (1.17.0: each threshold is tagged by provenance — a requirement
+  declared in config vs the kit's default opinion; the biting cap says so in the
+  headline — M5). **Derived FSM** (1.18.0: `phase` computes the workflow state
+  from the ledger's facts, never declared; the PR is gated with `--require
+  pr-ready` — M4). **Formal spikes** (1.19.0: a `spike/*` branch never passes the PR
+  gate; the legitimate output is an ADR with lessons — M10). Smoke suite 189/189 green.
+  **The PragProg backlog is CLOSED: 10 of 10** (see
   `docs/analisis-pragmatic-programmer.md`).
-  Licencia: MIT. El principio "facts block, guesses advise" es propiedad enforced,
-  no slogan.
-- **Docs** — pasados por truth-pass contra el engine real: cada claim describe lo que
-  v1.32.0 hace; el anexo de referencias tiene **links verificados por fetch** a las 10
-  fuentes. Convención de estado en los docs: `en el kit` / `nuevo` / `propuesta`.
-- **En curso** — dogfooding en caso real (proyecto piloto, Python): el adapter 1.4.0 lo desbloqueó;
-  queda el dry-run de solo lectura (criterio 2 del HANDOFF python-adapter) y el on-ramp.
-  Diferidos conscientes en CHANGELOG-1.4.0 (densidad de asserts en rebuild, perfiles A-E
-  mecanizados).
+  License: MIT. The principle "facts block, guesses advise" is an enforced property,
+  not a slogan.
+- **Docs** — passed through truth-pass against the real engine: every claim describes what
+  v1.32.0 does; the references appendix has **fetch-verified links** to the 10
+  sources. Status convention in the docs: `in the kit` / `new` / `proposal`.
+- **In progress** — dogfooding on a real case (pilot project, Python): the 1.4.0 adapter unblocked it;
+  what remains is the read-only dry-run (criterion 2 of the python-adapter HANDOFF) and the on-ramp.
+  Conscious deferrals in CHANGELOG-1.4.0 (assert density in rebuild, mechanized A-E
+  profiles).
 
-## Cómo se re-empaqueta el kit
+## How the kit is re-packaged
 
 ```bash
 powershell -NoProfile -Command "Compress-Archive -Path 'uscha-kit' -DestinationPath 'uscha-kit-X.Y.Z.zip' -Force"
 ```
 
-Los zips son artefactos de build: no se commitean. El source del kit en este repo es la verdad.
+The zips are build artifacts: they are not committed. The kit source in this repo is the truth.
 
-## Historia
+## History
 
-Nació como metodología de trabajo con Claude Code, se destiló con el principio
-Böckeler (computacional bloquea / inferencial aconseja), sobrevivió dos auditorías
-adversariales (231 agentes) que encontraron el principio central invertido en el código
-— y la 1.3.0 lo dio vuelta. Los detalles, en `audits/` y en los CHANGELOG.
+It was born as a methodology for working with Claude Code, was distilled with the
+Böckeler principle (computational blocks / inferential advises), survived two
+adversarial audits (231 agents) that found the central principle inverted in the code
+— and 1.3.0 flipped it right. The details are in `audits/` and in the CHANGELOGs.

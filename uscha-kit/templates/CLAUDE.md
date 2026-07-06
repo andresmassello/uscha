@@ -1,56 +1,56 @@
-# CLAUDE.md — protocolo del repo (Uscha)
+# CLAUDE.md — repo protocol (Uscha)
 
-Reglas **permanentes** de este repo. Claude Code las lee en cada sesión. Lo puntual de
-cada cambio vive en `SPEC.md` / `docs/adr/` / `ACCEPTANCE.md`, no acá.
+**Permanent** rules for this repo. Claude Code reads them at every session. What is specific to
+each change lives in `SPEC.md` / `docs/adr/` / `ACCEPTANCE.md`, not here.
 
-> Si usás otros agentes además de Claude Code, copiá este archivo como `AGENTS.md`
-> (mismo contenido) para que también lo lean.
+> If you use other agents besides Claude Code, copy this file as `AGENTS.md`
+> (same content) so they read it too.
 
-## Reglas innegociables
+## Non-negotiable rules
 
-1. **No codear desde una idea vaga.** Si no hay `SPEC.md` + `ACCEPTANCE.md`, primero
-   modelar: `/uscha-discovery` (sistema nuevo) o `/uscha-adr-refine` (feature conocido). Recién con el
-   paquete escrito se construye.
-2. **La verdad vive en archivos, no en el chat.** Antes de tocar código, leé `SPEC.md`,
-   `ACCEPTANCE.md` y `docs/adr/*.md`. No dependas de la conversación: el contexto se
-   resetea, los sub-agentes y el CI leen el repo.
-3. **Convergé, no persigas el cero.** Aplicá solo los findings ≥ severity gate; el resto
-   va a `ISSUES-DEFERRED.md`. El loop termina cuando converge, no cuando "no hay issues".
-4. **Disciplina de ADR + CONSTITUTION durante el build.** Antes de tocar un área, leé
-   `CONSTITUTION.md` (invariantes inviolables) y los ADR del área. Pará y proponé un ADR si
-   vas a: meter una dependencia nueva, crear un patrón nuevo, elegir entre alternativas no
-   obvias, o contradecir un ADR aceptado. **Una violación de la CONSTITUTION es BLOCKER: se
-   escala, nunca se rodea.** Linkeá el código con `// ADR: <slug> — ver docs/adr/...`.
-5. **Evidencia capturada, no narrada.** La evidencia la produce la ejecución (tests,
-   gates, coverage) — no se transcribe a mano. Ausente = sin evidencia, nunca "OK".
-6. **Legacy baseline.** En código viejo: 0 findings HIGH/CRITICAL nuevos, 0 regresiones,
-   sin warnings nuevos en archivos tocados. La deuda vieja se congela, la nueva se bloquea.
-7. **Change budget.** Máx. iteraciones/archivos según el plan; 0 cambios de schema sin
-   ADR; 0 dependencias nuevas sin aprobación. Si se supera el scope o un fix revierte otro
-   → escalá (no sigas solo).
-8. **Nunca edites la SPEC/ADR para que la implementación parezca correcta.** Si la
-   realidad obliga a cambiar la SPEC, versionala y volvé a Ready.
-9. **Human gate.** No hagas merge ni release automático. Parás en el PR; el merge y el
-   smoke en ambiente real los decide una persona.
+1. **Don't code from a vague idea.** If there is no `SPEC.md` + `ACCEPTANCE.md`, model
+   first: `/uscha-discovery` (new system) or `/uscha-adr-refine` (known feature). Only once the
+   package is written do you build.
+2. **Truth lives in files, not in the chat.** Before touching code, read `SPEC.md`,
+   `ACCEPTANCE.md` and `docs/adr/*.md`. Don't rely on the conversation: context
+   resets, and sub-agents and CI read the repo.
+3. **Converge, don't chase zero.** Apply only the findings ≥ severity gate; the rest
+   goes to `ISSUES-DEFERRED.md`. The loop ends when it converges, not when "there are no issues".
+4. **ADR + CONSTITUTION discipline during the build.** Before touching an area, read
+   `CONSTITUTION.md` (inviolable invariants) and the ADRs for the area. Stop and propose an ADR if
+   you are going to: introduce a new dependency, create a new pattern, choose between non-obvious
+   alternatives, or contradict an accepted ADR. **A CONSTITUTION violation is a BLOCKER: it is
+   escalated, never worked around.** Link the code with `// ADR: <slug> — see docs/adr/...`.
+5. **Evidence captured, not narrated.** Evidence is produced by execution (tests,
+   gates, coverage) — it is not transcribed by hand. Absent = no evidence, never "OK".
+6. **Legacy baseline.** In old code: 0 new HIGH/CRITICAL findings, 0 regressions,
+   no new warnings in touched files. Old debt is frozen, new debt is blocked.
+7. **Change budget.** Max iterations/files per the plan; 0 schema changes without an
+   ADR; 0 new dependencies without approval. If the scope is exceeded or a fix reverts another
+   → escalate (don't keep going alone).
+8. **Never edit the SPEC/ADR to make the implementation look correct.** If reality
+   forces a SPEC change, version it and go back to Ready.
+9. **Human gate.** Don't merge or release automatically. You stop at the PR; the merge and
+   the smoke test in a real environment are decided by a person.
 
-## Jerarquía de la verdad
+## Truth hierarchy
 
-`CONSTITUTION.md` (qué nunca es aceptable) ▸ `SPEC.md` (qué debe pasar) ▸ `docs/adr/` (por qué esta forma). La CONSTITUTION está por encima de los ADR: ningún ADR ni SPEC puede violarla. La leen `/uscha-discovery`, `/uscha-adr-refine` y `/uscha-devloop` antes de proponer o tocar nada.
+`CONSTITUTION.md` (what is never acceptable) ▸ `SPEC.md` (what must happen) ▸ `docs/adr/` (why this shape). The CONSTITUTION sits above the ADRs: no ADR or SPEC may violate it. `/uscha-discovery`, `/uscha-adr-refine` and `/uscha-devloop` read it before proposing or touching anything.
 
-## Comandos (skills)
+## Commands (skills)
 
 - `/uscha-discovery` — idea → CONTEXT/DOMAIN-MODEL/CONSTITUTION/SPEC/ADR/ACCEPTANCE/RISKS/HANDOFF
-- `/uscha-adr-refine` — feature conocido → SPEC + ADR + ACCEPTANCE
-- `/uscha-devloop` — plan → build → QA loop → PR (para en el merge)
-- `/uscha-sysdoc` — documenta el sistema desde el ledger
+- `/uscha-adr-refine` — known feature → SPEC + ADR + ACCEPTANCE
+- `/uscha-devloop` — plan → build → QA loop → PR (stops at the merge)
+- `/uscha-sysdoc` — documents the system from the ledger
 
-## Adapter del proyecto (COMPLETAR por repo)
+## Project adapter (TO COMPLETE per repo)
 
-> Esto es lo único específico del stack. Completalo y borrá este recordatorio.
+> This is the only stack-specific part. Complete it and delete this reminder.
 
-- **Build:** `<p.ej. mvn -q compile>`
-- **Tests:** `<p.ej. mvn -q test>`
-- **Static gate:** `<p.ej. mvn -q verify -Pqa  → checkstyle-result.xml, pmd.xml, spotbugsXml.xml>`
-- **Coverage:** `<p.ej. target/site/jacoco/jacoco.xml>`
-- **No-go zones:** `<carpetas/archivos que no se tocan>`
-- **Secretos / credenciales:** `<dónde están y qué NO loguear>`
+- **Build:** `<e.g. mvn -q compile>`
+- **Tests:** `<e.g. mvn -q test>`
+- **Static gate:** `<e.g. mvn -q verify -Pqa  → checkstyle-result.xml, pmd.xml, spotbugsXml.xml>`
+- **Coverage:** `<e.g. target/site/jacoco/jacoco.xml>`
+- **No-go zones:** `<folders/files that are not touched>`
+- **Secrets / credentials:** `<where they are and what NOT to log>`

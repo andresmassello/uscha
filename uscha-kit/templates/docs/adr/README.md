@@ -1,14 +1,14 @@
 # Architecture Decision Records
 
-Decisiones técnicas durables de este repo. Una por archivo:
-`ADR-NNN-<slug>.md`. Las escribe `/discovery` o `/adr-refine`, o se proponen durante el
-build cuando aparece una decisión real (ver reglas de ADR en `CLAUDE.md`).
+Durable technical decisions of this repo. One per file:
+`ADR-NNN-<slug>.md`. They are written by `/discovery` or `/adr-refine`, or proposed during the
+build when a real decision appears (see the ADR rules in `CLAUDE.md`).
 
-Formato: Estado (proposed/accepted/deprecated/superseded) · Contexto · Alternativas ·
-Decisión · Consecuencias · Implementation Plan (affected paths, patrones, tests) ·
+Format: Status (proposed/accepted/deprecated/superseded) · Context · Alternatives ·
+Decision · Consequences · Implementation Plan (affected paths, patterns, tests) ·
 Verification (checkboxes).
 
-## Índice
+## Index
 
-<!-- agregá una línea por ADR -->
-- _(todavía no hay ADRs)_
+<!-- add one line per ADR -->
+- _(no ADRs yet)_

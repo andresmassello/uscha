@@ -1,211 +1,211 @@
 # uscha-kit
 
-**Versión del kit:** v1.32.0 <!-- uscha:version -->
+**Kit version:** v1.32.0 <!-- uscha:version -->
 
-Orquestador spec-driven + QA multi-repo para Claude Code, con ledger determinístico.
-**Ocho skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
-`uscha-characterize`, `uscha-rubric`, `uscha-mirador`) y un motor de medición (`qa_ledger.py`).
+Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
+**Eight skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
+`uscha-characterize`, `uscha-rubric`, `uscha-mirador`) and a measurement engine (`qa_ledger.py`).
 
-**Para quién:** un operador solo llevando UN cambio no-trivial o con riesgo, mantenido
-honesto por un ledger determinístico y un human gate en el merge. NO es para cambios
-triviales (un one-liner corre build+test y listo).
+**Who it's for:** a solo operator carrying ONE non-trivial or risky change, kept
+honest by a deterministic ledger and a human gate at the merge. It is NOT for trivial
+changes (a one-liner runs build+test and that's it).
 
-## Qué hay adentro
+## What's inside
 
 ```
 uscha-kit/
-├─ uscha.config.json            # config: repos, umbrales, comandos
+├─ uscha.config.json            # config: repos, thresholds, commands
 ├─ hooks/
-│  └─ block-approved-writes.ps1    # PreToolUse: el agente NO puede escribir .approved (INV-GOLDEN-01)
+│  └─ block-approved-writes.ps1    # PreToolUse: the agent CANNOT write .approved (INV-GOLDEN-01)
 ├─ templates/
-│  ├─ CLAUDE.md                    # protocolo permanente del repo
-│  ├─ CONSTITUTION.md              # invariantes inviolables (completar dominio)
-│  ├─ .gitattributes               # *.approved.* binary — que los fin-de-línea no mientan
-│  └─ docs/adr/                    # scaffold ADR
+│  ├─ CLAUDE.md                    # permanent repo protocol
+│  ├─ CONSTITUTION.md              # inviolable invariants (fill in the domain)
+│  ├─ .gitattributes               # *.approved.* binary — so line endings don't lie
+│  └─ docs/adr/                    # ADR scaffold
 └─ .claude/skills/
-   ├─ uscha-discovery/                   # idea vaga → grilla 1x1 → CONSTITUTION/SPEC/ADR/ACCEPTANCE…
-   ├─ uscha-adr-refine/                  # feature conocido: entrevista de precisión → ADR + ACCEPTANCE
-   ├─ uscha-reverse-discovery/           # brownfield: mapa de HECHOS del sistema existente (no propone forma)
-   ├─ uscha-characterize/                # captura el golden ejecutando el código ORIGINAL (para en la aprobación humana)
+   ├─ uscha-discovery/                   # vague idea → 1x1 grilling → CONSTITUTION/SPEC/ADR/ACCEPTANCE…
+   ├─ uscha-adr-refine/                  # known feature: precision interview → ADR + ACCEPTANCE
+   ├─ uscha-reverse-discovery/           # brownfield: FACTS map of the existing system (does not propose shape)
+   ├─ uscha-characterize/                # captures the golden by running the ORIGINAL code (stops at human approval)
    ├─ uscha-devloop/
-   │  ├─ SKILL.md                  # orquestador: plan → build → QA loop → PR
-   │  └─ qa_ledger.py              # medición + ledger + gates (ingest/log-gate/golden-diff/gate-check/pit/simplicity/rebuild)
-   ├─ uscha-sysdoc/                     # (opcional) deck HTML de dos vistas desde el ledger
-   └─ uscha-rubric/                      # (opcional) grade de la rubrica — adapter fino; el nucleo es agnostico
+   │  ├─ SKILL.md                  # orchestrator: plan → build → QA loop → PR
+   │  └─ qa_ledger.py              # measurement + ledger + gates (ingest/log-gate/golden-diff/gate-check/pit/simplicity/rebuild)
+   ├─ uscha-sysdoc/                     # (optional) two-view HTML deck from the ledger
+   └─ uscha-rubric/                      # (optional) rubric grading — thin adapter; the core is agnostic
 ```
 
-## Flujo punta a punta
+## End-to-end flow
 
-`uscha-discovery` es el frente para algo nuevo (solo tenés la idea); `uscha-adr-refine` es el frente
-para un feature conocido; `uscha-devloop` construye y verifica. Se tocan en el `ACCEPTANCE.md`.
+`uscha-discovery` is the front for something new (you only have the idea); `uscha-adr-refine` is the front
+for a known feature; `uscha-devloop` builds and verifies. They meet at the `ACCEPTANCE.md`.
 
 ```
-/uscha-discovery     # solo idea + material de referencia → grilla 1x1 (propone, vos decidís)
-   ↓           #   escribe CONTEXT.md, CONSTITUTION.md, SPEC.md, docs/adr/*.md, ACCEPTANCE.md, RISKS.md, HANDOFF.md
-/uscha-devloop      # plan → build → QA loop (fact gates al ledger) → PR (para en el merge)
+/uscha-discovery     # idea only + reference material → 1x1 grilling (proposes, you decide)
+   ↓           #   writes CONTEXT.md, CONSTITUTION.md, SPEC.md, docs/adr/*.md, ACCEPTANCE.md, RISKS.md, HANDOFF.md
+/uscha-devloop      # plan → build → QA loop (fact gates to the ledger) → PR (stops at the merge)
    ↓
-/uscha-sysdoc       # (opcional, a pedido) documenta el sistema desde el ledger
+/uscha-sysdoc       # (optional, on request) documents the system from the ledger
 ```
 
-(Para un feature ya conocido, en vez de `/uscha-discovery` usás `/uscha-adr-refine`.)
+(For an already known feature, instead of `/uscha-discovery` you use `/uscha-adr-refine`.)
 
-**On-ramp de migración/legacy (perfil E):** el golden es la verdad de campo y se captura
-ANTES de tocar nada.
+**Migration/legacy on-ramp (profile E):** the golden is the field truth and is captured
+BEFORE touching anything.
 
 ```
-/uscha-reverse-discovery   # mapa de HECHOS del sistema viejo (endpoints, contratos, dependencias)
+/uscha-reverse-discovery   # FACTS map of the old system (endpoints, contracts, dependencies)
    ↓
-/uscha-characterize        # ejecuta el código ORIGINAL con corpus real → .received → PARA:
-   ↓                 #   un HUMANO aprueba los .approved (el agente jamás los escribe — hook)
-/uscha-devloop            # migra; golden-diff byte-compara contra el .approved en cada pass
+/uscha-characterize        # runs the ORIGINAL code with a real corpus → .received → STOPS:
+   ↓                 #   a HUMAN approves the .approved (the agent never writes them — hook)
+/uscha-devloop            # migrates; golden-diff byte-compares against the .approved on each pass
 ```
 
-## Requisitos
+## Requirements
 
-- **Python 3.8+** (solo stdlib — no hay `pip install`). `cloc` NO hace falta; el LOC se
-  cuenta en Python.
-- Para que `ingest-gate` y el coverage funcionen, tu build Maven tiene que emitir los
-  reportes (tu `java-qa-gate` ya tiene los plugins; estos son los paths que el ledger
-  espera):
+- **Python 3.8+** (stdlib only — no `pip install`). `cloc` is NOT needed; the LOC is
+  counted in Python.
+- For `ingest-gate` and coverage to work, your Maven build must emit the
+  reports (your `java-qa-gate` already has the plugins; these are the paths the ledger
+  expects):
 
-  | dato        | plugin / goal                                   | archivo |
+  | data        | plugin / goal                                   | file |
   |-------------|--------------------------------------------------|---------|
-  | coverage    | `jacoco-maven-plugin` (`report`)                 | `target/site/jacoco/jacoco.xml` (o `jacoco-aggregate/`) |
+  | coverage    | `jacoco-maven-plugin` (`report`)                 | `target/site/jacoco/jacoco.xml` (or `jacoco-aggregate/`) |
   | test count  | `maven-surefire-plugin` / `failsafe`             | `target/surefire-reports/TEST-*.xml` |
   | checkstyle  | `maven-checkstyle-plugin` (`checkstyle`)         | `target/checkstyle-result.xml` |
   | pmd         | `maven-pmd-plugin` (`pmd`)                        | `target/pmd.xml` |
   | spotbugs+fsb| `spotbugs-maven-plugin` (+ findsecbugs)          | `target/spotbugsXml.xml` |
 
-  Flutter: coverage de `coverage/lcov.info` (`flutter test --coverage`);
-  el test count es aproximado (cuenta `test(`/`testWidgets(`).
+  Flutter: coverage from `coverage/lcov.info` (`flutter test --coverage`);
+  the test count is approximate (it counts `test(`/`testWidgets(`).
 
   Python (`type: python`, kit 1.4.0):
 
-  | dato        | comando                                           | archivo |
+  | data        | command                                           | file |
   |-------------|---------------------------------------------------|---------|
-  | coverage    | `pytest --cov --cov-report=xml:reports/coverage.xml` | `coverage.xml` o `reports/coverage.xml` (Cobertura) |
-  | test count  | `pytest --junitxml=reports/junit.xml`             | `reports/junit.xml` (root envuelto `<testsuites>` soportado) |
-  | ruff        | `ruff check --output-format=json > reports/ruff.json` | `reports/ruff.json` (S*/E9*/F82*→HIGH · B*→MEDIUM · resto→LOW) |
+  | coverage    | `pytest --cov --cov-report=xml:reports/coverage.xml` | `coverage.xml` or `reports/coverage.xml` (Cobertura) |
+  | test count  | `pytest --junitxml=reports/junit.xml`             | `reports/junit.xml` (wrapped root `<testsuites>` supported) |
+  | ruff        | `ruff check --output-format=json > reports/ruff.json` | `reports/ruff.json` (S*/E9*/F82*→HIGH · B*→MEDIUM · rest→LOW) |
   | mypy        | `mypy src > reports/mypy.txt`                     | `reports/mypy.txt` (error→HIGH · warning→MEDIUM · note→INFO) |
 
-  `ingest-gate` los encuentra solo por type del repo, o con `--ruff/--mypy` explícitos.
-  Contrato idéntico al Java: reporte ausente = el gate no corrió (jamás acredita fixes).
+  `ingest-gate` finds them automatically by the repo's type, or with explicit `--ruff/--mypy`.
+  Contract identical to Java: a missing report = the gate didn't run (it never credits fixes).
 
   TypeScript/JS (`type: node`, kit 1.5.0):
 
-  | dato        | comando                                           | archivo |
+  | data        | command                                           | file |
   |-------------|---------------------------------------------------|---------|
-  | coverage    | `jest --coverage` (o vitest con reporter lcov)    | `coverage/lcov.info` (mismo parser que Flutter) |
-  | test count  | `jest-junit` / `vitest --reporter=junit`          | `reports/junit.xml` o `junit.xml` (root envuelto soportado) |
+  | coverage    | `jest --coverage` (or vitest with lcov reporter)  | `coverage/lcov.info` (same parser as Flutter) |
+  | test count  | `jest-junit` / `vitest --reporter=junit`          | `reports/junit.xml` or `junit.xml` (wrapped root supported) |
   | eslint      | `eslint . --format json > reports/eslint.json`    | `reports/eslint.json` (error→HIGH · warn→MEDIUM · `security/*` floor HIGH · ruleId null→HIGH) |
   | tsc         | `tsc --noEmit > reports/tsc.txt`                  | `reports/tsc.txt` (error TS → HIGH) |
 
-  `ingest-gate` los encuentra por type del repo, o con `--eslint/--tsc` explícitos.
-  Mismo contrato de ausencia.
+  `ingest-gate` finds them by the repo's type, or with explicit `--eslint/--tsc`.
+  Same absence contract.
 
   Go (`type: go`, kit 1.6.0):
 
-  | dato        | comando                                           | archivo |
+  | data        | command                                           | file |
   |-------------|---------------------------------------------------|---------|
-  | coverage    | `go test -coverprofile=coverage.out ./...`        | `coverage.out` (cover profile nativo — % por SENTENCIAS, la convención Go) |
-  | test count  | `gotestsum --junitfile reports/junit.xml -- ./...`| `reports/junit.xml` (JUnit envuelto soportado) |
-  | golangci    | `golangci-lint run --output.checkstyle.path=reports/golangci.xml` (v2; en v1: `--out-format checkstyle > ...`) | `reports/golangci.xml` (formato checkstyle: error→HIGH · warning→MEDIUM; incluye gosec si está habilitado) |
+  | coverage    | `go test -coverprofile=coverage.out ./...`        | `coverage.out` (native cover profile — % by STATEMENTS, the Go convention) |
+  | test count  | `gotestsum --junitfile reports/junit.xml -- ./...`| `reports/junit.xml` (wrapped JUnit supported) |
+  | golangci    | `golangci-lint run --output.checkstyle.path=reports/golangci.xml` (v2; in v1: `--out-format checkstyle > ...`) | `reports/golangci.xml` (checkstyle format: error→HIGH · warning→MEDIUM; includes gosec if enabled) |
 
-  `ingest-gate` lo encuentra por type del repo, o con `--golangci` explícito. Los tests
-  `_test.go` viven junto al código (convención Go) — el LOC los clasifica por sufijo.
-  `vendor/` y `testdata/` quedan fuera del LOC. Mismo contrato de ausencia.
-  **Ojo severidades**: golangci-lint emite `severity=error` para TODO salvo que
-  configures reglas `severity:` — sin eso, hasta los nits de estilo gatean como HIGH;
-  configurá severidades (o un set de linters magro) para que MEDIUM exista de verdad.
+  `ingest-gate` finds it by the repo's type, or with explicit `--golangci`. The
+  `_test.go` tests live alongside the code (Go convention) — the LOC classifies them by suffix.
+  `vendor/` and `testdata/` are excluded from the LOC. Same absence contract.
+  **Watch out for severities**: golangci-lint emits `severity=error` for EVERYTHING unless you
+  configure `severity:` rules — without that, even style nits gate as HIGH;
+  configure severities (or a lean linter set) so that MEDIUM really exists.
 
   Rust (`type: rust`, kit 1.7.0):
 
-  | dato        | comando                                           | archivo |
+  | data        | command                                           | file |
   |-------------|---------------------------------------------------|---------|
-  | coverage    | `cargo llvm-cov --cobertura --output-path reports/coverage.xml` | `reports/coverage.xml` (Cobertura — mismo parser que Python) |
-  | test count  | `cargo nextest run` + copy (ver nota)             | `reports/junit.xml` (JUnit envuelto soportado) |
-  | clippy      | `cargo clippy --message-format=json > reports/clippy.json` | `reports/clippy.json` (JSONL: error→HIGH · warning→MEDIUM · `code:null` compile-error→HIGH; summaries sin span ignorados) |
+  | coverage    | `cargo llvm-cov --cobertura --output-path reports/coverage.xml` | `reports/coverage.xml` (Cobertura — same parser as Python) |
+  | test count  | `cargo nextest run` + copy (see note)              | `reports/junit.xml` (wrapped JUnit supported) |
+  | clippy      | `cargo clippy --message-format=json > reports/clippy.json` | `reports/clippy.json` (JSONL: error→HIGH · warning→MEDIUM · `code:null` compile-error→HIGH; summaries without span ignored) |
 
-  `ingest-gate` con `--clippy` explícito o por type. Los tests inline `#[cfg(test)]`
-  cuentan como LOC prod (limitación documentada); `tests/` = integración.
-  **Ojo junit**: nextest NO emite JUnit por default — hay que habilitarlo en
-  `.config/nextest.toml` (`[profile.default.junit] path = "junit.xml"`) y el archivo
-  cae en `target/nextest/default/junit.xml`; copialo a `reports/junit.xml`
-  (`cp target/nextest/default/junit.xml reports/junit.xml`, ya incluido en el
-  `test_command_rust` de ejemplo).
+  `ingest-gate` with explicit `--clippy` or by type. The inline `#[cfg(test)]` tests
+  count as prod LOC (documented limitation); `tests/` = integration.
+  **Watch out for junit**: nextest does NOT emit JUnit by default — you have to enable it in
+  `.config/nextest.toml` (`[profile.default.junit] path = "junit.xml"`) and the file
+  lands in `target/nextest/default/junit.xml`; copy it to `reports/junit.xml`
+  (`cp target/nextest/default/junit.xml reports/junit.xml`, already included in the
+  example `test_command_rust`).
 
   C#/.NET (`type: dotnet`, kit 1.7.0):
 
-  | dato        | comando                                           | archivo |
+  | data        | command                                           | file |
   |-------------|---------------------------------------------------|---------|
   | coverage    | coverlet.msbuild: `/p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=$PWD/reports/coverage.xml` | `reports/coverage.xml` (Cobertura) |
-  | test count  | `dotnet test --logger "junit;LogFilePath=$PWD/reports/junit.xml"` (paquete JUnitXml.TestLogger) | `reports/junit.xml` |
-  | roslyn      | `dotnet build /p:ErrorLog="reports/analysis.sarif,version=2"` | `reports/analysis.sarif` (SARIF: error→HIGH · warning→MEDIUM · note→INFO; suprimidos ignorados) |
+  | test count  | `dotnet test --logger "junit;LogFilePath=$PWD/reports/junit.xml"` (JUnitXml.TestLogger package) | `reports/junit.xml` |
+  | roslyn      | `dotnet build /p:ErrorLog="reports/analysis.sarif,version=2"` | `reports/analysis.sarif` (SARIF: error→HIGH · warning→MEDIUM · note→INFO; suppressed ignored) |
 
-  `ingest-gate` con `--sarif` explícito o por type. SARIF es el formato universal de
-  análisis estático — el parser sirve para cualquier tool que lo emita.
-  **Ojo paths**: `LogFilePath` y `CoverletOutput` relativos resuelven contra el
-  directorio del PROYECTO DE TEST, no la raíz del repo — por eso los `$PWD`
-  (anclaje absoluto). Con varios proyectos de test, mergeá (`/p:MergeWith`) o un
-  reporte por proyecto. `ErrorLog` sin `,version=2` emite SARIF **v1**; el parser
-  tiene fallback v1, pero pedí v2 (la coma requiere las comillas).
+  `ingest-gate` with explicit `--sarif` or by type. SARIF is the universal static-analysis
+  format — the parser works for any tool that emits it.
+  **Watch out for paths**: relative `LogFilePath` and `CoverletOutput` resolve against the
+  TEST PROJECT directory, not the repo root — hence the `$PWD`
+  (absolute anchoring). With multiple test projects, merge (`/p:MergeWith`) or use one
+  report per project. `ErrorLog` without `,version=2` emits SARIF **v1**; the parser
+  has a v1 fallback, but ask for v2 (the comma requires the quotes).
 
   C++ (`type: cpp`, kit 1.8.0):
 
-  | dato        | comando                                           | archivo |
+  | data        | command                                           | file |
   |-------------|---------------------------------------------------|---------|
-  | coverage    | `gcovr --cobertura reports/coverage.xml` (sobre gcov) | `reports/coverage.xml` (Cobertura — mismo parser) |
-  | test count  | `ctest --test-dir build --output-junit ../reports/junit.xml` (CMake ≥3.21) o `--gtest_output=xml:...` | `reports/junit.xml` (root plano Y envuelto soportados) |
+  | coverage    | `gcovr --cobertura reports/coverage.xml` (over gcov) | `reports/coverage.xml` (Cobertura — same parser) |
+  | test count  | `ctest --test-dir build --output-junit ../reports/junit.xml` (CMake ≥3.21) or `--gtest_output=xml:...` | `reports/junit.xml` (flat AND wrapped root supported) |
   | clang-tidy  | `clang-tidy <files> > reports/clang-tidy.txt`     | `reports/clang-tidy.txt` (error→HIGH · warning→MEDIUM · `cert-*`/security floor HIGH) |
 
-  `ingest-gate` con `--clang-tidy` explícito o por type. El build system (CMake/
-  Bazel/make) es del adapter por-repo — el kit solo pide que los reportes existan.
-  `cmake-build-*` (cualquier perfil de CLion) y `_deps` quedan fuera del LOC.
+  `ingest-gate` with explicit `--clang-tidy` or by type. The build system (CMake/
+  Bazel/make) belongs to the per-repo adapter — the kit only requires that the reports exist.
+  `cmake-build-*` (any CLion profile) and `_deps` are excluded from the LOC.
 
-  Kotlin/JVM con Gradle (`type: gradle`, kit 1.9.0) — **Kotlin sobre Maven ya
-  funciona con `type: maven`** (`.kt` cuenta desde siempre; JaCoCo/Surefire no
-  distinguen lenguaje JVM). Este type es para el caso común Gradle:
+  Kotlin/JVM with Gradle (`type: gradle`, kit 1.9.0) — **Kotlin over Maven already
+  works with `type: maven`** (`.kt` has always counted; JaCoCo/Surefire don't
+  distinguish JVM language). This type is for the common Gradle case:
 
-  | dato        | comando                                           | archivo |
+  | data        | command                                           | file |
   |-------------|---------------------------------------------------|---------|
-  | coverage    | `./gradlew test jacocoTestReport`                 | `build/reports/jacoco/test/jacocoTestReport.xml` (JaCoCo — mismo parser que maven) |
-  | test count  | (mismo `./gradlew test`)                          | `build/test-results/**/TEST-*.xml` (per-clase, como surefire) |
-  | detekt      | `./gradlew detekt` **por separado** (ver nota)    | `build/reports/detekt/detekt.xml` (formato checkstyle: error→HIGH · warning→MEDIUM; paths absolutos relativizados) |
+  | coverage    | `./gradlew test jacocoTestReport`                 | `build/reports/jacoco/test/jacocoTestReport.xml` (JaCoCo — same parser as maven) |
+  | test count  | (same `./gradlew test`)                           | `build/test-results/**/TEST-*.xml` (per-class, like surefire) |
+  | detekt      | `./gradlew detekt` **separately** (see note)      | `build/reports/detekt/detekt.xml` (checkstyle format: error→HIGH · warning→MEDIUM; absolute paths relativized) |
 
-  `ingest-gate` con `--detekt` explícito o por type. Sirve igual para Java-sobre-
-  Gradle. LOC: `src/main` = prod; `src/test` Y source sets custom (`src/
-  integrationTest`, `src/functionalTest` — cualquier `src/*Test`) = test
-  (`.kt`/`.kts`/`.java`). El requisito JaCoCo: `jacoco` plugin +
+  `ingest-gate` with explicit `--detekt` or by type. It works the same for Java-over-
+  Gradle. LOC: `src/main` = prod; `src/test` AND custom source sets (`src/
+  integrationTest`, `src/functionalTest` — any `src/*Test`) = test
+  (`.kt`/`.kts`/`.java`). The JaCoCo requirement: `jacoco` plugin +
   `jacocoTestReport { reports { xml.required = true } }`.
-  **Ojo detekt**: NO lo encadenes al test command — su default es `maxIssues: 0`,
-  o sea que UN finding corta el build y la corrida de tests leería roja aunque
-  los tests pasen. Corré `./gradlew detekt` aparte, antes del `ingest-gate`
-  (el gate de lint tiene su propio canal).
+  **Watch out for detekt**: do NOT chain it to the test command — its default is `maxIssues: 0`,
+  meaning ONE finding breaks the build and the test run would read red even though
+  the tests pass. Run `./gradlew detekt` separately, before the `ingest-gate`
+  (the lint gate has its own channel).
 
   Swift (`type: swift`, kit 1.9.0):
 
-  | dato        | comando                                           | archivo |
+  | data        | command                                           | file |
   |-------------|---------------------------------------------------|---------|
-  | coverage    | `swift test --enable-code-coverage` + `llvm-cov export -format=lcov ... > coverage/lcov.info` | `coverage/lcov.info` (lcov — mismo parser que Flutter/node) |
-  | test count  | `swift test --xunit-output reports/junit.xml`     | `reports/junit.xml` **+ `reports/junit-swift-testing.xml`** (se SUMAN — ver nota) |
-  | swiftlint   | `swiftlint lint --reporter checkstyle > reports/swiftlint.xml` | `reports/swiftlint.xml` (formato checkstyle: error→HIGH · warning→MEDIUM; paths absolutos relativizados) |
+  | coverage    | `swift test --enable-code-coverage` + `llvm-cov export -format=lcov ... > coverage/lcov.info` | `coverage/lcov.info` (lcov — same parser as Flutter/node) |
+  | test count  | `swift test --xunit-output reports/junit.xml`     | `reports/junit.xml` **+ `reports/junit-swift-testing.xml`** (they are SUMMED — see note) |
+  | swiftlint   | `swiftlint lint --reporter checkstyle > reports/swiftlint.xml` | `reports/swiftlint.xml` (checkstyle format: error→HIGH · warning→MEDIUM; absolute paths relativized) |
 
-  `ingest-gate` con `--swiftlint` explícito o por type. LOC: convención SwiftPM
-  (`Sources/` = prod, `Tests/` + `*Tests.swift` = test). El export lcov necesita
-  el paso `llvm-cov export` contra el binario de tests (el `.profdata` solo no
-  alcanza) — dejalo en el `test_command_swift` de tu repo; en macOS es
-  `xcrun llvm-cov`, en Linux `llvm-cov` pelado (y el binario vive en
+  `ingest-gate` with explicit `--swiftlint` or by type. LOC: SwiftPM convention
+  (`Sources/` = prod, `Tests/` + `*Tests.swift` = test). The lcov export needs
+  the `llvm-cov export` step against the tests binary (the `.profdata` alone is
+  not enough) — leave it in your repo's `test_command_swift`; on macOS it is
+  `xcrun llvm-cov`, on Linux plain `llvm-cov` (and the binary lives in
   `.build/debug/<Pkg>PackageTests.xctest`).
-  **Ojo Swift Testing**: `--xunit-output` escribe los resultados de XCTest en
-  `junit.xml` y los de **Swift Testing** (el default de Swift 6) en un SEGUNDO
-  archivo `junit-swift-testing.xml` — el engine suma AMBOS; si solo leyera el
-  primero, un paquete Swift 6 mediría `tests=0` y un failure real quedaría
+  **Watch out for Swift Testing**: `--xunit-output` writes the XCTest results to
+  `junit.xml` and the **Swift Testing** ones (the default in Swift 6) to a SECOND
+  file `junit-swift-testing.xml` — the engine sums BOTH; if it only read the
+  first, a Swift 6 package would measure `tests=0` and a real failure would be
   invisible (fail-open).
 
-## Instalación
+## Installation
 
-**Opción A — por proyecto** (recomendado para suites multi-repo): copiá `.claude/` al
-repo primario y `uscha.config.json` a la raíz de ese repo.
+**Option A — per project** (recommended for multi-repo suites): copy `.claude/` to the
+primary repo and `uscha.config.json` to the root of that repo.
 
 ```bash
 cp -r uscha-kit/.claude  <repo-primario>/
@@ -213,11 +213,11 @@ cp uscha-kit/uscha.config.json  <repo-primario>/
 chmod +x <repo-primario>/.claude/skills/uscha-devloop/qa_ledger.py
 ```
 
-**Opción B — global** (kit 1.20.0: para todos tus repos, existentes y nuevos): copiá
-las OCHO skills a `~/.claude/skills/` y el hook a `~/.claude/hooks/` + registralo en
-`~/.claude/settings.json` (snippet en el header del .ps1) — así INV-GOLDEN-01 rige en
-todos los proyectos. Las skills resuelven el engine primero en el proyecto y caen a
-`~/.claude/skills/uscha-devloop/qa_ledger.py` si no hay instalación local.
+**Option B — global** (kit 1.20.0: for all your repos, existing and new): copy
+the EIGHT skills to `~/.claude/skills/` and the hook to `~/.claude/hooks/` + register it in
+`~/.claude/settings.json` (snippet in the .ps1 header) — this way INV-GOLDEN-01 rules across
+all projects. The skills resolve the engine first in the project and fall back to
+`~/.claude/skills/uscha-devloop/qa_ledger.py` if there is no local installation.
 
 ```bash
 for s in uscha-discovery uscha-adr-refine uscha-reverse-discovery uscha-characterize uscha-devloop uscha-sysdoc uscha-rubric; do
@@ -226,235 +226,235 @@ done
 mkdir -p ~/.claude/hooks && cp uscha-kit/hooks/block-approved-writes.ps1 ~/.claude/hooks/
 ```
 
-Lo que sigue siendo POR PROYECTO (estado, no instalable): `uscha.config.json` en la
-raíz del repo donde corras la run (los `path` son relativos a ahí — y tu quality bar
-declarada vive ahí), el `QA-LEDGER.json`, el `ACCEPTANCE.md`, y para trabajo de
-migración el `.gitattributes` de `templates/` (`*.approved.* binary`).
+What remains PER PROJECT (state, not installable): `uscha.config.json` in the
+repo root where you run the run (the `path` values are relative to there — and your declared
+quality bar lives there), the `QA-LEDGER.json`, the `ACCEPTANCE.md`, and for migration
+work the `.gitattributes` from `templates/` (`*.approved.* binary`).
 
-> En la máquina donde DESARROLLÁS el kit, en vez de copiar conviene un junction/symlink
-> de cada skill al repo canónico — global siempre al día con main, cero re-instalación
-> por release: `cmd /c mklink /J "%USERPROFILE%\.claude\skills\uscha-devloop" "<repo>\uscha-kit\.claude\skills\uscha-devloop"` (una por skill).
+> On the machine where you DEVELOP the kit, instead of copying it's better to use a junction/symlink
+> of each skill to the canonical repo — global always up to date with main, zero re-installation
+> per release: `cmd /c mklink /J "%USERPROFILE%\.claude\skills\uscha-devloop" "<repo>\uscha-kit\.claude\skills\uscha-devloop"` (one per skill).
 
-**Opción C — plugin de Claude Code** (kit 1.24.0, la recomendada si usás Claude Code):
-el repo es su propio marketplace y el hook INV-GOLDEN-01 se auto-registra al instalar
-(cero edición de settings.json). Las skills quedan como `uscha:uscha-*`.
+**Option C — Claude Code plugin** (kit 1.24.0, the recommended one if you use Claude Code):
+the repo is its own marketplace and the INV-GOLDEN-01 hook self-registers on install
+(zero editing of settings.json). The skills stay as `uscha:uscha-*`.
 
 ```
 /plugin marketplace add andresmassello/uscha
 /plugin install uscha@uscha
 ```
 
-Updates: `/plugin update uscha@uscha` cuando haya release nuevo (el plugin declara
-`version`, así que solo actualiza con bump). Linux: el hook es PowerShell — instalá pwsh
-(el doctor te da el link) y ajustá el comando del hook si hace falta. El resto de los
-runtimes (Codex, Gemini CLI, Cursor) siguen usando la Opción A/B — el plugin es
-empaquetado, no dependencia.
+Updates: `/plugin update uscha@uscha` when there is a new release (the plugin declares
+`version`, so it only updates on a bump). Linux: the hook is PowerShell — install pwsh
+(the doctor gives you the link) and adjust the hook command if needed. The other
+runtimes (Codex, Gemini CLI, Cursor) keep using Option A/B — the plugin is
+packaging, not a dependency.
 
-**Verificá la instalación con `doctor`** (kit 1.22.0, espíritu flutter doctor —
-Windows y Linux, output ASCII, exit 1 solo con errores):
+**Verify the installation with `doctor`** (kit 1.22.0, in the spirit of flutter doctor —
+Windows and Linux, ASCII output, exit 1 only on errors):
 
 ```bash
 python3 ~/.claude/skills/uscha-devloop/qa_ledger.py doctor
-# o, por proyecto:  python3 ./.claude/skills/uscha-devloop/qa_ledger.py doctor
+# or, per project:  python3 ./.claude/skills/uscha-devloop/qa_ledger.py doctor
 ```
 
-Chequea: Python >=3.8 · git · las 8 skills junto al engine (frontmatter
-verificado) · el hook INV-GOLDEN-01 (presente + registrado en settings.json +
-intérprete powershell/pwsh) · y si hay `uscha.config.json` en el cwd:
-config parseable, ACCEPTANCE con AC-IDs, integridad del ledger, las skills de
-QA de `qa_tools_order` (el loop las orquesta sin traerlas) y el toolchain
-primario de cada repo por type (su ausencia es AVISO — puede vivir solo en CI).
+It checks: Python >=3.8 · git · the 8 skills alongside the engine (frontmatter
+verified) · the INV-GOLDEN-01 hook (present + registered in settings.json +
+powershell/pwsh interpreter) · and if there is a `uscha.config.json` in the cwd:
+config parseable, ACCEPTANCE with AC-IDs, ledger integrity, the QA skills
+from `qa_tools_order` (the loop orchestrates them without bringing them in) and the
+primary toolchain of each repo by type (its absence is a WARNING — it may live only in CI).
 
-## Configurar
+## Configure
 
-Editá `uscha.config.json`:
+Edit `uscha.config.json`:
 
-- `repos[]`: nombre, `path` (relativo al repo primario), `type` (`maven`|`flutter`|`python`|`node`|`go`|`rust`|`dotnet`|`cpp`|`gradle`|`swift`).
-- `defaults.coverage_threshold`: dispara la fase de characterization si está por debajo.
-- `defaults.severity_gate`: qué severidades bloquean (default BLOCKER/CRITICAL/HIGH).
-- `defaults.id_granularity`: `line` o `file` (default `file`: más estable si refactorizás mucho).
-- `defaults.acceptance_file`: ruta de la **acceptance task list** (checkboxes markdown) que alimenta el ADR completion del readiness. Default `ACCEPTANCE.md`.
-- `defaults.constitution_file`: ruta de la **CONSTITUTION** (invariantes inviolables). Default `CONSTITUTION.md`.
-- `defaults.rebuild.coverage_tolerance`: puntos de coverage que el rebuild puede bajar sin penalizar (default 5).
-- `defaults.readiness_weights` / `readiness_caps` / `static_gate_zero_at`: pesos y topes del KPI.
-- `defaults.max_iterations`, `tools_per_cycle`, comandos de test.
+- `repos[]`: name, `path` (relative to the primary repo), `type` (`maven`|`flutter`|`python`|`node`|`go`|`rust`|`dotnet`|`cpp`|`gradle`|`swift`).
+- `defaults.coverage_threshold`: triggers the characterization phase if below it.
+- `defaults.severity_gate`: which severities block (default BLOCKER/CRITICAL/HIGH).
+- `defaults.id_granularity`: `line` or `file` (default `file`: more stable if you refactor a lot).
+- `defaults.acceptance_file`: path of the **acceptance task list** (markdown checkboxes) that feeds the ADR completion of readiness. Default `ACCEPTANCE.md`.
+- `defaults.constitution_file`: path of the **CONSTITUTION** (inviolable invariants). Default `CONSTITUTION.md`.
+- `defaults.rebuild.coverage_tolerance`: coverage points the rebuild can drop without penalty (default 5).
+- `defaults.readiness_weights` / `readiness_caps` / `static_gate_zero_at`: weights and caps of the KPI.
+- `defaults.max_iterations`, `tools_per_cycle`, test commands.
 
-## Multi-repo: montar los otros repos
+## Multi-repo: mounting the other repos
 
-El skill corre desde el repo primario; los demás se montan en la sesión:
+The skill runs from the primary repo; the others are mounted in the session:
 
 ```bash
 cd <repo-primario>
 claude --add-dir ../backend-api --add-dir ../mobile-app
 ```
 
-(o `additionalDirectories` en `.claude/settings.json`).
+(or `additionalDirectories` in `.claude/settings.json`).
 
-## Usar
+## Use
 
-Dentro de Claude Code, invocá el orquestador (con el ADR/PLAN ya listo o pedíselo):
+Inside Claude Code, invoke the orchestrator (with the ADR/PLAN ready or ask it for one):
 
 ```
 /dev-loop
 ```
 
-El skill maneja las fases solo: plan → coverage gate → (characterization si hace falta)
-→ build → QA loop per-repo → integración → verify → PR (para en el merge, lo aprobás
-vos) → smoke list. Loguea cada paso en `QA-LEDGER.json`. Al final:
+The skill handles the phases on its own: plan → coverage gate → (characterization if needed)
+→ build → per-repo QA loop → integration → verify → PR (stops at the merge, you approve
+it) → smoke list. It logs every step in `QA-LEDGER.json`. At the end:
 
 ```
-/uscha-sysdoc        # genera docs/system-deck.html (CEO + técnico, navegable)
+/uscha-sysdoc        # generates docs/system-deck.html (CEO + technical, navigable)
 ```
 
-## Verificación rápida (dry run del motor, sin el skill)
+## Quick check (engine dry run, without the skill)
 
-Para confirmar que el engine parsea bien tus reportes ANTES de confiarle el loop:
+To confirm the engine parses your reports correctly BEFORE trusting it with the loop:
 
 ```bash
 cd <repo-primario>
 QL=".claude/skills/uscha-devloop/qa_ledger.py"
 
-python3 $QL --help                                  # ver subcomandos
-python3 $QL init --config uscha.config.json      # crea QA-LEDGER.json
+python3 $QL --help                                  # see subcommands
+python3 $QL init --config uscha.config.json      # creates QA-LEDGER.json
 
-# corré tu build con los reportes, después:
+# run your build with the reports, then:
 python3 $QL snapshot      --repo backend-api --phase pre
-python3 $QL check-coverage --repo backend-api       # exit 0 = OK, 1 = bajo umbral
+python3 $QL check-coverage --repo backend-api       # exit 0 = OK, 1 = below threshold
 python3 $QL ingest-gate   --repo backend-api --iteration 1
-python3 $QL summary                                 # resumen humano
-python3 $QL summary --json                          # lo consume sys-doc
+python3 $QL summary                                 # human summary
+python3 $QL summary --json                          # consumed by sys-doc
 ```
 
-Si `snapshot`/`ingest-gate` dicen "no report found", es que el build todavía no generó
-los XML — corré `mvn test` con los plugins activos primero.
+If `snapshot`/`ingest-gate` say "no report found", it's because the build hasn't generated
+the XML yet — run `mvn test` with the plugins active first.
 
-## Readiness KPI (al terminar cualquier tarea)
+## Readiness KPI (when finishing any task)
 
-Muestra el estado de "listo para release" como score 0..100, **basado en estado del
-resultado, no en esfuerzo gastado**:
+Shows the "ready for release" status as a 0..100 score, **based on the state of the
+result, not on effort spent**:
 
 ```bash
 python3 $QL readiness --acceptance ACCEPTANCE.md
-python3 $QL readiness --json            # lo consume sys-doc (widget semáforo)
+python3 $QL readiness --json            # consumed by sys-doc (traffic-light widget)
 ```
 
-- Dimensiones/pesos: **acceptance trazada (MEDIDA) 30**, ADR/checkboxes 15, coverage 15,
-  static gate 20, convergencia 10, integración 10. El **ADR completion** sale de tu
-  acceptance task list (checkboxes `- [x]`/`- [ ]`, solo lectura) — contá el archivo
-  entero (default del CLI); `--section` solo si verificaste que el heading matchea
-  exacto (un mismatch cerea la dimensión en silencio).
-- **Trazabilidad (kit 1.10.0, la dimensión dominante)**: cada criterio lleva ID estable
-  — `- [ ] AC-01 — cuando X entonces Y`. Un criterio cierra MEDIDO solo cuando existe
-  ≥1 testcase VERDE con su tag en el nombre (`test_ac1_x` / `testAC01X` / `"AC-01: ..."`
-  — se normaliza por número: `AC-01 == AC_1 == ac1`) en los reportes JUnit ya ingeridos,
-  y ningún testcase taggeado en rojo. El checkbox es RELATO; el testcase es HECHO: un
-  `[x]` sin test verde aparece como `narrated_only` y NO cierra. Anti-Goodhart: el agente
-  ya no puede subir el KPI puliendo coverage — solo cerrando criterios con tests con
-  nombre. `spec-check --acceptance ACCEPTANCE.md` valida la estructura como FACT (cero
-  criterios trazables o IDs duplicados = BLOCKED). Sin IDs: cae al ratio de checkboxes
-  con warning (legacy, adopción incremental). Flutter no emite JUnit: sus criterios no
-  cierran medido (limitación documentada).
-- Un repo linteable cuyo static gate **nunca corrió** puntúa esa dimensión UNMEASURED (0.0)
-  — el silencio no es éxito.
-- **Hard caps** (pisan el techo): tests en rojo → ≤35, BLOCKER/CRITICAL abierto → ≤65,
-  escalación sin resolver → ≤75 (se sostiene hasta `resolve-escalation`, un evento registrado).
-- Bandas: `<50 NOT READY` · `50–79 IN PROGRESS` · `80–94 RELEASE CANDIDATE` · `95–100 READY`.
-- Multi-repo: per-repo y agregado (min() para blockers, ponderado por LOC para calidad).
-- Los ciclos/regresiones son **churn** (salud del proceso), se reportan aparte y nunca
-  suben el readiness.
+- Dimensions/weights: **acceptance traced (MEASURED) 30**, ADR/checkboxes 15, coverage 15,
+  static gate 20, convergence 10, integration 10. The **ADR completion** comes from your
+  acceptance task list (checkboxes `- [x]`/`- [ ]`, read-only) — count the whole file
+  (CLI default); `--section` only if you verified that the heading matches
+  exactly (a mismatch silently zeroes the dimension).
+- **Traceability (kit 1.10.0, the dominant dimension)**: each criterion carries a stable ID
+  — `- [ ] AC-01 — when X then Y`. A criterion closes MEASURED only when there exists
+  ≥1 GREEN testcase with its tag in the name (`test_ac1_x` / `testAC01X` / `"AC-01: ..."`
+  — normalized by number: `AC-01 == AC_1 == ac1`) in the already-ingested JUnit reports,
+  and no tagged testcase in red. The checkbox is NARRATIVE; the testcase is FACT: an
+  `[x]` without a green test appears as `narrated_only` and does NOT close. Anti-Goodhart: the agent
+  can no longer raise the KPI by polishing coverage — only by closing criteria with named
+  tests. `spec-check --acceptance ACCEPTANCE.md` validates the structure as a FACT (zero
+  traceable criteria or duplicate IDs = BLOCKED). Without IDs: it falls back to the checkbox ratio
+  with a warning (legacy, incremental adoption). Flutter doesn't emit JUnit: its criteria don't
+  close measured (documented limitation).
+- A lintable repo whose static gate **never ran** scores that dimension UNMEASURED (0.0)
+  — silence is not success.
+- **Hard caps** (they override the ceiling): tests in red → ≤35, open BLOCKER/CRITICAL → ≤65,
+  unresolved escalation → ≤75 (holds until `resolve-escalation`, a recorded event).
+- Bands: `<50 NOT READY` · `50–79 IN PROGRESS` · `80–94 RELEASE CANDIDATE` · `95–100 READY`.
+- Multi-repo: per-repo and aggregate (min() for blockers, LOC-weighted for quality).
+- Cycles/regressions are **churn** (process health), reported separately and never
+  raise readiness.
 
-## Rebuild test (completitud de la SPEC)
+## Rebuild test (SPEC completeness)
 
-Pregunta distinta al ledger: no "¿pasó este build?" (corrección) sino "¿la SPEC alcanza
-para regenerar el sistema?" (completitud). Para perfiles C+/E o periódico en CI.
+A different question for the ledger: not "did this build pass?" (correctness) but "is the SPEC
+enough to regenerate the system?" (completeness). For profiles C+/E or periodic in CI.
 
 ```bash
-# 1) en el tree ORIGINAL: capturá la firma que el rebuild debe igualar
+# 1) in the ORIGINAL tree: capture the signature the rebuild must match
 python3 $QL rebuild --mode baseline --config uscha.config.json   # → REBUILD-BASELINE.json
-# 2) en un tree LIMPIO / sesión nueva: regenerá SOLO el código de producción desde
-#    SPEC/ADR/ACCEPTANCE, PRESERVANDO los tests, y corré la suite.
-# 3) puntuá el tree regenerado contra la baseline
+# 2) in a CLEAN tree / new session: regenerate ONLY the production code from
+#    SPEC/ADR/ACCEPTANCE, PRESERVING the tests, and run the suite.
+# 3) score the regenerated tree against the baseline
 python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json   # exit 0 = COVERS
-python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json --json   # lo consume sys-doc
+python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json --json   # consumed by sys-doc
 ```
 
-- Dimensiones/pesos: tests 60, acceptance 20, coverage 15, surface 5. La señal dominante
-  es la **suite preservada**: un test que pasaba y falla en el código regenerado = comportamiento
-  que la SPEC dejó implícito.
-- Veredictos: `COVERS ≥90` · `PARTIAL ≥70` · `DIVERGE <70`. El score lista los **gaps**
-  concretos — metelos de vuelta en la SPEC y re-corré. La divergencia es hueco de spec, no bug de código.
+- Dimensions/weights: tests 60, acceptance 20, coverage 15, surface 5. The dominant signal
+  is the **preserved suite**: a test that passed and fails in the regenerated code = behavior
+  the SPEC left implicit.
+- Verdicts: `COVERS ≥90` · `PARTIAL ≥70` · `DIVERGE <70`. The score lists the concrete
+  **gaps** — feed them back into the SPEC and re-run. Divergence is a spec hole, not a code bug.
 
-## Simplicity gate — "Reduce" (minimalidad del cambio)
+## Simplicity gate — "Reduce" (minimality of the change)
 
-La invariante **Simplicidad** de la CONSTITUTION hecha gate determinístico: puntúa el *diff*
-(no CC por AST — son proxies medibles: minimalidad, anidación, abstracciones nuevas).
+The **Simplicity** invariant of the CONSTITUTION made a deterministic gate: it scores the *diff*
+(not CC by AST — they are measurable proxies: minimality, nesting, new abstractions).
 
 ```bash
 git diff --unified=0 <base> | python3 $QL simplicity-check --config uscha.config.json
-python3 $QL simplicity-check --from-git --base main            # usa git por vos
-python3 $QL simplicity-check --diff cambios.diff --json        # lo consume sys-doc / CI
+python3 $QL simplicity-check --from-git --base main            # uses git for you
+python3 $QL simplicity-check --diff changes.diff --json        # consumed by sys-doc / CI
 ```
 
-- Dimensiones/pesos: diff_size 35, nesting 30, net_growth 20, fan_out 8, blob 7
-  (abstraction NO pesa en el score — es proxy adivinón, queda como métrica + flag advisory).
-- Veredictos: `SIMPLE ≥85` · `ACCEPTABLE ≥65` · `OVERBUILT <65` (exit 1 = BLOCKER: recortá y re-corré).
-  Un exceso grosero (2× presupuesto, o anidación muy profunda) capea el score a 60 sí o sí.
-- **Tests FUERA del presupuesto** (kit 1.11.0): los archivos de test (convenciones de los
-  9 stacks) se cuentan y reportan aparte (`test_lines_added`) pero no gatean — escribir
-  tests nunca empuja el diff a OVERBUILT (borrarlos ya lo bloquea gate-check).
-- Los flags te dicen qué recortar (guard clauses, tipos/capas especulativos, hunks gigantes).
-- Presupuestos en `defaults.simplicity`; ajustables por perfil de riesgo. 2-espacios → `--indent-width 2`.
+- Dimensions/weights: diff_size 35, nesting 30, net_growth 20, fan_out 8, blob 7
+  (abstraction does NOT weigh in the score — it's a guessy proxy, kept as a metric + advisory flag).
+- Verdicts: `SIMPLE ≥85` · `ACCEPTABLE ≥65` · `OVERBUILT <65` (exit 1 = BLOCKER: trim and re-run).
+  A gross excess (2× budget, or very deep nesting) caps the score at 60 no matter what.
+- **Tests OUT of the budget** (kit 1.11.0): the test files (conventions of the
+  9 stacks) are counted and reported separately (`test_lines_added`) but do not gate — writing
+  tests never pushes the diff to OVERBUILT (deleting them is already blocked by gate-check).
+- The flags tell you what to trim (guard clauses, speculative types/layers, giant hunks).
+- Budgets in `defaults.simplicity`; adjustable per risk profile. 2-space → `--indent-width 2`.
 
-## Subcomandos del ledger
+## Ledger subcommands
 
 `doctor · init · snapshot · check-coverage · log-step · ingest-gate · log-gate · flag-blocker ·
 converged · oscillation · escalate · resolve-escalation · summary · readiness · rebuild ·
 simplicity-check · pit-check · gate-check · spec-check · golden-diff · regression-check ·
-phase · rubric-ingest · doctor` — cada uno con `--help`.
+phase · rubric-ingest · doctor` — each with `--help`.
 
-Los **fact gates** (golden-diff, gate-check, pit-check, simplicity) se PERSISTEN con
-`log-gate`: un fail bloquea convergencia y capea readiness ≤65 vía el ledger. Una violación
-de CONSTITUTION se registra con `flag-blocker` (mismo efecto, hasta `--resolve`).
+The **fact gates** (golden-diff, gate-check, pit-check, simplicity) are PERSISTED with
+`log-gate`: a fail blocks convergence and caps readiness ≤65 via the ledger. A CONSTITUTION
+violation is recorded with `flag-blocker` (same effect, until `--resolve`).
 
-## Notas
+## Notes
 
-- **No mergea solo.** Crea el PR y para; el merge lo hacés vos.
-- **Protocolo `.md` trackeado.** Antes de tocar CLAUDE.md / docs de plan/delta / docs/adr,
-  el skill pide la versión actual del archivo (no regenera y pisa progreso real).
-- `ingest-gate` acredita un fix solo si el reporte EXISTE y vino limpio; un reporte
-  ausente = el gate no corrió (no inventa ceros).
+- **It doesn't merge on its own.** It creates the PR and stops; the merge is yours.
+- **Tracked `.md` protocol.** Before touching CLAUDE.md / plan/delta docs / docs/adr,
+  the skill asks for the current version of the file (it doesn't regenerate and overwrite real progress).
+- `ingest-gate` credits a fix only if the report EXISTS and came back clean; a missing
+  report = the gate didn't run (it doesn't invent zeros).
 
-## Armado del workbench (setup genérico)
+## Setting up the workbench (generic setup)
 
-Antes de usar los skills necesitás el toolchain base (Claude Code + Python + git/gh +
-los skills instalados). Está todo en **`WORKBENCH.md`**: instalación, verificación y
-actualización, sin lo específico de cada stack (Java/MSSQL/linters = adapter por repo).
+Before using the skills you need the base toolchain (Claude Code + Python + git/gh +
+the skills installed). It's all in **`WORKBENCH.md`**: installation, verification and
+update, without the specifics of each stack (Java/MSSQL/linters = per-repo adapter).
 
-- Qué tengo instalado:  `bash workbench-doctor.sh`
-- Versión del kit:      `cat VERSION`
+- What I have installed:  `bash workbench-doctor.sh`
+- Kit version:      `cat VERSION`
 
-## Plantillas para el repo (que el repo quede "methodology-ready")
+## Templates for the repo (so the repo becomes "methodology-ready")
 
-El kit instala los skills; estas plantillas dejan el **repo** listo. Copialas a la raíz
-del repo donde vas a trabajar:
-
-```
-cp uscha-kit/templates/CLAUDE.md        <repo>/CLAUDE.md        # protocolo permanente del repo
-cp uscha-kit/templates/CONSTITUTION.md  <repo>/CONSTITUTION.md  # invariantes inviolables (completá dominio)
-cp -r uscha-kit/templates/docs    <repo>/docs           # scaffold docs/adr
-# si usás otros agentes además de Claude Code:  cp <repo>/CLAUDE.md <repo>/AGENTS.md
-```
-
-Después, completá el bloque "Adapter del proyecto" del `CLAUDE.md` con los comandos de
-build/test/gate de ese stack (es lo único específico del proyecto).
-
-## Verificar que el agente lee el kit
-
-Dentro de Claude Code, pedile:
+The kit installs the skills; these templates leave the **repo** ready. Copy them to the root
+of the repo where you're going to work:
 
 ```
-Listá las reglas activas del CLAUDE.md y los skills disponibles.
+cp uscha-kit/templates/CLAUDE.md        <repo>/CLAUDE.md        # permanent repo protocol
+cp uscha-kit/templates/CONSTITUTION.md  <repo>/CONSTITUTION.md  # inviolable invariants (fill in the domain)
+cp -r uscha-kit/templates/docs    <repo>/docs           # docs/adr scaffold
+# if you use other agents besides Claude Code:  cp <repo>/CLAUDE.md <repo>/AGENTS.md
 ```
 
-Deberían aparecer las reglas del protocolo y los comandos /uscha-discovery /uscha-adr-refine
-/uscha-devloop /uscha-sysdoc. (Para el toolchain de la máquina: `bash uscha-kit/workbench-doctor.sh`.)
+Then, complete the "Project adapter" block of the `CLAUDE.md` with the build/test/gate
+commands of that stack (it's the only project-specific thing).
+
+## Verify the agent reads the kit
+
+Inside Claude Code, ask it:
+
+```
+List the active rules from CLAUDE.md and the available skills.
+```
+
+The protocol rules and the commands /uscha-discovery /uscha-adr-refine
+/uscha-devloop /uscha-sysdoc should appear. (For the machine's toolchain: `bash uscha-kit/workbench-doctor.sh`.)

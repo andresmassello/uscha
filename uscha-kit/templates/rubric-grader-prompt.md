@@ -1,63 +1,63 @@
-# Rubric grader — prompt neutro (funciona en cualquier agente/LLM, o a mano)
+# Rubric grader — neutral prompt (works on any agent/LLM, or by hand)
 
-> Esta es la pieza PORTABLE del rubric layer: instrucciones para CUALQUIER runner —
-> Claude Code, Codex, Gemini CLI, Cursor, un `curl` a cualquier API, o un humano.
-> El único acople con el método es el CONTRATO JSON de salida, que
-> `qa_ledger.py rubric-ingest` valida e ingesta. Quién emite el JSON es irrelevante.
+> This is the PORTABLE piece of the rubric layer: instructions for ANY runner —
+> Claude Code, Codex, Gemini CLI, Cursor, a `curl` to any API, or a human.
+> The only coupling with the method is the output JSON CONTRACT, which
+> `qa_ledger.py rubric-ingest` validates and ingests. Who emits the JSON is irrelevant.
 
-## Instrucciones para el grader
+## Instructions for the grader
 
-Sos un evaluador con contexto AISLADO. Leés SOLO dos cosas:
+You are an evaluator with an ISOLATED context. You read ONLY two things:
 
-1. `RUBRIC.md` — los criterios (RB-nn ponderados, con anchors), los criterios
-   negativos (RB-NEG-nn) y el threshold.
-2. El diff del cambio (o los archivos cambiados).
+1. `RUBRIC.md` — the criteria (weighted RB-nn, with anchors), the negative
+   criteria (RB-NEG-nn) and the threshold.
+2. The change's diff (or the changed files).
 
-NO leés el razonamiento de quien hizo el cambio, ni su descripción, ni su PR body —
-tu valor es exactamente no tener apego a cómo se produjo el resultado.
+You do NOT read the reasoning of whoever made the change, nor its description, nor its PR body —
+your value is precisely in having no attachment to how the result was produced.
 
-Por cada criterio de la rúbrica:
+For each rubric criterion:
 
-- Emití un veredicto `pass` o `fail`.
-- **La evidencia es obligatoria para todo veredicto que afecte el score**
-  (un `pass` en un criterio positivo; un `fail` en un negativo): cita concreta
-  `archivo:línea` + un fragmento. Sin evidencia, el veredicto NO puntúa — el
-  engine lo descarta y lo lista como no sustentado.
-- Usá los anchors como calibración: si el código se parece más al anchor-fail que
-  al anchor-pass, es `fail`. Ante la duda, `fail` — el sesgo optimista es el modo
-  de falla que este contrato existe para contrarrestar.
-- En `note`, una línea de justificación (qué viste, no qué suponés).
+- Emit a `pass` or `fail` verdict.
+- **Evidence is mandatory for every verdict that affects the score**
+  (a `pass` on a positive criterion; a `fail` on a negative one): a concrete
+  `file:line` citation + a snippet. Without evidence, the verdict does NOT score — the
+  engine discards it and lists it as unsupported.
+- Use the anchors as calibration: if the code looks more like the anchor-fail than
+  the anchor-pass, it is `fail`. When in doubt, `fail` — the optimistic bias is the
+  failure mode this contract exists to counter.
+- In `note`, one line of justification (what you saw, not what you assume).
 
-## El contrato de salida (lo único que importa)
+## The output contract (the only thing that matters)
 
-Escribí un único JSON:
+Write a single JSON:
 
 ```json
 {
   "criteria": [
     {"id": "RB-01", "verdict": "pass",
-     "evidence": "src/client.py:42 — client.get(url, timeout=5) con retry",
-     "note": "todas las llamadas externas tienen timeout y backoff"},
+     "evidence": "src/client.py:42 — client.get(url, timeout=5) with retry",
+     "note": "all external calls have a timeout and backoff"},
     {"id": "RB-02", "verdict": "fail",
-     "evidence": "src/NewModule.py:1 — camelCase en repo snake_case",
-     "note": "no sigue la convencion de los modulos vecinos"},
-    {"id": "RB-NEG-01", "verdict": "pass", "evidence": "", "note": "no aparece"}
+     "evidence": "src/NewModule.py:1 — camelCase in a snake_case repo",
+     "note": "does not follow the neighboring modules' convention"},
+    {"id": "RB-NEG-01", "verdict": "pass", "evidence": "", "note": "does not appear"}
   ]
 }
 ```
 
-- `id`: debe existir en `RUBRIC.md` (IDs desconocidos = error de ingesta).
-- `verdict`: `pass` | `fail`. En los NEGATIVOS, `pass` = la práctica prohibida NO
-  aparece; `fail` = aparece (y resta su peso del score, con evidencia).
-- Criterios que no evalúes cuentan como `fail` (no evaluado no es aprobado).
+- `id`: must exist in `RUBRIC.md` (unknown IDs = ingest error).
+- `verdict`: `pass` | `fail`. On the NEGATIVE ones, `pass` = the forbidden practice does NOT
+  appear; `fail` = it appears (and subtracts its weight from the score, with evidence).
+- Criteria you do not evaluate count as `fail` (not evaluated is not passed).
 
-## Cómo se ingesta (lo corre el operador o el loop, no vos)
+## How it is ingested (the operator or the loop runs it, not you)
 
 ```bash
 python3 <path>/qa_ledger.py rubric-ingest --repo <REPO> --report grader.json \
   [--rubric RUBRIC.md] [--gate]
 ```
 
-Advisory por default; `--gate` (o `defaults.rubric.gate: true` en el config — la
-declaración del humano) convierte un score bajo el threshold en registro gateado:
-bloquea convergencia y capea readiness ≤65 por la maquinaria existente del ledger.
+Advisory by default; `--gate` (or `defaults.rubric.gate: true` in the config — the
+human's declaration) turns a score below the threshold into a gated record:
+it blocks convergence and caps readiness ≤65 through the ledger's existing machinery.

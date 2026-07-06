@@ -51,7 +51,7 @@ the documents as you go — not to ask the human to design the system for you.
   `docs/adr/` and read them. The CONSTITUTION constrains every shape you propose — never
   propose anything that would violate it.
 - **Sharpen fuzzy language.** When the human uses a vague or overloaded term, propose a
-  precise canonical term: "Decís 'cuenta' — ¿el Customer o el User? Son cosas distintas."
+  precise canonical term: "You say 'account' — the Customer or the User? They're different things."
 - **Maintain a glossary in `CONTEXT.md`**, updated inline as each term is resolved. Only
   terms meaningful to domain experts; don't couple it to implementation details.
 
@@ -60,32 +60,32 @@ the documents as you go — not to ask the human to design the system for you.
 Resolve these in order; for each, propose first, then ask. Skip what references already
 answer.
 
-1. **Propósito / valor / por qué ahora.** What job does this remove? Cost of not doing it?
-2. **Modelo de dominio.** Propose the core entities and their relationships. ("Del dominio
-   deduzco estas entidades núcleo: … ¿te cierran o falta alguna?")
-3. **Superficie de operaciones / API.** Propose the endpoints/operations and their
+1. **Purpose / value / why now.** What job does this remove? Cost of not doing it?
+2. **Domain model.** Propose the core entities and their relationships. ("From the domain
+   I deduce these core entities: … do they work for you, or is one missing?")
+3. **Operation / API surface.** Propose the endpoints/operations and their
    contracts (idempotency, status codes).
-4. **Decisiones grandes (→ ADR).** Propose 2–3 architecture options with trade-offs and
+4. **Big decisions (→ ADR).** Propose 2–3 architecture options with trade-offs and
    a recommended default: persistence, protocol, idempotency, sync/async, multi-tenancy.
-5. **Comportamiento y casos sucios.** Happy path, then failures, retries, partial states,
+5. **Behavior and dirty cases.** Happy path, then failures, retries, partial states,
    concurrency, what must NOT happen.
-6. **Restricciones inviolables (→ `CONSTITUTION.md`).** Domain + security + operation
+6. **Inviolable constraints (→ `CONSTITUTION.md`).** Domain + security + operation
    rules that can't be broken (money to the cent, no numbering gaps, never cross
    environments, secrets never logged, auth). Write/extend `CONSTITUTION.md` with these —
    one invariant per line, with a CWE reference where it maps. They feed the severity gate
    downstream, and a breach is a BLOCKER, never a trade-off.
 7. **Out of scope.** Explicit boundaries with forward references.
 8. **Acceptance / Definition of Done.** Concrete, checkable criteria + success metrics.
-9. **Quality bar (→ config, kit 1.17.0).** "¿Qué nivel de calidad BASTA acá, y qué
-   dimensiones son negociables (coverage, perf, seguridad)?" Propose thresholds fit for
+9. **Quality bar (→ config, kit 1.17.0).** "What level of quality is ENOUGH here, and which
+   dimensions are negotiable (coverage, perf, security)?" Propose thresholds fit for
    the risk profile (a payments core is not an internal dashboard). What the human
    declares goes into `uscha.config.json` (`defaults.coverage_threshold`,
    `defaults.readiness_caps`, `defaults.simplicity`) — a declared threshold reads as
    **requerimiento (config)** in the engine's output; an undeclared one stays a kit
    default (opinion) and is labeled as such. Declaring is committing the config.
-10. **Riesgos residuales y dependencias.** What's uncertain, what must exist first.
+10. **Residual risks and dependencies.** What's uncertain, what must exist first.
     For each HIGH-uncertainty risk, ask (kit 1.19.0, Tip 21 'Prototype to Learn'):
-    "¿Amerita un spike time-boxed antes de congelar la SPEC?" A spike runs on a
+    "Does it warrant a time-boxed spike before freezing the SPEC?" A spike runs on a
     `spike/*` branch and its ONLY legitimate output is an **ADR with lessons**
     (facts that feed the SPEC) — never mergeable code. The contract is executable:
     `phase --require pr-ready` refuses any `spike/*` branch, INV-GOLDEN-01 style.
@@ -99,11 +99,11 @@ answer.
 - **`DOMAIN-MODEL.md`** — the proposed core entities and their relationships (the "shape"
   you proposed and the human approved). Distinct from the glossary: this is the model, not
   the vocabulary.
-- **`SPEC.md`** — objetivo/valor, riesgo, scope/out-of-scope, comportamiento,
-  entradas/salidas/errores, acceptance, test plan, operación, rollback.
-- **`docs/adr/ADR-NNN-<slug>.md`** — one per durable decision. Format: Estado
-  (proposed/accepted/deprecated/superseded) · Contexto · Alternativas · Decisión ·
-  Consecuencias · **Implementation Plan** (affected paths, patterns to follow, tests to
+- **`SPEC.md`** — objective/value, risk, scope/out-of-scope, behavior,
+  inputs/outputs/errors, acceptance, test plan, operation, rollback.
+- **`docs/adr/ADR-NNN-<slug>.md`** — one per durable decision. Format: Status
+  (proposed/accepted/deprecated/superseded) · Context · Alternatives · Decision ·
+  Consequences · **Implementation Plan** (affected paths, patterns to follow, tests to
   write) · **Verification** (`- [ ]` checkboxes a coding agent can check). The
   Implementation Plan makes the ADR an executable spec: the agent implements it without
   asking follow-ups. Number from the highest existing ADR.
@@ -134,10 +134,10 @@ the package and the handoff.
 
 End with the implementation handoff (works for a human, an agent, or CI):
 
-> "Leé CONTEXT.md, SPEC.md, docs/adr/*.md y ACCEPTANCE.md. Antes de tocar código:
-> 1) resumí el comportamiento esperado, 2) marcá ambigüedades o contradicciones,
-> 3) proponé plan de archivos + tests. Implementá solo el scope de la SPEC. No cambies
-> contratos fuera de SPEC ni edites la SPEC para que tu implementación parezca correcta."
+> "Read CONTEXT.md, SPEC.md, docs/adr/*.md and ACCEPTANCE.md. Before touching code:
+> 1) summarize the expected behavior, 2) flag ambiguities or contradictions,
+> 3) propose a file plan + tests. Implement only the SPEC's scope. Do not change
+> contracts outside the SPEC, and do not edit the SPEC to make your implementation look correct."
 
 Flow: `/uscha-discovery` (idea → package) → `/uscha-devloop` (build + QA + evidence) → human gate.
 
