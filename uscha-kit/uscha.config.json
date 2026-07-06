@@ -1,5 +1,6 @@
 {
-  "version": "1.33.0",
+  "version": "1.34.0",
+  "project": null,
   "defaults": {
     "coverage_threshold": 60,
     "max_iterations": 5,

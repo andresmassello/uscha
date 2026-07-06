@@ -145,6 +145,7 @@ svg{display:block;width:100%;height:auto}
 .telemetry .tmrow{display:flex;justify-content:space-between;gap:1rem;font-size:.78rem;border-top:1px solid var(--rule);padding-top:.35rem}
 .telemetry .tmrow .tmn{font-family:var(--mono);color:var(--ink-mute)}
 .telemetry .tmrow .tmv{font-family:var(--mono);color:var(--ink-soft)}
+.hero .projtitle{font-size:1.7rem;font-weight:700;color:var(--ink-soft);letter-spacing:-.01em;margin-bottom:.75rem;line-height:1.15}
 </style>
 </head>
 <body>
@@ -157,6 +158,7 @@ svg{display:block;width:100%;height:auto}
 <main class="wrap">
 
   <section class="hero">
+    <div class="projtitle" id="projtitle"></div>
     <div class="verdict">
       <span class="band" id="v-band">—</span>
       <h1 id="v-title">—</h1>
@@ -244,7 +246,7 @@ svg{display:block;width:100%;height:auto}
 /* ==== DATA — sample output of `qa_ledger.py dashboard --json` (deterministic) ==== */
 /*MIRADOR_DATA_START*/
 const DATA = {
-  project: "backend-api + mobile-app",
+  project: "Fiscal Platform",
   generated: "2026-07-05 14:22 UTC",
   readiness: { score:88, band:"CASI LISTO",
     title:"Casi listo para release",
@@ -341,6 +343,7 @@ const chipText  = {done:"done",prog:"in progress",block:"blocked",todo:"to do"};
 
 /* ==== header + verdict ==== */
 $("#m-proj").textContent = DATA.project;
+$("#projtitle").textContent = DATA.project || "—";
 $("#m-ts").textContent = DATA.generated;
 const bandColors = {"CASI LISTO":["var(--amber-soft)","var(--amber)"],"LISTO":["var(--green-soft)","var(--green)"],"NO LISTO":["var(--red-soft)","var(--red-deep)"],
   "READY":["var(--green-soft)","var(--green)"],"RELEASE CANDIDATE":["var(--amber-soft)","var(--amber)"],"IN PROGRESS":["var(--amber-soft)","var(--amber)"],"NOT READY":["var(--red-soft)","var(--red-deep)"]};

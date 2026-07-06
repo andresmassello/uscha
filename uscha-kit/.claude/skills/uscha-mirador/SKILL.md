@@ -27,6 +27,9 @@ wires the JSON the engine emits into the template. Read-only.
   `/*MIRADOR_DATA_START*/` and `/*MIRADOR_DATA_END*/`; the sample `const DATA` it ships
   with is the **offline fallback**. The skill replaces ONLY that region; it does not
   touch the rest of the HTML.
+- **Project name (top):** the mirador shows the project name prominently at the top, from
+  `config.project` in `uscha.config.json` (set it in `uscha-discovery`); if unset, it falls
+  back to the joined repo names (truth-pass — no invented name).
 - **Session telemetry (optional, vendor-reported):** if `.uscha/telemetry.jsonl` exists,
   the skill aggregates it and MERGES a `telemetry` object into `DATA`. This is the ONE
   panel that is **narrated by the vendor (Claude Code), not measured by the engine** —
@@ -46,52 +49,46 @@ wires the JSON the engine emits into the template. Read-only.
    points to). If it does not exist, warn: you have to run `uscha-devloop` (or
    `qa_ledger.py init`) first — with no ledger there is no state to look at.
 
-3. **Generate the state JSON** (read-only, writes nothing):
+   (`<skill-dir>` below = this folder: `.claude/skills/uscha-mirador/` per-project, or
+   `~/.claude/skills/uscha-mirador/` global.)
+
+3. **(Optional) record this session's telemetry.** For the vendor-telemetry strip, append
+   the current Claude Code session to the sidecar:
    ```bash
-   python3 <engine> dashboard --ledger QA-LEDGER.json --json > .mirador-data.json
+   python3 <skill-dir>/telemetry-extract.py <path-to-CC-transcript.jsonl>
    ```
-   For the time-lapse: the history is filled with `qa_ledger.py readiness --record`
-   (opt-in) at the loop's checkpoints; if nothing has been recorded yet, `snapshots`
-   comes out `[]` and the time-lapse stays empty (it is prospective, not backfilled).
+   It **upserts by session** (safe to re-run — a watch loop won't inflate the totals). Skip
+   this for a pure measured view.
 
-4. **Merge session telemetry (optional, vendor-reported).** If `.uscha/telemetry.jsonl`
-   exists, read it (one JSON object per line, schema below) and aggregate into a single
-   object, then add it to the state JSON under the key `telemetry`:
+4. **Render `mirador.html`** with the standalone renderer — it runs `dashboard --json`,
+   merges the sidecar telemetry if present, injects `const DATA`, and writes the file:
+   ```bash
+   python3 <skill-dir>/mirador-render.py --engine <engine> --ledger QA-LEDGER.json \
+       --template <skill-dir>/mirador.template.html --out mirador.html
    ```
-   telemetry = { source: "Claude Code",
-                 sessions: <line count>,
-                 tokens_in: <sum>, tokens_out: <sum>, ms: <sum wall-time>,
-                 model: <the model, or a "+"-joined list if several>,
-                 effort: <the latest effort>,
-                 by_model: [ {model}, ... ] }
-   ```
-   The engine's `dashboard` NEVER produces this — it is vendor telemetry, wired in ONLY
-   here. If the file is absent, do NOT add the key (the strip stays hidden). To record the
-   current session before reading, run `telemetry-extract.py` on the Claude Code transcript
-   (see **Session telemetry** below). Aggregate across lines: sum `tokens_in`/`tokens_out`/
-   `ms`, count lines as `sessions`, and MERGE `by_model` (sum tokens per model) so the strip
-   can break the cost down per LLM.
+   The engine stays model-agnostic — telemetry is merged by the renderer (the adapter), NOT
+   by `dashboard`. If the ledger is missing, warn and stop (run `uscha-devloop` first). For
+   the time-lapse, `qa_ledger.py readiness --record` (opt-in) fills the history prospectively.
 
-5. **Inject into the template.** Read `mirador.template.html`, replace EVERYTHING between
-   `/*MIRADOR_DATA_START*/` and `/*MIRADOR_DATA_END*/` (including the old `const DATA`)
-   with:
-   ```
-   /*MIRADOR_DATA_START*/
-   const DATA = <the dashboard JSON, with the `telemetry` key merged in if present>;
-   /*MIRADOR_DATA_END*/
-   ```
-   Do not touch anything outside that region. Write the result as `mirador.html` at the
-   project root.
+5. **Open it** (best-effort; never fail — headless/CI): `start "" mirador.html` (Windows) /
+   `open mirador.html` (macOS) / `xdg-open mirador.html` (Linux). ALWAYS print the absolute
+   path of `mirador.html`.
 
-6. **Open the file** (best-effort, does not fail if it can't — headless/CI):
-   - Windows: `start "" mirador.html`
-   - macOS: `open mirador.html`
-   - Linux: `xdg-open mirador.html`
+## Live second-screen view
 
-   ALWAYS print the absolute path of `mirador.html` (even if it can't be opened).
+For a mirador that updates while you keep coding in the terminal, run the watch loop in a
+spare terminal and open `mirador.html` on a second monitor:
 
-7. **Cleanup:** delete `.mirador-data.json` (temporary). Keep `.uscha/telemetry.jsonl` —
-   it is the persistent sidecar, not a temp file.
+```bash
+# Windows:  powershell -NoProfile -File <skill-dir>\mirador-watch.ps1 -Interval 30
+# Unix:     bash <skill-dir>/mirador-watch.sh 30
+```
+
+It re-renders `mirador.html` every N seconds (default 30) from the current ledger, rendered
+with a matching `<meta http-equiv="refresh">` so the open page reloads on its own — **no
+server**. It is only as live as the **ledger**: the picture changes at the dev-loop's
+measured checkpoints (snapshots, gates, `readiness --record`), not per keystroke. Honest by
+design — it shows measured state, which changes at measured moments.
 
 ## Session telemetry — sidecar contract
 

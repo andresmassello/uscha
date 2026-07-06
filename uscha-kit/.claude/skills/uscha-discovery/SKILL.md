@@ -60,6 +60,10 @@ the documents as you go — not to ask the human to design the system for you.
 Resolve these in order; for each, propose first, then ask. Skip what references already
 answer.
 
+0. **Project name (first).** The very first thing you ask: "What do we call this?" Write the
+   answer to `uscha.config.json` as `"project": "<name>"` (create the config if absent). The
+   mirador shows it prominently at the top and the dashboard reads it from there; if unset it
+   falls back to the joined repo names.
 1. **Purpose / value / why now.** What job does this remove? Cost of not doing it?
 2. **Domain model.** Propose the core entities and their relationships. ("From the domain
    I deduce these core entities: … do they work for you, or is one missing?")

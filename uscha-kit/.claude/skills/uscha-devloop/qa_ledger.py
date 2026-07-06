@@ -2247,8 +2247,11 @@ def cmd_dashboard(args):
                  for h in ledger.get("readiness_history", [])]
 
     names = [r.get("name") for r in cfg.get("repos", []) if r.get("name")]
+    # nombre de proyecto: lo declara el humano en config (project/name); si no,
+    # se deriva juntando los repos. Truth-pass: nombre puesto si existe, si no derivado.
+    project = cfg.get("project") or cfg.get("name") or (" + ".join(names) if names else None)
     out = {
-        "project": " + ".join(names) if names else None,
+        "project": project,
         "generated": _now(),
         "readiness": readiness,
         "subscores": subscores,
@@ -4352,7 +4355,8 @@ def cmd_golden_diff(args):
 # ausente en la maquina puede vivir en CI).
 USCHA_SKILLS = ["uscha-discovery", "uscha-adr-refine",
                    "uscha-reverse-discovery", "uscha-characterize",
-                   "uscha-devloop", "uscha-sysdoc", "uscha-rubric"]
+                   "uscha-devloop", "uscha-sysdoc", "uscha-rubric",
+                   "uscha-mirador"]
 # herramienta primaria por type - su ausencia es AVISO, no error
 DOCTOR_TOOLS = {"maven": "mvn", "flutter": "flutter", "python": "pytest",
                 "node": "npm", "go": "go", "rust": "cargo", "dotnet": "dotnet",

@@ -73,6 +73,10 @@ def main():
     ap.add_argument("transcript", help="path to a Claude Code session transcript (*.jsonl)")
     ap.add_argument("--sidecar", default=os.path.join(".uscha", "telemetry.jsonl"),
                     help="append-only telemetry file (default: .uscha/telemetry.jsonl)")
+    ap.add_argument("--session", default=None,
+                    help="session key for idempotent upsert (default: transcript basename); "
+                         "re-running replaces this session's line instead of appending -- "
+                         "so a watch/refresh loop does not inflate the totals")
     ap.add_argument("--note", default=None, help="optional label for this session line")
     args = ap.parse_args()
 
@@ -93,14 +97,32 @@ def main():
         "tokens_in": total_in, "tokens_out": total_out, "ms": ms,
         "by_model": bm,
     }
+    session = args.session or os.path.basename(args.transcript)
+    rec["session"] = session
     if args.note:
         rec["note"] = args.note
 
     os.makedirs(os.path.dirname(args.sidecar) or ".", exist_ok=True)
-    with open(args.sidecar, "a", encoding="utf-8") as f:
-        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    print(f"[telemetry-extract] appended: {total_in} in / {total_out} out "
-          f"across {len(bm)} model(s) -> {args.sidecar}")
+    # upsert by session: re-running (watch mode) REPLACES this session's line instead of
+    # appending a duplicate -> a refresh loop never inflates the aggregated totals.
+    kept = []
+    if os.path.isfile(args.sidecar):
+        for line in open(args.sidecar, encoding="utf-8"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                prev = json.loads(line)
+            except ValueError:
+                continue
+            if prev.get("session") != session:
+                kept.append(prev)
+    kept.append(rec)
+    with open(args.sidecar, "w", encoding="utf-8") as f:
+        for r in kept:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    print(f"[telemetry-extract] {session}: {total_in} in / {total_out} out "
+          f"across {len(bm)} model(s) -> {args.sidecar} (upsert)")
     return 0
 
 

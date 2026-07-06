@@ -1355,6 +1355,53 @@ ok = (d['tokens_in'] == 54000 and d['tokens_out'] == 4500 and d['ms'] == 600000
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   suma tokens (input+cache) + wall time + by_model desde el transcript"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL extractor no resume bien el transcript CC"; }
+# upsert idempotente (1.34.0): re-correr con la misma sesion NO duplica la linea
+"$PY" "$EXTRACT" tele/t.jsonl --sidecar tele/telemetry.jsonl >/dev/null 2>&1
+"$PY" -c "
+import sys
+n = sum(1 for l in open('tele/telemetry.jsonl', encoding='utf-8') if l.strip())
+sys.exit(0 if n == 1 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   re-correr el extractor hace UPSERT (1 linea, no infla el total en watch)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL el extractor duplico la linea de sesion (watch-mode inflaria)"; }
+
+echo "== T55 dashboard project (1.34.0): config.project gana; sin el, join de repos =="
+printf '{ "project": "My Project", "defaults": { "acceptance_file": "acc-mir.md" },\n  "repos": [ {"name":"backend-api","path":"repo-mir","type":"python"} ], "integration": {"enabled": false} }\n' > mirp.json
+run init --config mirp.json --out L-mirp.json >/dev/null 2>&1
+run dashboard --ledger L-mirp.json --json 2>/dev/null | "$PY" -c "import json,sys; sys.exit(0 if json.load(sys.stdin)['project']=='My Project' else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   config.project -> dashboard.project"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL no toma project del config"; }
+run dashboard --ledger L-mir.json --json 2>/dev/null | "$PY" -c "import json,sys; sys.exit(0 if json.load(sys.stdin)['project']=='backend-api' else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   sin project en config -> fallback al nombre del repo (truth-pass)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL fallback de project mal"; }
+
+echo "== T56 mirador-render (1.34.0): dashboard + telemetria mergeada + inject + meta-refresh =="
+RENDER="$(dirname "$(dirname "$QL")")/uscha-mirador/mirador-render.py"
+TPL="$(dirname "$(dirname "$QL")")/uscha-mirador/mirador.template.html"
+"$PY" "$RENDER" --engine "$QL" --ledger L-mirp.json --template "$TPL" --out mir-out.html --sidecar tele/telemetry.jsonl --refresh 30 >/dev/null 2>&1
+"$PY" -c "
+import re, json, sys
+h = open('mir-out.html', encoding='utf-8').read()
+m = re.search(r'const DATA = (\{.*\});\n/\*MIRADOR_DATA_END', h, re.S)
+d = json.loads(m.group(1))
+ok = (d['project'] == 'My Project' and 'telemetry' in d
+      and d['telemetry']['tokens_in'] == 54000
+      and 'http-equiv=\"refresh\" content=\"30\"' in h)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   render standalone: project + telemetria + meta-refresh en mirador.html"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL mirador-render no produjo el HTML esperado"; }
+
+echo "== T57 skill-count no-drift (1.34.0): USCHA_SKILLS del doctor == dirs uscha-* en disco =="
+SKILLS_DIR="$(dirname "$(dirname "$QL")")"
+"$PY" -c "
+import sys, os
+sys.path.insert(0, os.path.dirname(sys.argv[1]))
+import qa_ledger as q
+listed = set(q.USCHA_SKILLS)
+ondisk = {d for d in os.listdir(sys.argv[2])
+          if d.startswith('uscha-') and os.path.isdir(os.path.join(sys.argv[2], d))}
+sys.exit(0 if listed == ondisk else 1)" "$QL" "$SKILLS_DIR" \
+  && { PASS=$((PASS+1)); echo "  ok   el doctor lista exactamente las skills uscha-* en disco (sin drift)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL USCHA_SKILLS != dirs uscha-* en disco (skill nueva sin registrar en el doctor?)"; }
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
