@@ -1403,6 +1403,306 @@ sys.exit(0 if listed == ondisk else 1)" "$QL" "$SKILLS_DIR" \
   && { PASS=$((PASS+1)); echo "  ok   el doctor lista exactamente las skills uscha-* en disco (sin drift)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL USCHA_SKILLS != dirs uscha-* en disco (skill nueva sin registrar en el doctor?)"; }
 
+echo "== T58 execution-policy (1.35.0): routing por fase sin contaminar readiness =="
+cat > ep.json <<'EOF'
+{ "version": "1.35.0",
+  "defaults": {
+    "execution_policy": {
+      "default": { "tier": "standard", "effort": "medium" },
+      "phases": {
+        "qa": { "method": "checker fresco", "tier": "checker", "model": "gpt-5.5", "effort": "high", "uncorrelated": true },
+        "build": { "method": "implementar plan", "tier": "standard", "effort": "medium" }
+      }
+    }
+  },
+  "repos": [ {"name":"repo-c","path":"repo-c","type":"python"} ],
+  "integration": {"enabled": false} }
+EOF
+run init --config ep.json --out L-ep.json >/dev/null 2>&1
+run execution-policy --ledger L-ep.json --phase qa --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ok = (d['phase'] == 'qa' and d['method'] == 'checker fresco'
+      and d['tier'] == 'checker' and d['model'] == 'gpt-5.5'
+      and d['effort'] == 'high' and d['uncorrelated'] is True)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   CLI JSON devuelve metodologia/model/effort declarados para qa"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL execution-policy --json no respeta config.defaults.execution_policy"; }
+run execution-policy --ledger L-ep.json --phase qa 2>/dev/null | grep -q "EXECUTION qa: checker fresco | tier=checker model=gpt-5.5 effort=high" \
+  && { PASS=$((PASS+1)); echo "  ok   CLI humano emite una linea operable por fase"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL execution-policy no imprime la linea de fase esperada"; }
+run dashboard --ledger L-ep.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ph = {p['key']: p['execution'] for p in d['phases']}
+ok = ('execution_policy' in d
+      and d['execution_policy']['source'] == 'config.defaults.execution_policy'
+      and ph['qa']['model'] == 'gpt-5.5' and ph['qa']['effort'] == 'high'
+      and ph['build']['method'] == 'implementar plan'
+      and isinstance(d['readiness']['score'], (int, float)))
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   dashboard expone execution_policy y anota phases sin ser score"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL dashboard no expone execution_policy por fase"; }
+
+echo "== T59 mirador-render (1.35.0): bird's-eye muestra policy model/effort =="
+"$PY" "$RENDER" --engine "$QL" --ledger L-ep.json --template "$TPL" --out ep-mir.html >/dev/null 2>&1
+"$PY" -c "
+import re, json, sys
+h = open('ep-mir.html', encoding='utf-8').read()
+m = re.search(r'const DATA = (\{.*\});\n/\*MIRADOR_DATA_END', h, re.S)
+d = json.loads(m.group(1))
+ok = ('id=\"exec\"' in h and 'Execution policy' in h
+      and d['execution_policy']['phases']['qa']['model'] == 'gpt-5.5'
+      and d['execution_policy']['phases']['qa']['effort'] == 'high')
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   mirador renderiza el panel y preserva model/effort en DATA"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL mirador no muestra execution_policy"; }
+
+echo "== T60 discovery-intake (1.36.0): production finding reabre discovery =="
+printf -- "# ACCEPTANCE\n\n- [ ] AC-01 checkout total correcto\n" > acc-intake.md
+printf '{ "version": "1.36.0", "defaults": { "acceptance_file": "acc-intake.md" },\n  "repos": [ {"name":"repo-c","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > intake.json
+run init --config intake.json --out L-intake.json >/dev/null 2>&1
+run production-finding --ledger L-intake.json --repo repo-c --severity HIGH --source sentry --title "checkout total wrong" --evidence "Sentry INC-1" 2>/dev/null | grep -q "PF-001" \
+  && { PASS=$((PASS+1)); echo "  ok   production-finding crea PF-001 con evidencia de produccion"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL production-finding no crea PF-001"; }
+run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+pf = d['discovery_intake']['production_findings']
+ok = (len(pf) == 1 and pf[0]['id'] == 'PF-001' and pf[0]['severity'] == 'HIGH'
+      and d['facts']['production_findings_open'] == 1)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   readiness expone production findings como discovery_intake"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL readiness no expone production findings"; }
+run readiness --ledger L-intake.json 2>/dev/null | grep -q "production findings open" \
+  && { PASS=$((PASS+1)); echo "  ok   readiness default avisa que discovery debe reabrirse"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL readiness default no avisa production finding"; }
+run production-finding --ledger L-intake.json --id PF-001 --resolve --note "fed into SPEC next cycle" >/dev/null 2>&1
+run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['discovery_intake']['production_findings'] == [] and d['facts']['production_findings_open'] == 0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   resolver PF-001 limpia el intake abierto"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL resolver PF-001 no limpia discovery_intake"; }
+
+echo "== T61 spec-doubt (1.36.0): SPEC-WRONG bloquea atajos y exige humano =="
+run spec-doubt --ledger L-intake.json --repo repo-c --kind spec-wrong --severity HIGH --note "AC dice sin impuesto, codigo real lo incluye" --evidence "demo con usuario" 2>/dev/null | grep -q "SD-001" \
+  && { PASS=$((PASS+1)); echo "  ok   spec-doubt crea SD-001 como duda de SPEC"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL spec-doubt no crea SD-001"; }
+run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sd = d['discovery_intake']['spec_doubts']
+ok = (len(sd) == 1 and sd[0]['id'] == 'SD-001' and sd[0]['kind'] == 'spec-wrong'
+      and d['facts']['spec_doubts_open'] == 1)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   readiness expone spec-doubt como discovery_intake"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL readiness no expone spec-doubt"; }
+run phase --ledger L-intake.json --repo repo-c --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['phase'] == 'escalated' and any('spec-doubt' in e for e in d['evidence']) else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   phase deriva escalated si hay spec-doubt abierto"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL phase ignora spec-doubt abierto"; }
+run spec-doubt --ledger L-intake.json --id SD-001 --resolve --decision "SPEC amended" --note "acceptance updated" >/dev/null 2>&1
+run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['discovery_intake']['spec_doubts'] == [] and d['facts']['spec_doubts_open'] == 0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   resolver SD-001 limpia el intake abierto"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL resolver SD-001 no limpia discovery_intake"; }
+
+echo "== T62 ADR experiments (1.37.0): hipotesis visible, advisory, no score =="
+mkdir -p docs/adr
+cat > docs/adr/ADR-001-checkout-path.md <<'EOF'
+# ADR-001: Checkout path
+## Status: Experiment
+## Context
+Tenemos dos caminos viables y la respuesta depende de feedback real.
+## Decision
+Probar el nuevo checkout para aprender con bajo blast radius.
+## Hypothesis
+El checkout nuevo reduce abandonos sin subir errores.
+## Feedback Signal
+Conversion rate y errores de pago en produccion.
+## Review By: 2099-01-01
+## Promote Criteria
+Conversion estable o mejor y cero incidentes HIGH/BLOCKER.
+## Rollback / Supersede Criteria
+Suben errores de pago o aparece production-finding gateado.
+## Implementation Plan
+- Affected paths: checkout/*
+## Verification
+- [ ] Revisar senales de feedback.
+EOF
+cat > docs/adr/ADR-002-bad-experiment.md <<'EOF'
+# ADR-002: Bad experiment
+## Status: Experiment
+## Context
+Esto declara experimento pero no dice como se mide ni como se cierra.
+## Hypothesis
+Tal vez mejora.
+## Review By: 2000-01-01
+EOF
+run dashboard --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+adrs = {a['id']: a for a in d['adrs']}
+good = adrs['ADR-001']
+bad = adrs['ADR-002']
+summary = d['adr_experiments']
+ok = (
+  good['status'] == 'prog'
+  and good['adr_status'] == 'experiment'
+  and good['experiment_valid'] is True
+  and good['review_by'] == '2099-01-01'
+  and good['expired'] is False
+  and bad['experiment_valid'] is False
+  and bad['expired'] is True
+  and 'feedback_signal' in bad['experiment_missing']
+  and summary['open'] == 2
+  and summary['malformed'] == 1
+  and summary['expired'] == 1
+  and isinstance(d['readiness']['score'], (int, float))
+)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   dashboard expone experiment ADR valido/malformado como advisory"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL dashboard no modela ADR experiment correctamente"; }
+"$PY" "$RENDER" --engine "$QL" --ledger L-intake.json --template "$TPL" --out exp-mir.html >/dev/null 2>&1
+"$PY" -c "
+import re, json, sys
+h = open('exp-mir.html', encoding='utf-8').read()
+m = re.search(r'const DATA = (\{.*\});\n/\*MIRADOR_DATA_END', h, re.S)
+d = json.loads(m.group(1))
+ok = ('experiment' in h and 'ADR-001' in h
+      and d['adr_experiments']['open'] == 2
+      and d['adrs'][0]['adr_status'] == 'experiment')
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   mirador renderiza ADR experiment sin cambiar readiness"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL mirador no muestra ADR experiment"; }
+
+echo "== T63 spec-change-request (1.38.0): evidence -> human-signed contract change =="
+run spec-change-request --ledger L-intake.json --repo repo-c --source SD-001 --requested-change "AC-01 debe incluir impuesto" --evidence "demo + SD-001" --spec ACCEPTANCE.md 2>/dev/null | grep -q "SCR-001" \
+  && { PASS=$((PASS+1)); echo "  ok   spec-change-request crea SCR-001 desde evidencia"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL spec-change-request no crea SCR-001"; }
+run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+scr = d['discovery_intake']['spec_change_requests']
+ok = (len(scr) == 1 and scr[0]['id'] == 'SCR-001' and scr[0]['source'] == 'SD-001'
+      and d['facts']['spec_change_requests_open'] == 1)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   readiness expone SCR abierto como puente contractual"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL readiness no expone SCR abierto"; }
+run phase --ledger L-intake.json --repo repo-c --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['phase'] == 'escalated' and any('SCR-001' in e for e in d['evidence']) else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   phase deriva escalated si hay SCR humano pendiente"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL phase ignora SCR abierto"; }
+run spec-change-request --ledger L-intake.json --id SCR-001 --resolve --decision accepted --note "ACCEPTANCE amended" --amended ACCEPTANCE.md >/dev/null 2>&1
+run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['discovery_intake']['spec_change_requests'] == [] and d['facts']['spec_change_requests_open'] == 0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   resolver SCR-001 limpia el puente contractual abierto"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL resolver SCR-001 no limpia discovery_intake"; }
+
+echo "== T64 golden labels (1.38.0): intended vs observed-accidental visible =="
+mkdir -p gold
+printf 'legacy bug preserved\n' > gold/qr.received.txt
+cp gold/qr.received.txt gold/qr.approved.txt
+cat > golden-labels.json <<'EOF'
+{
+  "fixtures": {
+    "gold/qr.approved.txt": {
+      "classification": "observed-accidental",
+      "note": "legacy QR bug preserved for migration only"
+    }
+  }
+}
+EOF
+run golden-diff --dir gold --labels golden-labels.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+labels = d['golden_labels']
+ok = (d['verdict'] == 'CLEAN'
+      and labels['observed_accidental'] == 1
+      and labels['intended'] == 0
+      and labels['unknown'] == 0
+      and d['fixtures'][0]['classification'] == 'observed-accidental')
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   golden-diff clasifica golden observado-accidental sin debilitar el byte compare"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL golden-diff no expone labels intended/accidental"; }
+run golden-diff --dir gold --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['golden_labels']['unknown'] == 1 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   golden sin labels queda unknown, no inventa intencion"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL golden-diff sin labels no queda unknown"; }
+
+echo "== T65 calibration summary (1.38.0): post-merge facts calibran la retro =="
+run summary --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+cal = d['post_merge_calibration']
+ok = (cal['production_findings']['total'] == 1
+      and cal['production_findings']['resolved'] == 1
+      and cal['spec_doubts']['total'] == 1
+      and cal['spec_doubts']['resolved'] == 1
+      and cal['spec_change_requests']['total'] == 1
+      and cal['spec_change_requests']['accepted'] == 1
+      and cal['contract_reopen_signals'] == 3)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   summary expone calibracion post-merge desde PF/SD/SCR"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL summary no expone calibracion post-merge"; }
+
+echo "== T66 universal installer (1.39.0): Codex plugin + Claude adapter, dry-run safe =="
+INST_HOME="$SB/home-installer"
+mkdir -p "$INST_HOME"
+"$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ok = (d['source_version'] == '1.39.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
+"$PY" "$KIT/install-uscha.py" install --target both --home "$INST_HOME" --dry-run --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ops = '\n'.join(o['path'].replace(chr(92), '/') for o in d['operations'])
+ok = (d['dry_run'] is True and 'plugins/uscha' in ops and '.agents/plugins/marketplace.json' in ops and '.claude/skills/uscha-devloop' in ops)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   dry-run planifica Codex plugin y Claude skills sin escribir"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL dry-run no muestra plan universal"; }
+[ ! -e "$INST_HOME/.agents/plugins/uscha" ] && [ ! -e "$INST_HOME/.claude/skills/uscha-devloop" ] \
+  && { PASS=$((PASS+1)); echo "  ok   dry-run no crea instalacion"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL dry-run escribio archivos"; }
+"$PY" "$KIT/install-uscha.py" install --target codex --home "$INST_HOME" --json >/dev/null 2>&1
+INST_HOME="$INST_HOME" "$PY" -c "
+import json, os, pathlib, sys
+h = pathlib.Path(os.environ['INST_HOME'])
+manifest = h/'plugins/uscha/.codex-plugin/plugin.json'
+market = h/'.agents/plugins/marketplace.json'
+engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
+marker = h/'plugins/uscha/uscha-install.json'
+ok = (manifest.exists() and market.exists() and engine.exists() and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.39.0' and
+      json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL install codex incompleto"; }
+"$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ok = (d['source_version'] == '1.39.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
+diff -qr "$KIT/.claude/skills" "$KIT/skills" -x __pycache__ >/dev/null 2>&1 \
+  && { PASS=$((PASS+1)); echo "  ok   Codex plugin skills mirror stays synced with canonical skills"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL uscha-kit/skills drifted from .claude/skills"; }
+
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"

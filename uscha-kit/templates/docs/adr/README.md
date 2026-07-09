@@ -4,9 +4,14 @@ Durable technical decisions of this repo. One per file:
 `ADR-NNN-<slug>.md`. They are written by `/discovery` or `/adr-refine`, or proposed during the
 build when a real decision appears (see the ADR rules in `CLAUDE.md`).
 
-Format: Status (proposed/accepted/deprecated/superseded) · Context · Alternatives ·
+Format: Status (proposed/accepted/experiment/deprecated/superseded) · Context · Alternatives ·
 Decision · Consequences · Implementation Plan (affected paths, patterns, tests) ·
 Verification (checkboxes).
+
+`Status: Experiment` is for a bounded, reversible hypothesis that needs real feedback.
+It must include: Hypothesis, Feedback Signal, Review By or Review Trigger, Promote
+Criteria, and Rollback / Supersede Criteria. Missing/expired metadata is advisory in
+Mirador/dashboard; it is not a readiness score.
 
 ## Index
 

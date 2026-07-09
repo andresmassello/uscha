@@ -1,0 +1,37 @@
+{
+  "name": "uscha",
+  "version": "1.39.0",
+  "description": "Uscha spec-driven development methodology for coding agents.",
+  "author": {
+    "name": "Andres Massello",
+    "url": "https://github.com/andresmassello"
+  },
+  "homepage": "https://github.com/andresmassello/uscha",
+  "repository": "https://github.com/andresmassello/uscha",
+  "license": "MIT",
+  "keywords": [
+    "spec-driven",
+    "qa",
+    "gates",
+    "golden-testing",
+    "readiness"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Uscha",
+    "shortDescription": "Spec-driven development with fact gates and readiness.",
+    "longDescription": "Uscha installs discovery, ADR, characterization, devloop, rubric, sysdoc and Mirador skills plus the qa_ledger.py evidence engine.",
+    "developerName": "Andres Massello",
+    "category": "Productivity",
+    "capabilities": [
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Run Uscha discovery for this feature.",
+      "Use Uscha devloop to verify this change.",
+      "Show the Uscha readiness for this repo."
+    ],
+    "brandColor": "#7C3AED"
+  }
+}

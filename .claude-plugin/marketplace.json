@@ -9,13 +9,21 @@
     {
       "name": "uscha",
       "source": "./uscha-kit",
-      "description": "8 skills (uscha-*) + qa_ledger.py (25 subcommands, stdlib). Facts block, guesses advise; the human approves.",
-      "version": "1.34.0",
-      "author": { "name": "Andres Massello" },
+      "description": "8 skills (uscha-*) + qa_ledger.py (29 subcommands, stdlib + universal installer). Facts block, guesses advise; the human approves.",
+      "version": "1.39.0",
+      "author": {
+        "name": "Andres Massello"
+      },
       "homepage": "https://github.com/andresmassello/uscha",
       "repository": "https://github.com/andresmassello/uscha",
       "license": "MIT",
-      "keywords": ["spec-driven", "qa", "gates", "golden-testing", "readiness"]
+      "keywords": [
+        "spec-driven",
+        "qa",
+        "gates",
+        "golden-testing",
+        "readiness"
+      ]
     }
   ]
 }

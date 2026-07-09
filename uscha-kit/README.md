@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.34.0 <!-- uscha:version -->
+**Kit version:** v1.39.0 <!-- uscha:version -->
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Eight skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -22,6 +22,8 @@ uscha-kit/
 │  ├─ CONSTITUTION.md              # inviolable invariants (fill in the domain)
 │  ├─ .gitattributes               # *.approved.* binary — so line endings don't lie
 │  └─ docs/adr/                    # ADR scaffold
+?? .codex-plugin/plugin.json      # Codex plugin manifest
+?? skills/                         # Codex plugin mirror of .claude/skills (smoke checks sync)
 └─ .claude/skills/
    ├─ uscha-discovery/                   # vague idea → 1x1 grilling → CONSTITUTION/SPEC/ADR/ACCEPTANCE…
    ├─ uscha-adr-refine/                  # known feature: precision interview → ADR + ACCEPTANCE
@@ -204,58 +206,68 @@ BEFORE touching anything.
 
 ## Installation
 
-**Option A — per project** (recommended for multi-repo suites): copy `.claude/` to the
-primary repo and `uscha.config.json` to the root of that repo.
+**Preferred machine install (kit 1.39.0): use the universal installer.** One
+interface, two adapters: Codex gets a personal local plugin (`~/plugins/uscha` +
+`~/.agents/plugins/marketplace.json`), Claude gets global skills/hooks under
+`~/.claude`. Use `--dry-run` first on every new machine.
 
 ```bash
-cp -r uscha-kit/.claude  <repo-primario>/
-cp uscha-kit/uscha.config.json  <repo-primario>/
-chmod +x <repo-primario>/.claude/skills/uscha-devloop/qa_ledger.py
+python uscha-kit/install-uscha.py version
+python uscha-kit/install-uscha.py install --target codex --dry-run
+python uscha-kit/install-uscha.py install --target codex
+python uscha-kit/install-uscha.py doctor --target codex
 ```
 
-**Option B — global** (kit 1.20.0: for all your repos, existing and new): copy
-the EIGHT skills to `~/.claude/skills/` and the hook to `~/.claude/hooks/` + register it in
-`~/.claude/settings.json` (snippet in the .ps1 header) — this way INV-GOLDEN-01 rules across
-all projects. The skills resolve the engine first in the project and fall back to
-`~/.claude/skills/uscha-devloop/qa_ledger.py` if there is no local installation.
+For a machine used by both runtimes:
 
 ```bash
-for s in uscha-discovery uscha-adr-refine uscha-reverse-discovery uscha-characterize uscha-devloop uscha-sysdoc uscha-rubric; do
-  cp -r "uscha-kit/.claude/skills/$s" ~/.claude/skills/
-done
-mkdir -p ~/.claude/hooks && cp uscha-kit/hooks/block-approved-writes.ps1 ~/.claude/hooks/
+python uscha-kit/install-uscha.py install --target both --dry-run
+python uscha-kit/install-uscha.py install --target both
+python uscha-kit/install-uscha.py doctor --target both
+```
+
+For the machine where you DEVELOP the kit, use links instead of copies so the
+installed skills follow the canonical repo after `git pull`:
+
+```bash
+python uscha-kit/install-uscha.py install --target both --mode link --dry-run
+python uscha-kit/install-uscha.py install --target both --mode link
+```
+
+Prepare a repo after the machine install:
+
+```bash
+python uscha-kit/install-uscha.py init --repo <repo> --dry-run
+python uscha-kit/install-uscha.py init --repo <repo>
 ```
 
 What remains PER PROJECT (state, not installable): `uscha.config.json` in the
-repo root where you run the run (the `path` values are relative to there — and your declared
+repo root where you run the run (the `path` values are relative to there ? and your declared
 quality bar lives there), the `QA-LEDGER.json`, the `ACCEPTANCE.md`, and for migration
 work the `.gitattributes` from `templates/` (`*.approved.* binary`).
 
-> On the machine where you DEVELOP the kit, instead of copying it's better to use a junction/symlink
-> of each skill to the canonical repo — global always up to date with main, zero re-installation
-> per release: `cmd /c mklink /J "%USERPROFILE%\.claude\skills\uscha-devloop" "<repo>\uscha-kit\.claude\skills\uscha-devloop"` (one per skill).
+**Legacy/manual install** still works: copy `.claude/` and `uscha.config.json`
+per project, or copy the `uscha-*` skills to `~/.claude/skills/`. Prefer the
+installer unless you are debugging the installer itself.
 
-**Option C — Claude Code plugin** (kit 1.24.0, the recommended one if you use Claude Code):
-the repo is its own marketplace and the INV-GOLDEN-01 hook self-registers on install
-(zero editing of settings.json). The skills stay as `uscha:uscha-*`.
+**Claude Code plugin** remains available for Claude Code users:
 
 ```
 /plugin marketplace add andresmassello/uscha
 /plugin install uscha@uscha
 ```
 
-Updates: `/plugin update uscha@uscha` when there is a new release (the plugin declares
-`version`, so it only updates on a bump). Linux: the hook is PowerShell — install pwsh
-(the doctor gives you the link) and adjust the hook command if needed. The other
-runtimes (Codex, Gemini CLI, Cursor) keep using Option A/B — the plugin is
-packaging, not a dependency.
+Updates: `/plugin update uscha@uscha` for Claude Code plugin installs, or rerun
+`install-uscha.py install ...` for Codex/Claude machine installs.
+
+
 
 **Verify the installation with `doctor`** (kit 1.22.0, in the spirit of flutter doctor —
 Windows and Linux, ASCII output, exit 1 only on errors):
 
 ```bash
-python3 ~/.claude/skills/uscha-devloop/qa_ledger.py doctor
-# or, per project:  python3 ./.claude/skills/uscha-devloop/qa_ledger.py doctor
+python uscha-kit/install-uscha.py doctor --target both
+# or engine-only: python3 ~/.claude/skills/uscha-devloop/qa_ledger.py doctor
 ```
 
 It checks: Python >=3.8 · git · the 8 skills alongside the engine (frontmatter
@@ -277,6 +289,9 @@ Edit `uscha.config.json`:
 - `defaults.constitution_file`: path of the **CONSTITUTION** (inviolable invariants). Default `CONSTITUTION.md`.
 - `defaults.rebuild.coverage_tolerance`: coverage points the rebuild can drop without penalty (default 5).
 - `defaults.readiness_weights` / `readiness_caps` / `static_gate_zero_at`: weights and caps of the KPI.
+- `defaults.execution_policy`: phase-level routing metadata (`method`, `tier`, `model`, `effort`) shown by `execution-policy` and Mirador. It guides the operator; it does **not** affect readiness.
+- Discovery intake commands (`production-finding`, `spec-doubt`, `spec-change-request`) persist post-merge production facts, SPEC doubts, and human contract-change bridges so the next cycle reopens discovery/SPEC instead of hiding reality in narration.
+- ADRs may use `Status: Experiment` when a decision is an explicit, measured hypothesis. `dashboard --json`/Mirador expose `adr_status`, feedback/review metadata, malformed/expired counts; this is advisory visibility, not readiness scoring.
 - `defaults.max_iterations`, `tools_per_cycle`, test commands.
 
 ## Multi-repo: mounting the other repos
@@ -322,7 +337,7 @@ python3 $QL snapshot      --repo backend-api --phase pre
 python3 $QL check-coverage --repo backend-api       # exit 0 = OK, 1 = below threshold
 python3 $QL ingest-gate   --repo backend-api --iteration 1
 python3 $QL summary                                 # human summary
-python3 $QL summary --json                          # consumed by sys-doc
+python3 $QL summary --json                          # includes post_merge_calibration
 ```
 
 If `snapshot`/`ingest-gate` say "no report found", it's because the build hasn't generated
@@ -336,6 +351,10 @@ result, not on effort spent**:
 ```bash
 python3 $QL readiness --acceptance ACCEPTANCE.md
 python3 $QL readiness --json            # consumed by sys-doc (traffic-light widget)
+python3 $QL execution-policy --phase qa  # one-line methodology/model/effort routing
+python3 $QL production-finding --repo backend-api --severity HIGH --title "..." --evidence "..."
+python3 $QL spec-doubt --repo backend-api --kind spec-wrong --note "..." --evidence "..."
+python3 $QL spec-change-request --repo backend-api --source SD-001 --requested-change "..." --evidence "..."
 ```
 
 - Dimensions/weights: **acceptance traced (MEASURED) 30**, ADR/checkboxes 15, coverage 15,
@@ -408,7 +427,7 @@ python3 $QL simplicity-check --diff changes.diff --json        # consumed by sys
 ## Ledger subcommands
 
 `doctor · init · snapshot · check-coverage · log-step · ingest-gate · log-gate · flag-blocker ·
-converged · oscillation · escalate · resolve-escalation · summary · readiness · rebuild ·
+converged · oscillation · escalate · resolve-escalation · summary · readiness · execution-policy · production-finding · spec-doubt · rebuild ·
 simplicity-check · pit-check · gate-check · spec-check · golden-diff · regression-check ·
 phase · rubric-ingest · doctor` — each with `--help`.
 
@@ -419,6 +438,7 @@ violation is recorded with `flag-blocker` (same effect, until `--resolve`).
 ## Notes
 
 - **It doesn't merge on its own.** It creates the PR and stops; the merge is yours.
+- **ADR experiments are visible hypotheses.** `Status: Experiment` requires Hypothesis, Feedback Signal, Review By/Trigger, Promote Criteria and Rollback/Supersede Criteria. Missing or expired metadata is shown by `dashboard --json`/Mirador as advisory, not as a hard PR gate.
 - **Tracked `.md` protocol.** Before touching CLAUDE.md / plan/delta docs / docs/adr,
   the skill asks for the current version of the file (it doesn't regenerate and overwrite real progress).
 - `ingest-gate` credits a fix only if the report EXISTS and came back clean; a missing
@@ -431,7 +451,7 @@ the skills installed). It's all in **`WORKBENCH.md`**: installation, verificatio
 update, without the specifics of each stack (Java/MSSQL/linters = per-repo adapter).
 
 - What I have installed:  `bash workbench-doctor.sh`
-- Kit version:      `cat VERSION`
+- Kit version:      `python uscha-kit/install-uscha.py version` or `cat VERSION`
 
 ## Templates for the repo (so the repo becomes "methodology-ready")
 

@@ -3,6 +3,12 @@
 __pycache__/
 *.pyc
 
+# local agent/session artifacts
+.atl/
+.tmp-openai-docs-cache/
+handoff.md
+mirador.html
+
 # workspace locale
 QA-LEDGER.json
 REBUILD-BASELINE.json

@@ -1,9 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "uscha",
-  "version": "1.34.0",
+  "version": "1.39.0",
   "displayName": "Uscha",
-  "description": "Spec-driven development for LLM coding agents: 8 skills (discovery, adr-refine, reverse-discovery, characterize, devloop, sysdoc, rubric, mirador) + a stdlib measurement engine (qa_ledger.py, 25 subcommands). Facts block, guesses advise; the human approves.",
+  "description": "Spec-driven development for LLM coding agents: 8 skills (discovery, adr-refine, reverse-discovery, characterize, devloop, sysdoc, rubric, mirador) + a stdlib measurement engine (qa_ledger.py, 29 subcommands + universal installer). Facts block, guesses advise; the human approves.",
   "author": {
     "name": "Andres Massello",
     "url": "https://github.com/andresmassello"
@@ -11,7 +11,14 @@
   "homepage": "https://github.com/andresmassello/uscha",
   "repository": "https://github.com/andresmassello/uscha",
   "license": "MIT",
-  "keywords": ["spec-driven", "qa", "gates", "golden-testing", "readiness", "methodology"],
+  "keywords": [
+    "spec-driven",
+    "qa",
+    "gates",
+    "golden-testing",
+    "readiness",
+    "methodology"
+  ],
   "skills": "./.claude/skills/",
   "hooks": "./hooks/hooks.json"
 }
