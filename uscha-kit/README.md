@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.40.1 <!-- uscha:version -->
+**Kit version:** v1.40.2 <!-- uscha:version -->
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Eight skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -14,6 +14,8 @@ changes (a one-liner runs build+test and that's it).
 
 ```
 uscha-kit/
+?? INSTALL.md                   # install guide: npx, Codex, Claude Code, alternatives
+?? install-uscha.py             # canonical installer used by npm/npx
 ├─ uscha.config.json            # config: repos, thresholds, commands
 ├─ hooks/
 │  └─ block-approved-writes.ps1    # PreToolUse: the agent CANNOT write .approved (INV-GOLDEN-01)
@@ -206,76 +208,34 @@ BEFORE touching anything.
 
 ## Installation
 
-**Preferred public install (kit 1.40.1): use npm/npx.** The npm package is a
-thin router over the canonical Python installer, so adoption is easy without
-duplicating installer logic. You need Node/npm for this path and Python 3.8+ for
-the underlying installer.
-
-Codex-only machine:
+**Recommended path: npm/npx.** Use the same installer for Codex, Claude Code,
+or both. Full guide: [`INSTALL.md`](INSTALL.md).
 
 ```bash
-npx @andresmassello/uscha@latest version
-npx @andresmassello/uscha@latest install --target codex --dry-run
-npx @andresmassello/uscha@latest install --target codex
-npx @andresmassello/uscha@latest doctor --target codex
+npx --yes @andresmassello/uscha@latest version
+npx --yes @andresmassello/uscha@latest install --target codex --dry-run
+npx --yes @andresmassello/uscha@latest install --target codex
+npx --yes @andresmassello/uscha@latest doctor --target codex
 ```
 
-Machine used by both Codex and Claude:
+For a machine used by both Codex and Claude Code:
 
 ```bash
-npx @andresmassello/uscha@latest install --target both --dry-run
-npx @andresmassello/uscha@latest install --target both
-npx @andresmassello/uscha@latest doctor --target both
+npx --yes @andresmassello/uscha@latest install --target both --dry-run
+npx --yes @andresmassello/uscha@latest install --target both
+npx --yes @andresmassello/uscha@latest doctor --target both
 ```
 
-**Repo checkout install still works and is preferred when developing the kit
-itself.** One interface, two adapters: Codex gets a personal local plugin
-(`~/plugins/uscha` + `~/.agents/plugins/marketplace.json`), Claude gets global
-skills/hooks under `~/.claude`. Use `--dry-run` first on every new machine.
-
-```bash
-python uscha-kit/install-uscha.py version
-python uscha-kit/install-uscha.py install --target codex --dry-run
-python uscha-kit/install-uscha.py install --target codex
-python uscha-kit/install-uscha.py doctor --target codex
-```
-
-For the machine where you DEVELOP the kit, use links instead of copies so the
-installed skills follow the canonical repo after `git pull`:
+Use a Git checkout only when developing Uscha itself or testing unreleased
+changes:
 
 ```bash
 python uscha-kit/install-uscha.py install --target both --mode link --dry-run
 python uscha-kit/install-uscha.py install --target both --mode link
 ```
 
-Prepare a repo after the machine install:
-
-```bash
-npx @andresmassello/uscha@latest init --repo <repo> --dry-run
-npx @andresmassello/uscha@latest init --repo <repo>
-# or from a checkout:
-python uscha-kit/install-uscha.py init --repo <repo>
-```
-
-What remains PER PROJECT (state, not installable): `uscha.config.json` in the
-repo root where you run the run (the `path` values are relative to there ? and your declared
-quality bar lives there), the `QA-LEDGER.json`, the `ACCEPTANCE.md`, and for migration
-work the `.gitattributes` from `templates/` (`*.approved.* binary`).
-
-**Legacy/manual install** still works: copy `.claude/` and `uscha.config.json`
-per project, or copy the `uscha-*` skills to `~/.claude/skills/`. Prefer the
-installer unless you are debugging the installer itself.
-
-**Claude Code plugin** remains available for Claude Code users:
-
-```
-/plugin marketplace add andresmassello/uscha
-/plugin install uscha@uscha
-```
-
-Updates: `/plugin update uscha@uscha` for Claude Code plugin installs,
-`npx @andresmassello/uscha@latest install ...` for npm installs, or rerun
-`install-uscha.py install ...` from a repo checkout.
+Claude Code's native plugin flow remains available for Claude-only users, but
+`npx` is the universal path and also covers Codex.
 
 
 

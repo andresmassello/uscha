@@ -12,13 +12,15 @@ instantiation in Claude Code, the **uscha-kit**.
 
 ```
 SpecLoop/
-├── uscha-kit/          # ★ canonical SOURCE of the kit (v1.40.1)
+??? package.json        # npm package: @andresmassello/uscha
+??? bin/uscha.js        # thin npx router to uscha-kit/install-uscha.py
+├── uscha-kit/          # ★ canonical SOURCE of the kit (v1.40.2)
 │   ├── .claude/skills/    #   8 skills: uscha-discovery · uscha-adr-refine · uscha-devloop · uscha-sysdoc
 │   │                      #             uscha-reverse-discovery · uscha-characterize · uscha-rubric · uscha-mirador
 │   ├── .claude/skills/uscha-devloop/qa_ledger.py   # evidence engine (29 subcommands, stdlib)
 │   ├── hooks/             #   PreToolUse: the agent never writes .approved (INV-GOLDEN-01)
 │   ├── templates/         #   CLAUDE.md · CONSTITUTION.md · .gitattributes · docs/adr
-│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (traceable acceptance) → 1.11.0 (tests outside the budget) → 1.12.0 (secret-scan) → 1.13.0 (atomic ledger) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (threshold provenance) → 1.18.0 (derived FSM) → 1.19.0 (spikes — PragProg backlog CLOSED) → 1.20.0 (global install) → 1.21.0 (namespace uscha-*) → 1.22.0 (doctor) → 1.23.0 (rubric layer) → 1.24.0 (Claude Code plugin) → 1.25.0 (anti-ceremony) → 1.26.0 (waste-check REUSE-FIRST) → 1.27.0 (FTY) → 1.28.0 (measured acceptance %) → 1.29.0 (rebrand → Uscha) → 1.30.0 (dependency gate) → 1.31.0 (evidence freshness + doc-version gate) → 1.32.0 (mirador — bird's-eye view + dashboard --json) → 1.33.0 (mirador telemetry — per-model tokens/time/model + transcript extractor) → 1.34.0 (mirador: project name from config + live watch/auto-refresh) -> 1.35.0 (execution-policy routing) -> 1.36.0 (discovery-intake: production findings + spec-doubt) -> 1.37.0 (ADR experiments: visible hypotheses) -> 1.38.0 (contract closure: SCR bridge + golden labels + calibration) -> 1.39.0 (universal Codex/Claude installer) -> 1.40.1 (npm/npx router)
+│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (traceable acceptance) → 1.11.0 (tests outside the budget) → 1.12.0 (secret-scan) → 1.13.0 (atomic ledger) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (threshold provenance) → 1.18.0 (derived FSM) → 1.19.0 (spikes — PragProg backlog CLOSED) → 1.20.0 (global install) → 1.21.0 (namespace uscha-*) → 1.22.0 (doctor) → 1.23.0 (rubric layer) → 1.24.0 (Claude Code plugin) → 1.25.0 (anti-ceremony) → 1.26.0 (waste-check REUSE-FIRST) → 1.27.0 (FTY) → 1.28.0 (measured acceptance %) → 1.29.0 (rebrand → Uscha) → 1.30.0 (dependency gate) → 1.31.0 (evidence freshness + doc-version gate) → 1.32.0 (mirador — bird's-eye view + dashboard --json) → 1.33.0 (mirador telemetry — per-model tokens/time/model + transcript extractor) → 1.34.0 (mirador: project name from config + live watch/auto-refresh) -> 1.35.0 (execution-policy routing) -> 1.36.0 (discovery-intake: production findings + spec-doubt) -> 1.37.0 (ADR experiments: visible hypotheses) -> 1.38.0 (contract closure: SCR bridge + golden labels + calibration) -> 1.39.0 (universal Codex/Claude installer) -> 1.40.0 (npm/npx router) -> 1.40.1 (npm package hygiene) -> 1.40.2 (install docs)
 ├── docs/                  # published artifacts (canonical here; Downloads = snapshots)
 │   ├── uscha-claude-code-doc-FINAL.html   # long deck ES (36 slides)
 │   ├── uscha-claude-code-doc-EN.html      # long deck EN
@@ -40,7 +42,7 @@ SpecLoop/
 
 ## Status (2026-07-05)
 
-- **Kit v1.40.1** <!-- uscha:version --> — the fact-gates are WIRED into the engine (1.3.0: `log-gate`,
+- **Kit v1.40.2** <!-- uscha:version --> — the fact-gates are WIRED into the engine (1.3.0: `log-gate`,
   `flag-blocker`, `resolve-escalation`; UNMEASURED; per-tool convergence with a veto from
   the measured snapshot) and the engine measures **Python** repos (1.4.0: pytest/Cobertura + ruff +
   mypy) **TypeScript/JS** (1.5.0: lcov + jest-junit + eslint + tsc) **Go** (1.6.0: native cover
@@ -62,13 +64,13 @@ SpecLoop/
   headline — M5). **Derived FSM** (1.18.0: `phase` computes the workflow state
   from the ledger's facts, never declared; the PR is gated with `--require
   pr-ready` — M4). **Formal spikes** (1.19.0: a `spike/*` branch never passes the PR
-  gate; the legitimate output is an ADR with lessons — M10). **Execution policy routing** (1.35.0: phase-level methodology/model/effort metadata for the operator and Mirador, not readiness scoring). **Discovery intake** (1.36.0: production findings + spec-doubt/SPEC-WRONG enter the ledger and reopen discovery instead of disappearing into narration). **ADR experiments** (1.37.0: `Status: Experiment` is visible/advisory in dashboard/Mirador with feedback/review metadata, not a readiness score). **Contract closure** (1.38.0: structured `spec-change-request`, golden intended vs observed-accidental labels, and post-merge calibration metrics). **Universal installer** (1.39.0: one machine installer for Codex plugin adoption and Claude global install, with dry-run/doctor/version checks). **npm/npx router** (1.40.1: `@andresmassello/uscha` exposes `uscha`/`uscha-kit` and delegates to the canonical Python installer). Smoke suite 224/224 green.
+  gate; the legitimate output is an ADR with lessons — M10). **Execution policy routing** (1.35.0: phase-level methodology/model/effort metadata for the operator and Mirador, not readiness scoring). **Discovery intake** (1.36.0: production findings + spec-doubt/SPEC-WRONG enter the ledger and reopen discovery instead of disappearing into narration). **ADR experiments** (1.37.0: `Status: Experiment` is visible/advisory in dashboard/Mirador with feedback/review metadata, not a readiness score). **Contract closure** (1.38.0: structured `spec-change-request`, golden intended vs observed-accidental labels, and post-merge calibration metrics). **Universal installer** (1.39.0: one machine installer for Codex plugin adoption and Claude global install, with dry-run/doctor/version checks). **npm/npx router** (1.40.0: `@andresmassello/uscha` exposes `uscha`/`uscha-kit` and delegates to the canonical Python installer). **Install docs** (1.40.2: npx-first guide for Codex, Claude Code, and mixed-machine setups). Smoke suite 224/224 green.
   **The PragProg backlog is CLOSED: 10 of 10** (see
   `docs/analisis-pragmatic-programmer.md`).
   License: MIT. The principle "facts block, guesses advise" is an enforced property,
   not a slogan.
 - **Docs** — passed through truth-pass against the real engine: every claim describes what
-  v1.40.1 does; the references appendix has **fetch-verified links** to the 10
+  v1.40.2 does; the references appendix has **fetch-verified links** to the 10
   sources. Status convention in the docs: `in the kit` / `new` / `proposal`.
 - **In progress** — dogfooding on a real case (pilot project, Python): the 1.4.0 adapter unblocked it;
   what remains is the read-only dry-run (criterion 2 of the python-adapter HANDOFF) and the on-ramp.
@@ -76,17 +78,23 @@ SpecLoop/
   profiles).
 
 
-## Install from npm/npx
+## Install
+
+Recommended for Codex and Claude Code:
 
 ```bash
-npx @andresmassello/uscha@latest install --target codex
-npx @andresmassello/uscha@latest doctor --target codex
-# or both Codex + Claude:
-npx @andresmassello/uscha@latest install --target both
+npx --yes @andresmassello/uscha@latest install --target codex
+npx --yes @andresmassello/uscha@latest doctor --target codex
+# or both Codex + Claude Code:
+npx --yes @andresmassello/uscha@latest install --target both
+npx --yes @andresmassello/uscha@latest doctor --target both
 ```
 
-The npm package is only a router. The canonical installer remains
-`uscha-kit/install-uscha.py`, and Python 3.8+ is still required on the target machine.
+Full install guide: [`uscha-kit/INSTALL.md`](uscha-kit/INSTALL.md).
+
+The npm package is only a thin router. The canonical installer remains
+`uscha-kit/install-uscha.py`, and Python 3.8+ is still required on the target
+machine.
 
 ## How the kit is re-packaged
 
