@@ -6,6 +6,7 @@ __pycache__/
 # local agent/session artifacts
 .atl/
 .tmp-openai-docs-cache/
+.npm-cache/
 handoff.md
 mirador.html
 

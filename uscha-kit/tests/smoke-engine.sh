@@ -38,6 +38,7 @@ set -u
 # infinito (paso en la vida real: exit 124 por timeout con commit encadenado).
 exec < /dev/null
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$KIT/.." && pwd)"
 QL="$KIT/.claude/skills/uscha-devloop/qa_ledger.py"
 # probe FUNCIONAL: en Windows 'python3' puede ser un stub de Store que está en
 # PATH pero no ejecuta — hay que probar --version, no solo command -v.
@@ -1657,13 +1658,13 @@ sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   summary expone calibracion post-merge desde PF/SD/SCR"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL summary no expone calibracion post-merge"; }
 
-echo "== T66 universal installer (1.39.0): Codex plugin + Claude adapter, dry-run safe =="
+echo "== T66 universal installer (1.40.0): Codex plugin + Claude adapter, dry-run safe =="
 INST_HOME="$SB/home-installer"
 mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.39.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.40.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1687,7 +1688,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.39.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.40.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1695,13 +1696,41 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.39.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.40.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
 diff -qr "$KIT/.claude/skills" "$KIT/skills" -x __pycache__ >/dev/null 2>&1 \
   && { PASS=$((PASS+1)); echo "  ok   Codex plugin skills mirror stays synced with canonical skills"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL uscha-kit/skills drifted from .claude/skills"; }
+
+
+echo "== T67 npm router (1.40.0): npx package delegates to canonical installer =="
+if command -v node >/dev/null 2>&1; then
+  node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ok = (d['source_version'] == '1.40.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+sys.exit(0 if ok else 1)" \
+    && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
+    || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
+else
+  FAIL=$((FAIL+1)); echo "  FAIL node no esta disponible para probar el router npm"
+fi
+if command -v npm >/dev/null 2>&1; then
+  (cd "$ROOT" && npm_config_cache="$SB/npm-cache" npm pack --dry-run --json 2>/dev/null) | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)[0]
+files = {f['path'] for f in d['files']}
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.40.0'
+      and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
+      and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files)
+sys.exit(0 if ok else 1)" \
+    && { PASS=$((PASS+1)); echo "  ok   npm pack dry-run incluye router/kit y excluye artefactos locales"; } \
+    || { FAIL=$((FAIL+1)); echo "  FAIL npm pack dry-run no tiene el contenido esperado"; }
+else
+  FAIL=$((FAIL+1)); echo "  FAIL npm no esta disponible para probar package dry-run"
+fi
 
 echo ""
 echo "RESULTADO: $PASS ok · $FAIL fail"

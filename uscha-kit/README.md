@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.39.0 <!-- uscha:version -->
+**Kit version:** v1.40.0 <!-- uscha:version -->
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Eight skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -206,24 +206,38 @@ BEFORE touching anything.
 
 ## Installation
 
-**Preferred machine install (kit 1.39.0): use the universal installer.** One
-interface, two adapters: Codex gets a personal local plugin (`~/plugins/uscha` +
-`~/.agents/plugins/marketplace.json`), Claude gets global skills/hooks under
-`~/.claude`. Use `--dry-run` first on every new machine.
+**Preferred public install (kit 1.40.0): use npm/npx.** The npm package is a
+thin router over the canonical Python installer, so adoption is easy without
+duplicating installer logic. You need Node/npm for this path and Python 3.8+ for
+the underlying installer.
+
+Codex-only machine:
+
+```bash
+npx @andresmassello/uscha@latest version
+npx @andresmassello/uscha@latest install --target codex --dry-run
+npx @andresmassello/uscha@latest install --target codex
+npx @andresmassello/uscha@latest doctor --target codex
+```
+
+Machine used by both Codex and Claude:
+
+```bash
+npx @andresmassello/uscha@latest install --target both --dry-run
+npx @andresmassello/uscha@latest install --target both
+npx @andresmassello/uscha@latest doctor --target both
+```
+
+**Repo checkout install still works and is preferred when developing the kit
+itself.** One interface, two adapters: Codex gets a personal local plugin
+(`~/plugins/uscha` + `~/.agents/plugins/marketplace.json`), Claude gets global
+skills/hooks under `~/.claude`. Use `--dry-run` first on every new machine.
 
 ```bash
 python uscha-kit/install-uscha.py version
 python uscha-kit/install-uscha.py install --target codex --dry-run
 python uscha-kit/install-uscha.py install --target codex
 python uscha-kit/install-uscha.py doctor --target codex
-```
-
-For a machine used by both runtimes:
-
-```bash
-python uscha-kit/install-uscha.py install --target both --dry-run
-python uscha-kit/install-uscha.py install --target both
-python uscha-kit/install-uscha.py doctor --target both
 ```
 
 For the machine where you DEVELOP the kit, use links instead of copies so the
@@ -237,7 +251,9 @@ python uscha-kit/install-uscha.py install --target both --mode link
 Prepare a repo after the machine install:
 
 ```bash
-python uscha-kit/install-uscha.py init --repo <repo> --dry-run
+npx @andresmassello/uscha@latest init --repo <repo> --dry-run
+npx @andresmassello/uscha@latest init --repo <repo>
+# or from a checkout:
 python uscha-kit/install-uscha.py init --repo <repo>
 ```
 
@@ -257,8 +273,9 @@ installer unless you are debugging the installer itself.
 /plugin install uscha@uscha
 ```
 
-Updates: `/plugin update uscha@uscha` for Claude Code plugin installs, or rerun
-`install-uscha.py install ...` for Codex/Claude machine installs.
+Updates: `/plugin update uscha@uscha` for Claude Code plugin installs,
+`npx @andresmassello/uscha@latest install ...` for npm installs, or rerun
+`install-uscha.py install ...` from a repo checkout.
 
 
 

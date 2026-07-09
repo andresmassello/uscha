@@ -1,0 +1,35 @@
+{
+  "name": "@andresmassello/uscha",
+  "version": "1.40.0",
+  "description": "Uscha installer for Codex and Claude coding-agent workflows.",
+  "bin": {
+    "uscha": "bin/uscha.js",
+    "uscha-kit": "bin/uscha.js"
+  },
+  "files": [
+    "bin/",
+    "uscha-kit/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andresmassello/uscha.git"
+  },
+  "homepage": "https://github.com/andresmassello/uscha#readme",
+  "bugs": {
+    "url": "https://github.com/andresmassello/uscha/issues"
+  },
+  "keywords": [
+    "codex",
+    "claude",
+    "spec-driven",
+    "qa",
+    "coding-agents",
+    "sdd"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
