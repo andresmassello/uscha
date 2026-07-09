@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.40.0 <!-- uscha:version -->
+**Kit version:** v1.40.1 <!-- uscha:version -->
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Eight skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -206,7 +206,7 @@ BEFORE touching anything.
 
 ## Installation
 
-**Preferred public install (kit 1.40.0): use npm/npx.** The npm package is a
+**Preferred public install (kit 1.40.1): use npm/npx.** The npm package is a
 thin router over the canonical Python installer, so adoption is easy without
 duplicating installer logic. You need Node/npm for this path and Python 3.8+ for
 the underlying installer.
