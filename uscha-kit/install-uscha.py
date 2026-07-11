@@ -257,25 +257,37 @@ def install_codex(home, mode, dry_run, operations):
         missing_market_dirs.append(directory)
         directory = directory.parent
     swapped = False
+    backed_up = False
     market_mutated = False
     try:
         plugin_root.parent.mkdir(parents=True, exist_ok=True)
         if plugin_root.exists() or plugin_root.is_symlink():
             os.replace(plugin_root, backup)
+            backed_up = True
         os.replace(stage, plugin_root)
         swapped = True
         atomic_json(market, market_data)
         market_mutated = True
         atomic_json(plugin_root / "uscha-install.json", marker("codex", plugin_root, mode))
+        # success: the pre-existing plugin (now in backup) is stale -- drop it HERE, not
+        # in `finally`, so a failure can never delete the backup before it is restored
+        # (kit 1.41.1 adversarial-review fix -- the Codex path used to gate the restore on
+        # `swapped` and unconditionally delete the backup, destroying the user's install).
+        if backed_up and (backup.exists() or backup.is_symlink()):
+            remove_path(backup)
+            backed_up = False
     except Exception as exc:
         rollback_errors = []
-        if swapped:
-            try:
+        # restore gated on the BACKUP existing (not on `swapped`): if the swap failed
+        # AFTER the original was moved to backup, the original still lives in backup.
+        try:
+            if swapped and (plugin_root.exists() or plugin_root.is_symlink()):
                 remove_path(plugin_root)
-                if backup.exists() or backup.is_symlink():
-                    os.replace(backup, plugin_root)
-            except Exception as rollback_exc:
-                rollback_errors.append("%s: %s" % (plugin_root, rollback_exc))
+            if backed_up and (backup.exists() or backup.is_symlink()):
+                os.replace(backup, plugin_root)
+                backed_up = False
+        except Exception as rollback_exc:
+            rollback_errors.append("%s: %s" % (plugin_root, rollback_exc))
         if market_mutated:
             try:
                 if market_existed:
@@ -295,8 +307,9 @@ def install_codex(home, mode, dry_run, operations):
     finally:
         if stage.exists():
             remove_path(stage)
-        if backup.exists() or backup.is_symlink():
-            remove_path(backup)
+        # backup is intentionally NOT deleted here: on success it was dropped above; on
+        # failure it was restored; on a hard interrupt (KeyboardInterrupt bypasses the
+        # except) it is left in place so the user's original is never destroyed.
     return plugin_root
 
 

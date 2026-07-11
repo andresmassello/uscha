@@ -365,6 +365,24 @@ def _junit_counts(element, path):
     counts = tuple(_junit_int(element, name, path)
                    for name in ("tests", "failures", "errors", "skipped"))
     tests, failures, errors, skipped = counts
+    # kit 1.41.1 (adversarial-review fix): a <testsuite>'s summary ATTRIBUTES are
+    # self-declared and can hide real outcomes -- e.g. failures="0" on a suite that
+    # actually contains a <testcase> with a <failure>/<error> element. Honor the real
+    # child ELEMENTS, fail-closed (take the worse): present failure/error evidence can
+    # never be attribute-declared away. (Attribute-only summary suites with no
+    # <testcase> elements keep their declared counts -- the form many emitters use.)
+    if _local(element.tag) == "testsuite":
+        el_fail = el_err = 0
+        for tc in element:
+            if _local(tc.tag) != "testcase":
+                continue
+            kinds = {_local(ch.tag) for ch in tc}
+            if "failure" in kinds:
+                el_fail += 1
+            elif "error" in kinds:
+                el_err += 1
+        failures = max(failures, el_fail)
+        errors = max(errors, el_err)
     if skipped > tests:
         _invalid_junit(path, "attribute 'skipped' cannot exceed 'tests'")
     build_error_only = (
@@ -376,7 +394,7 @@ def _junit_counts(element, path):
     if failures + errors > tests - skipped and not build_error_only:
         _invalid_junit(
             path, "'failures' + 'errors' cannot exceed executed tests")
-    return counts
+    return (tests, failures, errors, skipped)
 
 
 def _perclass_xml_count(patterns):
@@ -3373,9 +3391,20 @@ def cmd_readiness(args):
                        or s.get("gated_reported", 0) > 0)]
     if integ_enabled:
         if integ_steps:
-            last = integ_steps[-1]
-            integ_dim = 1.0 if (last.get("gated_reported", 0) == 0
-                                and last.get("tests_passed") is True) else 0.0
+            # kit 1.41.1 (adversarial-review fix): do NOT trust the single last event.
+            # A trailing green test-only step must not mask an earlier FAILING integration
+            # gate. Green requires (a) 0 open gated findings across the LATEST record per
+            # integration tool (so a re-run that clears a gate still counts), AND (b) the
+            # latest test-carrying event passed.
+            integ_all = ledger["integration"]["iterations"]
+            integ_latest_by_tool = {}
+            for s in integ_all:
+                integ_latest_by_tool[s.get("tool")] = s
+            integ_open = sum((v.get("gated_reported", 0) or 0)
+                             for v in integ_latest_by_tool.values())
+            integ_tests = [s for s in integ_all if s.get("tests_passed") is not None]
+            integ_tests_ok = bool(integ_tests) and integ_tests[-1].get("tests_passed") is True
+            integ_dim = 1.0 if (integ_open == 0 and integ_tests_ok) else 0.0
         else:
             integ_dim = 0.0  # required but never run
     else:

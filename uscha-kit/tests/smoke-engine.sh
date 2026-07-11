@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.41.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.41.1.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.41.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.41.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.41.1.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.41.1.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.41.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.41.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.41.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.41.1' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.41.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.41.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.41.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.41.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.41.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.41.1'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2047,6 +2047,41 @@ cmp -s L-pr-evidence-before-inconsistent-root.json L-pr-evidence.json \
   && { PASS=$((PASS+1)); echo "  ok   JUnit inconsistent root leaves ledger unchanged"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL JUnit inconsistent root changed the ledger"; }
 chk "invalid JUnit cannot lead to pr-ready" 1 run phase --ledger L-pr-evidence.json --repo pr-evidence --require pr-ready
+
+echo "== T69b (1.41.1): well-formed JUnit that LIES (failures=0 attr + real <failure>) reads RED =="
+"$PY" -c "
+import sys, os, tempfile
+sys.path.insert(0, os.path.dirname(sys.argv[1]))
+import qa_ledger as q
+def cnt(xml):
+    d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, 'reports'))
+    open(os.path.join(d, 'reports', 'junit.xml'), 'w').write(xml)
+    return q.junit_test_count(d)
+lie = cnt('<testsuite tests=\"2\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase name=\"t1\"/><testcase name=\"t2\"><failure message=\"x\"/></testcase></testsuite>')
+err = cnt('<testsuite tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase name=\"t\"><error message=\"x\"/></testcase></testsuite>')
+adapter = cnt('<testsuites><testsuite name=\"pytest\" tests=\"5\" failures=\"0\" errors=\"0\" skipped=\"1\"/></testsuites>')
+legit = cnt('<testsuites><testsuite name=\"pytest\" tests=\"3\" failures=\"1\" errors=\"0\" skipped=\"0\"><testcase name=\"a\"/><testcase name=\"b\"><failure/></testcase><testcase name=\"c\"/></testsuite></testsuites>')
+ok = (lie['failures'] == 1 and err['errors'] == 1
+      and adapter['total'] == 5 and adapter['failures'] == 0
+      and legit['failures'] == 1)
+sys.exit(0 if ok else 1)" "$QL" \
+  && { PASS=$((PASS+1)); echo "  ok   <failure>/<error> elements override a lying summary attribute; adapter/legit reports intact"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL lying JUnit still reads green (element reconciliation broken)"; }
+
+echo "== T69c (1.41.1): integration readiness does NOT trust the last event (green test cannot mask a failing gate) =="
+mkdir -p ri/reports
+printf '{ "defaults": { "acceptance_file": "acc-ri.md" }, "repos": [ {"name":"backend-api","path":"ri","type":"python"} ], "integration": {"enabled": true, "contract_tests_command": "x"} }\n' > ri.json
+printf -- "# A\n\n- [x] AC-01 x\n" > acc-ri.md
+run init --config ri.json --out L-ri.json >/dev/null 2>&1
+run log-step --ledger L-ri.json --repo integration --tool e2e-gate --iteration 1 --reported 3 --gated-reported 3 --tests-passed false >/dev/null 2>&1
+run log-step --ledger L-ri.json --repo integration --tool e2e-tests --iteration 2 --reported 0 --gated-reported 0 --tests-passed true >/dev/null 2>&1
+run readiness --ledger L-ri.json --json 2>/dev/null | "$PY" -c "import json,sys; sys.exit(0 if json.load(sys.stdin)['dimensions'].get('integration',{}).get('raw')==0.0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   a failing integration gate is not masked by a trailing green test (dim=0.0)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL integration still trusts the last event (masking not closed)"; }
+run log-step --ledger L-ri.json --repo integration --tool e2e-gate --iteration 3 --reported 3 --gated-reported 0 >/dev/null 2>&1
+run readiness --ledger L-ri.json --json 2>/dev/null | "$PY" -c "import json,sys; sys.exit(0 if json.load(sys.stdin)['dimensions'].get('integration',{}).get('raw')==1.0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   clearing the same-tool gate restores integration to green (no false negative)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL a fixed integration gate is not seen"; }
 
 echo "== T70 static-gate silence does not invent clean evidence =="
 PHASE_NO_STATIC=$(run phase --ledger L-fsm.json --repo fsm --require pr-ready 2>&1)
@@ -2551,6 +2586,41 @@ if [ "$ROLLBACK_NO_MARKER_RC" -ne 0 ] \
 else
   FAIL=$((FAIL+1)); echo "  FAIL late Claude failure left a marker that did not exist before"
 fi
+
+echo "== T77b (1.41.1): Codex install rollback restores the pre-existing plugin (data-loss fix) =="
+"$PY" - "$KIT/install-uscha.py" <<'PY'
+import importlib.util, os, sys, shutil, tempfile, pathlib
+spec = importlib.util.spec_from_file_location("iu", sys.argv[1])
+iu = importlib.util.module_from_spec(spec); spec.loader.exec_module(iu)
+home = pathlib.Path(tempfile.mkdtemp())
+try:
+    plugin = home / "plugins" / iu.PLUGIN_NAME
+    plugin.mkdir(parents=True)
+    (plugin / "SENTINEL.txt").write_text("ORIGINAL")
+    real = os.replace
+    def failing(src, dst, *a, **k):
+        # only the stage->plugin swap fails (e.g. a Windows AV lock on the fresh stage
+        # tree); the backup->plugin restore must still succeed
+        if pathlib.Path(dst) == plugin and "staging" in str(src):
+            raise PermissionError("simulated stage-swap failure")
+        return real(src, dst, *a, **k)
+    iu.os.replace = failing
+    raised = False
+    try:
+        iu.install_codex(home, "copy", False, [])
+    except BaseException:
+        raised = True
+    finally:
+        iu.os.replace = real
+    s = plugin / "SENTINEL.txt"
+    ok = (raised and s.exists() and s.read_text() == "ORIGINAL"
+          and not list((home / "plugins").glob(".*backup*")))
+    sys.exit(0 if ok else 1)
+finally:
+    shutil.rmtree(home, ignore_errors=True)
+PY
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); echo "  ok   a failed Codex swap restores the user's pre-existing plugin (no data loss)"; \
+else FAIL=$((FAIL+1)); echo "  FAIL Codex rollback lost or stranded the pre-existing plugin"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
