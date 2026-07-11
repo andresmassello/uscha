@@ -124,8 +124,8 @@ ADR where it could later be "traded away"):
 ```markdown
 # Acceptance — <feature>
 ## Definition of Done
-- [ ] <verifiable criterion>
-- [ ] …
+- [ ] AC-01 — <verifiable criterion>
+- [ ] AC-02 — <verifiable criterion>
 ## How we measure success
 - <objective metric: p95, cost, zero orphans, …>
 ## Out of scope

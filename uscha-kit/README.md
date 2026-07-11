@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.40.2 <!-- uscha:version -->
+**Kit version:** v1.41.0 <!-- uscha:version -->
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Eight skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -130,8 +130,11 @@ BEFORE touching anything.
   | test count  | `cargo nextest run` + copy (see note)              | `reports/junit.xml` (wrapped JUnit supported) |
   | clippy      | `cargo clippy --message-format=json > reports/clippy.json` | `reports/clippy.json` (JSONL: error→HIGH · warning→MEDIUM · `code:null` compile-error→HIGH; summaries without span ignored) |
 
-  `ingest-gate` with explicit `--clippy` or by type. The inline `#[cfg(test)]` tests
-  count as prod LOC (documented limitation); `tests/` = integration.
+  `ingest-gate` with explicit `--clippy` or by type. Its JSONL evidence is fail-closed:
+  each nonblank line must be a UTF-8 Cargo JSON object with a string `reason`; malformed
+  records or malformed compiler diagnostics are rejected before ledger mutation. An empty
+  file plus valid Cargo summaries and span-less diagnostic summaries remain clean/noise.
+  The inline `#[cfg(test)]` tests count as prod LOC (documented limitation); `tests/` = integration.
   **Watch out for junit**: nextest does NOT emit JUnit by default — you have to enable it in
   `.config/nextest.toml` (`[profile.default.junit] path = "junit.xml"`) and the file
   lands in `target/nextest/default/junit.xml`; copy it to `reports/junit.xml`
@@ -165,6 +168,13 @@ BEFORE touching anything.
   `ingest-gate` with explicit `--clang-tidy` or by type. The build system (CMake/
   Bazel/make) belongs to the per-repo adapter — the kit only requires that the reports exist.
   `cmake-build-*` (any CLion profile) and `_deps` are excluded from the LOC.
+
+  **Text-report boundary:** mypy, tsc, and clang-tidy ingest only their recognized diagnostic
+  lines. Their legitimate clean/noise forms include status/success text, tool summaries, and
+  (for clang-tidy) passed-through compiler output, so a nonempty unmatched line is not safely
+  distinguishable from a clean report. The kit deliberately does **not** invent fail-closed
+  heuristics for those text formats; use their structured output where a fail-closed schema is
+  required.
 
   Kotlin/JVM with Gradle (`type: gradle`, kit 1.9.0) — **Kotlin over Maven already
   works with `type: maven`** (`.kt` has always counted; JaCoCo/Surefire don't
@@ -287,7 +297,7 @@ claude --add-dir ../backend-api --add-dir ../mobile-app
 Inside Claude Code, invoke the orchestrator (with the ADR/PLAN ready or ask it for one):
 
 ```
-/dev-loop
+/uscha-devloop
 ```
 
 The skill handles the phases on its own: plan → coverage gate → (characterization if needed)
@@ -327,7 +337,7 @@ result, not on effort spent**:
 
 ```bash
 python3 $QL readiness --acceptance ACCEPTANCE.md
-python3 $QL readiness --json            # consumed by sys-doc (traffic-light widget)
+python3 $QL readiness --json            # consumed by uscha-sysdoc (traffic-light widget)
 python3 $QL execution-policy --phase qa  # one-line methodology/model/effort routing
 python3 $QL production-finding --repo backend-api --severity HIGH --title "..." --evidence "..."
 python3 $QL spec-doubt --repo backend-api --kind spec-wrong --note "..." --evidence "..."
@@ -371,7 +381,7 @@ python3 $QL rebuild --mode baseline --config uscha.config.json   # → REBUILD-B
 #    SPEC/ADR/ACCEPTANCE, PRESERVING the tests, and run the suite.
 # 3) score the regenerated tree against the baseline
 python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json   # exit 0 = COVERS
-python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json --json   # consumed by sys-doc
+python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json --json   # consumed by uscha-sysdoc
 ```
 
 - Dimensions/weights: tests 60, acceptance 20, coverage 15, surface 5. The dominant signal
@@ -388,7 +398,7 @@ The **Simplicity** invariant of the CONSTITUTION made a deterministic gate: it s
 ```bash
 git diff --unified=0 <base> | python3 $QL simplicity-check --config uscha.config.json
 python3 $QL simplicity-check --from-git --base main            # uses git for you
-python3 $QL simplicity-check --diff changes.diff --json        # consumed by sys-doc / CI
+python3 $QL simplicity-check --diff changes.diff --json        # consumed by uscha-sysdoc / CI
 ```
 
 - Dimensions/weights: diff_size 35, nesting 30, net_growth 20, fan_out 8, blob 7
@@ -403,10 +413,11 @@ python3 $QL simplicity-check --diff changes.diff --json        # consumed by sys
 
 ## Ledger subcommands
 
-`doctor · init · snapshot · check-coverage · log-step · ingest-gate · log-gate · flag-blocker ·
-converged · oscillation · escalate · resolve-escalation · summary · readiness · execution-policy · production-finding · spec-doubt · rebuild ·
-simplicity-check · pit-check · gate-check · spec-check · golden-diff · regression-check ·
-phase · rubric-ingest · doctor` — each with `--help`.
+`doctor - rubric-ingest - init - snapshot - check-coverage - log-step - ingest-gate - phase -
+converged - oscillation - escalate - resolve-escalation - log-gate - flag-blocker -
+production-finding - spec-doubt - spec-change-request - regression-check - summary - readiness -
+execution-policy - dashboard - rebuild - simplicity-check - waste-check - pit-check - gate-check -
+spec-check - golden-diff` - the exact current `qa_ledger.py` parser surface; each supports `--help`.
 
 The **fact gates** (golden-diff, gate-check, pit-check, simplicity) are PERSISTED with
 `log-gate`: a fail blocks convergence and caps readiness ≤65 via the ledger. A CONSTITUTION
@@ -453,5 +464,5 @@ Inside Claude Code, ask it:
 List the active rules from CLAUDE.md and the available skills.
 ```
 
-The protocol rules and the commands /uscha-discovery /uscha-adr-refine
-/uscha-devloop /uscha-sysdoc should appear. (For the machine's toolchain: `bash uscha-kit/workbench-doctor.sh`.)
+The protocol rules and the commands `/uscha-discovery`, `/uscha-adr-refine`,
+`/uscha-devloop`, and `/uscha-sysdoc` should appear. (For the machine's toolchain: `bash uscha-kit/workbench-doctor.sh`.)

@@ -18,10 +18,22 @@ los linters del static gate, drivers) es el *adapter* del proyecto y vive en el
 | **Python 3.8+** | corre `qa_ledger.py` (stdlib pura, sin dependencias) | `python3` en PATH |
 | **git** | versionado | 2.x, con `user.name`/`user.email` |
 | **gh** (GitHub CLI) | crear repo / abrir PR | opcional pero recomendado |
-| **skills del kit** | `discovery`, `adr-refine`, `dev-loop`, `sys-doc` | copiados a `~/.claude/skills/` |
+| **skills del kit (8)** | `uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`, `uscha-characterize`, `uscha-rubric`, `uscha-mirador` | instalados por `npx` en Codex y/o Claude Code |
 | **skills de QA** | `code-review`, `judgment-day`, `improve` | tus skills globales (el dev-loop los **orquesta**, no los trae) |
 
 ---
+
+## Camino feliz: instalar Uscha con npx
+
+Uscha instala los skills y la configuracion para Codex, Claude Code o ambos:
+
+```bash
+npx --yes @andresmassello/uscha@latest version
+npx --yes @andresmassello/uscha@latest install --target both
+npx --yes @andresmassello/uscha@latest doctor --target both
+```
+
+`--target codex` o `--target claude` limita la instalacion a un solo entorno. Este es el camino recomendado y portable.
 
 ## 2. Instalar Claude Code
 
@@ -87,6 +99,8 @@ gh auth login          # habilita gh repo create / gh pr
 
 ## 5. Instalar los skills del kit
 
+**Manual, avanzado/legacy (solo Claude Code; preferi `npx` arriba):**
+
 **Global (todos los repos):**
 
 ```bash
@@ -102,14 +116,14 @@ cp -r uscha-kit/.claude/skills  <repo>/.claude/
 cp uscha-kit/uscha.config.json  <repo>/      # config en la raíz del repo
 ```
 
-**Verificar:** abrí `claude` y mirá `/help` — deberían aparecer `/discovery`,
-`/adr-refine`, `/dev-loop`, `/sys-doc`. O `ls ~/.claude/skills`.
+**Verificar:** abra `claude` y mire `/help`: deberian aparecer `/uscha-discovery`,
+`/uscha-adr-refine`, `/uscha-devloop`, `/uscha-sysdoc` y las otras cuatro skills del kit. O `ls ~/.claude/skills`.
 
 ---
 
 ## 6. Los skills de QA externos (dependencia)
 
-El `dev-loop` **orquesta** `code-review` / `judgment-day` / `improve` — **no los empaqueta**.
+El `uscha-devloop` **orquesta** `code-review` / `judgment-day` / `improve` — **no los empaqueta**.
 Tienen que estar en `~/.claude/skills/` (tus skills globales). Si usás otros nombres,
 editá `qa_tools_order` en `uscha.config.json`. Si no los tenés, el loop no encuentra
 las tools de juicio (igual corre el static gate determinístico).
@@ -173,6 +187,6 @@ claude whoami           # cuenta autenticada
 - [ ] `python3 --version` ≥ 3.8
 - [ ] git configurado (`user.name` / `user.email`)
 - [ ] `gh auth login` hecho (si vas a abrir PRs)
-- [ ] `/discovery` `/adr-refine` `/dev-loop` `/sys-doc` aparecen en `/help`
+- [ ] `/uscha-discovery` `/uscha-adr-refine` `/uscha-devloop` `/uscha-sysdoc` aparecen en `/help`
 - [ ] `code-review` / `judgment-day` / `improve` presentes (o `qa_tools_order` ajustado)
 - [ ] `uscha.config.json` en la raíz del repo

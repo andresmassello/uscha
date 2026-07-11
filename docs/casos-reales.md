@@ -46,7 +46,7 @@ saber cuál de los dos va a ser — y ese es el costo.
 |---------|-----------|--------|
 | El pedido "check" | **La entrega de un diagnóstico ES el entregable.** El método distingue evaluar de intervenir: los hechos se reportan, el humano decide. | El agente presenta el análisis de los logs y las causas — y PARA. |
 | "Diseño cerrado" | **Un diseño lo cierra un humano.** Contrato de escalación del dev-loop: *"un fix que requiere una decisión de diseño (nivel ADR) → STOP y preguntar"*. | La decisión de diseño se presenta con alternativas; la elige el humano (y queda en un ADR — legible para el próximo). |
-| Antes de codear | **Phase 0 del dev-loop**: sin criterios de aceptación no se construye — *"si faltan, corré `/adr-refine` primero (o preguntá)"*. | El fix se especifica ANTES: qué comportamiento se espera, qué queda fuera, cómo se verifica. |
+| Antes de codear | **Phase 0 del uscha-devloop**: sin criterios de aceptación no se construye — *"si faltan, corré `/uscha-adr-refine` primero (o preguntá)"*. | El fix se especifica ANTES: qué comportamiento se espera, qué queda fuera, cómo se verifica. |
 | Si igual hubiera codeado | **El merge gate**: el loop abre el PR y para; mergea una persona. | Última red — pero el método pone la fricción ANTES, donde es barata. |
 
 ### La frase para la presentación

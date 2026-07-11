@@ -16,7 +16,7 @@ npx --yes @andresmassello/uscha@latest doctor --target codex
 
 Then restart Codex or open a new thread. The installer registers Uscha as a
 personal local plugin under `~/plugins/uscha` and updates
-`~/.agents/plugins/marketplace.json`.
+`~/.agents/plugins/marketplace.json`. It preflights that marketplace before replacing the plugin tree and writes the install marker last.
 
 ### Claude Code
 
@@ -26,8 +26,7 @@ npx --yes @andresmassello/uscha@latest install --target claude
 npx --yes @andresmassello/uscha@latest doctor --target claude
 ```
 
-This installs the `uscha-*` skills and hooks under `~/.claude`. Restart or reload
-Claude Code after installing.
+This installs the `uscha-*` skills and registers a portable Python `PreToolUse` hook under `~/.claude` while preserving unrelated `settings.json` entries. Restart or reload Claude Code after installing.
 
 ### Same machine uses both
 
@@ -45,7 +44,11 @@ workflow:
 ```bash
 npx --yes @andresmassello/uscha@latest init --repo . --dry-run
 npx --yes @andresmassello/uscha@latest init --repo .
+# Existing differing files are preserved; use --force only to replace them deliberately.
+npx --yes @andresmassello/uscha@latest init --repo . --force
 ```
+
+`init` exits nonzero and reports conflicts for differing `uscha.config.json`, `CLAUDE.md`, `CONSTITUTION.md`, or `.gitattributes`; `--dry-run` performs the same conflict check without writing.
 
 Project state stays in the project: `uscha.config.json`, `QA-LEDGER.json`,
 `ACCEPTANCE.md`, and approved golden fixtures when used.
@@ -95,6 +98,8 @@ npx --yes @andresmassello/uscha@latest version
 npx --yes @andresmassello/uscha@latest install --target both
 npx --yes @andresmassello/uscha@latest doctor --target both
 ```
+
+`doctor` exits 1 for any unhealthy target in either text or `--json` mode. It checks installed skill presence, manifest/marketplace or hook registration, marker, and version; it does not measure file-content integrity.
 
 If `npm view` returns `404` immediately after a new release, wait a few minutes:
 npm search/dist-tags can propagate before the package metadata endpoint used by

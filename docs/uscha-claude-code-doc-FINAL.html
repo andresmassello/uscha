@@ -397,7 +397,7 @@ body::before{content:"";position:fixed;inset:0;background:
 <!-- 2 Skills -->
 <g class="icod" transform="translate(267,818)"><rect x="-9" y="-7" width="18" height="14" rx="2"/><polyline points="-5,-2 -1,1 -5,4"/><line x1="1" y1="4" x2="5" y2="4"/></g>
 <text class="ft" x="287" y="810">Skills (/comando)</text>
-<text class="fd" x="287" y="825">las 7 skills del kit</text>
+<text class="fd" x="287" y="825">las 8 skills del kit</text>
 <text class="fd" x="287" y="837">discovery → rubric</text>
 <!-- 3 Sub-agentes -->
 <g class="icod" transform="translate(444,818)"><circle cx="0" cy="-6" r="2.5"/><circle cx="-6" cy="5" r="2.5"/><circle cx="6" cy="5" r="2.5"/><line x1="-1.4" y1="-3.8" x2="-5" y2="2.8"/><line x1="1.4" y1="-3.8" x2="5" y2="2.8"/></g>
@@ -445,7 +445,7 @@ body::before{content:"";position:fixed;inset:0;background:
   </div>
   <p>Dos cosas que el flujo garantiza: <strong>bajar el costo de entrada</strong> (no tenés que diseñar el sistema para poder empezar — eso lo propone el Discovery) y <strong>subir la certeza de salida</strong> (un estado honesto, con evidencia y blockers, dice cuán listo está de verdad). En Claude Code todo esto vive en siete skills invocables (kit 1.27.0) y un motor de medición en Python.</p>
   <div class="tagrow">
-    <span class="chip red">/uscha-discovery</span><span class="chip red">/uscha-adr-refine</span><span class="chip red">/uscha-devloop</span><span class="chip red">/uscha-sysdoc</span><span class="chip red">/uscha-reverse-discovery</span><span class="chip red">/uscha-characterize</span><span class="chip">qa_ledger.py</span>
+    <span class="chip red">/uscha-discovery</span><span class="chip red">/uscha-adr-refine</span><span class="chip red">/uscha-devloop</span><span class="chip red">/uscha-sysdoc</span><span class="chip red">/uscha-reverse-discovery</span><span class="chip red">/uscha-characterize</span><span class="chip red">/uscha-rubric</span><span class="chip red">/uscha-mirador</span><span class="chip">qa_ledger.py</span>
   </div>
 </section>
 
@@ -577,7 +577,7 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
   <table>
     <thead><tr><th>Subcomando</th><th>Qué hace</th></tr></thead>
     <tbody>
-      <tr><td class="t">doctor</td><td>Diagnóstico de la instalación (espíritu flutter doctor): python/git, las 7 skills junto al engine, hook INV-GOLDEN-01 registrado, config/ACCEPTANCE/ledger del proyecto y toolchains por type. Exit 1 solo con errores (1.22.0).</td></tr>
+      <tr><td class="t">doctor</td><td>Diagnóstico de la instalación (espíritu flutter doctor): python/git, las 8 skills junto al engine, hook INV-GOLDEN-01 registrado, config/ACCEPTANCE/ledger del proyecto y toolchains por type. Exit 1 solo con errores (1.22.0).</td></tr>
       <tr><td class="t">init</td><td>Crea el ledger desde <code class="in">uscha.config.json</code> (repos, umbrales, comandos).</td></tr>
       <tr><td class="t">snapshot</td><td>Mide coverage / tests / LOC de un repo (<code class="in">--phase pre|post</code>).</td></tr>
       <tr><td class="t">check-coverage</td><td>Exit 0 si ≥ umbral, 1 si está por debajo. Es el gate de la fase 1.</td></tr>
@@ -595,7 +595,18 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">regression-check</td><td>Find Bugs Once (1.16.0): findings cerrados sin línea nueva de test = NARRATED — avisa; <code class="in">--strict</code> gatea; se persiste con <code class="in">log-gate --kind regression</code>.</td></tr>
       <tr><td class="t">waste-check</td><td>Reuse-first (1.26.0): detección determinística de clones Type-1/2 del diff contra el <strong>repositorio</strong> — la duplicación que <code class="in">simplicity-check</code> no ve (puntúa el diff aislado). Cada flag nombra el <code class="in">file:line</code> a reusar. Advisory salvo <code class="in">--gate</code> o <code class="in">defaults.waste.gate</code>. Raíz: muda Lean (Poppendieck) + el +81% de duplicación de GitClear.</td></tr>
       <tr><td class="t">phase</td><td>Estado del workflow DERIVADO del ledger (plan/build/qa/escalated/pr-ready), jamás declarado. <code class="in">--require pr-ready</code> gatea el PR y veta ramas <code class="in">spike/*</code> (1.18.0–1.19.0).</td></tr>
-    </tbody>
+
+      <tr><td class="t">rubric-ingest</td><td>Ingesta el JSON de la r?brica.</td></tr>
+      <tr><td class="t">production-finding</td><td>Registra feedback de producci?n.</td></tr>
+      <tr><td class="t">spec-doubt</td><td>Registra dudas de SPEC.</td></tr>
+      <tr><td class="t">spec-change-request</td><td>Registra pedidos de cambio de SPEC/ADR.</td></tr>
+      <tr><td class="t">execution-policy</td><td>Imprime el ruteo de ejecuci?n.</td></tr>
+      <tr><td class="t">dashboard</td><td>Entrega el contrato de datos de Mirador.</td></tr>
+      <tr><td class="t">simplicity-check</td><td>Eval?a minimalidad del diff.</td></tr>
+      <tr><td class="t">pit-check</td><td>Eval?a efectividad de tests.</td></tr>
+      <tr><td class="t">gate-check</td><td>Detecta debilitamiento de gates o secretos.</td></tr>
+      <tr><td class="t">spec-check</td><td>Valida SPEC/ACCEPTANCE.</td></tr>
+      <tr><td class="t">golden-diff</td><td>Compara bytes received/approved.</td></tr>    </tbody>
   </table>
   <pre><span class="c"># un pase típico del loop</span>
 QL=./.claude/skills/uscha-devloop/qa_ledger.py
@@ -976,7 +987,7 @@ $ claude
   <span class="c">grilla 1×1, propone entidades/endpoints, vos decidís 3 cosas</span>
   <span class="o">✓</span> CONTEXT.md · DOMAIN-MODEL.md · SPEC-001 · ADR-001/2/3
   <span class="o">✓</span> ACCEPTANCE.md · RISKS.md · HANDOFF.md
-&gt; /dev-loop
+&gt; /uscha-devloop
   <span class="c">plan → coverage gate → build → QA loop (sub-agentes) → integration</span>
   <span class="o">CONVERGED</span> · PR abierto. Paro en el merge.
 &gt; !python3 .claude/skills/uscha-devloop/qa_ledger.py readiness --acceptance ACCEPTANCE.md

@@ -102,6 +102,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <a href="#reverse-discovery">uscha-reverse-disc.</a>
     <a href="#sys-doc">uscha-sysdoc</a>
     <a href="#rubric">uscha-rubric</a>
+    <a href="#mirador">uscha-mirador</a>
     <a href="#transversales">transversales</a>
   </div>
 </nav>
@@ -110,10 +111,10 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <header class="hero">
   <div class="tag">referencia exhaustiva · uscha-kit 1.27.0</div>
-  <h1>Las siete skills <span class="a">del método.</span></h1>
+  <h1>Las ocho skills <span class="a">del método.</span></h1>
   <p>Qué hace cada una, fase por fase: propósito, cuándo se invoca, principios no
   negociables, protocolo, artefactos, guardrails y relaciones. La fuente de verdad son
-  los siete <code>SKILL.md</code> de <code>uscha-kit/.claude/skills/</code> — este doc
+  los ocho <code>SKILL.md</code> de <code>uscha-kit/.claude/skills/</code> — este doc
   los describe, no los reemplaza. Si algo acá contradice un SKILL.md, gana el SKILL.md.</p>
 </header>
 
@@ -479,6 +480,31 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <div class="rule stop"><div class="rk">maker ≠ grader</div><p>Nunca gradear un cambio
     que authoreaste en este mismo contexto — la separación ES el valor. La rúbrica es
     criterio del HUMANO: se proponen ediciones, jamás se reescribe en silencio.</p></div>
+  </div>
+</article>
+
+
+<!-- ══════════════════════ 8 · MIRADOR ══════════════════════ -->
+<article class="play" id="mirador">
+  <div class="top"><div class="pn">08</div><div class="pt">uscha-mirador — estado real a vista de pájaro</div><div class="status">dashboard</div></div>
+  <div class="body">
+    <p><strong>Qué es.</strong> Una vista de estado autocontenida y de solo lectura: readiness, sub-scores, camino de fases, invariantes, loops de QA y time-lapse. <strong>La skill cablea; no calcula.</strong> Cada número proviene del ledger.</p>
+    <p><strong>Cuándo.</strong> "mirador", "vista de estado", "bird's-eye", "dashboard del proyecto". Sin <code>QA-LEDGER.json</code> no hay estado que mostrar: se avisa y se frena.</p>
+    <h4>Contrato no negociable</h4>
+    <ul class="do">
+      <li><strong>Truth-pass.</strong> <code>qa_ledger.py dashboard --json</code> agrega solo estado existente. Una fuente ausente produce <code>null</code>/<code>[]</code>; el template degrada, jamás inventa.</li>
+      <li><strong>Separación de datos.</strong> La policy de ejecución es metadata de routing, no score. La telemetría opcional es narrada por el vendor y vive en una franja separada; nunca entra al readiness.</li>
+      <li><strong>Solo lectura.</strong> No corre gates ni modifica el ledger. <code>readiness --record</code> pertenece al loop, no a esta skill.</li>
+      <li><strong>Artefacto generado.</strong> Reemplaza solo el bloque entre <code>/*MIRADOR_DATA_START*/</code> y <code>/*MIRADOR_DATA_END*/</code> del template y escribe <code>mirador.html</code>.</li>
+    </ul>
+    <h4>Flujo</h4>
+    <ol class="steps">
+      <li><strong>Resolver engine y ledger.</strong> Usa la primera instalación válida de <code>qa_ledger.py</code> y el <code>QA-LEDGER.json</code> indicado.</li>
+      <li><strong>Renderizar.</strong> <code>mirador-render.py</code> ejecuta <code>dashboard --json</code>, mezcla la telemetría sidecar si existe e inyecta <code>const DATA</code> en el template.</li>
+      <li><strong>Abrir best-effort.</strong> Intenta abrir <code>mirador.html</code> según la plataforma, nunca falla en headless/CI y siempre imprime el path absoluto.</li>
+      <li><strong>Segundo monitor opcional.</strong> <code>mirador-watch.ps1</code>/<code>mirador-watch.sh</code> re-renderiza cada N segundos; la página se refresca sin servidor y cambia solo en checkpoints medidos.</li>
+    </ol>
+    <div class="rule go"><div class="rk">frontera doctrinal</div><p>Los paneles medidos responden <strong>"¿es correcto?"</strong>; la telemetría vendor-reported responde <strong>"¿cuánto costó?"</strong>. Se muestran juntas, pero jamás se mezclan ni gatean entre sí.</p></div>
   </div>
 </article>
 

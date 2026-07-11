@@ -375,7 +375,7 @@ claude --version &amp;&amp; claude doctor</pre>
           <tr><td>/uscha-adr-refine</td><td>polish a decision's edges.</td></tr>
           <tr><td>/uscha-devloop</td><td>plan → coverage → build → QA loop → integration.</td></tr>
           <tr><td>/uscha-sysdoc</td><td>two-view deck from the ledger — optional reporting, on request.</td></tr>
-          <tr><td>doctor</td><td>installation diagnosis (flutter-doctor spirit): python/git, 7 skills, INV-GOLDEN-01 hook, config/ACCEPTANCE/ledger, per-type toolchains — exit 1 only on errors (1.22.0).</td></tr>
+          <tr><td>doctor</td><td>installation diagnosis (flutter-doctor spirit): python/git, 8 skills, INV-GOLDEN-01 hook, config/ACCEPTANCE/ledger, per-type toolchains — exit 1 only on errors (1.22.0).</td></tr>
           <tr><td>qa_ledger init</td><td>build ledger from uscha.config.json.</td></tr>
           <tr><td>snapshot</td><td>coverage/tests/LOC (--phase pre|post).</td></tr>
           <tr><td>check-coverage</td><td>exit 0 if ≥ threshold (phase-1 gate).</td></tr>
@@ -394,7 +394,19 @@ claude --version &amp;&amp; claude doctor</pre>
           <tr><td>phase</td><td>workflow state DERIVED from the ledger (plan/build/qa/escalated/pr-ready), never self-declared; --require pr-ready gates the PR and vetoes spike/* branches (1.18.0–1.19.0).</td></tr>
           <tr><td>rubric-ingest</td><td>ingests the rubric grader JSON (evidence-or-nothing, weighted score vs threshold); advisory by default, --gate or defaults.rubric.gate makes it blocking (1.23.0).</td></tr>
         </tbody>
-      </table>
+
+          <tr><td>init</td><td>ledger command.</td></tr>
+          <tr><td>log-step</td><td>records one QA-tool pass.</td></tr>
+          <tr><td>escalate</td><td>records a human escalation.</td></tr>
+          <tr><td>production-finding</td><td>records or resolves production feedback.</td></tr>
+          <tr><td>spec-doubt</td><td>records or resolves a SPEC doubt.</td></tr>
+          <tr><td>spec-change-request</td><td>records or resolves a human SPEC/ADR change request.</td></tr>
+          <tr><td>execution-policy</td><td>prints model/effort routing by phase.</td></tr>
+          <tr><td>dashboard</td><td>emits Mirador data contract.</td></tr>
+          <tr><td>simplicity-check</td><td>scores diff minimality and complexity.</td></tr>
+          <tr><td>pit-check</td><td>scores test effectiveness from PIT.</td></tr>
+          <tr><td>gate-check</td><td>detects weakened gates or secrets.</td></tr>
+          <tr><td>spec-check</td><td>validates SPEC/ACCEPTANCE structure and traceability.</td></tr></table>
       <div class="rule"><div class="rk">tracked-md protocol</div><p>Before editing any tracked <code>.md</code> (CLAUDE.md, plan/delta docs, docs/adr), pull the repo's current version first. Those files carry live progress — never regenerate from scratch.</p></div>
     </div>
   </section>

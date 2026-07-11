@@ -370,7 +370,7 @@ claude --version &amp;&amp; claude doctor</pre>
           <tr><td>/uscha-adr-refine</td><td>pulir los bordes de una decisión.</td></tr>
           <tr><td>/uscha-devloop</td><td>plan → coverage → build → QA loop → integración.</td></tr>
           <tr><td>/uscha-sysdoc</td><td>reporte opcional (a pedido) — deck de dos vistas desde el ledger.</td></tr>
-          <tr><td>doctor</td><td>diagnóstico de la instalación (flutter-doctor spirit): python/git, 7 skills, hook INV-GOLDEN-01, config/ACCEPTANCE/ledger, toolchains por type — exit 1 solo con errores (1.22.0).</td></tr>
+          <tr><td>doctor</td><td>diagnóstico de la instalación (flutter-doctor spirit): python/git, 8 skills, hook INV-GOLDEN-01, config/ACCEPTANCE/ledger, toolchains por type — exit 1 solo con errores (1.22.0).</td></tr>
           <tr><td>qa_ledger init</td><td>arma el ledger desde uscha.config.json.</td></tr>
           <tr><td>snapshot</td><td>coverage/tests/LOC (--phase pre|post).</td></tr>
           <tr><td>check-coverage</td><td>exit 0 si ≥ umbral (gate de fase 1).</td></tr>
@@ -389,7 +389,19 @@ claude --version &amp;&amp; claude doctor</pre>
           <tr><td>phase</td><td>estado del workflow DERIVADO del ledger (plan/build/qa/escalated/pr-ready), jamás declarado; --require pr-ready gatea el PR y veta ramas spike/* (1.18.0–1.19.0).</td></tr>
           <tr><td>rubric-ingest</td><td>ingesta el JSON del grader de la rúbrica (evidence-or-nothing, score ponderado vs threshold); advisory por default, --gate o defaults.rubric.gate lo vuelve bloqueante (1.23.0).</td></tr>
         </tbody>
-      </table>
+
+          <tr><td>init</td><td>comando del ledger.</td></tr>
+          <tr><td>log-step</td><td>registra un pase de una herramienta de QA.</td></tr>
+          <tr><td>escalate</td><td>registra una escalaci?n humana.</td></tr>
+          <tr><td>production-finding</td><td>registra o resuelve feedback de producci?n.</td></tr>
+          <tr><td>spec-doubt</td><td>registra o resuelve una duda de SPEC.</td></tr>
+          <tr><td>spec-change-request</td><td>registra o resuelve un pedido humano de cambio de SPEC/ADR.</td></tr>
+          <tr><td>execution-policy</td><td>imprime el ruteo de modelo/esfuerzo por fase.</td></tr>
+          <tr><td>dashboard</td><td>emite el contrato de datos de Mirador.</td></tr>
+          <tr><td>simplicity-check</td><td>eval?a minimalidad y complejidad del diff.</td></tr>
+          <tr><td>pit-check</td><td>eval?a efectividad de tests desde PIT.</td></tr>
+          <tr><td>gate-check</td><td>detecta debilitamiento de gates o secretos.</td></tr>
+          <tr><td>spec-check</td><td>valida estructura y trazabilidad de SPEC/ACCEPTANCE.</td></tr></table>
       <div class="rule"><div class="rk">protocolo md-trackeado</div><p>Antes de editar cualquier <code>.md</code> trackeado (CLAUDE.md, docs de plan/delta, docs/adr), traé primero la versión actual del repo. Esos archivos cargan progreso vivo — nunca los regeneres de cero.</p></div>
     </div>
   </section>

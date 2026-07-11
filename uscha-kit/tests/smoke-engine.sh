@@ -49,6 +49,192 @@ if [ -z "$PY" ]; then
   done
 fi
 [ -n "$PY" ] || { echo "FAIL: no hay Python funcional en PATH"; exit 1; }
+if [ "${USCHA_INSTALLER_P0_D_ONLY:-0}" = "1" ]; then
+  "$PY" - "$KIT/install-uscha.py" <<'PY'
+import json
+import os
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+installer = pathlib.Path(sys.argv[1])
+
+
+def run(*args):
+    return subprocess.run(
+        [sys.executable, str(installer), *map(str, args)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+
+
+with tempfile.TemporaryDirectory(prefix="uscha-installer-p0-d-") as tmp:
+    root = pathlib.Path(tmp)
+    repo = root / "repo-symlink"
+    outside = root / "outside-sentinel.json"
+    repo.mkdir()
+    outside.write_bytes(b"outside-sentinel\n")
+    (repo / "uscha.config.json").symlink_to(outside)
+    before = outside.read_bytes()
+
+    result = run("init", "--repo", repo, "--force", "--json")
+
+    assert result.returncode != 0, (result.returncode, result.stdout, result.stderr)
+    assert "traceback" not in result.stderr.lower(), result.stderr
+    assert outside.read_bytes() == before, "managed-target symlink modified outside sentinel"
+    assert (repo / "uscha.config.json").is_symlink(), "managed-target symlink was replaced"
+    for name in ("CLAUDE.md", "CONSTITUTION.md", ".gitattributes"):
+        assert not (repo / name).exists(), (name, "init wrote after symlink hazard")
+    broken_repo = root / "repo-broken-symlink"
+    broken_repo.mkdir()
+    missing_outside = root / "missing-outside-sentinel.json"
+    broken_target = broken_repo / "uscha.config.json"
+    broken_target.symlink_to(missing_outside)
+    result = run("init", "--repo", broken_repo, "--force", "--json")
+    assert result.returncode != 0, (result.returncode, result.stdout, result.stderr)
+    assert broken_target.is_symlink(), "broken managed-target symlink was replaced"
+    assert not missing_outside.exists(), "broken symlink target was created outside repo"
+    for name in ("CLAUDE.md", "CONSTITUTION.md", ".gitattributes"):
+        assert not (broken_repo / name).exists(), (name, "init wrote after broken symlink hazard")
+    print("P0-D RED/GREEN 1: init rejects existing and broken managed-target symlinks without writes")
+
+    repo = root / "repo-late-conflict"
+    repo.mkdir()
+    conflict = repo / ".gitattributes"
+    conflict.write_bytes(b"late-conflict-sentinel\n")
+    before = conflict.read_bytes()
+
+    result = run("init", "--repo", repo, "--json")
+
+    assert result.returncode != 0, (result.returncode, result.stdout, result.stderr)
+    assert conflict.read_bytes() == before, "late conflict was modified"
+    for name in ("uscha.config.json", "CLAUDE.md", "CONSTITUTION.md"):
+        assert not (repo / name).exists(), (name, "written before late conflict discovery")
+    dry_repo = root / "repo-init-dry-run"
+    result = run("init", "--repo", dry_repo, "--dry-run", "--json")
+    assert result.returncode == 0, (result.returncode, result.stdout, result.stderr)
+    assert not dry_repo.exists(), "init dry-run wrote the repository"
+    print("P0-D RED/GREEN 2: late init conflict prevents all earlier writes; dry-run stays write-free")
+
+    fault = root / "codex-marker-fault"
+    fault.mkdir()
+    (fault / "sitecustomize.py").write_text(r"""
+import os
+
+_replace = os.replace
+_failed = False
+
+
+def fail_at_codex_marker(source, target):
+    global _failed
+    normalized = os.path.normcase(os.path.normpath(os.fspath(target)))
+    suffix = os.path.normcase(os.path.normpath(os.path.join("plugins", "uscha", "uscha-install.json")))
+    if not _failed and normalized.endswith(suffix):
+        _failed = True
+        with open(os.environ["USCHA_FAULT_WITNESS"], "w", encoding="utf-8", newline="\n") as handle:
+            handle.write("late\n")
+        raise OSError("deterministic late Codex marker failure")
+    return _replace(source, target)
+
+
+os.replace = fail_at_codex_marker
+""", encoding="utf-8", newline="\n")
+
+    marketplace_bytes = (b'{\n  "name": "personal", "interface": {"displayName": "Mine"},\n'
+                         b'  "plugins": [{"name":"other","source":{"source":"local","path":"./plugins/other"},'
+                         b'"policy":{"installation":"AVAILABLE","authentication":"ON_INSTALL"},"category":"Productivity"}]\n}\n')
+
+    for prior_marketplace in (marketplace_bytes, None):
+        label = "existing" if prior_marketplace is not None else "absent"
+        home = root / ("home-codex-rollback-" + label)
+        plugin = home / "plugins" / "uscha"
+        market = home / ".agents" / "plugins" / "marketplace.json"
+        plugin.mkdir(parents=True)
+        (plugin / "sentinel.bin").write_bytes(b"prior-plugin-tree\x00\xff")
+        if prior_marketplace is not None:
+            market.parent.mkdir(parents=True)
+            market.write_bytes(prior_marketplace)
+        before_plugin = sorted((p.relative_to(plugin).as_posix(), p.read_bytes())
+                               for p in plugin.rglob("*") if p.is_file())
+        witness = fault / ("witness-" + label + ".txt")
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(fault)
+        env["USCHA_FAULT_WITNESS"] = str(witness)
+
+        result = subprocess.run(
+            [sys.executable, str(installer), "install", "--target", "codex",
+             "--home", str(home), "--json"], stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", env=env)
+
+        assert result.returncode != 0, (label, result.returncode, result.stdout, result.stderr)
+        assert witness.read_text(encoding="utf-8") == "late\n", (label, "fault not reached")
+        after_plugin = sorted((p.relative_to(plugin).as_posix(), p.read_bytes())
+                              for p in plugin.rglob("*") if p.is_file())
+        assert after_plugin == before_plugin, (label, "prior plugin tree not restored")
+        if prior_marketplace is None:
+            assert not market.exists(), "new marketplace remained after rollback"
+            assert not (home / ".agents").exists(), "new marketplace directories remained after rollback"
+        else:
+            assert market.read_bytes() == prior_marketplace, "marketplace bytes not restored"
+        assert not list((home / "plugins").glob(".uscha.*-*")), (label, "Codex transaction residue")
+    print("P0-D RED/GREEN 3: late Codex marker failure restores plugin and marketplace states")
+
+    home = root / "home-claude-narrow-matcher"
+    result = run("install", "--target", "claude", "--home", home, "--json")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    settings_path = home / ".claude" / "settings.json"
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    canonical = settings["hooks"]["PreToolUse"][-1]
+    canonical["matcher"] = "Write"
+    settings["theme"] = "sentinel"
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+    result = run("doctor", "--target", "claude", "--home", home, "--json")
+    assert result.returncode != 0, "doctor accepted exact command under a narrow matcher"
+
+    result = run("install", "--target", "claude", "--home", home, "--json")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    result = run("install", "--target", "claude", "--home", home, "--json")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    groups = settings["hooks"]["PreToolUse"]
+    commands = [item.get("command") for group in groups if group.get("matcher") == "*"
+                for item in group.get("hooks", []) if item.get("type") == "command"
+                and "block-approved-writes.py" in item.get("command", "")]
+    assert len(commands) == 1, (groups, "canonical matcher registration count")
+    assert settings["theme"] == "sentinel", "unrelated Claude settings were not preserved"
+    assert any(group.get("matcher") == "Write" for group in groups), "narrow registration was removed"
+    result = run("doctor", "--target", "claude", "--home", home, "--json")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    print("P0-D RED/GREEN 4: narrow hook matcher requires one canonical registration")
+
+    malformed_settings = [
+        ("root-list", []),
+        ("hooks-scalar", {"hooks": 7}),
+        ("pretool-scalar", {"hooks": {"PreToolUse": 7}}),
+        ("group-list", {"hooks": {"PreToolUse": [[]]}}),
+        ("group-hooks-scalar", {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": 7}]}}),
+        ("item-list", {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [[]]}]}}),
+    ]
+    for label, payload in malformed_settings:
+        home = root / ("home-malformed-" + label)
+        claude = home / ".claude"
+        settings_path = claude / "settings.json"
+        claude.mkdir(parents=True)
+        original = (json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n").encode("utf-8")
+        settings_path.write_bytes(original)
+        before_paths = sorted(p.relative_to(home).as_posix() for p in home.rglob("*"))
+
+        result = run("install", "--target", "claude", "--home", home, "--json")
+
+        assert result.returncode != 0, (label, result.stdout, result.stderr)
+        assert "traceback" not in result.stderr.lower(), (label, result.stderr)
+        assert settings_path.read_bytes() == original, (label, "settings bytes changed")
+        after_paths = sorted(p.relative_to(home).as_posix() for p in home.rglob("*"))
+        assert after_paths == before_paths, (label, before_paths, after_paths)
+    print("P0-D RED/GREEN 5: malformed settings shapes fail cleanly without writes")
+PY
+  exit $?
+fi
 SB="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/smoke-$$")"; mkdir -p "$SB/repo-a" "$SB/repo-b" "$SB/repo-c" "$SB/repo-d" "$SB/repo-e" "$SB/repo-f" "$SB/repo-g" "$SB/repo-h" "$SB/repo-i" "$SB/repo-j"
 cd "$SB"
 
@@ -301,12 +487,12 @@ echo "== T20 rust: clippy JSONL (error/warning/compile-error/summary/dup) =="
 # HIGH fantasma y el gate no converge jamas. El duplicado (lib + test target)
 # debe dedupearse por finding ID.
 cat > repo-f/reports/clippy.json <<'EOF'
-{"reason":"compiler-message","message":{"level":"error","code":{"code":"clippy::unwrap_used"},"spans":[{"file_name":"src/lib.rs","line_start":2,"is_primary":true}]}}
-{"reason":"compiler-message","message":{"level":"warning","code":{"code":"clippy::needless_return"},"spans":[{"file_name":"src/lib.rs","line_start":3,"is_primary":true}]}}
-{"reason":"compiler-message","message":{"level":"warning","code":{"code":"clippy::needless_return"},"spans":[{"file_name":"src/lib.rs","line_start":3,"is_primary":true}]}}
-{"reason":"compiler-message","message":{"level":"error","code":null,"spans":[{"file_name":"src/lib.rs","line_start":1,"is_primary":true}]}}
-{"reason":"compiler-message","message":{"level":"warning","code":null,"spans":[],"message":"1 warning emitted"}}
-{"reason":"compiler-message","message":{"level":"error","code":null,"spans":[],"message":"aborting due to 1 previous error"}}
+{"reason":"compiler-message","message":{"message":"unwrap used","level":"error","code":{"code":"clippy::unwrap_used"},"spans":[{"file_name":"src/lib.rs","line_start":2,"is_primary":true}]}}
+{"reason":"compiler-message","message":{"message":"needless return","level":"warning","code":{"code":"clippy::needless_return"},"spans":[{"file_name":"src/lib.rs","line_start":3,"is_primary":true}]}}
+{"reason":"compiler-message","message":{"message":"needless return","level":"warning","code":{"code":"clippy::needless_return"},"spans":[{"file_name":"src/lib.rs","line_start":3,"is_primary":true}]}}
+{"reason":"compiler-message","message":{"message":"compile error","level":"error","code":null,"spans":[{"file_name":"src/lib.rs","line_start":1,"is_primary":true}]}}
+{"reason":"compiler-message","message":{"message":"1 warning emitted","level":"warning","code":null,"spans":[]}}
+{"reason":"compiler-message","message":{"message":"aborting due to 1 previous error","level":"error","code":null,"spans":[]}}
 {"reason":"build-finished","success":false}
 EOF
 INGF=$(run ingest-gate --repo repo-f --iteration 1 2>&1)
@@ -788,14 +974,17 @@ sys.exit(0 if d['budgets_declared'] == ['max_lines_added'] else 1)" \
   || { FAIL=$((FAIL+1)); echo "  FAIL budgets_declared no refleja el CLI"; }
 
 echo "== T40 phase: FSM DERIVADA del ledger — el estado se computa, no se declara =="
-mkdir -p repo-x
+mkdir -p repo-x/reports
+cat > repo-x/reports/junit.xml <<'EOF'
+<testsuite tests="1" failures="0" errors="0" skipped="0"/>
+EOF
 printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"] },\n  "repos": [ {"name":"fsm","path":"repo-x","type":"go"} ], "integration": {"enabled": false} }\n' > c-fsm.json
 run init --config c-fsm.json --out L-fsm.json >/dev/null 2>&1
 chk "ledger virgen -> plan" 0 run phase --ledger L-fsm.json --repo fsm --require plan
 run snapshot --ledger L-fsm.json --repo fsm >/dev/null 2>&1
 chk "snapshot medido sin QA -> build" 0 run phase --ledger L-fsm.json --repo fsm --require build
 run log-step --ledger L-fsm.json --repo fsm --tool code-review --iteration 1 \
-  --gated-reported 2 --tests-passed true >/dev/null 2>&1
+  --reported 2 --gated-reported 2 --tests-passed true >/dev/null 2>&1
 chk "pasos de QA sin converger -> qa" 0 run phase --ledger L-fsm.json --repo fsm --require qa
 chk "pedir pr-ready con findings abiertos -> exit 1 (los hechos mandan)" 1 \
   run phase --ledger L-fsm.json --repo fsm --require pr-ready
@@ -1221,22 +1410,24 @@ sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   tests rotos al regenerar -> DIVERGE/PARTIAL + gap reportado"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL compare no detecto la divergencia de tests"; }
 
-echo "== T44 sync quintuple de version: VERSION = config = plugin.json = marketplace.json =="
+echo "== T44 sync seis fuentes de version + changelog: VERSION/config/Claude/marketplace/package/Codex =="
 "$PY" -c "
 import json, sys, os, io
 kit = os.path.dirname(os.path.dirname(os.path.dirname(sys.argv[1])))  # <kit>/.claude/skills/x -> <kit>
 repo = os.path.dirname(kit)
 v_file = io.open(os.path.join(kit, 'VERSION'), encoding='utf-8').read().split()[-1]
 v_cfg = json.load(io.open(os.path.join(kit, 'uscha.config.json'), encoding='utf-8'))['version']
-v_plug = json.load(io.open(os.path.join(kit, '.claude-plugin', 'plugin.json'), encoding='utf-8'))['version']
+v_claude = json.load(io.open(os.path.join(kit, '.claude-plugin', 'plugin.json'), encoding='utf-8'))['version']
+v_codex = json.load(io.open(os.path.join(kit, '.codex-plugin', 'plugin.json'), encoding='utf-8'))['version']
+v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))['version']
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
-vs = {v_file, v_cfg, v_plug, v_mkt}
-print('  versiones:', v_file, v_cfg, v_plug, v_mkt)
-sys.exit(0 if len(vs) == 1 else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las cuatro fuentes de version coinciden"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version entre VERSION/config/plugin/marketplace"; }
-
+versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
+changelog = os.path.join(kit, 'CHANGELOG-1.41.0.md')
+print('  versiones:', *versions)
+sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.41.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.41.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1522,12 +1713,12 @@ cat > docs/adr/ADR-001-checkout-path.md <<'EOF'
 Tenemos dos caminos viables y la respuesta depende de feedback real.
 ## Decision
 Probar el nuevo checkout para aprender con bajo blast radius.
-## Hypothesis
+## HIPÓTESIS
 El checkout nuevo reduce abandonos sin subir errores.
-## Feedback Signal
+## SEÑAL DE FEEDBACK
 Conversion rate y errores de pago en produccion.
 ## Review By: 2099-01-01
-## Promote Criteria
+## CRITERIOS DE PROMOCIÓN
 Conversion estable o mejor y cero incidentes HIGH/BLOCKER.
 ## Rollback / Supersede Criteria
 Suben errores de pago o aparece production-finding gateado.
@@ -1658,13 +1849,13 @@ sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   summary expone calibracion post-merge desde PF/SD/SCR"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL summary no expone calibracion post-merge"; }
 
-echo "== T66 universal installer (1.40.2): Codex plugin + Claude adapter, dry-run safe =="
+echo "== T66 universal installer (1.41.0): Codex plugin + Claude adapter, dry-run safe =="
 INST_HOME="$SB/home-installer"
 mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.40.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.41.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1688,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.40.2' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.41.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1696,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.40.2' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.41.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1705,12 +1896,12 @@ diff -qr "$KIT/.claude/skills" "$KIT/skills" -x __pycache__ >/dev/null 2>&1 \
   || { FAIL=$((FAIL+1)); echo "  FAIL uscha-kit/skills drifted from .claude/skills"; }
 
 
-echo "== T67 npm router (1.40.2): npx package delegates to canonical installer =="
+echo "== T67 npm router (1.41.0): npx package delegates to canonical installer =="
 if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.40.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.41.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1722,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.40.2'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.41.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -1733,7 +1924,948 @@ else
   FAIL=$((FAIL+1)); echo "  FAIL npm no esta disponible para probar package dry-run"
 fi
 
+echo "== T68 pr-ready exige evidencia de tests medida y verde =="
+mkdir -p repo-pr-evidence
+printf '{ "defaults": {"qa_tools_order":["code-review","judgment-day","improve"]},\n  "repos": [ {"name":"pr-evidence","path":"repo-pr-evidence","type":"python"} ], "integration": {"enabled": false} }\n' > c-pr-evidence.json
+run init --config c-pr-evidence.json --out L-pr-evidence.json >/dev/null 2>&1
+for t in code-review judgment-day improve; do
+  run log-step --ledger L-pr-evidence.json --repo pr-evidence --tool "$t" \
+    --iteration 1 --gated-reported 0 --files-changed 0 >/dev/null 2>&1
+done
+chk "QA narrada sin snapshot/reporte medido NO queda pr-ready" 1 \
+  run phase --ledger L-pr-evidence.json --repo pr-evidence --require pr-ready
+run phase --ledger L-pr-evidence.json --repo pr-evidence 2>/dev/null \
+  | grep -q "falta evidencia medida de tests" \
+  && { PASS=$((PASS+1)); echo "  ok   phase explains missing measured test evidence"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL phase does not explain missing measured test evidence"; }
+
+echo "== T69 reportes malformados fallan cerrados =="
+mkdir -p repo-pr-evidence/reports
+cat > repo-pr-evidence/reports/ruff.json <<'EOF'
+[{"code":"S101","filename":"app.py","location":{"row":1}}]
+EOF
+run ingest-gate --ledger L-pr-evidence.json --repo pr-evidence --iteration 2 \
+  --ruff repo-pr-evidence/reports/ruff.json >/dev/null 2>&1
+cp L-pr-evidence.json L-pr-evidence-before-invalid.json
+printf '{malformed\n' > repo-pr-evidence/reports/ruff.json
+chk "Ruff JSON malformado -> evidencia invalida exit 2" 2 \
+  run ingest-gate --ledger L-pr-evidence.json --repo pr-evidence --iteration 3 \
+    --ruff repo-pr-evidence/reports/ruff.json
+cmp -s L-pr-evidence-before-invalid.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   Ruff invalido no reemplaza findings previos con estado limpio"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL invalid Ruff changed the ledger"; }
+cp L-pr-evidence.json L-pr-evidence-before-schema-invalid.json
+printf '[42]\n' > repo-pr-evidence/reports/ruff.json
+chk "Ruff JSON schema-invalid -> invalid evidence exit 2" 2 \
+  run ingest-gate --ledger L-pr-evidence.json --repo pr-evidence --iteration 4 \
+    --ruff repo-pr-evidence/reports/ruff.json
+cmp -s L-pr-evidence-before-schema-invalid.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   Ruff schema-invalid leaves ledger unchanged"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL Ruff schema-invalid changed the ledger"; }
+cat > repo-pr-evidence/reports/ruff.json <<'EOF'
+[{"code":"S101","filename":"app.py","location":"oops"}]
+EOF
+cp L-pr-evidence.json L-pr-evidence-before-nested-schema-invalid.json
+chk "Ruff nested schema-invalid -> invalid evidence exit 2" 2 \
+  run ingest-gate --ledger L-pr-evidence.json --repo pr-evidence --iteration 5 \
+    --ruff repo-pr-evidence/reports/ruff.json
+cmp -s L-pr-evidence-before-nested-schema-invalid.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   Ruff nested schema-invalid leaves ledger unchanged"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL Ruff nested schema-invalid changed the ledger"; }
+for bad_ruff in \
+  '[{"code":42,"filename":"app.py","location":{"row":1}}]' \
+  '[{"code":"S101","filename":[],"location":{"row":1}}]' \
+  '[{"code":"S101","filename":"app.py","location":{"row":"one"}}]'
+do
+  printf '%s\n' "$bad_ruff" > repo-pr-evidence/reports/ruff.json
+  cp L-pr-evidence.json L-pr-evidence-before-invalid-ruff-field.json
+  chk "Ruff invalid field type -> invalid evidence exit 2" 2 \
+    run ingest-gate --ledger L-pr-evidence.json --repo pr-evidence --iteration 6 \
+      --ruff repo-pr-evidence/reports/ruff.json
+  cmp -s L-pr-evidence-before-invalid-ruff-field.json L-pr-evidence.json \
+    && { PASS=$((PASS+1)); echo "  ok   Ruff invalid field leaves ledger unchanged"; } \
+    || { FAIL=$((FAIL+1)); echo "  FAIL Ruff invalid field changed the ledger"; }
+done
+printf '<testsuite tests="1"' > repo-pr-evidence/reports/junit.xml
+cp L-pr-evidence.json L-pr-evidence-before-invalid-junit.json
+chk "JUnit XML malformado -> evidencia invalida exit 2" 2 \
+  run snapshot --ledger L-pr-evidence.json --repo pr-evidence
+cmp -s L-pr-evidence-before-invalid-junit.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   JUnit invalido no persiste snapshot falsamente limpio"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL invalid JUnit changed the ledger"; }
+printf '<testsuites><foo/></testsuites>\n' > repo-pr-evidence/reports/junit.xml
+cp L-pr-evidence.json L-pr-evidence-before-invalid-junit-structure.json
+chk "JUnit structure-invalid -> invalid evidence exit 2" 2 \
+  run snapshot --ledger L-pr-evidence.json --repo pr-evidence
+cmp -s L-pr-evidence-before-invalid-junit-structure.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   JUnit structure-invalid leaves ledger unchanged"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL JUnit structure-invalid changed the ledger"; }
+
+printf '<testsuite tests="1" failures="0" errors="0" skipped="-1"/>\n' \
+  > repo-pr-evidence/reports/junit.xml
+cp L-pr-evidence.json L-pr-evidence-before-invalid-junit-counters.json
+chk "JUnit negative counters -> invalid evidence exit 2" 2 \
+  run snapshot --ledger L-pr-evidence.json --repo pr-evidence
+cmp -s L-pr-evidence-before-invalid-junit-counters.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   JUnit invalid counters leave ledger unchanged"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL JUnit invalid counters changed the ledger"; }
+
+for bad_junit in \
+  '<testsuite tests="1" failures="-1" errors="0" skipped="0"/>' \
+  '<testsuite tests="1" failures="0" errors="-1" skipped="0"/>'
+do
+  printf '%s\n' "$bad_junit" > repo-pr-evidence/reports/junit.xml
+  cp L-pr-evidence.json L-pr-evidence-before-negative-outcome.json
+  chk "JUnit negative failure/error -> invalid evidence exit 2" 2 \
+    run snapshot --ledger L-pr-evidence.json --repo pr-evidence
+  cmp -s L-pr-evidence-before-negative-outcome.json L-pr-evidence.json \
+    && { PASS=$((PASS+1)); echo "  ok   JUnit negative outcome leaves ledger unchanged"; } \
+    || { FAIL=$((FAIL+1)); echo "  FAIL JUnit negative outcome changed the ledger"; }
+done
+printf '<testsuite tests="1" failures="0" errors="0" skipped="2"/>\n' \
+  > repo-pr-evidence/reports/junit.xml
+cp L-pr-evidence.json L-pr-evidence-before-excess-skipped.json
+chk "JUnit skipped exceeds tests -> invalid evidence exit 2" 2 \
+  run snapshot --ledger L-pr-evidence.json --repo pr-evidence
+cmp -s L-pr-evidence-before-excess-skipped.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   JUnit excess skipped leaves ledger unchanged"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL JUnit excess skipped changed the ledger"; }
+
+printf '<testsuite tests="2" failures="1" errors="1" skipped="1"/>\n' \
+  > repo-pr-evidence/reports/junit.xml
+cp L-pr-evidence.json L-pr-evidence-before-impossible-outcomes.json
+chk "JUnit outcomes exceed executed tests -> invalid evidence exit 2" 2 \
+  run snapshot --ledger L-pr-evidence.json --repo pr-evidence
+cmp -s L-pr-evidence-before-impossible-outcomes.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   JUnit impossible outcomes leave ledger unchanged"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL JUnit impossible outcomes changed the ledger"; }
+
+printf '<testsuites tests="1" failures="1"><testsuite tests="1" errors="1"/></testsuites>\n' > repo-pr-evidence/reports/junit.xml
+cp L-pr-evidence.json L-pr-evidence-before-inconsistent-root.json
+chk "JUnit root/child counters inconsistent -> invalid evidence exit 2" 2 run snapshot --ledger L-pr-evidence.json --repo pr-evidence
+cmp -s L-pr-evidence-before-inconsistent-root.json L-pr-evidence.json \
+  && { PASS=$((PASS+1)); echo "  ok   JUnit inconsistent root leaves ledger unchanged"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL JUnit inconsistent root changed the ledger"; }
+chk "invalid JUnit cannot lead to pr-ready" 1 run phase --ledger L-pr-evidence.json --repo pr-evidence --require pr-ready
+
+echo "== T70 static-gate silence does not invent clean evidence =="
+PHASE_NO_STATIC=$(run phase --ledger L-fsm.json --repo fsm --require pr-ready 2>&1)
+PHASE_NO_STATIC_RC=$?
+if [ "$PHASE_NO_STATIC_RC" -eq 0 ]; then
+  PASS=$((PASS+1)); echo "  ok   measured green tests can reach pr-ready without static reports"
+else
+  FAIL=$((FAIL+1)); echo "  FAIL phase did not reach pr-ready without static reports ($PHASE_NO_STATIC)"
+fi
+if echo "$PHASE_NO_STATIC" | grep -q "static gates"; then
+  FAIL=$((FAIL+1)); echo "  FAIL phase invented a clean static-gate claim"
+else
+  PASS=$((PASS+1)); echo "  ok   qa_tools_order covers agents; static silence is not evidence"
+fi
+
+echo "== T71 pr-ready requires at least one executed test =="
+mkdir -p repo-zero-tests/reports
+cat > repo-zero-tests/reports/junit.xml <<'EOF'
+<testsuite tests="0" failures="0" errors="0" skipped="0"/>
+EOF
+printf '{ "defaults": {"qa_tools_order":["code-review"]},\n  "repos": [ {"name":"zero-tests","path":"repo-zero-tests","type":"python"} ], "integration": {"enabled": false} }\n' > c-zero-tests.json
+run init --config c-zero-tests.json --out L-zero-tests.json >/dev/null 2>&1
+run snapshot --ledger L-zero-tests.json --repo zero-tests >/dev/null 2>&1
+run log-step --ledger L-zero-tests.json --repo zero-tests --tool code-review \
+  --iteration 1 --gated-reported 0 --files-changed 0 >/dev/null 2>&1
+chk "zero executed tests cannot satisfy pr-ready" 1 \
+  run phase --ledger L-zero-tests.json --repo zero-tests --require pr-ready
+
+echo "== T72 installer safety =="
+SAFE_HOME="$SB/home-installer-safe"; SAFE_REPO="$SB/repo-installer-safe"
+mkdir -p "$SAFE_HOME" "$SAFE_REPO"
+printf 'keep-existing\n' > "$SAFE_REPO/CLAUDE.md"
+chk "init conflict exits nonzero" 1 "$PY" "$KIT/install-uscha.py" init --repo "$SAFE_REPO" --json
+grep -q '^keep-existing$' "$SAFE_REPO/CLAUDE.md" && { PASS=$((PASS+1)); echo "  ok   init preserves conflict"; } || { FAIL=$((FAIL+1)); echo "  FAIL init replaced conflict"; }
+chk "init dry-run detects conflict" 1 "$PY" "$KIT/install-uscha.py" init --repo "$SAFE_REPO" --dry-run --json
+chk "init --force replaces conflict" 0 "$PY" "$KIT/install-uscha.py" init --repo "$SAFE_REPO" --force --json
+mkdir -p "$SAFE_HOME/plugins/uscha" "$SAFE_HOME/.agents/plugins"
+printf 'preserve-plugin\n' > "$SAFE_HOME/plugins/uscha/sentinel.txt"
+printf '{ malformed\n' > "$SAFE_HOME/.agents/plugins/marketplace.json"
+chk "dry-run rejects malformed marketplace" 1 "$PY" "$KIT/install-uscha.py" install --target codex --home "$SAFE_HOME" --dry-run --json
+test -f "$SAFE_HOME/plugins/uscha/sentinel.txt" && { PASS=$((PASS+1)); echo "  ok   malformed preflight preserves plugin"; } || { FAIL=$((FAIL+1)); echo "  FAIL malformed preflight changed plugin"; }
+cat > "$SAFE_HOME/.agents/plugins/marketplace.json" <<'EOF'
+{"name":"personal","interface":{"displayName":"Personal"},"plugins":[{"name":"other"}]}
+EOF
+chk "install rejects structurally invalid marketplace" 1 "$PY" "$KIT/install-uscha.py" install --target codex --home "$SAFE_HOME" --json
+test -f "$SAFE_HOME/plugins/uscha/sentinel.txt" && { PASS=$((PASS+1)); echo "  ok   structural preflight preserves plugin"; } || { FAIL=$((FAIL+1)); echo "  FAIL structural preflight changed plugin"; }
+rm -f "$SAFE_HOME/.agents/plugins/marketplace.json"
+chk "healthy Codex install" 0 "$PY" "$KIT/install-uscha.py" install --target codex --home "$SAFE_HOME" --json
+chk "healthy Codex doctor" 0 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$SAFE_HOME" --json
+EMPTY_HOME="$SB/home-installer-unhealthy"; mkdir -p "$EMPTY_HOME"
+chk "unhealthy doctor text exits 1" 1 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$EMPTY_HOME"
+chk "unhealthy doctor JSON exits 1" 1 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$EMPTY_HOME" --json
+CLAUDE_HOME="$SB/home-installer-claude"; mkdir -p "$CLAUDE_HOME/.claude"
+printf '{"theme":"dark","hooks":{"PostToolUse":[{"matcher":"*","hooks":[]}]}}\n' > "$CLAUDE_HOME/.claude/settings.json"
+chk "Claude install activates hook" 0 "$PY" "$KIT/install-uscha.py" install --target claude --home "$CLAUDE_HOME" --json
+chk "Claude reinstall is idempotent" 0 "$PY" "$KIT/install-uscha.py" install --target claude --home "$CLAUDE_HOME" --json
+CLAUDE_HOME="$CLAUDE_HOME" "$PY" -c "import json,os,pathlib,sys; d=json.load(open(pathlib.Path(os.environ['CLAUDE_HOME'])/'.claude/settings.json',encoding='utf-8')); p=d.get('hooks',{}).get('PreToolUse',[]); c=[h.get('command','') for r in p for h in r.get('hooks',[])]; sys.exit(0 if d.get('theme')=='dark' and 'PostToolUse' in d.get('hooks',{}) and sum('block-approved-writes.py' in x for x in c)==1 else 1)" && { PASS=$((PASS+1)); echo "  ok   settings preserved; hook registered once"; } || { FAIL=$((FAIL+1)); echo "  FAIL Claude hook merge"; }
+chk "healthy Claude doctor" 0 "$PY" "$KIT/install-uscha.py" doctor --target claude --home "$CLAUDE_HOME" --json
+echo "== T73 mutation-safe input validation =="
+mkdir -p repo-valid repo-other repo-valid/reports
+printf '<testsuite tests="1" failures="0" errors="0" skipped="0"/>\n' > repo-valid/reports/junit.xml
+cat > c-validation.json <<'EOF'
+{"defaults":{"coverage_threshold":60,"max_iterations":5,"tools_per_cycle":3,"qa_tools_order":["code-review"]},"repos":[{"name":"valid","path":"repo-valid","type":"python"},{"name":"other","path":"repo-other","type":"node"}],"integration":{"enabled":false}}
+EOF
+run init --config c-validation.json --out L-validation.json >/dev/null 2>&1
+
+reject_unchanged() {
+  local desc="$1" ledger="$2"; shift 2
+  cp "$ledger" "$ledger.before"
+  "$@" >/dev/null 2>&1; local got=$?
+  if [ "$got" -ne 0 ] && cmp -s "$ledger.before" "$ledger"; then
+    PASS=$((PASS+1)); echo "  ok   $desc"
+  else
+    FAIL=$((FAIL+1)); echo "  FAIL $desc (exit=$got or ledger changed)"
+  fi
+}
+
+reject_unchanged "escalate rejects unknown repo and preserves bytes" L-validation.json \
+  run escalate --ledger L-validation.json --repo missing --reason "invalid target"
+run production-finding --ledger L-validation.json --repo valid --title "prod" --evidence "log:1" >/dev/null
+reject_unchanged "PF resolve requires nonempty note and preserves bytes" L-validation.json \
+  run production-finding --ledger L-validation.json --id PF-001 --resolve --note "   "
+chk "PF resolve accepts disposition note" 0 run production-finding --ledger L-validation.json --id PF-001 --resolve --note "triaged into fix"
+
+run spec-doubt --ledger L-validation.json --repo valid --note "contract mismatch" >/dev/null
+reject_unchanged "SD resolve requires nonempty decision and preserves bytes" L-validation.json \
+  run spec-doubt --ledger L-validation.json --id SD-001 --resolve --decision "   "
+chk "SD resolve accepts decision" 0 run spec-doubt --ledger L-validation.json --id SD-001 --resolve --decision "SPEC amended"
+
+run production-finding --ledger L-validation.json --repo valid --title "source" --evidence "log:2" >/dev/null
+run spec-doubt --ledger L-validation.json --repo other --note "other repo doubt" >/dev/null
+reject_unchanged "SCR rejects arbitrary source ID and preserves bytes" L-validation.json \
+  run spec-change-request --ledger L-validation.json --repo valid --source BUG-9 --requested-change "change" --evidence "log:3"
+reject_unchanged "SCR rejects missing PF source and preserves bytes" L-validation.json \
+  run spec-change-request --ledger L-validation.json --repo valid --source PF-999 --requested-change "change" --evidence "log:3"
+reject_unchanged "SCR rejects cross-repo SD source and preserves bytes" L-validation.json \
+  run spec-change-request --ledger L-validation.json --repo valid --source SD-002 --requested-change "change" --evidence "log:3"
+chk "SCR accepts same-repo PF source" 0 run spec-change-request --ledger L-validation.json --repo valid --source PF-002 --requested-change "change" --evidence "log:3"
+for bad_args in "--decision accepted" "--decision rejected" "--decision superseded" "--decision rejected --note '   '"; do
+  cp L-validation.json L-validation-before-scr.json
+  eval "run spec-change-request --ledger L-validation.json --id SCR-001 --resolve $bad_args" >/dev/null 2>&1; rc=$?
+  if [ "$rc" -ne 0 ] && cmp -s L-validation-before-scr.json L-validation.json; then
+    PASS=$((PASS+1)); echo "  ok   invalid SCR closure rejected without mutation: $bad_args"
+  else
+    FAIL=$((FAIL+1)); echo "  FAIL invalid SCR closure mutated ledger: $bad_args"
+  fi
+done
+reject_unchanged "SCR resolve requires decision and preserves bytes" L-validation.json \
+  run spec-change-request --ledger L-validation.json --id SCR-001 --resolve
+chk "SCR accepted requires amended artifact" 0 run spec-change-request --ledger L-validation.json --id SCR-001 --resolve --decision accepted --amended SPEC.md
+
+run spec-change-request --ledger L-validation.json --repo valid --source PF-002 --requested-change "reject" --evidence "log:4" >/dev/null
+chk "SCR rejected accepts rationale" 0 run spec-change-request --ledger L-validation.json --id SCR-002 --resolve --decision rejected --note "not aligned"
+run spec-change-request --ledger L-validation.json --repo valid --source PF-002 --requested-change "replace" --evidence "log:5" >/dev/null
+chk "SCR superseded accepts replacement reference" 0 run spec-change-request --ledger L-validation.json --id SCR-003 --resolve --decision superseded --amended SPEC-v2.md
+
+echo "== T73b P1 ledger integrity: readiness config and one-shot closures =="
+"$PY" "$KIT/tests/ledger-integrity-regressions.py" "$QL" >/dev/null 2>&1 \
+  && { PASS=$((PASS+1)); echo "  ok   P1 ledger integrity regressions"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL P1 ledger integrity regressions"; }
+
+check_bad_config() {
+  local desc="$1" json="$2"
+  printf '%s\n' "$json" > c-bad-validation.json
+  rm -f L-bad-validation.json
+  run init --config c-bad-validation.json --out L-bad-validation.json >/dev/null 2>&1; local got=$?
+  if [ "$got" -ne 0 ] && [ ! -e L-bad-validation.json ]; then
+    PASS=$((PASS+1)); echo "  ok   $desc"
+  else
+    FAIL=$((FAIL+1)); echo "  FAIL $desc (exit=$got or output created)"
+  fi
+}
+check_bad_config "repos must be a list" '{"repos":{}}'
+check_bad_config "repo entries must be objects" '{"repos":["x"]}'
+check_bad_config "repo names must be nonempty" '{"repos":[{"name":" ","path":"x","type":"python"}]}'
+check_bad_config "repo names must be unique" '{"repos":[{"name":"x","path":"a","type":"python"},{"name":"x","path":"b","type":"node"}]}'
+check_bad_config "integration is a reserved repo name" '{"repos":[{"name":"integration","path":"x","type":"python"}]}'
+check_bad_config "repo paths must be nonempty" '{"repos":[{"name":"x","path":" ","type":"python"}]}'
+check_bad_config "repo types must be supported" '{"repos":[{"name":"x","path":"x","type":"ruby"}]}'
+check_bad_config "qa_tools_order must be nonempty" '{"defaults":{"qa_tools_order":[]},"repos":[]}'
+check_bad_config "qa_tools_order entries must be strings" '{"defaults":{"qa_tools_order":[1]},"repos":[]}'
+check_bad_config "qa_tools_order entries must be unique and nonempty" '{"defaults":{"qa_tools_order":["x","x"]},"repos":[]}'
+check_bad_config "qa_tools_order entries cannot be blank" '{"defaults":{"qa_tools_order":[" "]},"repos":[]}'
+for supported_type in maven flutter python node go rust dotnet cpp gradle swift; do
+  printf '{"repos":[{"name":"x","path":"x","type":"%s"}]}\n' "$supported_type" > c-supported.json
+  chk "supported repo type: $supported_type" 0 run init --config c-supported.json --out L-supported.json
+done
+check_bad_config "coverage threshold cannot be negative" '{"defaults":{"coverage_threshold":-1},"repos":[]}'
+check_bad_config "coverage threshold cannot exceed 100" '{"defaults":{"coverage_threshold":101},"repos":[]}'
+check_bad_config "max_iterations must be positive" '{"defaults":{"max_iterations":0},"repos":[]}'
+check_bad_config "tools_per_cycle must be positive" '{"defaults":{"tools_per_cycle":0},"repos":[]}'
+
+for cmd in \
+  "log-step --repo valid --tool code-review --iteration 0" \
+  "ingest-gate --repo valid --iteration 0 --ruff repo-valid/reports/ruff.json" \
+  "log-gate --repo valid --iteration 0 --kind regression --verdict pass" \
+  "flag-blocker --repo valid --iteration 0 --note breach" \
+  "rubric-ingest --repo valid --iteration 0 --report missing.json"
+do
+  cp L-validation.json L-validation-before-iteration.json
+  eval "run $cmd --ledger L-validation.json" >/dev/null 2>&1; rc=$?
+  if [ "$rc" -ne 0 ] && cmp -s L-validation-before-iteration.json L-validation.json; then
+    PASS=$((PASS+1)); echo "  ok   iteration <1 rejected without mutation: $cmd"
+  else
+    FAIL=$((FAIL+1)); echo "  FAIL iteration <1 changed ledger: $cmd"
+  fi
+done
+
+printf '[{"code":"E501","filename":"x.py","location":{"row":1}}]\n' > repo-valid/reports/ruff.json
+chk "newer ingest-gate state accepted" 0 run ingest-gate --ledger L-validation.json --repo valid --iteration 3 --ruff repo-valid/reports/ruff.json
+reject_unchanged "older ingest-gate iteration cannot supersede newer state" L-validation.json \
+  run ingest-gate --ledger L-validation.json --repo valid --iteration 2 --ruff repo-valid/reports/ruff.json
+chk "newer blocker state accepted" 0 run flag-blocker --ledger L-validation.json --repo valid --kind t73 --iteration 3 --note breach
+reject_unchanged "older blocker iteration cannot supersede newer state" L-validation.json \
+  run flag-blocker --ledger L-validation.json --repo valid --kind t73 --iteration 2 --note older
+cat > T73-RUBRIC.md <<'EOF'
+# T73 rubric
+threshold: 0.50
+- [ ] RB-01 (peso 1) - evidence
+EOF
+cat > t73-grader.json <<'EOF'
+{"criteria":[{"id":"RB-01","verdict":"pass","evidence":"x.py:1","note":"ok"}]}
+EOF
+chk "newer rubric state accepted" 0 run rubric-ingest --ledger L-validation.json --repo valid --iteration 3 --rubric T73-RUBRIC.md --report t73-grader.json
+reject_unchanged "older rubric iteration cannot supersede newer state" L-validation.json \
+  run rubric-ingest --ledger L-validation.json --repo valid --iteration 2 --rubric T73-RUBRIC.md --report t73-grader.json
+
+for bad_counts in "--reported -1" "--gated-reported -1" "--fixed -1" "--deferred -1" \
+  "--suppressed -1" "--files-changed -1" "--reported 1 --gated-reported 2"
+do
+  cp L-validation.json L-validation-before-counts.json
+  eval "run log-step --ledger L-validation.json --repo valid --tool code-review --iteration 1 $bad_counts" >/dev/null 2>&1; rc=$?
+  if [ "$rc" -ne 0 ] && cmp -s L-validation-before-counts.json L-validation.json; then
+    PASS=$((PASS+1)); echo "  ok   invalid log-step counters rejected: $bad_counts"
+  else
+    FAIL=$((FAIL+1)); echo "  FAIL invalid log-step counters changed ledger: $bad_counts"
+  fi
+done
+reject_unchanged "negative FACT-gate count rejected without mutation" L-validation.json \
+  run log-gate --ledger L-validation.json --repo valid --iteration 1 --kind regression --verdict fail --count -1
+chk "log-step allows fixed above reported" 0 run log-step --ledger L-validation.json --repo valid --tool code-review --iteration 2 --reported 1 --fixed 2
+reject_unchanged "older log-step iteration cannot supersede newer state" L-validation.json \
+  run log-step --ledger L-validation.json --repo valid --tool code-review --iteration 1
+chk "same-cycle retry remains valid" 0 run log-step --ledger L-validation.json --repo valid --tool code-review --iteration 2
+chk "newer FACT-gate state accepted" 0 run log-gate --ledger L-validation.json --repo valid --iteration 3 --kind regression --verdict fail --count 1
+reject_unchanged "older FACT-gate iteration cannot supersede newer state" L-validation.json \
+  run log-gate --ledger L-validation.json --repo valid --iteration 2 --kind regression --verdict pass
+cat > c-integration-readiness.json <<'EOF'
+{"defaults":{"qa_tools_order":["code-review"]},"repos":[],"integration":{"enabled":true}}
+EOF
+run init --config c-integration-readiness.json --out L-integration-readiness.json >/dev/null
+run log-step --ledger L-integration-readiness.json --repo integration --tool integration-tests \
+  --iteration 1 --tests-passed false >/dev/null
+run log-gate --ledger L-integration-readiness.json --repo integration --iteration 1 \
+  --kind gate-check --verdict pass >/dev/null
+run readiness --ledger L-integration-readiness.json --json | "$PY" -c \
+  "import json,sys; sys.exit(0 if json.load(sys.stdin)['dimensions']['integration']['raw'] == 0 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   integration failure survives later non-test event"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL integration failure hidden by later non-test event"; }
+run log-step --ledger L-integration-readiness.json --repo integration --tool integration-tests \
+  --iteration 2 --tests-passed true >/dev/null
+run readiness --ledger L-integration-readiness.json --json | "$PY" -c \
+  "import json,sys; sys.exit(0 if json.load(sys.stdin)['dimensions']['integration']['raw'] == 1 else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   newer measured integration success recovers readiness"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL newer measured integration success did not recover readiness"; }
+echo "== T74 npm router: probes Python before one installer invocation =="
+if command -v node >/dev/null 2>&1; then
+  ROUTER_BIN="$SB/router-bin"; ROUTER_LOG="$SB/router.log"
+  ROUTER_FIXTURE_READY=1
+  mkdir -p "$ROUTER_BIN"
+  if [ "$(node -p 'process.platform')" = "win32" ]; then
+    cat > "$ROUTER_BIN/fake-python.cs" <<'EOF'
+using System;
+using System.Diagnostics;
+using System.IO;
+class FakePython {
+  static int Main(string[] args) {
+    string role = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule.FileName).ToLowerInvariant();
+    File.AppendAllText(Environment.GetEnvironmentVariable("USCHA_TEST_LOG"), role + " " + string.Join(" ", args) + "\r\n");
+    if (Array.IndexOf(args, "--version") >= 0) {
+      if (role == "python") return 1;
+      Console.WriteLine("Python 3.8.0");
+      return 0;
+    }
+    return role == "python" ? 9 : 0;
+  }
+}
+EOF
+    CSHARP_ROOT="${WINDIR:-C:/Windows}"
+    command -v cygpath >/dev/null 2>&1 || ROUTER_FIXTURE_READY=0
+    if [ "$ROUTER_FIXTURE_READY" -eq 1 ] && printf '%s' "$CSHARP_ROOT" | grep -Eq '^[A-Za-z]:'; then CSHARP_ROOT="$(cygpath -u "$CSHARP_ROOT")"; fi
+    CSHARP_COMPILER="$CSHARP_ROOT/Microsoft.NET/Framework64/v4.0.30319/csc.exe"
+    [ -x "$CSHARP_COMPILER" ] || CSHARP_COMPILER="$CSHARP_ROOT/Microsoft.NET/Framework/v4.0.30319/csc.exe"
+    [ -x "$CSHARP_COMPILER" ] || ROUTER_FIXTURE_READY=0
+    if [ "$ROUTER_FIXTURE_READY" -eq 1 ]; then
+      CSHARP_OUTPUT="$(cygpath -w "$ROUTER_BIN/python.exe")"
+      CSHARP_SOURCE="$(cygpath -w "$ROUTER_BIN/fake-python.cs")"
+      MSYS_NO_PATHCONV=1 "$CSHARP_COMPILER" /nologo "/out:$CSHARP_OUTPUT" "$CSHARP_SOURCE" >/dev/null 2>&1 \
+        && cp "$ROUTER_BIN/python.exe" "$ROUTER_BIN/py.exe" \
+        || ROUTER_FIXTURE_READY=0
+    fi
+    ROUTER_PRIMARY="python"; ROUTER_FALLBACK="py -3"
+  else
+    cat > "$ROUTER_BIN/python3" <<'EOF'
+#!/usr/bin/env sh
+printf 'python3 %s\n' "$*" >> "$USCHA_TEST_LOG"
+[ "$1" = "--version" ] && exit 1
+exit 9
+EOF
+    cat > "$ROUTER_BIN/python" <<'EOF'
+#!/usr/bin/env sh
+printf 'python %s\n' "$*" >> "$USCHA_TEST_LOG"
+if [ "$1" = "--version" ]; then echo "Python 3.8.0"; exit 0; fi
+exit 0
+EOF
+    chmod +x "$ROUTER_BIN/python3" "$ROUTER_BIN/python"
+    ROUTER_PRIMARY="python3"; ROUTER_FALLBACK="python"
+  fi
+  if [ "$ROUTER_FIXTURE_READY" -eq 1 ]; then
+    PATH="$ROUTER_BIN:$PATH" USCHA_TEST_LOG="$ROUTER_LOG" node "$ROOT/bin/uscha.js" version >/dev/null 2>&1; ROUTER_RC=$?
+  else
+    ROUTER_RC=99
+  fi
+  if [ "$ROUTER_FIXTURE_READY" -eq 1 ] && [ "$ROUTER_RC" -eq 0 ] && grep -Fxq "$ROUTER_PRIMARY --version" "$ROUTER_LOG" \
+    && grep -Fxq "$ROUTER_FALLBACK --version" "$ROUTER_LOG" \
+    && [ "$(grep -F "$ROUTER_FALLBACK " "$ROUTER_LOG" | grep -c 'install-uscha.py version')" -eq 1 ] \
+    && [ "$(grep -F "$ROUTER_PRIMARY " "$ROUTER_LOG" | grep -c 'install-uscha.py version')" -eq 0 ] \
+    && [ "$(grep -c 'install-uscha.py version' "$ROUTER_LOG")" -eq 1 ]; then
+    PASS=$((PASS+1)); echo "  ok   unusable first Python falls through to verified fallback once"
+  else
+    FAIL=$((FAIL+1)); echo "  FAIL router did not probe/fallback exactly once"
+  fi
+else
+  FAIL=$((FAIL+1)); echo "  FAIL node no esta disponible para probar fallback del router npm"
+fi
+echo "== T75 npm router: installer failure is not retried =="
+if command -v node >/dev/null 2>&1; then
+  ROUTER_BIN="$SB/router-failure-bin"; ROUTER_LOG="$SB/router-failure.log"
+  ROUTER_FIXTURE_READY=1
+  mkdir -p "$ROUTER_BIN"
+  if [ "$(node -p 'process.platform')" = "win32" ]; then
+    cat > "$ROUTER_BIN/fake-python.cs" <<'EOF'
+using System;
+using System.Diagnostics;
+using System.IO;
+class FakePython {
+  static int Main(string[] args) {
+    string role = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule.FileName).ToLowerInvariant();
+    File.AppendAllText(Environment.GetEnvironmentVariable("USCHA_TEST_LOG"), role + " " + string.Join(" ", args) + "\r\n");
+    if (Array.IndexOf(args, "--version") >= 0) { Console.WriteLine("Python 3.8.0"); return 0; }
+    return role == "python" ? 23 : 0;
+  }
+}
+EOF
+    CSHARP_ROOT="${WINDIR:-C:/Windows}"
+    command -v cygpath >/dev/null 2>&1 || ROUTER_FIXTURE_READY=0
+    if [ "$ROUTER_FIXTURE_READY" -eq 1 ] && printf '%s' "$CSHARP_ROOT" | grep -Eq '^[A-Za-z]:'; then CSHARP_ROOT="$(cygpath -u "$CSHARP_ROOT")"; fi
+    CSHARP_COMPILER="$CSHARP_ROOT/Microsoft.NET/Framework64/v4.0.30319/csc.exe"
+    [ -x "$CSHARP_COMPILER" ] || CSHARP_COMPILER="$CSHARP_ROOT/Microsoft.NET/Framework/v4.0.30319/csc.exe"
+    [ -x "$CSHARP_COMPILER" ] || ROUTER_FIXTURE_READY=0
+    if [ "$ROUTER_FIXTURE_READY" -eq 1 ]; then
+      CSHARP_OUTPUT="$(cygpath -w "$ROUTER_BIN/python.exe")"
+      CSHARP_SOURCE="$(cygpath -w "$ROUTER_BIN/fake-python.cs")"
+      MSYS_NO_PATHCONV=1 "$CSHARP_COMPILER" /nologo "/out:$CSHARP_OUTPUT" "$CSHARP_SOURCE" >/dev/null 2>&1 \
+        && cp "$ROUTER_BIN/python.exe" "$ROUTER_BIN/py.exe" \
+        || ROUTER_FIXTURE_READY=0
+    fi
+    ROUTER_PRIMARY="python"; ROUTER_FALLBACK="py -3"
+  else
+    cat > "$ROUTER_BIN/python3" <<'EOF'
+#!/usr/bin/env sh
+printf 'python3 %s\n' "$*" >> "$USCHA_TEST_LOG"
+if [ "$1" = "--version" ]; then echo "Python 3.8.0"; exit 0; fi
+exit 23
+EOF
+    cat > "$ROUTER_BIN/python" <<'EOF'
+#!/usr/bin/env sh
+printf 'python %s\n' "$*" >> "$USCHA_TEST_LOG"
+if [ "$1" = "--version" ]; then echo "Python 3.8.0"; exit 0; fi
+exit 0
+EOF
+    chmod +x "$ROUTER_BIN/python3" "$ROUTER_BIN/python"
+    ROUTER_PRIMARY="python3"; ROUTER_FALLBACK="python"
+  fi
+  if [ "$ROUTER_FIXTURE_READY" -eq 1 ]; then
+    PATH="$ROUTER_BIN:$PATH" USCHA_TEST_LOG="$ROUTER_LOG" node "$ROOT/bin/uscha.js" version >/dev/null 2>&1; ROUTER_RC=$?
+  else
+    ROUTER_RC=99
+  fi
+  if [ "$ROUTER_FIXTURE_READY" -eq 1 ] && [ "$ROUTER_RC" -eq 23 ] && grep -Fxq "$ROUTER_PRIMARY --version" "$ROUTER_LOG" \
+    && [ "$(grep -F "$ROUTER_PRIMARY " "$ROUTER_LOG" | grep -c 'install-uscha.py version')" -eq 1 ] \
+    && ! grep -Fq "$ROUTER_FALLBACK" "$ROUTER_LOG"; then
+    PASS=$((PASS+1)); echo "  ok   installer exit 23 is preserved without another interpreter"
+  else
+    FAIL=$((FAIL+1)); echo "  FAIL router retried or changed installer failure status"
+  fi
+else
+  FAIL=$((FAIL+1)); echo "  FAIL node no esta disponible para probar failure del router npm"
+fi
+echo "== T76 workbench doctor: usable Python fallback and source skill roster =="
+DOCTOR_BIN="$SB/doctor-bin"; DOCTOR_HOME="$SB/doctor-home"
+mkdir -p "$DOCTOR_BIN" "$DOCTOR_HOME/.claude/skills"
+cat > "$DOCTOR_BIN/python3" <<'EOF'
+#!/usr/bin/env sh
+echo "Python 2.7.18"
+EOF
+if case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) true;; *) false;; esac; then
+  cat > "$DOCTOR_BIN/python" <<'EOF'
+#!/usr/bin/env sh
+echo "Python 2.7.18"
+EOF
+  cat > "$DOCTOR_BIN/py" <<'EOF'
+#!/usr/bin/env sh
+if [ "$#" -eq 2 ] && [ "$1" = "-3" ] && [ "$2" = "--version" ]; then
+  echo "Python 3.11.9"
+  exit 0
+fi
+exit 1
+EOF
+  chmod +x "$DOCTOR_BIN/python" "$DOCTOR_BIN/py"
+else
+  cat > "$DOCTOR_BIN/python" <<'EOF'
+#!/usr/bin/env sh
+echo "Python 3.11.9"
+EOF
+  chmod +x "$DOCTOR_BIN/python"
+fi
+chmod +x "$DOCTOR_BIN/python3"
+DOCTOR_SKILL_COUNT=0
+for source_skill in "$KIT/.claude/skills"/uscha-*; do
+  [ -d "$source_skill" ] || continue
+  skill_name="$(basename "$source_skill")"
+  mkdir -p "$DOCTOR_HOME/.claude/skills/$skill_name"
+  : > "$DOCTOR_HOME/.claude/skills/$skill_name/SKILL.md"
+  DOCTOR_SKILL_COUNT=$((DOCTOR_SKILL_COUNT+1))
+done
+DOCTOR_OUT="$(HOME="$DOCTOR_HOME" PATH="$DOCTOR_BIN:$PATH" bash "$KIT/workbench-doctor.sh")"
+DOCTOR_SKILLS_OK=1
+for source_skill in "$KIT/.claude/skills"/uscha-*; do
+  [ -d "$source_skill" ] || continue
+  skill_name="$(basename "$source_skill")"
+  printf '%s\n' "$DOCTOR_OUT" | grep -Fq "$skill_name" || DOCTOR_SKILLS_OK=0
+done
+if [ "$DOCTOR_SKILL_COUNT" -gt 0 ] && [ "$DOCTOR_SKILLS_OK" -eq 1 ] \
+  && printf '%s\n' "$DOCTOR_OUT" | grep -Fq "Python 3.8+" \
+  && printf '%s\n' "$DOCTOR_OUT" | grep -Fq "Python 3.11.9" \
+  && ! printf '%s\n' "$DOCTOR_OUT" | grep -Fq "Python 2.7.18"; then
+  PASS=$((PASS+1)); echo "  ok   doctor uses Python >=3.8 fallback and current uscha-* skill roster"
+else
+  FAIL=$((FAIL+1)); echo "  FAIL doctor did not use source roster or usable Python fallback"
+fi
+
+echo "== T77 Claude install rolls back the complete managed target on a late failure =="
+ROLLBACK_HOME="$SB/home-installer-claude-rollback"
+ROLLBACK_ROOT="$ROLLBACK_HOME/.claude"
+ROLLBACK_FAULT="$SB/claude-rollback-fault"
+mkdir -p "$ROLLBACK_ROOT/skills/unrelated-skill" "$ROLLBACK_ROOT/hooks" "$ROLLBACK_FAULT"
+for source_skill in "$KIT/.claude/skills"/uscha-*; do
+  [ -d "$source_skill" ] || continue
+  skill_name="$(basename "$source_skill")"
+  mkdir -p "$ROLLBACK_ROOT/skills/$skill_name"
+  printf 'previous-%s\n' "$skill_name" > "$ROLLBACK_ROOT/skills/$skill_name/sentinel.bin"
+done
+printf 'unrelated-skill\n' > "$ROLLBACK_ROOT/skills/unrelated-skill/sentinel.bin"
+printf 'previous-hook\n' > "$ROLLBACK_ROOT/hooks/block-approved-writes.py"
+printf 'unrelated-file\n' > "$ROLLBACK_ROOT/unrelated.bin"
+printf '{"theme":"sentinel","permissions":{"allow":["Read"]},"hooks":{"PostToolUse":[{"matcher":"*","hooks":[]}]}}\n' > "$ROLLBACK_ROOT/settings.json"
+printf 'previous-marker\n' > "$ROLLBACK_ROOT/uscha-install.json"
+cat > "$ROLLBACK_FAULT/sitecustomize.py" <<'PY'
+import os
+
+_replace = os.replace
+_failed = False
+
+
+def fail_at_claude_marker(source, target):
+    global _failed
+    normalized = os.path.normcase(os.path.normpath(os.fspath(target)))
+    marker_suffix = os.path.normcase(os.path.normpath(os.path.join(".claude", "uscha-install.json")))
+    if not _failed and normalized.endswith(marker_suffix):
+        _failed = True
+        root = os.path.dirname(normalized)
+        replaced = os.path.isfile(os.path.join(root, "skills", "uscha-discovery", "SKILL.md"))
+        old_gone = not os.path.exists(os.path.join(root, "skills", "uscha-discovery", "sentinel.bin"))
+        with open(os.environ["USCHA_FAULT_WITNESS"], "w", encoding="utf-8", newline="\n") as handle:
+            handle.write("late\n" if replaced and old_gone else "too-early\n")
+        raise OSError("deterministic late Claude marker failure")
+    return _replace(source, target)
+
+
+os.replace = fail_at_claude_marker
+PY
+cat > "$ROLLBACK_FAULT/snapshot.py" <<'PY'
+import base64
+import json
+import os
+import pathlib
+import stat
+import sys
+
+root = pathlib.Path(sys.argv[1])
+snapshot = []
+for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+    relative = path.relative_to(root).as_posix()
+    info = path.lstat()
+    if path.is_symlink():
+        snapshot.append([relative, "symlink", os.readlink(path)])
+    elif path.is_dir():
+        snapshot.append([relative, "dir", stat.S_IMODE(info.st_mode)])
+    else:
+        snapshot.append([relative, "file", stat.S_IMODE(info.st_mode),
+                         base64.b64encode(path.read_bytes()).decode("ascii")])
+json.dump(snapshot, sys.stdout, separators=(",", ":"))
+sys.stdout.write("\n")
+PY
+"$PY" "$ROLLBACK_FAULT/snapshot.py" "$ROLLBACK_HOME" > "$ROLLBACK_FAULT/before.json"
+PYTHONPATH="$ROLLBACK_FAULT" USCHA_FAULT_WITNESS="$ROLLBACK_FAULT/witness.txt" \
+  "$PY" "$KIT/install-uscha.py" install --target claude --home "$ROLLBACK_HOME" --json \
+  > "$ROLLBACK_FAULT/stdout.txt" 2> "$ROLLBACK_FAULT/stderr.txt"
+ROLLBACK_RC=$?
+"$PY" "$ROLLBACK_FAULT/snapshot.py" "$ROLLBACK_HOME" > "$ROLLBACK_FAULT/after.json"
+if [ "$ROLLBACK_RC" -ne 0 ] \
+  && grep -Fxq 'late' "$ROLLBACK_FAULT/witness.txt" \
+  && cmp -s "$ROLLBACK_FAULT/before.json" "$ROLLBACK_FAULT/after.json"; then
+  PASS=$((PASS+1)); echo "  ok   late Claude failure restores the full managed tree and unrelated state"
+else
+  FAIL=$((FAIL+1)); echo "  FAIL late Claude failure left a partial install or changed unrelated state"
+fi
+
+rm -f "$ROLLBACK_ROOT/uscha-install.json" "$ROLLBACK_FAULT/witness.txt"
+"$PY" "$ROLLBACK_FAULT/snapshot.py" "$ROLLBACK_HOME" > "$ROLLBACK_FAULT/before-no-marker.json"
+PYTHONPATH="$ROLLBACK_FAULT" USCHA_FAULT_WITNESS="$ROLLBACK_FAULT/witness.txt" \
+  "$PY" "$KIT/install-uscha.py" install --target claude --home "$ROLLBACK_HOME" --json \
+  > "$ROLLBACK_FAULT/stdout-no-marker.txt" 2> "$ROLLBACK_FAULT/stderr-no-marker.txt"
+ROLLBACK_NO_MARKER_RC=$?
+"$PY" "$ROLLBACK_FAULT/snapshot.py" "$ROLLBACK_HOME" > "$ROLLBACK_FAULT/after-no-marker.json"
+if [ "$ROLLBACK_NO_MARKER_RC" -ne 0 ] \
+  && grep -Fxq 'late' "$ROLLBACK_FAULT/witness.txt" \
+  && [ ! -e "$ROLLBACK_ROOT/uscha-install.json" ] \
+  && cmp -s "$ROLLBACK_FAULT/before-no-marker.json" "$ROLLBACK_FAULT/after-no-marker.json"; then
+  PASS=$((PASS+1)); echo "  ok   late Claude failure does not leave a newly created marker"
+else
+  FAIL=$((FAIL+1)); echo "  FAIL late Claude failure left a marker that did not exist before"
+fi
+
 echo ""
-echo "RESULTADO: $PASS ok · $FAIL fail"
+echo "RESULTADO BASE: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"
 [ "$FAIL" -eq 0 ]
+SMOKE_STATUS=$?
+# P0-B-START: targeted fail-closed static-analysis evidence regression.
+if [ "${USCHA_P0_B_SKIP:-0}" != "1" ]; then
+  P0_B_ROOT="${P0_ROOT:-${ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}}"
+  P0_B_QL="$P0_B_ROOT/uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"
+  P0_B_PY="${PYTHON:-${PY:-python}}"
+  "$P0_B_PY" - "$P0_B_QL" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+engine = pathlib.Path(sys.argv[1])
+
+
+def run(*args):
+    return subprocess.run(
+        [sys.executable, str(engine), *map(str, args)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+
+
+cases = [
+    ("checkstyle", "maven", "--checkstyle", "checkstyle.xml",
+     '<checkstyle><file name="src/A.java"><error line="1" severity="error" source="Rule"/></file></checkstyle>',
+     '<checkstyle/>', '<pmd/>', '<checkstyle>',
+     '<checkstyle><file name="src/A"><error line="oops" severity="error" source="Rule"/></file></checkstyle>'),
+    ("golangci", "go", "--golangci", "golangci.xml",
+     '<checkstyle><file name="pkg/a.go"><error line="1" severity="error" source="Rule"/></file></checkstyle>',
+     '<checkstyle/>', '<pmd/>', '<checkstyle>',
+     '<checkstyle><file name="src/A"><error line="oops" severity="error" source="Rule"/></file></checkstyle>'),
+    ("detekt", "gradle", "--detekt", "detekt.xml",
+     '<checkstyle><file name="src/A.kt"><error line="1" severity="error" source="Rule"/></file></checkstyle>',
+     '<checkstyle/>', '<pmd/>', '<checkstyle>',
+     '<checkstyle><file name="src/A"><error line="oops" severity="error" source="Rule"/></file></checkstyle>'),
+    ("swiftlint", "swift", "--swiftlint", "swiftlint.xml",
+     '<checkstyle><file name="Sources/A.swift"><error line="1" severity="error" source="Rule"/></file></checkstyle>',
+     '<checkstyle/>', '<pmd/>', '<checkstyle>',
+     '<checkstyle><file name="src/A"><error line="oops" severity="error" source="Rule"/></file></checkstyle>'),
+    ("pmd", "maven", "--pmd", "pmd.xml",
+     '<pmd><file name="src/A.java"><violation beginline="1" priority="1" rule="Rule"/></file></pmd>',
+     '<pmd/>', '<checkstyle/>', '<pmd>',
+     '<pmd><file name="src/A.java"><violation beginline="1" priority="oops" rule="Rule"/></file></pmd>'),
+    ("spotbugs", "maven", "--spotbugs", "spotbugs.xml",
+     '<BugCollection><BugInstance type="BUG" priority="1" category="CORRECTNESS"><SourceLine sourcepath="A.java" start="1"/></BugInstance></BugCollection>',
+     '<BugCollection/>', '<checkstyle/>', '<BugCollection>',
+     '<BugCollection><BugInstance type="BUG" priority="oops" category="CORRECTNESS"/></BugCollection>'),
+    ("eslint", "node", "--eslint", "eslint.json",
+     '[{"filePath":"src/a.js","messages":[{"ruleId":"rule","severity":2,"line":1}]}]',
+     '[]', '{}', '{', '[{"filePath":"src/a.js","messages":{}}]'),
+    ("sarif", "dotnet", "--sarif", "analysis.sarif",
+     '{"version":"2.1.0","runs":[{"results":[{"ruleId":"CA1","level":"error"}]}]}',
+     '{"version":"2.1.0","runs":[]}', '[]', '{',
+     '{"version":"2.1.0","runs":[{"results":{}}]}'),
+    ("clippy", "rust", "--clippy", "clippy.json",
+     '{"reason":"compiler-message","message":{"message":"needless return","level":"warning","code":{"code":"clippy::needless_return"},"spans":[{"file_name":"src/lib.rs","line_start":1,"is_primary":true}]}}',
+     '', '[]', '{',
+     '{"reason":"compiler-message","message":{"message":"bad spans","level":"warning","code":null,"spans":"not-an-array"}}'),
+
+]
+
+with tempfile.TemporaryDirectory(prefix="uscha-p0-b-") as tmp:
+    root = pathlib.Path(tmp)
+    for family, repo_type, flag, report_name, finding, empty, wrong, malformed, nested in cases:
+        repo = root / family
+        repo.mkdir()
+        report = repo / report_name
+        config = root / f"{family}.config.json"
+        ledger = root / f"{family}.ledger.json"
+        config.write_text(json.dumps({
+            "defaults": {"severity_gate": ["BLOCKER", "CRITICAL", "HIGH"]},
+            "repos": [{"name": family, "path": str(repo), "type": repo_type}],
+            "integration": {"enabled": False},
+        }), encoding="utf-8")
+        result = run("init", "--config", config, "--out", ledger)
+        assert result.returncode == 0, (family, "init", result.stderr)
+        report.write_text(finding, encoding="utf-8")
+        result = run("ingest-gate", "--ledger", ledger, "--repo", family,
+                     "--iteration", "1", flag, report)
+        assert result.returncode == 0, (family, "seed red", result.stdout, result.stderr)
+        before = ledger.read_bytes()
+        invalid_cases = [("malformed", malformed), ("wrong shape", wrong),
+                         ("invalid fields", nested)]
+        if family == "clippy":
+            invalid_cases.extend([
+                ("missing diagnostic code", '{"reason":"compiler-message","message":{"message":"bad code","level":"warning","spans":[]}}'),
+                ("invalid primary span", '{"reason":"compiler-message","message":{"message":"bad location","level":"warning","code":null,"spans":[{"file_name":"src/lib.rs","line_start":false,"is_primary":true}]}}'),
+            ])
+        for label, invalid in invalid_cases:
+            report.write_text(invalid, encoding="utf-8")
+            result = run("ingest-gate", "--ledger", ledger, "--repo", family,
+                         "--iteration", "2", flag, report)
+            assert result.returncode == 2, (family, label, result.returncode,
+                                            result.stdout, result.stderr)
+            assert "invalid" in result.stderr.lower(), (family, label, result.stderr)
+            assert ledger.read_bytes() == before, (family, label, "ledger mutated")
+        valid_clean = [("valid empty", empty)]
+        if family == "clippy":
+            valid_clean.extend([
+                ("valid no-span summary", '{"reason":"compiler-message","message":{"message":"1 warning emitted","level":"warning","code":null,"spans":[]}}'),
+                ("valid Cargo summary", '{"reason":"build-finished","success":true}'),
+            ])
+        for label, clean in valid_clean:
+            report.write_text(clean, encoding="utf-8")
+            result = run("ingest-gate", "--ledger", ledger, "--repo", family,
+                         "--iteration", "2", flag, report)
+            assert result.returncode == 0, (family, label, result.stdout, result.stderr)
+        print(f"P0-B ok: {family} malformed/wrong-shape/invalid-field fail closed; valid empty/noise accepted")
+PY
+  P0_B_STATUS=$?
+  if [ "$P0_B_STATUS" -ne 0 ]; then SMOKE_STATUS="$P0_B_STATUS"; fi
+fi
+# P0-B-END
+# P0-C-START: targeted stale-JUnit pr-ready regression.
+if [ "${USCHA_P0_C_SKIP:-0}" != "1" ]; then
+  P0_C_ROOT="${P0_ROOT:-${ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}}"
+  P0_C_QL="$P0_C_ROOT/uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"
+  P0_C_PY="${PYTHON:-${PY:-python}}"
+  "$P0_C_PY" - "$P0_C_QL" <<'PY'
+import json
+import os
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+engine = pathlib.Path(sys.argv[1])
+
+
+def run(*args):
+    return subprocess.run(
+        [sys.executable, str(engine), *map(str, args)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+
+
+def check_layout(root, name, repo_type, source_rel, report_rel):
+    repo = root / name
+    source = repo / source_rel
+    report = repo / report_rel
+    source.parent.mkdir(parents=True, exist_ok=True)
+    report.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("source\n", encoding="utf-8")
+    report.write_text(
+        '<testsuite tests="1" failures="0" errors="0" skipped="0"/>\n',
+        encoding="utf-8")
+    base_ns = 1_700_000_000_000_000_000
+    os.utime(source, ns=(base_ns, base_ns))
+    os.utime(report, ns=(base_ns + 5_000_000_000,
+                         base_ns + 5_000_000_000))
+
+    config = root / f"{name}.config.json"
+    ledger = root / f"{name}.ledger.json"
+    config.write_text(json.dumps({
+        "defaults": {"qa_tools_order": ["code-review"]},
+        "repos": [{"name": name, "path": str(repo), "type": repo_type}],
+        "integration": {"enabled": False},
+    }), encoding="utf-8")
+
+    result = run("init", "--config", config, "--out", ledger)
+    assert result.returncode == 0, (name, "init", result.stdout, result.stderr)
+    result = run("snapshot", "--ledger", ledger, "--repo", name)
+    assert result.returncode == 0, (name, "fresh snapshot", result.stdout, result.stderr)
+    result = run("log-step", "--ledger", ledger, "--repo", name,
+                 "--tool", "code-review", "--iteration", "1",
+                 "--gated-reported", "0", "--files-changed", "0")
+    assert result.returncode == 0, (name, "log-step", result.stdout, result.stderr)
+    result = run("phase", "--ledger", ledger, "--repo", name,
+                 "--require", "pr-ready")
+    assert result.returncode == 0, (name, "fresh pr-ready", result.stdout, result.stderr)
+
+    os.utime(source, ns=(base_ns + 10_000_000_000,
+                         base_ns + 10_000_000_000))
+    result = run("snapshot", "--ledger", ledger, "--repo", name)
+    assert result.returncode == 0, (name, "stale snapshot", result.stdout, result.stderr)
+    assert "stale" in result.stdout.lower(), (name, "stale snapshot diagnostic", result.stdout)
+    latest = json.loads(ledger.read_text(encoding="utf-8"))["repos"][name]["snapshots"][-1]["tests"]
+    assert latest["report_found"] is True and latest["freshness"]["status"] == "stale", latest
+    assert latest["reports"] and latest["reports"][0]["path"], latest
+    result = run("phase", "--ledger", ledger, "--repo", name,
+                 "--require", "pr-ready")
+    assert result.returncode == 1, (name, "stale pr-ready veto", result.stdout, result.stderr)
+    assert "stale" in (result.stdout + result.stderr).lower(), (name, "stale phase diagnostic", result.stdout, result.stderr)
+
+    os.utime(report, ns=(base_ns + 15_000_000_000,
+                         base_ns + 15_000_000_000))
+    result = run("snapshot", "--ledger", ledger, "--repo", name)
+    assert result.returncode == 0, (name, "recovered snapshot", result.stdout, result.stderr)
+    result = run("phase", "--ledger", ledger, "--repo", name,
+                 "--require", "pr-ready")
+    assert result.returncode == 0, (name, "recovered pr-ready", result.stdout, result.stderr)
+    print(f"P0-C ok: {repo_type} fresh -> stale veto -> regenerated recovery")
+
+
+def check_report_only_compatibility(root):
+    name = "report-only"
+    repo = root / name
+    report = repo / "reports" / "junit.xml"
+    ignored = repo / "vendor" / "ignored.py"
+    report.parent.mkdir(parents=True)
+    ignored.parent.mkdir(parents=True)
+    report.write_text(
+        '<testsuite tests="1" failures="0" errors="0" skipped="0"/>\n',
+        encoding="utf-8")
+    ignored.write_text("generated dependency\n", encoding="utf-8")
+    config = root / f"{name}.config.json"
+    ledger = root / f"{name}.ledger.json"
+    config.write_text(json.dumps({
+        "defaults": {"qa_tools_order": ["code-review"]},
+        "repos": [{"name": name, "path": str(repo), "type": "python"}],
+        "integration": {"enabled": False},
+    }), encoding="utf-8")
+    for args in (
+        ("init", "--config", config, "--out", ledger),
+        ("snapshot", "--ledger", ledger, "--repo", name),
+        ("log-step", "--ledger", ledger, "--repo", name, "--tool", "code-review",
+         "--iteration", "1", "--gated-reported", "0", "--files-changed", "0"),
+    ):
+        result = run(*args)
+        assert result.returncode == 0, (name, args[0], result.stdout, result.stderr)
+    latest = json.loads(ledger.read_text(encoding="utf-8"))["repos"][name]["snapshots"][-1]["tests"]
+    assert latest["freshness"]["status"] == "unknown-no-sources", latest
+    result = run("phase", "--ledger", ledger, "--repo", name,
+                 "--require", "pr-ready")
+    assert result.returncode == 0, (name, "compatibility", result.stdout, result.stderr)
+    print("P0-C ok: report-only repo stays usable with explicit unknown-no-sources provenance")
+
+
+with tempfile.TemporaryDirectory(prefix="uscha-p0-c-") as tmp:
+    root = pathlib.Path(tmp)
+    check_layout(root, "python-layout", "python", "src/app.py", "reports/junit.xml")
+    check_layout(root, "maven-layout", "maven", "src/test/java/AppTest.java",
+                 "target/surefire-reports/TEST-AppTest.xml")
+    check_report_only_compatibility(root)
+PY
+  P0_C_STATUS=$?
+  if [ "$P0_C_STATUS" -ne 0 ]; then SMOKE_STATUS="$P0_C_STATUS"; fi
+fi
+# P0-C-END
+# P0-A-START: targeted Mirador script/DOM injection regression.
+if [ "${USCHA_P0_A_SKIP:-0}" != "1" ]; then
+  set -eu
+  P0_PREVIOUS_STATUS="${SMOKE_STATUS:-0}"
+  P0_ROOT="${P0_ROOT:-${ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}}"
+  P0_KIT="$P0_ROOT/uscha-kit"
+  P0_TMP="$(mktemp -d)"
+  trap 'rm -rf "$P0_TMP"' EXIT
+  P0_PY="${PYTHON:-${PY:-python}}"
+  cat > "$P0_TMP/dashboard-engine.py" <<'PY'
+#!/usr/bin/env python3
+import json
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
+attack = '</script><script>globalThis.MIRADOR_PWNED=1</script><b>&"\'\u2028\u2029'
+data = {
+ "project": attack, "generated": attack,
+ "readiness": {"score": 7, "band": "NOT READY", "title": attack, "sub": attack},
+ "phases": [{"key": attack, "phase": attack, "label": attack, "status": "todo", "risk": 0, "count": attack,
+             "execution": {"model": attack, "tier": attack, "effort": attack, "method": attack, "uncorrelated": True}}],
+ "specs": [{"id": attack, "t": attack, "status": "todo", "acc": attack}],
+ "adrs": [{"id": attack, "t": attack, "status": "todo", "adr_status": attack}],
+ "inv": [{"name": attack, "status": "todo"}], "capas": [{"name": attack, "v": attack, "status": "warn"}],
+ "loops": [{"mod": attack, "state": attack, "max": 1, "iters": 1}],
+ "subscores": [{"k": attack, "val": None, "bd": attack}],
+ "execution_policy": {"source": attack, "phases": {}},
+ "evidence": {attack: {"ey": attack, "title": attack, "desc": attack, "pre": attack}},
+ "snapshots": [{"date": attack, "readiness": 7, "reached": 0}],
+}
+print(json.dumps(data, ensure_ascii=False))
+PY
+  cat > "$P0_TMP/telemetry.jsonl" <<'JSON'
+{"tokens_in":1,"tokens_out":2,"ms":3,"effort":"</script><script>telemetry()</script><i>&\"\u2028\u2029","by_model":[{"model":"<img src=x onerror=telemetry()> & \" model","tokens_in":1,"tokens_out":2}]}
+JSON
+  "$P0_PY" "$P0_KIT/.claude/skills/uscha-mirador/mirador-render.py" \
+    --engine "$P0_TMP/dashboard-engine.py" --ledger "$P0_TMP/ledger.json" \
+    --template "$P0_KIT/.claude/skills/uscha-mirador/mirador.template.html" \
+    --out "$P0_TMP/mirador.html" --sidecar "$P0_TMP/telemetry.jsonl" >/dev/null
+  "$P0_PY" - "$P0_TMP/mirador.html" "$P0_KIT/.claude/skills/uscha-mirador/mirador.template.html" <<'PY'
+import json, pathlib, re, sys
+attack = '</script><script>globalThis.MIRADOR_PWNED=1</script><b>&"\'\u2028\u2029'
+html = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+template = pathlib.Path(sys.argv[2]).read_text(encoding="utf-8")
+match = re.search(r"const DATA = (\{.*?\});\n/\*MIRADOR_DATA_END", html, re.S)
+assert match, "rendered DATA payload missing"
+payload = match.group(1)
+decoded = json.loads(payload)
+assert decoded["project"] == attack and decoded["readiness"]["title"] == attack
+assert decoded["telemetry"]["effort"].startswith("</script><script>telemetry()")
+for raw in ("<", ">", "&", "\u2028", "\u2029"):
+    assert raw not in payload, f"raw script-context delimiter leaked: {raw!r}"
+for escaped in (r"\u003c", r"\u003e", r"\u0026", r"\u2028", r"\u2029"):
+    assert escaped in payload, f"missing HTML-safe JSON escape: {escaped}"
+assert "globalThis.MIRADOR_PWNED" not in html.replace(payload, "")
+assert ".innerHTML" not in template, "data-bearing innerHTML sink remains"
+assert "insertAdjacentHTML" not in template and "document.write" not in template
+print("P0-A ok: script-context JSON escaped and dynamic DOM rendering has no HTML sinks")
+PY
+  P0_A_STATUS=0
+fi
+# P0-A-END
+
+if [ "${USCHA_P0_B_SKIP:-0}" != "1" ]; then
+  if [ "${P0_B_STATUS:-1}" -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+fi
+if [ "${USCHA_P0_C_SKIP:-0}" != "1" ]; then
+  if [ "${P0_C_STATUS:-1}" -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+fi
+if [ "${USCHA_P0_A_SKIP:-0}" != "1" ]; then
+  if [ "${P0_A_STATUS:-1}" -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+fi
+
+echo ""
+printf 'RESULTADO: %s ok · %s fail\n' "$PASS" "$FAIL"
+exit "${SMOKE_STATUS:-0}"

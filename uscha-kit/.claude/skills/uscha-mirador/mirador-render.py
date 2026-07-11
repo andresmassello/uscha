@@ -59,6 +59,16 @@ def aggregate_telemetry(path):
             "model": model, "effort": effort, "by_model": by_model}
 
 
+def _json_for_html_script(value):
+    """Serialize JSON without allowing data to terminate the enclosing script."""
+    return (json.dumps(value, ensure_ascii=False)
+            .replace("&", r"\u0026")
+            .replace("<", r"\u003c")
+            .replace(">", r"\u003e")
+            .replace("\u2028", r"\u2028")
+            .replace("\u2029", r"\u2029"))
+
+
 def main():
     ap = argparse.ArgumentParser(description="render mirador.html from the ledger (+ optional vendor telemetry)")
     ap.add_argument("--engine", required=True, help="path to qa_ledger.py")
@@ -93,7 +103,7 @@ def main():
         print(f"[mirador-render] cannot read template {args.template}: {e}", file=sys.stderr)
         return 1
     payload = ("/*MIRADOR_DATA_START*/\nconst DATA = "
-               + json.dumps(data, ensure_ascii=False) + ";\n/*MIRADOR_DATA_END*/")
+               + _json_for_html_script(data) + ";\n/*MIRADOR_DATA_END*/")
     out = re.sub(r"/\*MIRADOR_DATA_START\*/.*?/\*MIRADOR_DATA_END\*/",
                  lambda m: payload, tpl, count=1, flags=re.S)
     if args.refresh and args.refresh > 0:

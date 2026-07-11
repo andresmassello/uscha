@@ -55,10 +55,12 @@ import argparse
 import glob
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
 import sys
+import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
@@ -326,6 +328,57 @@ def coverage(repo_path, repo_type):
 # --------------------------------------------------------------------------- #
 # measurement: test counts
 # --------------------------------------------------------------------------- #
+def _invalid_junit(path, detail):
+    print(f"[qa_ledger] invalid JUnit XML report '{path}': {detail}",
+          file=sys.stderr)
+    raise SystemExit(2)
+
+
+def _parse_junit_xml(path):
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError) as exc:
+        _invalid_junit(path, exc)
+    root_kind = _local(root.tag)
+    if root_kind not in ("testsuite", "testsuites"):
+        _invalid_junit(path, "expected <testsuite> or <testsuites> root")
+    if root_kind == "testsuites":
+        children = list(root)
+        if children and any(_local(child.tag) != "testsuite"
+                            for child in children):
+            _invalid_junit(path, "<testsuites> may contain only <testsuite> children")
+
+    return root
+
+
+def _junit_int(element, name, path):
+    try:
+        value = int(element.get(name, 0))
+    except (TypeError, ValueError):
+        _invalid_junit(path, f"attribute '{name}' must be an integer")
+    if value < 0:
+        _invalid_junit(path, f"attribute '{name}' must be non-negative")
+    return value
+
+
+def _junit_counts(element, path):
+    counts = tuple(_junit_int(element, name, path)
+                   for name in ("tests", "failures", "errors", "skipped"))
+    tests, failures, errors, skipped = counts
+    if skipped > tests:
+        _invalid_junit(path, "attribute 'skipped' cannot exceed 'tests'")
+    build_error_only = (
+        _local(element.tag) == "testsuites"
+        and not list(element)
+        and failures == 0
+        and errors > 0
+    )
+    if failures + errors > tests - skipped and not build_error_only:
+        _invalid_junit(
+            path, "'failures' + 'errors' cannot exceed executed tests")
+    return counts
+
+
 def _perclass_xml_count(patterns):
     """Sum per-class JUnit XML files (surefire/failsafe/gradle test-results):
     each file's root is a <testsuite> carrying the counters."""
@@ -336,14 +389,14 @@ def _perclass_xml_count(patterns):
             if f in seen:
                 continue
             seen.add(f)
-            try:
-                root = ET.parse(f).getroot()
-            except ET.ParseError:
-                continue
-            tests += int(root.get("tests", 0))
-            failures += int(root.get("failures", 0))
-            errors += int(root.get("errors", 0))
-            skipped += int(root.get("skipped", 0))
+            root = _parse_junit_xml(f)
+            if _local(root.tag) != "testsuite":
+                _invalid_junit(f, "per-class report requires a <testsuite> root")
+            t, fl, er, sk = _junit_counts(root, f)
+            tests += t
+            failures += fl
+            errors += er
+            skipped += sk
     executed = tests - skipped
     return {"total": tests, "executed": executed, "failures": failures,
             "errors": errors, "skipped": skipped, "passed": executed - failures - errors,
@@ -440,30 +493,99 @@ _SRC_EXT = {
     ".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".swift", ".m", ".mm",
     ".rb", ".php", ".dart", ".gradle",
 }
-_SRC_SKIP_DIRS = {
-    ".git", "target", "build", "reports", "node_modules", "dist", ".gradle",
-    "venv", ".venv", "__pycache__", ".idea", "bin", "obj", "Pods",
-    ".dart_tool", "coverage", "out", ".vs",
-}
+_SRC_SKIP_DIRS = SKIP_DIRS | {"reports", "Pods", ".vs"}
+
+# One second admits same-run writes on filesystems with coarse timestamp
+# resolution, without letting genuinely older reports mask later source edits.
+_JUNIT_FRESHNESS_TOLERANCE_NS = 1_000_000_000
+
+
+def _newest_source(repo_path, extensions=None):
+    """Newest relevant source/test file, excluding the same generated, build,
+    report, VCS, dependency, and vendor-like trees used by repo adapters."""
+    newest = None
+    allowed = extensions or _SRC_EXT
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in _SRC_SKIP_DIRS
+                    and not d.startswith("cmake-build-")]
+        for fn in files:
+            if os.path.splitext(fn)[1].lower() not in allowed:
+                continue
+            path = os.path.join(root, fn)
+            try:
+                mtime_ns = os.stat(path).st_mtime_ns
+            except OSError:
+                continue
+            if newest is None or mtime_ns > newest["mtime_ns"]:
+                newest = {
+                    "path": os.path.relpath(path, repo_path).replace("\\", "/"),
+                    "mtime_ns": mtime_ns,
+                    "mtime": datetime.fromtimestamp(
+                        mtime_ns / 1_000_000_000, timezone.utc).isoformat(),
+                }
+    return newest
 
 
 def _source_newest_mtime(repo_path):
-    """Newest mtime among source files under repo_path, skipping build/vendor/
-    report dirs. Reference for JUnit report freshness: a report older than this
-    means the code changed after the tests ran. Returns 0.0 if no source file
-    is found (cannot correlate -> never flags stale, avoids false positives)."""
-    newest = 0.0
-    for root, dirs, files in os.walk(repo_path):
-        dirs[:] = [d for d in dirs if d not in _SRC_SKIP_DIRS]
-        for fn in files:
-            if os.path.splitext(fn)[1].lower() in _SRC_EXT:
-                try:
-                    m = os.path.getmtime(os.path.join(root, fn))
-                except OSError:
-                    continue
-                if m > newest:
-                    newest = m
-    return newest
+    """Compatibility helper for AC evidence freshness."""
+    newest = _newest_source(repo_path)
+    return newest["mtime_ns"] / 1_000_000_000 if newest else 0.0
+
+
+def _test_evidence_provenance(repo_path, repo_type):
+    """Explain which JUnit reports back a snapshot and whether they are newer
+    than relevant source/test files. No discoverable source is explicitly
+    uncorrelated-but-usable to preserve synthetic/report-only workflows."""
+    files = _junit_files_for(repo_path, repo_type)
+    reports = []
+    for path in files:
+        try:
+            mtime_ns = os.stat(path).st_mtime_ns
+        except OSError:
+            continue
+        reports.append({
+            "path": os.path.relpath(path, repo_path).replace("\\", "/"),
+            "mtime_ns": mtime_ns,
+            "mtime": datetime.fromtimestamp(
+                mtime_ns / 1_000_000_000, timezone.utc).isoformat(),
+        })
+    if not reports:
+        status = "not-applicable" if repo_type == "flutter" else "missing"
+        reason = ("approximate static test discovery has no JUnit report"
+                  if repo_type == "flutter"
+                  else "no selected JUnit report")
+        return reports, {"status": status, "reason": reason,
+                         "tolerance_ns": _JUNIT_FRESHNESS_TOLERANCE_NS}
+
+    newest = _newest_source(
+        repo_path, SOURCE_EXT.get(repo_type, SOURCE_EXT["generic"]))
+    if newest is None:
+        return reports, {
+            "status": "unknown-no-sources",
+            "reason": ("no discoverable source/test files; report-only evidence "
+                       "remains usable for compatibility"),
+            "newest_source": None,
+            "tolerance_ns": _JUNIT_FRESHNESS_TOLERANCE_NS,
+        }
+
+    stale_reports = [
+        report for report in reports
+        if newest["mtime_ns"] > report["mtime_ns"] + _JUNIT_FRESHNESS_TOLERANCE_NS
+    ]
+    if stale_reports:
+        paths = ", ".join(report["path"] for report in stale_reports)
+        reason = (f"source/test {newest['path']} is newer than JUnit report(s) "
+                  f"{paths}")
+        status = "stale"
+    else:
+        reason = "selected JUnit report(s) are current relative to source/test files"
+        status = "fresh"
+    return reports, {
+        "status": status,
+        "reason": reason,
+        "newest_source": newest,
+        "tolerance_ns": _JUNIT_FRESHNESS_TOLERANCE_NS,
+    }
 
 
 # tolerante a los limites de naming de cada lenguaje: test_ac1_x (python/go,
@@ -546,28 +668,38 @@ def junit_test_count(repo_path, extra_files=None):
             files.append(f)
     tests = failures = errors = skipped = 0
     for f in files:
-        try:
-            root = ET.parse(f).getroot()
-        except (ET.ParseError, OSError):
-            continue
+        root = _parse_junit_xml(f)
         if _local(root.tag) == "testsuite":
             suites = [root]
         else:
             suites = list(_iter_local(root, "testsuite"))
         t = fl = er = sk = 0
         for s in suites:
-            t += int(s.get("tests", 0))
-            fl += int(s.get("failures", 0))
-            er += int(s.get("errors", 0))
-            sk += int(s.get("skipped", 0))
+            suite_t, suite_fl, suite_er, suite_sk = _junit_counts(s, f)
+            t += suite_t
+            fl += suite_fl
+            er += suite_er
+            sk += suite_sk
         if _local(root.tag) == "testsuites":
             # gotestsum puts `errors` ONLY on the <testsuites> root (a package
             # that fails to BUILD has root errors>0 and no suite) — take the max
             # of root attrs vs child sums so a broken build never reads green.
-            t = max(t, int(root.get("tests", 0)))
-            fl = max(fl, int(root.get("failures", 0)))
-            er = max(er, int(root.get("errors", 0)))
-            sk = max(sk, int(root.get("skipped", 0)))
+            root_t, root_fl, root_er, root_sk = _junit_counts(root, f)
+            child_counts = (t, fl, er, sk)
+            root_counts = (root_t, root_fl, root_er, root_sk)
+            for name, root_count, child_count in zip(
+                    ("tests", "failures", "errors", "skipped"),
+                    root_counts, child_counts):
+                if name in root.attrib and root_count < child_count:
+                    _invalid_junit(
+                        f, f"root '{name}' cannot be less than child suite total")
+            t = max(t, root_t)
+            fl = max(fl, root_fl)
+            er = max(er, root_er)
+            sk = max(sk, root_sk)
+            if suites and fl + er > t - sk:
+                _invalid_junit(
+                    f, "combined root/child outcomes exceed executed tests")
         tests += t
         failures += fl
         errors += er
@@ -580,20 +712,25 @@ def junit_test_count(repo_path, extra_files=None):
 
 def test_count(repo_path, repo_type):
     if repo_type == "maven":
-        return maven_test_count(repo_path)
-    if repo_type == "gradle":
-        return gradle_test_count(repo_path)
-    if repo_type == "swift":
+        result = maven_test_count(repo_path)
+    elif repo_type == "gradle":
+        result = gradle_test_count(repo_path)
+    elif repo_type == "swift":
         # SwiftPM writes Swift Testing results to a SEPARATE file next to the
         # XCTest one — both must count or a Swift-6 package reads tests=0.
-        return junit_test_count(repo_path, extra_files=[
+        result = junit_test_count(repo_path, extra_files=[
             os.path.join(repo_path, "reports", "junit-swift-testing.xml"),
             os.path.join(repo_path, "junit-swift-testing.xml")])
-    if repo_type in ("python", "node", "go", "rust", "dotnet", "cpp"):
+    elif repo_type in ("python", "node", "go", "rust", "dotnet", "cpp"):
         # go: gotestsum · rust: cargo-nextest · dotnet: JUnit logger ·
         # cpp: ctest --output-junit / gtest
-        return junit_test_count(repo_path)
-    return flutter_test_count(repo_path)
+        result = junit_test_count(repo_path)
+    else:
+        result = flutter_test_count(repo_path)
+    reports, freshness = _test_evidence_provenance(repo_path, repo_type)
+    result["reports"] = reports
+    result["freshness"] = freshness
+    return result
 
 
 # --------------------------------------------------------------------------- #
@@ -760,6 +897,23 @@ def _find_all(base, patterns, explicit):
     return sorted(set(found))
 
 
+def _invalid_static_report(path, label, detail):
+    print(f"[qa_ledger] invalid {label} report '{path}': {detail}",
+          file=sys.stderr)
+    raise SystemExit(2)
+
+
+def _parse_static_xml(path, label, root_name):
+    try:
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError) as exc:
+        _invalid_static_report(path, label, exc)
+    if _local(root.tag) != root_name:
+        _invalid_static_report(
+            path, label, f"expected <{root_name}> root, got <{_local(root.tag)}>")
+    return root
+
+
 def parse_checkstyle(path, granularity, tool="checkstyle", base=None):
     """Checkstyle-format XML. Also emitted by golangci-lint (v2:
     --output.checkstyle.path=...; v1: --out-format checkstyle), detekt and
@@ -770,40 +924,55 @@ def parse_checkstyle(path, granularity, tool="checkstyle", base=None):
     paths (detekt and SwiftLint print absolute BY DEFAULT) are relativized
     against the repo first, same discipline as eslint/tsc/clang-tidy."""
     out = []
-    try:
-        root = ET.parse(path).getroot()
-    except (ET.ParseError, OSError):
-        return out
-    for f in _iter_local(root, "file"):
-        fname = f.get("name", "?")
-        for e in _iter_local(f, "error"):
+    root = _parse_static_xml(path, f"{tool} Checkstyle XML", "checkstyle")
+    for file_index, f in enumerate(_iter_local(root, "file")):
+        fname = f.get("name")
+        if not fname:
+            _invalid_static_report(
+                path, f"{tool} Checkstyle XML",
+                f"file at index {file_index} is missing required name")
+        for error_index, e in enumerate(_iter_local(f, "error")):
+            line = e.get("line", "0")
+            try:
+                int(line)
+            except (TypeError, ValueError):
+                _invalid_static_report(
+                    path, f"{tool} Checkstyle XML",
+                    f"error at {file_index}:{error_index} has invalid line")
             sev = CHECKSTYLE_SEVERITY.get((e.get("severity") or "warning").lower(), "MEDIUM")
             rule = (e.get("source") or "?").split(".")[-1]
             if tool != "checkstyle":
                 fid = _mk_id_rel(tool, rule, _node_rel(fname, base),
-                                 e.get("line", "0"), granularity)
+                                 line, granularity)
             else:
-                fid = _mk_id(tool, rule, fname, e.get("line", "0"), granularity)
+                fid = _mk_id(tool, rule, fname, line, granularity)
             out.append((fid, sev, tool))
     return out
 
 
 def parse_pmd(path, granularity):
     out = []
-    try:
-        root = ET.parse(path).getroot()
-    except (ET.ParseError, OSError):
-        return out
-    for f in _iter_local(root, "file"):
-        fname = f.get("name", "?")
-        for v in _iter_local(f, "violation"):
+    root = _parse_static_xml(path, "PMD XML", "pmd")
+    for file_index, f in enumerate(_iter_local(root, "file")):
+        fname = f.get("name")
+        if not fname:
+            _invalid_static_report(
+                path, "PMD XML", f"file at index {file_index} is missing required name")
+        for violation_index, v in enumerate(_iter_local(f, "violation")):
             try:
                 pr = int(v.get("priority", "3"))
-            except ValueError:
-                pr = 3
-            sev = PMD_PRIORITY.get(pr, "MEDIUM")
+                beginline = int(v.get("beginline", "0"))
+            except (TypeError, ValueError):
+                _invalid_static_report(
+                    path, "PMD XML",
+                    f"violation at {file_index}:{violation_index} has invalid numeric field")
+            if pr not in PMD_PRIORITY:
+                _invalid_static_report(
+                    path, "PMD XML",
+                    f"violation at {file_index}:{violation_index} has invalid priority")
+            sev = PMD_PRIORITY[pr]
             rule = v.get("rule", "?")
-            out.append((_mk_id("pmd", rule, fname, v.get("beginline", "0"), granularity),
+            out.append((_mk_id("pmd", rule, fname, beginline, granularity),
                         sev, "pmd"))
     return out
 
@@ -812,18 +981,25 @@ def parse_spotbugs(path, granularity):
     """SpotBugs report. FindSecBugs findings (category SECURITY) are split out
     under tool 'findsecbugs' and floored to HIGH severity."""
     out = []
-    try:
-        root = ET.parse(path).getroot()
-    except (ET.ParseError, OSError):
-        return out
-    for b in _iter_local(root, "BugInstance"):
+    root = _parse_static_xml(path, "SpotBugs XML", "BugCollection")
+    for bug_index, b in enumerate(_iter_local(root, "BugInstance")):
         try:
             pr = int(b.get("priority", "2"))
-        except ValueError:
-            pr = 2
-        sev = SPOTBUGS_PRIORITY.get(pr, "MEDIUM")
+        except (TypeError, ValueError):
+            _invalid_static_report(
+                path, "SpotBugs XML",
+                f"BugInstance at index {bug_index} has invalid priority")
+        if pr not in SPOTBUGS_PRIORITY:
+            _invalid_static_report(
+                path, "SpotBugs XML",
+                f"BugInstance at index {bug_index} has invalid priority")
+        sev = SPOTBUGS_PRIORITY[pr]
         cat = (b.get("category") or "").upper()
-        btype = b.get("type", "?")
+        btype = b.get("type")
+        if not btype:
+            _invalid_static_report(
+                path, "SpotBugs XML",
+                f"BugInstance at index {bug_index} is missing required type")
         sl = next((c for c in b if _local(c.tag) == "SourceLine"), None)
         if sl is not None:
             fname = sl.get("sourcepath") or sl.get("classname") or "?"
@@ -851,22 +1027,40 @@ def _ruff_severity(code):
     return "LOW"
 
 
+def _invalid_ruff(path, detail):
+    print(f"[qa_ledger] invalid Ruff JSON report '{path}': {detail}",
+          file=sys.stderr)
+    raise SystemExit(2)
+
+
 def parse_ruff(path, granularity):
     """`ruff check --output-format=json` — a JSON array of finding objects."""
     out = []
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
             data = json.load(fh)
-    except (OSError, ValueError):
-        return out
+    except (OSError, ValueError) as exc:
+        _invalid_ruff(path, exc)
     if not isinstance(data, list):
-        return out
-    for item in data:
+        _invalid_ruff(path, "expected a JSON array of findings")
+    for index, item in enumerate(data):
         if not isinstance(item, dict):
-            continue
+            _invalid_ruff(path, f"finding at index {index} must be an object")
         code = item.get("code")
-        fname = item.get("filename") or "?"
-        line = (item.get("location") or {}).get("row", 0)
+        if code is not None and not isinstance(code, str):
+            _invalid_ruff(path, f"finding at index {index} has invalid code")
+        fname = item.get("filename")
+        if fname is not None and not isinstance(fname, str):
+            _invalid_ruff(path, f"finding at index {index} has invalid filename")
+        location = item.get("location")
+        if location is None:
+            location = {}
+        if not isinstance(location, dict):
+            _invalid_ruff(path, f"finding at index {index} has invalid location")
+        line = location.get("row", 0)
+        if isinstance(line, bool) or not isinstance(line, int):
+            _invalid_ruff(path, f"finding at index {index} has invalid location row")
+        fname = fname or "?"
         # modern ruff (>=0.5) emits "code": null for SYNTAX errors — real breakage,
         # always HIGH (the legacy E9* branch only covers older ruff versions).
         sev = "HIGH" if code is None else _ruff_severity(code)
@@ -930,7 +1124,7 @@ def _node_rel(fname, base):
 
 
 def parse_eslint(path, granularity, base=None):
-    """`eslint --format json` — array of {filePath, messages:[{ruleId, severity,
+    """ESLint JSON format — array of {filePath, messages:[{ruleId, severity,
     line, fatal}]}. fatal:true (parse error) -> HIGH always. ruleId null WITHOUT
     fatal (e.g. unused eslint-disable directives in ESLint 9) follows the message
     severity — never a false blocker. severity 2 -> HIGH, 1 -> MEDIUM; rules from
@@ -939,31 +1133,63 @@ def parse_eslint(path, granularity, base=None):
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
             data = json.load(fh)
-    except (OSError, ValueError):
-        return out
+    except (OSError, ValueError) as exc:
+        _invalid_static_report(path, "ESLint JSON", exc)
     if not isinstance(data, list):
-        return out
-    for entry in data:
+        _invalid_static_report(path, "ESLint JSON",
+                               "expected a JSON array of file results")
+    for entry_index, entry in enumerate(data):
         if not isinstance(entry, dict):
-            continue
-        fname = _node_rel(entry.get("filePath"), base)
-        for msg in entry.get("messages") or []:
+            _invalid_static_report(
+                path, "ESLint JSON", f"file result at index {entry_index} must be an object")
+        file_path = entry.get("filePath")
+        if file_path is not None and not isinstance(file_path, str):
+            _invalid_static_report(
+                path, "ESLint JSON", f"file result at index {entry_index} has invalid filePath")
+        messages = entry.get("messages")
+        if not isinstance(messages, list):
+            _invalid_static_report(
+                path, "ESLint JSON", f"file result at index {entry_index} has invalid messages")
+        fname = _node_rel(file_path, base)
+        for message_index, msg in enumerate(messages):
             if not isinstance(msg, dict):
-                continue
+                _invalid_static_report(
+                    path, "ESLint JSON",
+                    f"message at {entry_index}:{message_index} must be an object")
             rule = msg.get("ruleId")
-            if msg.get("fatal"):
+            if rule is not None and not isinstance(rule, str):
+                _invalid_static_report(
+                    path, "ESLint JSON",
+                    f"message at {entry_index}:{message_index} has invalid ruleId")
+            severity = msg.get("severity")
+            if isinstance(severity, bool) or not isinstance(severity, int):
+                _invalid_static_report(
+                    path, "ESLint JSON",
+                    f"message at {entry_index}:{message_index} has invalid severity")
+            fatal = msg.get("fatal", False)
+            if not isinstance(fatal, bool):
+                _invalid_static_report(
+                    path, "ESLint JSON",
+                    f"message at {entry_index}:{message_index} has invalid fatal")
+            line = msg.get("line", 0)
+            if line is None:
+                line = 0
+            if isinstance(line, bool) or not isinstance(line, int):
+                _invalid_static_report(
+                    path, "ESLint JSON",
+                    f"message at {entry_index}:{message_index} has invalid line")
+            if fatal:
                 sev, rule = "HIGH", "syntax-error"
             elif rule is None:
-                sev = "HIGH" if msg.get("severity") == 2 else "MEDIUM"
+                sev = "HIGH" if severity == 2 else "MEDIUM"
                 rule = "unused-directive"
             else:
-                sev = "HIGH" if msg.get("severity") == 2 else "MEDIUM"
+                sev = "HIGH" if severity == 2 else "MEDIUM"
                 if rule.startswith("security/"):
                     sev = _bump(sev, "HIGH")
-            out.append((_mk_id_rel("eslint", rule, fname, msg.get("line", 0),
-                                   granularity), sev, "eslint"))
+            out.append((_mk_id_rel("eslint", rule, fname, line, granularity),
+                        sev, "eslint"))
     return out
-
 
 _TSC_LINE = re.compile(
     r"^(?P<file>(?:[A-Za-z]:)?[^(\n]+\.(?:ts|tsx|js|jsx|mts|cts))"
@@ -1002,56 +1228,91 @@ def parse_tsc(path, granularity, base=None):
 
 
 def parse_clippy(path, granularity):
-    """`cargo clippy --message-format=json` — JSON Lines; each compiler-message
-    carries message.level (error/warning), message.code.code (e.g. 'clippy::x';
-    null for plain rustc compile errors — real breakage, HIGH always) and spans.
-    error -> HIGH, warning -> MEDIUM; note/help lines are skipped.
-    Diagnostics WITHOUT a primary span are rustc's end-of-run summaries
-    ('N warnings emitted', 'aborting due to ...') — real compile errors always
-    carry a span, so span-less lines are skipped BEFORE the code-null check
-    (else every warning run grows a phantom HIGH 'compile-error' and the gate
-    can never converge). Repeats across compilation targets (lib/bin/test)
+    """`cargo clippy --message-format=json` ? Cargo JSON Lines.
+
+    Each nonblank line must be a UTF-8 JSON object with a string ``reason``.
+    Cargo permits an empty output and non-diagnostic records (including
+    ``build-finished``); compiler-message diagnostics may legitimately have no
+    primary span for end-of-run summaries, so those remain clean noise. Unlike
+    permissive text formats, malformed JSON or an invalid diagnostic shape is
+    unambiguously bad structured evidence and must reject ingest before the
+    ledger is mutated. Error -> HIGH, warning -> MEDIUM; code:null with a
+    primary span is a real rustc compile error -> HIGH. Repeats across targets
     are deduped by finding ID."""
     out = []
     seen = set()
     try:
-        fh = open(path, "r", encoding="utf-8", errors="replace")
-    except OSError:
-        return out
+        fh = open(path, "r", encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        _invalid_static_report(path, "Clippy JSONL", exc)
     with fh:
-        for raw in fh:
+        for line_no, raw in enumerate(fh, 1):
             raw = raw.strip()
             if not raw:
                 continue
             try:
                 obj = json.loads(raw)
-            except ValueError:
+            except ValueError as exc:
+                _invalid_static_report(path, "Clippy JSONL",
+                                       f"line {line_no} is not valid JSON: {exc}")
+            if not isinstance(obj, dict):
+                _invalid_static_report(path, "Clippy JSONL",
+                                       f"line {line_no} must be a JSON object")
+            reason = obj.get("reason")
+            if not isinstance(reason, str):
+                _invalid_static_report(path, "Clippy JSONL",
+                                       f"line {line_no} has no string reason")
+            if reason != "compiler-message":
                 continue
-            if not isinstance(obj, dict) or obj.get("reason") != "compiler-message":
-                continue
-            msg = obj.get("message") or {}
+
+            msg = obj.get("message")
+            where = f"compiler message at line {line_no}"
+            if not isinstance(msg, dict):
+                _invalid_static_report(path, "Clippy JSONL", f"{where} must be an object")
+            if not isinstance(msg.get("message"), str):
+                _invalid_static_report(path, "Clippy JSONL", f"{where} has invalid message")
             level = msg.get("level")
+            if not isinstance(level, str):
+                _invalid_static_report(path, "Clippy JSONL", f"{where} has invalid level")
+            if "code" not in msg:
+                _invalid_static_report(path, "Clippy JSONL", f"{where} is missing code")
+            code_data = msg["code"]
+            if code_data is not None:
+                if not isinstance(code_data, dict) or not isinstance(code_data.get("code"), str):
+                    _invalid_static_report(path, "Clippy JSONL", f"{where} has invalid code")
+            spans = msg.get("spans")
+            if not isinstance(spans, list):
+                _invalid_static_report(path, "Clippy JSONL", f"{where} has invalid spans")
+            for span_index, candidate in enumerate(spans):
+                if not isinstance(candidate, dict):
+                    _invalid_static_report(
+                        path, "Clippy JSONL", f"{where} has non-object span {span_index}")
+                if not isinstance(candidate.get("is_primary"), bool):
+                    _invalid_static_report(
+                        path, "Clippy JSONL", f"{where} has invalid is_primary in span {span_index}")
+
             if level not in ("error", "warning"):
                 continue
-            span = next((s for s in (msg.get("spans") or [])
-                         if isinstance(s, dict) and s.get("is_primary")), None)
+            span = next((candidate for candidate in spans if candidate["is_primary"]), None)
             if span is None:
                 continue  # span-less = summary diagnostic, not a finding
-            code = (msg.get("code") or {}).get("code") if msg.get("code") else None
-            if code is None:
+            fname = span.get("file_name")
+            line = span.get("line_start")
+            if not isinstance(fname, str) or not fname:
+                _invalid_static_report(path, "Clippy JSONL", f"{where} has invalid primary file_name")
+            if isinstance(line, bool) or not isinstance(line, int) or line < 1:
+                _invalid_static_report(path, "Clippy JSONL", f"{where} has invalid primary line_start")
+            if code_data is None:
                 sev, rule = "HIGH", "compile-error"
             else:
                 sev = "HIGH" if level == "error" else "MEDIUM"
-                rule = code
-            fname = span.get("file_name") or "?"
-            line = span.get("line_start", 0)
+                rule = code_data["code"]
             fid = _mk_id_rel("clippy", rule, fname, line, granularity)
             if fid in seen:
                 continue
             seen.add(fid)
             out.append((fid, sev, "clippy"))
     return out
-
 
 def _sarif_rel(uri, base):
     """SARIF uris arrive as file:///C:/repo/src/A.cs (Roslyn emits absolute,
@@ -1083,38 +1344,80 @@ def parse_sarif(path, granularity, tool="sarif", base=None):
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
             data = json.load(fh)
-    except (OSError, ValueError):
-        return out
+    except (OSError, ValueError) as exc:
+        _invalid_static_report(path, "SARIF JSON", exc)
     if not isinstance(data, dict):
-        return out
-    for run in data.get("runs") or []:
+        _invalid_static_report(path, "SARIF JSON", "expected a JSON object")
+    runs = data.get("runs")
+    if not isinstance(runs, list):
+        _invalid_static_report(path, "SARIF JSON", "expected runs to be an array")
+    for run_index, run in enumerate(runs):
         if not isinstance(run, dict):
-            continue
-        for res in run.get("results") or []:
+            _invalid_static_report(
+                path, "SARIF JSON", f"run at index {run_index} must be an object")
+        results = run.get("results", [])
+        if not isinstance(results, list):
+            _invalid_static_report(
+                path, "SARIF JSON", f"run at index {run_index} has invalid results")
+        for result_index, res in enumerate(results):
+            where = f"result at {run_index}:{result_index}"
             if not isinstance(res, dict):
-                continue
+                _invalid_static_report(path, "SARIF JSON", f"{where} must be an object")
+            for suppression_key in ("suppressions", "suppressionStates"):
+                suppressions = res.get(suppression_key)
+                if suppressions is not None and not isinstance(suppressions, list):
+                    _invalid_static_report(
+                        path, "SARIF JSON", f"{where} has invalid {suppression_key}")
             if res.get("suppressions") or res.get("suppressionStates"):
                 continue
-            sev = sev_map.get((res.get("level") or "warning").lower(), "MEDIUM")
-            rule = res.get("ruleId") or "?"
+            level = res.get("level", "warning")
+            if not isinstance(level, str):
+                _invalid_static_report(path, "SARIF JSON", f"{where} has invalid level")
+            rule = res.get("ruleId", "?")
+            if rule is None:
+                rule = "?"
+            if not isinstance(rule, str):
+                _invalid_static_report(path, "SARIF JSON", f"{where} has invalid ruleId")
+            sev = sev_map.get(level.lower(), "MEDIUM")
             fname, line = "?", 0
-            locs = res.get("locations") or []
-            if locs and isinstance(locs[0], dict):
+            locs = res.get("locations", [])
+            if not isinstance(locs, list):
+                _invalid_static_report(path, "SARIF JSON", f"{where} has invalid locations")
+            if locs:
                 loc = locs[0]
-                phys = loc.get("physicalLocation") or {}
-                art = phys.get("artifactLocation") or {}
+                if not isinstance(loc, dict):
+                    _invalid_static_report(
+                        path, "SARIF JSON", f"{where} has a non-object location")
+                phys = loc.get("physicalLocation", {})
+                if not isinstance(phys, dict):
+                    _invalid_static_report(
+                        path, "SARIF JSON", f"{where} has invalid physicalLocation")
+                art = phys.get("artifactLocation", {})
+                region = phys.get("region", {})
+                if not isinstance(art, dict) or not isinstance(region, dict):
+                    _invalid_static_report(
+                        path, "SARIF JSON", f"{where} has invalid physical location fields")
                 uri = art.get("uri")
-                region = phys.get("region") or {}
-                if not uri:  # SARIF v1 fallback
+                if not uri:
                     v1 = loc.get("resultFile") or loc.get("analysisTarget") or {}
+                    if not isinstance(v1, dict):
+                        _invalid_static_report(
+                            path, "SARIF JSON", f"{where} has invalid SARIF v1 location")
                     uri = v1.get("uri")
                     region = v1.get("region") or {}
+                    if not isinstance(region, dict):
+                        _invalid_static_report(
+                            path, "SARIF JSON", f"{where} has invalid SARIF v1 region")
+                if uri is not None and not isinstance(uri, str):
+                    _invalid_static_report(path, "SARIF JSON", f"{where} has invalid uri")
                 if uri:
                     fname = _sarif_rel(uri, base)
                 line = region.get("startLine", 0)
+                if isinstance(line, bool) or not isinstance(line, int):
+                    _invalid_static_report(
+                        path, "SARIF JSON", f"{where} has invalid startLine")
             out.append((_mk_id_rel(tool, rule, fname, line, granularity), sev, tool))
     return out
-
 
 _CLANG_TIDY_LINE = re.compile(
     r"^(?P<file>(?:[A-Za-z]:)?[^:\n]+\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|tpp|ipp|inl|mm|cu)):"
@@ -1162,8 +1465,159 @@ def _prev_finding_ids(node, tool):
 # --------------------------------------------------------------------------- #
 # subcommands
 # --------------------------------------------------------------------------- #
+SUPPORTED_REPO_TYPES = {
+    "maven", "flutter", "python", "node", "go", "rust", "dotnet", "cpp",
+    "gradle", "swift",
+}
+
+
+def _has_text(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _validate_init_config(cfg):
+    """Validate only the engine's core init contract before creating a ledger."""
+    if not isinstance(cfg, dict):
+        raise SystemExit("[qa_ledger] invalid config: root must be an object")
+    defaults = cfg.get("defaults", {})
+    if not isinstance(defaults, dict):
+        raise SystemExit("[qa_ledger] invalid config: defaults must be an object")
+
+    repos = cfg.get("repos", [])
+    if not isinstance(repos, list):
+        raise SystemExit("[qa_ledger] invalid config: repos must be a list")
+    names = set()
+    for index, repo in enumerate(repos):
+        if not isinstance(repo, dict):
+            raise SystemExit(
+                f"[qa_ledger] invalid config: repos[{index}] must be an object")
+        name = repo.get("name")
+        path = repo.get("path")
+        repo_type = repo.get("type")
+        if not _has_text(name):
+            raise SystemExit(
+                f"[qa_ledger] invalid config: repos[{index}].name must be nonempty")
+        if name == "integration":
+            raise SystemExit(
+                "[qa_ledger] invalid config: repo name 'integration' is reserved")
+        if name in names:
+            raise SystemExit(
+                f"[qa_ledger] invalid config: duplicate repo name '{name}'")
+        names.add(name)
+        if not _has_text(path):
+            raise SystemExit(
+                f"[qa_ledger] invalid config: repo '{name}' path must be nonempty")
+        if repo_type not in SUPPORTED_REPO_TYPES:
+            supported = ", ".join(sorted(SUPPORTED_REPO_TYPES))
+            raise SystemExit(
+                f"[qa_ledger] invalid config: repo '{name}' type must be one of {supported}")
+
+    if "qa_tools_order" in defaults:
+        order = defaults["qa_tools_order"]
+        if (not isinstance(order, list) or not order
+                or any(not _has_text(tool) for tool in order)
+                or len(set(order)) != len(order)):
+            raise SystemExit(
+                "[qa_ledger] invalid config: qa_tools_order must contain unique nonempty strings")
+
+    if "coverage_threshold" in defaults:
+        value = defaults["coverage_threshold"]
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or value < 0 or value > 100):
+            raise SystemExit(
+                "[qa_ledger] invalid config: coverage_threshold must be between 0 and 100")
+    for key in ("max_iterations", "tools_per_cycle"):
+        if key in defaults:
+            value = defaults[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise SystemExit(
+                    f"[qa_ledger] invalid config: {key} must be a positive integer")
+
+    integration = cfg.get("integration", {})
+    if not isinstance(integration, dict):
+        raise SystemExit("[qa_ledger] invalid config: integration must be an object")
+    if "enabled" in integration and not isinstance(integration["enabled"], bool):
+        raise SystemExit("[qa_ledger] invalid config: integration.enabled must be boolean")
+
+    if "severity_gate" in defaults:
+        gate = defaults["severity_gate"]
+        if (not isinstance(gate, list)
+                or any(not isinstance(level, str) or level not in SEVERITY_ORDER
+                       for level in gate)):
+            raise SystemExit("[qa_ledger] invalid config: severity_gate must be a list of known severities")
+
+    def finite_number(value):
+        return (not isinstance(value, bool) and isinstance(value, (int, float))
+                and math.isfinite(value))
+
+    readiness_weights = defaults.get("readiness_weights", {})
+    if not isinstance(readiness_weights, dict):
+        raise SystemExit("[qa_ledger] invalid config: readiness_weights must be an object")
+    unknown_weights = sorted(set(readiness_weights) - set(DEFAULT_WEIGHTS))
+    if unknown_weights:
+        raise SystemExit("[qa_ledger] invalid config: readiness_weights has unknown dimension(s): " + ", ".join(unknown_weights))
+    for key, value in readiness_weights.items():
+        if not finite_number(value) or value < 0:
+            raise SystemExit(f"[qa_ledger] invalid config: readiness_weights.{key} must be a finite nonnegative number")
+
+    readiness_caps = defaults.get("readiness_caps", {})
+    if not isinstance(readiness_caps, dict):
+        raise SystemExit("[qa_ledger] invalid config: readiness_caps must be an object")
+    unknown_caps = sorted(set(readiness_caps) - set(DEFAULT_CAPS))
+    if unknown_caps:
+        raise SystemExit("[qa_ledger] invalid config: readiness_caps has unknown cap(s): " + ", ".join(unknown_caps))
+    for key, value in readiness_caps.items():
+        if not finite_number(value) or value < 0 or value > 100:
+            raise SystemExit(f"[qa_ledger] invalid config: readiness_caps.{key} must be a finite percentage between 0 and 100")
+
+    if "static_gate_zero_at" in defaults:
+        value = defaults["static_gate_zero_at"]
+        if not finite_number(value) or value <= 0:
+            raise SystemExit("[qa_ledger] invalid config: static_gate_zero_at must be a positive finite number")
+
+    effective_weights = {**DEFAULT_WEIGHTS, **readiness_weights}
+    local_dimensions = ("coverage", "static_gate", "convergence")
+    if repos and sum(effective_weights[key] for key in local_dimensions) <= 0:
+        raise SystemExit("[qa_ledger] invalid config: effective readiness_weights must leave positive weight for per-repo readiness")
+
+    global_dimensions = ["acceptance", "adr", "coverage", "static_gate", "convergence"]
+    if integration.get("enabled", False):
+        global_dimensions.append("integration")
+    dimension_sets = [global_dimensions]
+    if "readiness_weights" in defaults and "acceptance" not in readiness_weights:
+        dimension_sets.append([key for key in global_dimensions if key != "acceptance"])
+    if any(sum(effective_weights[key] for key in dimensions) <= 0 for dimensions in dimension_sets):
+        raise SystemExit("[qa_ledger] invalid config: effective readiness_weights must sum to a positive value for every possible readiness dimension set")
+
+
+def _validate_iteration(node, tool, iteration):
+    if isinstance(iteration, bool) or not isinstance(iteration, int) or iteration < 1:
+        raise SystemExit("[qa_ledger] iteration must be >= 1")
+    latest = max(
+        (record.get("iteration", 0) for record in node.get("iterations", [])
+         if record.get("tool") == tool),
+        default=0,
+    )
+    if iteration < latest:
+        raise SystemExit(
+            f"[qa_ledger] iteration {iteration} is older than latest iteration "
+            f"{latest} for {tool}")
+
+
+def _validate_log_step_counts(args):
+    names = ("reported", "gated_reported", "fixed", "deferred",
+             "suppressed", "files_changed")
+    for name in names:
+        value = getattr(args, name)
+        if value < 0:
+            raise SystemExit(f"[qa_ledger] {name.replace('_', '-')} must be nonnegative")
+    if args.gated_reported > args.reported:
+        raise SystemExit("[qa_ledger] gated-reported cannot exceed reported")
+
+
 def cmd_init(args):
     cfg = _load(args.config)
+    _validate_init_config(cfg)
     defaults = cfg.get("defaults", {})
     ledger = {
         "schema": "dev-loop/qa-ledger@1",
@@ -1214,10 +1668,14 @@ def cmd_snapshot(args):
                             "phase": args.phase})
     _save(args.ledger, ledger)
     cov, tests, loc = snap["coverage"], snap["tests"], snap["loc"]
+    freshness = tests.get("freshness", {})
     print(f"[qa_ledger] snapshot {args.repo} ({args.phase}): "
           f"coverage={cov['pct']}% (found={cov['report_found']}), "
           f"tests={tests['total']} (found={tests['report_found']}), "
+          f"freshness={freshness.get('status', 'unknown')}, "
           f"prod_loc={loc['prod_loc']}, test_loc={loc['test_loc']}")
+    if freshness.get("status") == "stale":
+        print(f"  test evidence stale: {freshness.get('reason')}")
 
 
 def cmd_check_coverage(args):
@@ -1248,6 +1706,8 @@ def _to_bool(s):
 def cmd_log_step(args):
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
+    _validate_iteration(node, args.tool, args.iteration)
+    _validate_log_step_counts(args)
     ledger["step_counter"] += 1
     fp = None
     ids = None
@@ -1288,6 +1748,8 @@ def cmd_ingest_gate(args):
     recent prior run of the same linter, so it is real, not estimated."""
     ledger = _load(args.ledger)
     cfg = _repo_cfg(ledger, args.repo)
+    if args.iteration < 1:
+        raise SystemExit("[qa_ledger] iteration must be >= 1")
     base = cfg["path"]
     defaults = ledger["config"].get("defaults", {})
     gate = defaults.get("severity_gate", ["BLOCKER", "CRITICAL", "HIGH"])
@@ -1410,6 +1872,8 @@ def cmd_ingest_gate(args):
         by_tool.setdefault(tool, [])
 
     results = []
+    for tool in by_tool:
+        _validate_iteration(node, tool, args.iteration)
     for tool, items in sorted(by_tool.items()):
         ids = sorted(set(fid for fid, _ in items))
         gated = sum(1 for _, sev in items if _at_or_above(sev, gate))
@@ -1503,6 +1967,14 @@ def _find_by_id(rows, rid, noun):
     raise SystemExit("[qa_ledger] unknown %s id '%s'" % (noun, rid))
 
 
+def _require_open_resolution(row, noun):
+    status = row.get("status")
+    if status is None:
+        raise SystemExit(f"[qa_ledger] {noun} '{row.get('id')}' has no status; legacy rows are fail-closed and cannot be resolved")
+    if status != "open":
+        raise SystemExit(f"[qa_ledger] {noun} '{row.get('id')}' is not open (status '{status}'); only open records can be resolved")
+
+
 def _touch_event(ledger, kind, rid, repo=None):
     ledger["step_counter"] = ledger.get("step_counter", 0) + 1
     ledger.setdefault("steps", []).append({"n": ledger["step_counter"],
@@ -1560,7 +2032,11 @@ def cmd_production_finding(args):
     if args.resolve:
         if not args.id:
             raise SystemExit("[qa_ledger] --resolve requires --id PF-nnn")
+        if not _has_text(args.note):
+            raise SystemExit(
+                "[qa_ledger] production-finding --resolve requires a nonempty --note")
         row = _find_by_id(rows, args.id, "production finding")
+        _require_open_resolution(row, "production finding")
         row["status"] = "resolved"
         row["resolved_at"] = _now()
         row["resolution_note"] = args.note
@@ -1593,7 +2069,11 @@ def cmd_spec_doubt(args):
     if args.resolve:
         if not args.id:
             raise SystemExit("[qa_ledger] --resolve requires --id SD-nnn")
+        if not _has_text(args.decision):
+            raise SystemExit(
+                "[qa_ledger] spec-doubt --resolve requires a nonempty --decision")
         row = _find_by_id(rows, args.id, "spec-doubt")
+        _require_open_resolution(row, "spec-doubt")
         row["status"] = "resolved"
         row["resolved_at"] = _now()
         row["decision"] = args.decision
@@ -1627,7 +2107,23 @@ def cmd_spec_change_request(args):
     if args.resolve:
         if not args.id:
             raise SystemExit("[qa_ledger] --resolve requires --id SCR-nnn")
+        if args.decision not in {"accepted", "rejected", "superseded"}:
+            raise SystemExit(
+                "[qa_ledger] spec-change-request --resolve requires "
+                "--decision accepted|rejected|superseded")
+        if args.decision == "accepted" and not _has_text(args.amended):
+            raise SystemExit(
+                "[qa_ledger] accepted spec-change-request requires nonempty --amended")
+        if (args.decision in {"rejected", "superseded"}
+                and not (_has_text(args.note) or
+                         (args.decision == "superseded" and _has_text(args.amended)))):
+            raise SystemExit(
+                f"[qa_ledger] {args.decision} spec-change-request requires "
+                "a nonempty --note"
+                + (" or --amended replacement reference"
+                   if args.decision == "superseded" else ""))
         row = _find_by_id(rows, args.id, "spec-change-request")
+        _require_open_resolution(row, "spec-change-request")
         row["status"] = "resolved"
         row["resolved_at"] = _now()
         row["decision"] = args.decision
@@ -1641,6 +2137,22 @@ def cmd_spec_change_request(args):
     if not args.repo or not args.source or not args.requested_change or not args.evidence:
         raise SystemExit("[qa_ledger] spec-change-request requires --repo, --source, --requested-change and --evidence")
     _repo_node(ledger, args.repo)  # validate repo
+    source_match = re.fullmatch(r"(PF|SD)-(\d+)", args.source or "")
+    if not source_match:
+        raise SystemExit(
+            "[qa_ledger] spec-change-request --source must be an existing PF-n or SD-n")
+    source_rows = (ledger.get("production_findings", [])
+                   if source_match.group(1) == "PF"
+                   else ledger.get("spec_doubts", []))
+    source_row = next((item for item in source_rows
+                       if item.get("id") == args.source), None)
+    if source_row is None:
+        raise SystemExit(
+            f"[qa_ledger] spec-change-request source '{args.source}' does not exist")
+    if source_row.get("repo") != args.repo:
+        raise SystemExit(
+            f"[qa_ledger] spec-change-request source '{args.source}' belongs to "
+            f"repo '{source_row.get('repo')}', not '{args.repo}'")
     row = {"id": _next_prefixed_id(rows, "SCR"), "at": _now(),
            "status": "open", "repo": args.repo, "source": args.source,
            "requested_change": args.requested_change, "evidence": args.evidence,
@@ -1686,6 +2198,9 @@ def cmd_log_gate(args):
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
     tool = f"gate:{args.kind}"
+    _validate_iteration(node, tool, args.iteration)
+    if args.count < 0:
+        raise SystemExit("[qa_ledger] count must be nonnegative")
     if args.verdict == "not-run":
         ledger["step_counter"] += 1
         ledger["steps"].append({"n": ledger["step_counter"], "at": _now(),
@@ -1716,6 +2231,7 @@ def cmd_flag_blocker(args):
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
     tool = f"blocker:{args.kind}"
+    _validate_iteration(node, tool, args.iteration)
     failing = not args.resolve
     if failing and not args.note:
         raise SystemExit("[qa_ledger] flag-blocker requires --note describing the breach.")
@@ -1771,6 +2287,11 @@ def _converged(node, k, qa_order=None):
         if (t.get("failures", 0) or 0) + (t.get("errors", 0) or 0) > 0:
             tests_ok = False
             reasons.append("snapshot shows failing tests (measured, overrides agent report)")
+        freshness = t.get("freshness", {})
+        if freshness.get("status") == "stale":
+            tests_ok = False
+            reasons.append(f"snapshot test evidence is stale: "
+                           f"{freshness.get('reason', 'source/test changed after report')}")
     if gated:
         reasons.append(f"agent gated={gated}")
     if changed:
@@ -1825,11 +2346,27 @@ def _derive_phase(ledger, name, node, k, qa_order):
                              f"debe entrar al proximo discovery"]
     conv, reasons = _converged(node, k, qa_order)
     tests_red = _tests_red(node)
+    last_tests = (node["snapshots"][-1].get("tests", {})
+                  if node.get("snapshots") else {})
+    tests_measured_green = (
+        bool(last_tests.get("report_found"))
+        and last_tests.get("freshness", {}).get("status") != "stale"
+        and (last_tests.get("executed", 0) or 0) > 0
+        and (last_tests.get("failures", 0) or 0) == 0
+        and (last_tests.get("errors", 0) or 0) == 0
+    )
+    if not last_tests.get("report_found"):
+        reasons.append("falta evidencia medida de tests")
+    elif (last_tests.get("executed", 0) or 0) <= 0 and not tests_red:
+        reasons.append("la evidencia medida no contiene tests ejecutados")
     _go, sev = _gate_open_and_sev(node)
     blk = sev.get("BLOCKER", 0) + sev.get("CRITICAL", 0)
-    if conv and not tests_red and blk == 0:
-        return "pr-ready", ["ciclo de agente limpio + static gates limpios",
-                            "tests verdes (medidos)", "0 BLOCKER/CRITICAL abiertos"]
+    if conv and tests_measured_green and not tests_red and blk == 0:
+        evidence = ["ciclo de agente limpio", "tests verdes (medidos)",
+                    "0 BLOCKER/CRITICAL abiertos"]
+        if _latest_static_by_tool(node):
+            evidence.insert(1, "static gates registrados sin findings gateados")
+        return "pr-ready", evidence
     if node["iterations"]:
         return "qa", reasons or ["pasos de QA registrados, aun sin converger"]
     if node.get("snapshots"):
@@ -1952,6 +2489,7 @@ def cmd_oscillation(args):
 
 def cmd_escalate(args):
     ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
     ledger["step_counter"] += 1
     ledger["escalations"].append({"n": ledger["step_counter"], "at": _now(),
                                   "repo": args.repo, "reason": args.reason})
@@ -2492,11 +3030,8 @@ _ADR_EXPERIMENT_REQUIRED = {
 
 
 def _ascii_fold(s):
-    # stdlib-free accent folding for the few Spanish labels the kit documents.
-    return (s or "").lower().replace("?", "a").replace("?", "e") \
-        .replace("?", "i").replace("?", "o").replace("?", "u") \
-        .replace("?", "n")
-
+    normalized = unicodedata.normalize("NFKD", (s or "").lower())
+    return "".join(c for c in normalized if not unicodedata.combining(c))
 
 def _adr_key(s):
     s = _ascii_fold(s)
@@ -2833,12 +3368,14 @@ def cmd_readiness(args):
 
     # integration dimension (feature-level)
     integ_enabled = ledger["config"].get("integration", {}).get("enabled", False)
-    integ_steps = [s for s in ledger["integration"]["iterations"]]
+    integ_steps = [s for s in ledger["integration"]["iterations"]
+                   if (s.get("tests_passed") is not None
+                       or s.get("gated_reported", 0) > 0)]
     if integ_enabled:
         if integ_steps:
             last = integ_steps[-1]
             integ_dim = 1.0 if (last.get("gated_reported", 0) == 0
-                                and last.get("tests_passed") is not False) else 0.0
+                                and last.get("tests_passed") is True) else 0.0
         else:
             integ_dim = 0.0  # required but never run
     else:
@@ -4524,6 +5061,7 @@ def _rubric_structure(path):
 def cmd_rubric_ingest(args):
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
+    _validate_iteration(node, "rubric:grade", args.iteration)
     defaults = ledger["config"].get("defaults", {})
     rub_cfg = defaults.get("rubric", {}) if isinstance(defaults.get("rubric"), dict) else {}
     rubric_path = args.rubric or rub_cfg.get("file", "RUBRIC.md")
@@ -5188,7 +5726,7 @@ def build_parser():
                      help='grader JSON: {"criteria":[{"id","verdict","evidence","note"}]}')
     pri.add_argument("--rubric", default=None,
                      help="RUBRIC.md path (default: defaults.rubric.file or ./RUBRIC.md)")
-    pri.add_argument("--iteration", type=int, default=0)
+    pri.add_argument("--iteration", type=int, default=1)
     pri.add_argument("--gate", action="store_true",
                      help="a below-threshold score writes a GATED record: blocks "
                           "convergence and caps readiness <=65")
@@ -5332,7 +5870,7 @@ def build_parser():
     pfb.add_argument("--repo", required=True)
     pfb.add_argument("--kind", default="constitution",
                      help="free-text breach kind (default: constitution)")
-    pfb.add_argument("--iteration", type=int, default=0)
+    pfb.add_argument("--iteration", type=int, default=1)
     pfb.add_argument("--note", default=None,
                      help="what was breached (required unless --resolve)")
     pfb.add_argument("--resolve", action="store_true",

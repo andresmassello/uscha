@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 Durable technical decisions of this repo. One per file:
-`ADR-NNN-<slug>.md`. They are written by `/discovery` or `/adr-refine`, or proposed during the
+`ADR-NNN-<slug>.md`. They are written by `/uscha-discovery` or `/uscha-adr-refine`, or proposed during the
 build when a real decision appears (see the ADR rules in `CLAUDE.md`).
 
 Format: Status (proposed/accepted/experiment/deprecated/superseded) · Context · Alternatives ·

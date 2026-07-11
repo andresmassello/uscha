@@ -363,7 +363,27 @@ const $ = s => document.querySelector(s);
 const statusColor = {done:"var(--green)",prog:"var(--amber)",block:"var(--red)",todo:"#cfd5db"};
 const chipClass = {done:"st-done",prog:"st-prog",block:"st-block",todo:"st-todo"};
 const chipText  = {done:"done",prog:"in progress",block:"blocked",todo:"to do"};
-
+function node(tag, className, value){
+  const n=document.createElement(tag);
+  if(className)n.className=className;
+  if(value!==undefined&&value!==null)n.textContent=String(value);
+  return n;
+}
+function append(parent,...children){children.forEach(child=>parent.appendChild(child));return parent;}
+function renderEvidencePre(host, value){
+  host.replaceChildren();
+  const entities={"&lt;":"<","&gt;":">","&amp;":"&","&quot;":"\"","&#39;":"'"};
+  const text=value==null?"":String(value),tokens=/<span class=(["'])([gram])\1>|<\/span>/gi;
+  const addText=(parent,part)=>parent.appendChild(document.createTextNode(part.replace(/&(lt|gt|amp|quot|#39);/g,m=>entities[m])));
+  let cursor=0,current=host,match;
+  while((match=tokens.exec(text))!==null){
+    addText(current,text.slice(cursor,match.index));
+    if(match[2]){const span=node("span",match[2]);current.appendChild(span);current=span;}
+    else if(current!==host)current=host;
+    cursor=tokens.lastIndex;
+  }
+  addText(current,text.slice(cursor));
+}
 /* ==== header + verdict ==== */
 $("#m-proj").textContent = DATA.project;
 $("#projtitle").textContent = DATA.project || "—";
@@ -373,14 +393,15 @@ const bandColors = {"CASI LISTO":["var(--amber-soft)","var(--amber)"],"LISTO":["
 function paintVerdict(score, band, title, sub){
   const b=$("#v-band"); const c=bandColors[band]||["#eef1f4","var(--ink-mute)"];
   b.textContent=band; b.style.background=c[0]; b.style.color=c[1];
-  $("#v-title").innerHTML = (title||"") + ' <span class="score">'+score+'/100</span>';
-  $("#v-sub").innerHTML = sub||"";
+  const titleHost=$("#v-title");
+  titleHost.replaceChildren(document.createTextNode(String(title||"")+" "),node("span","score",String(score)+"/100"));
+  $("#v-sub").textContent=sub||"";
 }
 paintVerdict(DATA.readiness.score, DATA.readiness.band, DATA.readiness.title, DATA.readiness.sub);
 
 /* ==== el sendero (SVG) ==== */
 const VB={w:1060,h:300}, base=232, pad=70;
-const riskY=[0,26,60,92]; // más riesgo = más alto (paso de montaña)
+const riskY=[0,26,60,92];
 const N=DATA.phases.length;
 function nodeXY(i,risk){const r=(riskY[risk]==null?0:riskY[risk]);const x=pad+i*((VB.w-2*pad)/(N-1));const y=base-r;return [x,y];}
 function smoothPath(pts){
@@ -392,10 +413,9 @@ function smoothPath(pts){
   return d;
 }
 function renderTrail(activeReached){
-  const svg=$("#trail"); svg.innerHTML="";
+  const svg=$("#trail"); svg.replaceChildren();
   const pts=DATA.phases.map((p,i)=>nodeXY(i,p.risk));
   const ns="http://www.w3.org/2000/svg";
-  // terreno (silueta) + contornos suaves
   const terr=document.createElementNS(ns,"path");
   terr.setAttribute("d", smoothPath(pts)+" L "+pts[N-1][0]+" "+VB.h+" L "+pts[0][0]+" "+VB.h+" Z");
   terr.setAttribute("fill","var(--terrain)"); terr.setAttribute("opacity",".4"); svg.appendChild(terr);
@@ -405,16 +425,13 @@ function renderTrail(activeReached){
     c.setAttribute("fill","none");c.setAttribute("stroke","var(--terrain-line)");c.setAttribute("stroke-width","1");c.setAttribute("opacity",".5");
     svg.appendChild(c);
   }
-  // trail line
   const trail=document.createElementNS(ns,"path");
   trail.setAttribute("d",smoothPath(pts));trail.setAttribute("fill","none");
   trail.setAttribute("stroke","var(--stone)");trail.setAttribute("stroke-width","3");
   trail.setAttribute("stroke-dasharray","2 7");trail.setAttribute("stroke-linecap","round");trail.setAttribute("opacity",".8");
   svg.appendChild(trail);
-  // mojones
   DATA.phases.forEach((p,i)=>{
     const [x,y]=pts[i];
-    // estado efectivo según time-lapse
     let st=p.status;
     if(activeReached!==null){
       if(i<activeReached) st="done";
@@ -422,39 +439,26 @@ function renderTrail(activeReached){
       else st="todo";
     }
     const g=document.createElementNS(ns,"g");
-    g.setAttribute("class","moj");g.setAttribute("tabindex","0");
-    g.setAttribute("role","button");
-    g.setAttribute("aria-label",p.label+" — "+chipText[st]);
-    g.dataset.key=p.key;
-    // halo estado
+    g.setAttribute("class","moj");g.setAttribute("tabindex","0");g.setAttribute("role","button");
+    g.setAttribute("aria-label",p.label+" — "+chipText[st]);g.dataset.key=p.key;
     const halo=document.createElementNS(ns,"circle");
     halo.setAttribute("cx",x);halo.setAttribute("cy",y);halo.setAttribute("r","18");
     halo.setAttribute("fill",statusColor[st]);halo.setAttribute("opacity",".16");
     if(st==="prog"||st==="block")halo.setAttribute("class","pulse");
     g.appendChild(halo);
-    // piedra (mojón)
-    const stone=document.createElementNS(ns,"path");
-    const s=11;
-    stone.setAttribute("d",`M ${x-s} ${y+s} L ${x-s+2} ${y-s+3} Q ${x} ${y-s-3} ${x+s-2} ${y-s+3} L ${x+s} ${y+s} Z`);
-    stone.setAttribute("class","stone");
-    stone.setAttribute("fill", st==="todo"?"#eef1f4":"#fff");
-    stone.setAttribute("stroke",statusColor[st]);stone.setAttribute("stroke-width","2.5");
-    g.appendChild(stone);
-    // dot central
+    const stone=document.createElementNS(ns,"path"); const size=11;
+    stone.setAttribute("d","M "+(x-size)+" "+(y+size)+" L "+(x-size+2)+" "+(y-size+3)+" Q "+x+" "+(y-size-3)+" "+(x+size-2)+" "+(y-size+3)+" L "+(x+size)+" "+(y+size)+" Z");
+    stone.setAttribute("class","stone");stone.setAttribute("fill",st==="todo"?"#eef1f4":"#fff");
+    stone.setAttribute("stroke",statusColor[st]);stone.setAttribute("stroke-width","2.5");g.appendChild(stone);
     const dot=document.createElementNS(ns,"circle");
-    dot.setAttribute("cx",x);dot.setAttribute("cy",y);dot.setAttribute("r","3.4");
-    dot.setAttribute("fill",statusColor[st]);g.appendChild(dot);
-    // textos
+    dot.setAttribute("cx",x);dot.setAttribute("cy",y);dot.setAttribute("r","3.4");dot.setAttribute("fill",statusColor[st]);g.appendChild(dot);
     const ph=document.createElementNS(ns,"text");
-    ph.setAttribute("x",x);ph.setAttribute("y",y-24);ph.setAttribute("text-anchor","middle");
-    ph.setAttribute("class","mphase");ph.textContent=p.phase;g.appendChild(ph);
+    ph.setAttribute("x",x);ph.setAttribute("y",y-24);ph.setAttribute("text-anchor","middle");ph.setAttribute("class","mphase");ph.textContent=p.phase;g.appendChild(ph);
     const lab=document.createElementNS(ns,"text");
-    lab.setAttribute("x",x);lab.setAttribute("y",base+38);lab.setAttribute("text-anchor","middle");
-    lab.setAttribute("class","mlabel");lab.textContent=p.label;g.appendChild(lab);
+    lab.setAttribute("x",x);lab.setAttribute("y",base+38);lab.setAttribute("text-anchor","middle");lab.setAttribute("class","mlabel");lab.textContent=p.label;g.appendChild(lab);
     if(p.count){
       const cnt=document.createElementNS(ns,"text");
-      cnt.setAttribute("x",x);cnt.setAttribute("y",base+53);cnt.setAttribute("text-anchor","middle");
-      cnt.setAttribute("class","mcount");cnt.textContent=p.count;g.appendChild(cnt);
+      cnt.setAttribute("x",x);cnt.setAttribute("y",base+53);cnt.setAttribute("text-anchor","middle");cnt.setAttribute("class","mcount");cnt.textContent=p.count;g.appendChild(cnt);
     }
     g.addEventListener("click",()=>openEvidence(p.key));
     g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openEvidence(p.key);}});
@@ -464,14 +468,10 @@ function renderTrail(activeReached){
 
 /* ==== specs / adrs / inv / heat / loops / subs ==== */
 function renderSpecs(){
-  $("#spec-n").textContent = DATA.specs.filter(s=>s.status==="done").length+"/"+DATA.specs.length;
-  $("#speclist").innerHTML = DATA.specs.map(s=>`
-    <div class="spec">
-      <span class="id">${s.id}</span>
-      <span class="t">${s.t}</span>
-      <span class="chip ${chipClass[s.status]}">${chipText[s.status]}</span>
-      <span class="acc">${s.acc}%</span>
-    </div>`).join("");
+  $("#spec-n").textContent=DATA.specs.filter(s=>s.status==="done").length+"/"+DATA.specs.length;
+  const host=$("#speclist");host.replaceChildren();
+  DATA.specs.forEach(s=>append(host,append(node("div","spec"),node("span","id",s.id),node("span","t",s.t),
+    node("span","chip "+(chipClass[s.status]||"st-todo"),chipText[s.status]||s.status),node("span","acc",String(s.acc)+"%"))));
 }
 function adrLabel(a){
   if(a.adr_status==="experiment"){
@@ -483,103 +483,87 @@ function adrLabel(a){
   return a.status==="done"?"accepted":a.status==="prog"?"proposed":chipText[a.status];
 }
 function renderAdrs(){
-  $("#adr-n").textContent = DATA.adrs.filter(a=>a.status==="done").length+"/"+DATA.adrs.length;
-  $("#adrlist").innerHTML = DATA.adrs.map(a=>`
-    <div class="spec">
-      <span class="id">${a.id}</span>
-      <span class="t">${a.t}</span>
-      <span class="chip ${chipClass[a.status]}">${adrLabel(a)}</span>
-    </div>`).join("");
+  $("#adr-n").textContent=DATA.adrs.filter(a=>a.status==="done").length+"/"+DATA.adrs.length;
+  const host=$("#adrlist");host.replaceChildren();
+  DATA.adrs.forEach(a=>append(host,append(node("div","spec"),node("span","id",a.id),node("span","t",a.t),
+    node("span","chip "+(chipClass[a.status]||"st-todo"),adrLabel(a)))));
 }
 function renderInv(){
-  $("#inv").innerHTML = DATA.inv.map(v=>`<span class="item ${v.status}"><i></i>${v.name}</span>`).join("");
+  const host=$("#inv");host.replaceChildren();
+  DATA.inv.forEach(v=>{const item=node("span","item "+(v.status||""));append(item,node("i"),document.createTextNode(String(v.name||"")));host.appendChild(item);});
 }
 function renderHeat(){
-  const cls={ok:"h-ok",warn:"h-warn",miss:"h-miss"};
-  $("#heat").innerHTML = DATA.capas.map(c=>`
-    <div class="cell ${cls[c.status]}"><div class="lab">${c.name}</div><div class="v">${c.v}</div></div>`).join("");
+  const cls={ok:"h-ok",warn:"h-warn",miss:"h-miss"},host=$("#heat");host.replaceChildren();
+  DATA.capas.forEach(c=>append(host,append(node("div","cell "+(cls[c.status]||""),undefined),node("div","lab",c.name),node("div","v",c.v))));
 }
 function renderLoops(){
-  $("#qa-n").textContent = DATA.loops.length;
+  $("#qa-n").textContent=DATA.loops.length;
   const tag={converged:["st-done","converged"],oscillating:["st-prog","oscillating"],escalated:["st-block","escalated"],active:["st-prog","active"]};
-  $("#loops").innerHTML = DATA.loops.map(l=>{
-    const mx=l.max||l.iters||0;
-    let bars=""; for(let i=0;i<mx;i++)bars+=`<b class="${i<l.iters?'on':''}"></b>`;
+  const host=$("#loops");host.replaceChildren();
+  DATA.loops.forEach(l=>{
+    const mx=l.max||l.iters||0,bars=node("span","bar");
+    for(let i=0;i<mx;i++)bars.appendChild(node("b",i<l.iters?"on":""));
     const t=tag[l.state]||["st-todo","—"];
-    return `<div class="loop"><span class="mod">${l.mod}</span><span class="bar">${bars}</span><span class="tag ${t[0]}">${t[1]}</span></div>`;
-  }).join("");
+    append(host,append(node("div","loop"),node("span","mod",l.mod),bars,node("span","tag "+t[0],t[1])));
+  });
 }
 function renderSubs(){
   const band=v=>(v==null?"var(--ink-mute)":v>=85?"var(--green)":v>=65?"var(--amber)":"var(--red)");
-  $("#subrow").innerHTML = DATA.subscores.map(s=>`
-    <div class="s"><div class="k">${s.k}</div><div class="val" style="color:${band(s.val)}">${s.val==null?"—":s.val}</div><div class="bd">${s.bd==null?"":s.bd}</div></div>`).join("");
+  const host=$("#subrow");host.replaceChildren();
+  DATA.subscores.forEach(s=>{const val=node("div","val",s.val==null?"—":s.val);val.style.color=band(s.val);
+    append(host,append(node("div","s"),node("div","k",s.k),val,node("div","bd",s.bd==null?"":s.bd)));});
 }
-
 function renderExecutionPolicy(){
-  const host=$("#exec"); if(!host)return;
-  const policy=DATA.execution_policy||{};
-  const phases=policy.phases||{};
-  const source=policy.source||"policy";
+  const host=$("#exec");if(!host)return;host.replaceChildren();
+  const policy=DATA.execution_policy||{},phases=policy.phases||{},source=policy.source||"policy";
   $("#exec-n").textContent=source.replace("config.defaults.","");
-  const rows=(DATA.phases||[]).map(p=>{
-    const e=p.execution||phases[p.key]||{};
-    const model=e.model||"default";
-    const tier=e.tier||"-";
-    const effort=e.effort||"-";
-    const method=e.method||"No execution policy declared for this phase.";
-    const unc=e.uncorrelated?`<span class="exchip warn">uncorrelated</span>`:"";
-    return `<div class="exrow"><div class="exphase">${p.phase||""} ${p.key}</div><div><div class="exmethod">${method}</div><div class="exmeta"><span class="exchip">tier=${tier}</span><span class="exchip">model=${model}</span><span class="exchip">effort=${effort}</span>${unc}</div></div></div>`;
-  }).join("");
-  host.innerHTML=rows||`<p style="color:var(--ink-mute);font-size:.82rem">No execution_policy in DATA.</p>`;
+  if(!(DATA.phases||[]).length){const empty=node("p",null,"No execution_policy in DATA.");empty.style.color="var(--ink-mute)";empty.style.fontSize=".82rem";host.appendChild(empty);return;}
+  (DATA.phases||[]).forEach(p=>{
+    const e=p.execution||phases[p.key]||{},meta=node("div","exmeta");
+    append(meta,node("span","exchip","tier="+(e.tier||"-")),node("span","exchip","model="+(e.model||"default")),
+      node("span","exchip","effort="+(e.effort||"-")));
+    if(e.uncorrelated)meta.appendChild(node("span","exchip warn","uncorrelated"));
+    append(host,append(node("div","exrow"),node("div","exphase",String(p.phase||"")+" "+String(p.key||"")),
+      append(node("div"),node("div","exmethod",e.method||"No execution policy declared for this phase."),meta)));
+  });
 }
-
 function renderTelemetry(){
-  const t=DATA.telemetry, sec=$("#telemetry");
-  if(!t){ if(sec) sec.hidden=true; return; }
+  const t=DATA.telemetry,sec=$("#telemetry");if(!t){if(sec)sec.hidden=true;return;}
   const fmtN=n=>n==null?"—":n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?Math.round(n/1e3)+"k":String(n);
-  const fmtMs=ms=>{ if(ms==null)return "—"; const m=Math.round(ms/60000); return m>=60?(m/60).toFixed(1)+"h":m+"m"; };
-  const bm=t.by_model||[];
-  const short=m=>String(m).replace(/^claude-/,"");
+  const fmtMs=ms=>{if(ms==null)return "—";const m=Math.round(ms/60000);return m>=60?(m/60).toFixed(1)+"h":m+"m";};
+  const bm=t.by_model||[],short=m=>String(m).replace(/^claude-/,"");
   const modelCell=bm.length?(bm.length+" model"+(bm.length>1?"s":"")):(t.model?short(t.model):"—");
   const cells=[["tokens in",fmtN(t.tokens_in)],["tokens out",fmtN(t.tokens_out)],["wall time",fmtMs(t.ms)],["model",modelCell],["effort",t.effort||"—"],["sessions",t.sessions==null?"—":String(t.sessions)]];
-  $("#trow").innerHTML=cells.map(([k,v])=>`<div class="tcell"><div class="tk">${k}</div><div class="tv">${v}</div></div>`).join("");
-  $("#tmodels").innerHTML = bm.length>1 ? bm.map(m=>`<div class="tmrow"><span class="tmn">${short(m.model)}</span><span class="tmv">${fmtN(m.tokens_in)} &rarr; ${fmtN(m.tokens_out)}</span></div>`).join("") : "";
-  if(sec) sec.hidden=false;
+  const row=$("#trow");row.replaceChildren();cells.forEach(([k,v])=>append(row,append(node("div","tcell"),node("div","tk",k),node("div","tv",v))));
+  const models=$("#tmodels");models.replaceChildren();
+  if(bm.length>1)bm.forEach(m=>append(models,append(node("div","tmrow"),node("span","tmn",short(m.model)),node("span","tmv",fmtN(m.tokens_in)+" → "+fmtN(m.tokens_out)))));
+  if(sec)sec.hidden=false;
 }
 
 /* ==== evidence drawer ==== */
 function openEvidence(key){
-  const e=DATA.evidence[key]; if(!e)return;
-  $("#d-ey").textContent=e.ey; $("#d-title").textContent=e.title; $("#d-desc").textContent=e.desc;
-  $("#d-pre").innerHTML=e.pre;
-  $("#drawer").classList.add("open"); $("#drawer").setAttribute("aria-hidden","false");
-  $("#scrim").classList.add("open");
+  const e=DATA.evidence[key];if(!e)return;
+  $("#d-ey").textContent=e.ey;$("#d-title").textContent=e.title;$("#d-desc").textContent=e.desc;renderEvidencePre($("#d-pre"),e.pre);
+  $("#drawer").classList.add("open");$("#drawer").setAttribute("aria-hidden","false");$("#scrim").classList.add("open");
 }
 function closeDrawer(){$("#drawer").classList.remove("open");$("#drawer").setAttribute("aria-hidden","true");$("#scrim").classList.remove("open");}
-$("#d-close").addEventListener("click",closeDrawer);
-$("#scrim").addEventListener("click",closeDrawer);
+$("#d-close").addEventListener("click",closeDrawer);$("#scrim").addEventListener("click",closeDrawer);
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
 
 /* ==== time-lapse ==== */
-const scrub=$("#scrub"); const snaps=DATA.snapshots||[];
-if(snaps.length){ scrub.max=snaps.length-1; scrub.value=snaps.length-1; }
-else { scrub.max=0; scrub.value=0; scrub.disabled=true; }
+const scrub=$("#scrub"),snaps=DATA.snapshots||[];
+if(snaps.length){scrub.max=snaps.length-1;scrub.value=snaps.length-1;}else{scrub.max=0;scrub.value=0;scrub.disabled=true;}
 function applySnapshot(i){
-  const s=snaps[i]; if(!s) return;
-  $("#asof").textContent=s.date;
-  const isLatest = i===snaps.length-1;
-  if(isLatest){ paintVerdict(DATA.readiness.score,DATA.readiness.band,DATA.readiness.title,DATA.readiness.sub); renderTrail(null); }
-  else{
-    const band=s.readiness>=95?"READY":s.readiness>=50?"IN PROGRESS":"NOT READY";
-    paintVerdict(s.readiness,band,"History",'Reconstructed from the snapshot of <b>'+s.date+'</b> — the ledger keeps every run.');
-    renderTrail(s.reached);
-  }
+  const s=snaps[i];if(!s)return;$("#asof").textContent=s.date;
+  if(i===snaps.length-1){paintVerdict(DATA.readiness.score,DATA.readiness.band,DATA.readiness.title,DATA.readiness.sub);renderTrail(null);}
+  else{const band=s.readiness>=95?"READY":s.readiness>=50?"IN PROGRESS":"NOT READY";
+    paintVerdict(s.readiness,band,"History","Reconstructed from the snapshot of "+s.date+" — the ledger keeps every run.");renderTrail(s.reached);}
 }
 scrub.addEventListener("input",()=>applySnapshot(+scrub.value));
 
 /* ==== init ==== */
-renderSpecs(); renderAdrs(); renderInv(); renderHeat(); renderLoops(); renderSubs(); renderExecutionPolicy(); renderTelemetry();
-$("#asof").textContent = snaps.length ? snaps[snaps.length-1].date : "no history yet (readiness --record)";
+renderSpecs();renderAdrs();renderInv();renderHeat();renderLoops();renderSubs();renderExecutionPolicy();renderTelemetry();
+$("#asof").textContent=snaps.length?snaps[snaps.length-1].date:"no history yet (readiness --record)";
 renderTrail(null);
 </script>
 </body>

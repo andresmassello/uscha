@@ -6,7 +6,7 @@ whatever trade-off wins. An ADR *chooses* between alternatives; the CONSTITUTION
 > Truth hierarchy: **SPEC** = what must happen · **ADR** = why this shape ·
 > **CONSTITUTION** = what is never acceptable.
 
-Versioned, one per project. `/discovery`, `/adr-refine` and `/dev-loop` read it **before**
+Versioned, one per project. `/uscha-discovery`, `/uscha-adr-refine` and `/uscha-devloop` read it **before**
 proposing or touching anything. A violation is a **BLOCKER** finding (non-negotiable): the agent
 MUST record it — `qa_ledger.py flag-blocker --kind constitution` — and once recorded it
 blocks convergence and caps readiness ≤65 until `--resolve` (a human decision). The engine
@@ -100,7 +100,7 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
 
 ## Anti-ceremony — Lean over the method itself (meta-invariant)
 
-> The risk is not a bad gate: it is the **sum** of good gates turning `/dev-loop` into an
+> The risk is not a bad gate: it is the **sum** of good gates turning `/uscha-devloop` into an
 > audit. That is *over-processing* — the waste of ceremony (Poppendieck ch. 4). It applies to the
 > tool, not the code: if a step does not add value **for the human**, it is waste.
 > It is a **meta-invariant** — the criterion that EVERY future gate must pass before entering.
@@ -114,9 +114,9 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
 
 ## How it is enforced
 
-- `/discovery` and `/adr-refine` read it and derive the **severity gate** from here (the
+- `/uscha-discovery` and `/uscha-adr-refine` read it and derive the **severity gate** from here (the
   "inviolable constraints" step). Each invariant carries, where it maps, a CWE reference.
-- `/dev-loop` consults it before touching a governed area; a violation is recorded with
+- `/uscha-devloop` consults it before touching a governed area; a violation is recorded with
   `qa_ledger.py flag-blocker --kind constitution --note "<invariant>"` and enters the ledger
   as a **BLOCKER** finding (readiness cap ≤ 65, blocks convergence until `--resolve`).
   Detecting it is the agent/human's obligation; once recorded, enforcement is the engine's.

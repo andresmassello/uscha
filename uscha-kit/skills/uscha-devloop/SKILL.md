@@ -418,7 +418,9 @@ BLOCKER/CRITICAL open → ≤65, unresolved escalation → ≤75 (held until
 `resolve-escalation` — a recorded event, not an implication). A `CONSTITUTION.md`
 breach does NOT reach the engine by itself: **you MUST log it** —
 `flag-blocker --repo <REPO> --kind constitution --note "<invariant breached>"` — and
-once logged it caps readiness ≤65 and blocks convergence until `--resolve`. Bands:
+once logged it caps readiness ≤65 and blocks convergence until resolved with
+`flag-blocker --repo <REPO> --kind constitution --resolve --escape-analysis
+"Added a regression test for the invariant."`. Bands:
 <50 NOT READY, 50–79 IN PROGRESS, 80–94 RELEASE CANDIDATE, 95–100 READY.
 
 **Acceptance traceability (the DOMINANT dimension — kit 1.10.0).** Each ACCEPTANCE
