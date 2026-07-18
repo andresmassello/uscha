@@ -53,6 +53,20 @@ npx --yes @andresmassello/uscha@latest init --repo . --force
 Project state stays in the project: `uscha.config.json`, `QA-LEDGER.json`,
 `ACCEPTANCE.md`, and approved golden fixtures when used.
 
+## See the dashboard (mirador)
+
+From the root of any project that has a `QA-LEDGER.json`, one command renders the mirador and
+opens it — no python, no paths:
+
+```bash
+npx --yes @andresmassello/uscha@latest mirador           # one glance: render + open
+npx --yes @andresmassello/uscha@latest mirador --watch   # live second-screen view (auto-refresh)
+```
+
+It defaults to the `QA-LEDGER.json` convention in the current directory (pass `--ledger` to
+point elsewhere) and prints the absolute path it wrote. `--watch` re-renders every `--interval`
+seconds (default 30) into one self-reloading tab.
+
 ## Requirements
 
 | Requirement | Why |

@@ -90,10 +90,23 @@ wires the JSON the engine emits into the template. Read-only.
    on the `OPEN IT:` line — surface that path to the operator. Pass `--no-open` to write the
    file without opening a browser (headless/CI, or the watch loop below, which passes it).
 
+## For a human at a terminal: `uscha mirador`
+
+The one-liner above is what THIS skill runs. A human who just wants the dashboard — without a
+Claude Code session — has a zero-friction verb instead (kit 1.43.0): from the project root,
+
+```bash
+uscha mirador            # render + open, defaults to the QA-LEDGER.json convention
+uscha mirador --watch    # live second-screen view (auto-refresh, one self-reloading tab)
+npx @andresmassello/uscha mirador   # same, no install
+```
+
+No python, no paths: the verb resolves the engine, template and ledger on its own.
+
 ## Live second-screen view
 
 For a mirador that updates while you keep coding in the terminal, run the watch loop in a
-spare terminal and open `mirador.html` on a second monitor:
+spare terminal and open `mirador.html` on a second monitor (or just use `uscha mirador --watch`):
 
 ```bash
 # Windows:  powershell -NoProfile -File <skill-dir>\mirador-watch.ps1 -Interval 30

@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -497,6 +498,65 @@ def cmd_init(args):
         raise SystemExit(1)
 
 
+def _open_best_effort(path):
+    """Open the rendered file in the default browser; never fail (headless/CI)."""
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(path)  # type: ignore[attr-defined]  # Windows-only
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception:
+        pass  # the renderer already printed the absolute path
+
+
+def _mirador_render_path():
+    """The mirador renderer inside this kit (either skill-tree layout)."""
+    for rel in (("skills", "uscha-mirador", "mirador-render.py"),
+                (".claude", "skills", "uscha-mirador", "mirador-render.py")):
+        candidate = KIT_ROOT.joinpath(*rel)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def cmd_mirador(args):
+    """`uscha mirador` — one command to render + open the project's dashboard.
+    No paths, no python: the renderer self-resolves its engine/template siblings, and the
+    ledger defaults to the QA-LEDGER.json convention in the current directory."""
+    render = _mirador_render_path()
+    if render is None:
+        print("[uscha mirador] mirador-render.py not found in the kit", file=sys.stderr)
+        raise SystemExit(1)
+    if not Path(args.ledger).is_file():
+        print("[uscha mirador] ledger '%s' not found here -- run the dev loop first, or pass --ledger"
+              % args.ledger, file=sys.stderr)
+        raise SystemExit(1)
+    base = [sys.executable, str(render), "--ledger", args.ledger, "--out", args.out]
+    if not args.watch:
+        # one-shot: the renderer writes the file and opens it (unless --no-open)
+        rc = subprocess.call(base + (["--no-open"] if args.no_open else []))
+        if rc:
+            raise SystemExit(rc)
+        return
+    # live view: the page carries its own meta-refresh and reloads itself in ONE tab, so we
+    # open once here and re-render quietly forever -- never re-open (no browser-tab spam).
+    rc = subprocess.call(base + ["--refresh", str(args.interval), "--no-open"])
+    if rc:
+        raise SystemExit(rc)
+    out_abs = os.path.abspath(args.out)
+    if not args.no_open:
+        _open_best_effort(out_abs)
+    print("[uscha mirador] live view every %ss at %s -- Ctrl-C to stop" % (args.interval, out_abs))
+    try:
+        while True:
+            time.sleep(args.interval)
+            subprocess.call(base + ["--refresh", str(args.interval), "--no-open"])
+    except KeyboardInterrupt:
+        print("\n[uscha mirador] stopped")
+
+
 def next_steps(target):
     steps = []
     if target in ("codex", "both"): steps.append("Codex: restart or open a new thread, then install/use uscha from the Personal marketplace if needed.")
@@ -527,6 +587,13 @@ def build_parser():
     doctor.add_argument("--target", choices=["codex", "claude", "both"], default="both"); doctor.add_argument("--home"); doctor.add_argument("--json", action="store_true"); doctor.set_defaults(func=cmd_doctor)
     init = sub.add_parser("init", help="prepare a repo with Uscha config/templates")
     init.add_argument("--repo", default="."); init.add_argument("--force", action="store_true", help="replace differing init files deliberately"); init.add_argument("--dry-run", action="store_true"); init.add_argument("--json", action="store_true"); init.set_defaults(func=cmd_init)
+    mirador = sub.add_parser("mirador", help="render + open the project's mirador dashboard from QA-LEDGER.json")
+    mirador.add_argument("--ledger", default="QA-LEDGER.json", help="ledger to read (default: the QA-LEDGER.json convention)")
+    mirador.add_argument("--out", default="mirador.html")
+    mirador.add_argument("--watch", action="store_true", help="live second-screen view: re-render every --interval seconds")
+    mirador.add_argument("--interval", type=int, default=30)
+    mirador.add_argument("--no-open", action="store_true", help="write the file but do not open a browser")
+    mirador.set_defaults(func=cmd_mirador)
     return parser
 
 
