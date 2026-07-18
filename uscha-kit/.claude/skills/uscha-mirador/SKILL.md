@@ -75,18 +75,20 @@ wires the JSON the engine emits into the template. Read-only.
    this for a pure measured view.
 
 4. **Render `mirador.html`** with the standalone renderer — it runs `dashboard --json`,
-   merges the sidecar telemetry if present, injects `const DATA`, and writes the file:
+   merges the sidecar telemetry if present, injects `const DATA`, writes the file, prints its
+   absolute path (`OPEN IT: ...`), and opens it in the default browser. From the project root,
+   with no long paths — `--engine` and `--template` default to the renderer's sibling skill
+   files (kit 1.41.2):
    ```bash
-   python3 <skill-dir>/mirador-render.py --engine <engine> --ledger QA-LEDGER.json \
-       --template <skill-dir>/mirador.template.html --out mirador.html
+   python3 <skill-dir>/mirador-render.py --ledger QA-LEDGER.json
    ```
    The engine stays model-agnostic — telemetry is merged by the renderer (the adapter), NOT
    by `dashboard`. If the ledger is missing, warn and stop (run `uscha-devloop` first). For
    the time-lapse, `qa_ledger.py readiness --record` (opt-in) fills the history prospectively.
 
-5. **Open it** (best-effort; never fail — headless/CI): `start "" mirador.html` (Windows) /
-   `open mirador.html` (macOS) / `xdg-open mirador.html` (Linux). ALWAYS print the absolute
-   path of `mirador.html`.
+5. **Where to look:** the renderer already opened `mirador.html` and printed its absolute path
+   on the `OPEN IT:` line — surface that path to the operator. Pass `--no-open` to write the
+   file without opening a browser (headless/CI, or the watch loop below, which passes it).
 
 ## Live second-screen view
 

@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.41.1.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.41.2.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.41.1.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.41.1.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.41.2.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.41.2.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1569,7 +1569,7 @@ run dashboard --ledger L-mir.json --json 2>/dev/null | "$PY" -c "import json,sys
 echo "== T56 mirador-render (1.34.0): dashboard + telemetria mergeada + inject + meta-refresh =="
 RENDER="$(dirname "$(dirname "$QL")")/uscha-mirador/mirador-render.py"
 TPL="$(dirname "$(dirname "$QL")")/uscha-mirador/mirador.template.html"
-"$PY" "$RENDER" --engine "$QL" --ledger L-mirp.json --template "$TPL" --out mir-out.html --sidecar tele/telemetry.jsonl --refresh 30 >/dev/null 2>&1
+"$PY" "$RENDER" --engine "$QL" --ledger L-mirp.json --template "$TPL" --out mir-out.html --sidecar tele/telemetry.jsonl --refresh 30 --no-open >/dev/null 2>&1
 "$PY" -c "
 import re, json, sys
 h = open('mir-out.html', encoding='utf-8').read()
@@ -1637,7 +1637,7 @@ sys.exit(0 if ok else 1)" \
   || { FAIL=$((FAIL+1)); echo "  FAIL dashboard no expone execution_policy por fase"; }
 
 echo "== T59 mirador-render (1.35.0): bird's-eye muestra policy model/effort =="
-"$PY" "$RENDER" --engine "$QL" --ledger L-ep.json --template "$TPL" --out ep-mir.html >/dev/null 2>&1
+"$PY" "$RENDER" --engine "$QL" --ledger L-ep.json --template "$TPL" --out ep-mir.html --no-open >/dev/null 2>&1
 "$PY" -c "
 import re, json, sys
 h = open('ep-mir.html', encoding='utf-8').read()
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.41.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.41.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.41.1' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.41.2' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.41.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.41.2' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.41.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.41.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.41.1'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.41.2'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2622,6 +2622,35 @@ PY
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); echo "  ok   a failed Codex swap restores the user's pre-existing plugin (no data loss)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL Codex rollback lost or stranded the pre-existing plugin"; fi
 
+echo "== T78 (1.41.2): NOT READY title is score-aware -- never says 'no arranca' once started =="
+# isolated subdir: dashboard scans the CWD for ADRs/specs, so run away from the shared sandbox
+mkdir -p title-sb && ( cd title-sb
+  printf -- "# ACCEPTANCE\n\n- [ ] uno\n- [ ] dos\n" > title-acc.md
+  printf '{ "defaults": { "acceptance_file": "title-acc.md" },\n  "repos": [ {"name":"solo","path":"r","type":"python"} ], "integration": {"enabled": false} }\n' > title-cfg.json
+  run init --config title-cfg.json --out L-title-a.json >/dev/null 2>&1
+  # A: virgin ledger -> score 0 -> "sin evidencia medida", NOT "no arranca"
+  run dashboard --ledger L-title-a.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+r = json.load(sys.stdin)['readiness']
+t = r['title'] or ''
+sys.exit(0 if (r['band'] == 'NOT READY' and (r['score'] or 0) == 0
+               and 'arranca' not in t and 'sin evidencia' in t) else 1)" \
+    && { PASS=$((PASS+1)); echo "  ok   score 0 -> 'sin evidencia medida' (no 'no arranca')"; } \
+    || { FAIL=$((FAIL+1)); echo "  FAIL titulo virgen incorrecto"; }
+  # B: one passing gate -> score >0 but still NOT READY -> "en construccion", never "no arranca"
+  cp L-title-a.json L-title-b.json
+  run log-gate --repo solo --iteration 1 --kind simplicity --verdict pass --ledger L-title-b.json >/dev/null 2>&1
+  run dashboard --ledger L-title-b.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+r = json.load(sys.stdin)['readiness']
+t = r['title'] or ''
+sys.exit(0 if (r['band'] == 'NOT READY' and 0 < (r['score'] or 0) < 50
+               and 'arranca' not in t and 'construccion' in t) else 1)" \
+    && { PASS=$((PASS+1)); echo "  ok   score >0 NOT READY -> 'en construccion' (no 'no arranca')"; } \
+    || { FAIL=$((FAIL+1)); echo "  FAIL titulo iniciado incorrecto"; }
+  echo "$PASS $FAIL" > title-counts.txt )
+read PASS FAIL < title-sb/title-counts.txt
+
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"
@@ -2901,7 +2930,7 @@ JSON
   "$P0_PY" "$P0_KIT/.claude/skills/uscha-mirador/mirador-render.py" \
     --engine "$P0_TMP/dashboard-engine.py" --ledger "$P0_TMP/ledger.json" \
     --template "$P0_KIT/.claude/skills/uscha-mirador/mirador.template.html" \
-    --out "$P0_TMP/mirador.html" --sidecar "$P0_TMP/telemetry.jsonl" >/dev/null
+    --out "$P0_TMP/mirador.html" --sidecar "$P0_TMP/telemetry.jsonl" --no-open >/dev/null
   "$P0_PY" - "$P0_TMP/mirador.html" "$P0_KIT/.claude/skills/uscha-mirador/mirador.template.html" <<'PY'
 import json, pathlib, re, sys
 attack = '</script><script>globalThis.MIRADOR_PWNED=1</script><b>&"\'\u2028\u2029'

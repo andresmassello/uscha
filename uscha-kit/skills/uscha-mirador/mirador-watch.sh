@@ -20,7 +20,7 @@ command -v "$PY" >/dev/null 2>&1 || PY=python
 echo "mirador-watch: regenerating $OUT every ${INTERVAL}s (Ctrl-C to stop). Open $OUT in a browser."
 while true; do
   "$PY" "$HERE/mirador-render.py" --engine "$ENGINE" --ledger "$LEDGER" \
-    --template "$TEMPLATE" --out "$OUT" --refresh "$INTERVAL" || \
+    --template "$TEMPLATE" --out "$OUT" --refresh "$INTERVAL" --no-open || \
     echo "mirador-watch: render failed (ledger missing? run uscha-devloop first) -- retrying"
   sleep "$INTERVAL"
 done

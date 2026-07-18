@@ -2886,7 +2886,7 @@ _MIRADOR_TITLE = {
     "READY": "Listo para release",
     "RELEASE CANDIDATE": "Casi listo para release",
     "IN PROGRESS": "En construccion",
-    "NOT READY": "Todavia no arranca",
+    # NOT READY has no fixed title: it is score-aware (see cmd_dashboard, kit 1.41.2).
 }
 # los 7 invariantes de la CONSTITUTION (lista fija: el engine NO lee CONSTITUTION.md
 # por diseno). El status se infiere del gate persistido donde hay mapeo; los que no
@@ -3183,8 +3183,15 @@ def cmd_dashboard(args):
     score = rd.get("score")
     band = rd.get("status")
     cap = rd.get("cap_reason")
+    # kit 1.41.2: NOT READY (band 0-49) is NOT "hasn't started". Above 0 the project HAS
+    # started but lacks enough MEASURED evidence -- do not say "no arranca" at e.g. 22.
+    if band == "NOT READY":
+        _title = ("Todavia sin evidencia medida" if (score or 0) < 1
+                  else "En construccion -- evidencia insuficiente")
+    else:
+        _title = _MIRADOR_TITLE.get(band)
     readiness = {"score": score, "band": band,
-                 "title": _MIRADOR_TITLE.get(band),
+                 "title": _title,
                  "sub": (f"cap: {cap}" if cap else None)}
 
     # subscores: coverage es numerico real; los gates persistidos (simplicity/waste/

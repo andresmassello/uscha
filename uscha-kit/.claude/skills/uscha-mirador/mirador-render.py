@@ -69,15 +69,35 @@ def _json_for_html_script(value):
             .replace("\u2029", r"\u2029"))
 
 
+def _open_best_effort(path):
+    """Open the rendered file in the default browser; never fail (headless/CI)."""
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(path)  # type: ignore[attr-defined]  # Windows-only
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception:
+        pass  # the absolute path was already printed
+
+
 def main():
+    here = os.path.dirname(os.path.abspath(__file__))
     ap = argparse.ArgumentParser(description="render mirador.html from the ledger (+ optional vendor telemetry)")
-    ap.add_argument("--engine", required=True, help="path to qa_ledger.py")
+    # engine + template default to the SIBLING skill files, so from any project you can just
+    # run this script (or `/uscha-mirador`) with no long paths (kit 1.41.2).
+    ap.add_argument("--engine", default=os.path.join(here, os.pardir, "uscha-devloop", "qa_ledger.py"),
+                    help="path to qa_ledger.py (default: the sibling uscha-devloop engine)")
     ap.add_argument("--ledger", default="QA-LEDGER.json")
-    ap.add_argument("--template", required=True, help="path to mirador.template.html")
+    ap.add_argument("--template", default=os.path.join(here, "mirador.template.html"),
+                    help="path to mirador.template.html (default: the sibling template)")
     ap.add_argument("--out", default="mirador.html")
     ap.add_argument("--sidecar", default=os.path.join(".uscha", "telemetry.jsonl"))
     ap.add_argument("--refresh", type=int, default=0,
                     help="if >0, the page auto-reloads every N seconds (live second-screen view)")
+    ap.add_argument("--no-open", action="store_true",
+                    help="write the file but do not open it in a browser")
     args = ap.parse_args()
 
     try:
@@ -113,8 +133,13 @@ def main():
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(out)
     score = (data.get("readiness") or {}).get("score")
-    print(f"[mirador-render] wrote {args.out} (readiness {score}, "
-          f"telemetry {'on' if tel else 'off'}, refresh {args.refresh or 'off'})")
+    out_abs = os.path.abspath(args.out)
+    print(f"[mirador-render] wrote {out_abs}")
+    print(f"[mirador-render]   readiness {score} | telemetry {'on' if tel else 'off'} | "
+          f"refresh {args.refresh or 'off'}")
+    print(f"[mirador-render]   OPEN IT:  {out_abs}")
+    if not args.no_open:
+        _open_best_effort(out_abs)
     return 0
 
 

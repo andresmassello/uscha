@@ -16,7 +16,7 @@ $out      = if ($env:OUT)      { $env:OUT }      else { "mirador.html" }
 $py       = if ($env:PYTHON)   { $env:PYTHON }   else { "python" }
 Write-Host "mirador-watch: regenerating $out every ${Interval}s (Ctrl-C to stop). Open $out in a browser."
 while ($true) {
-  & $py (Join-Path $here "mirador-render.py") --engine $engine --ledger $ledger --template $template --out $out --refresh $Interval
+  & $py (Join-Path $here "mirador-render.py") --engine $engine --ledger $ledger --template $template --out $out --refresh $Interval --no-open
   if ($LASTEXITCODE -ne 0) { Write-Host "mirador-watch: render failed (ledger missing? run uscha-devloop first) -- retrying" }
   Start-Sleep -Seconds $Interval
 }
