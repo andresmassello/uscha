@@ -130,6 +130,7 @@ def main():
         # opt-in live reload: a meta-refresh, injected only when watching
         out = out.replace("</head>",
                           f'<meta http-equiv="refresh" content="{args.refresh}">\n</head>', 1)
+    live = bool(args.refresh and args.refresh > 0)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(out)
     score = (data.get("readiness") or {}).get("score")
@@ -138,7 +139,10 @@ def main():
     print(f"[mirador-render]   readiness {score} | telemetry {'on' if tel else 'off'} | "
           f"refresh {args.refresh or 'off'}")
     print(f"[mirador-render]   OPEN IT:  {out_abs}")
-    if not args.no_open:
+    # Auto-open only a ONE-SHOT view. In live mode (--refresh) the page carries its own
+    # meta-refresh and reloads in the SAME tab, so opening on every render cycle would
+    # spawn a new browser tab each time (kit 1.41.3). Open it once by hand and let it live.
+    if not args.no_open and not live:
         _open_best_effort(out_abs)
     return 0
 
