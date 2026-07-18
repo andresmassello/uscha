@@ -154,6 +154,26 @@ svg{display:block;width:100%;height:auto}
 .exchip{font-family:var(--mono);font-size:.63rem;color:var(--ink-mute);border:1px solid var(--rule);border-radius:6px;padding:.08rem .38rem;background:#fff}
 .exchip.warn{color:var(--amber);border-color:var(--amber);background:#fff9ec}
 .hero .projtitle{font-size:1.7rem;font-weight:700;color:var(--ink-soft);letter-spacing:-.01em;margin-bottom:.75rem;line-height:1.15}
+
+/* status story — how it's going / what's blocking / what's next (all from measured DATA) */
+.status{margin-top:1rem;background:var(--paper);border:1px solid var(--rule);border-radius:14px;box-shadow:0 24px 50px -44px rgba(0,0,0,.3)}
+.srow{display:grid;grid-template-columns:132px 1fr;gap:1rem;align-items:start;padding:.85rem 1.15rem;border-top:1px solid var(--rule)}
+.srow:first-child{border-top:0}
+.srow .slab{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-mute);padding-top:.2rem}
+.srow .sval{font-size:.94rem;color:var(--ink);min-width:0}
+.srow .sval .muted{color:var(--ink-mute)}
+.dimline{font-family:var(--mono);font-size:.82rem;color:var(--ink-soft);line-height:1.7;word-break:break-word}
+.dimline b{color:var(--ink);font-weight:600}
+.blockers{display:flex;flex-direction:column;gap:.35rem}
+.blockers .bk{display:flex;align-items:baseline;gap:.5rem;line-height:1.4}
+.blockers .bk i{color:var(--red-deep);font-style:normal;font-weight:800;flex-shrink:0}
+.blockers .bk.ok i{color:var(--green)}
+.blockers .bk.ok{color:var(--ink-soft)}
+.next .nmethod{color:var(--ink);line-height:1.4}
+.next .nmethod b{font-weight:700}
+.next .nmeta{margin-top:.35rem;display:flex;gap:.35rem;flex-wrap:wrap}
+.next .nmeta span{font-family:var(--mono);font-size:.63rem;color:var(--ink-mute);border:1px solid var(--rule);border-radius:6px;padding:.08rem .4rem;background:#fff}
+.emptyhint{color:var(--ink-mute);font-size:.82rem;line-height:1.5}
 </style>
 </head>
 <body>
@@ -171,6 +191,12 @@ svg{display:block;width:100%;height:auto}
       <span class="band" id="v-band">—</span>
       <h1 id="v-title">—</h1>
       <div class="sub" id="v-sub">—</div>
+    </div>
+
+    <div class="status" id="status" hidden>
+      <div class="srow"><div class="slab">Cómo viene</div><div class="sval dimline" id="s-how"></div></div>
+      <div class="srow"><div class="slab">Qué lo traba</div><div class="sval blockers" id="s-block"></div></div>
+      <div class="srow"><div class="slab">Qué sigue</div><div class="sval next" id="s-next"></div></div>
     </div>
 
     <div class="trailcard">
@@ -208,7 +234,7 @@ svg{display:block;width:100%;height:auto}
       <div class="inv" id="inv"></div>
     </div>
 
-    <div class="card col6">
+    <div class="card col6" id="card-heat">
       <h2>The 6 layers of truth</h2>
       <div class="heat" id="heat"></div>
     </div>
@@ -370,6 +396,8 @@ function node(tag, className, value){
   return n;
 }
 function append(parent,...children){children.forEach(child=>parent.appendChild(child));return parent;}
+function emptyHint(text){return node("p","emptyhint",text);}
+function countOf(v){return Array.isArray(v)?v.length:(v||0);}
 function renderEvidencePre(host, value){
   host.replaceChildren();
   const entities={"&lt;":"<","&gt;":">","&amp;":"&","&quot;":"\"","&#39;":"'"};
@@ -470,6 +498,7 @@ function renderTrail(activeReached){
 function renderSpecs(){
   $("#spec-n").textContent=DATA.specs.filter(s=>s.status==="done").length+"/"+DATA.specs.length;
   const host=$("#speclist");host.replaceChildren();
+  if(!DATA.specs.length){host.appendChild(emptyHint("sin specs medidas todavía — la fase SPEC las declara"));return;}
   DATA.specs.forEach(s=>append(host,append(node("div","spec"),node("span","id",s.id),node("span","t",s.t),
     node("span","chip "+(chipClass[s.status]||"st-todo"),chipText[s.status]||s.status),node("span","acc",String(s.acc)+"%"))));
 }
@@ -485,6 +514,7 @@ function adrLabel(a){
 function renderAdrs(){
   $("#adr-n").textContent=DATA.adrs.filter(a=>a.status==="done").length+"/"+DATA.adrs.length;
   const host=$("#adrlist");host.replaceChildren();
+  if(!DATA.adrs.length){host.appendChild(emptyHint("sin ADRs medidos todavía — la fase ADR·CONST los registra"));return;}
   DATA.adrs.forEach(a=>append(host,append(node("div","spec"),node("span","id",a.id),node("span","t",a.t),
     node("span","chip "+(chipClass[a.status]||"st-todo"),adrLabel(a)))));
 }
@@ -494,12 +524,17 @@ function renderInv(){
 }
 function renderHeat(){
   const cls={ok:"h-ok",warn:"h-warn",miss:"h-miss"},host=$("#heat");host.replaceChildren();
+  const card=$("#card-heat");
+  // the engine does not feed capas for a real project -> hide the whole card rather than show a dead grid
+  if(!(DATA.capas||[]).length){if(card)card.hidden=true;return;}
+  if(card)card.hidden=false;
   DATA.capas.forEach(c=>append(host,append(node("div","cell "+(cls[c.status]||""),undefined),node("div","lab",c.name),node("div","v",c.v))));
 }
 function renderLoops(){
   $("#qa-n").textContent=DATA.loops.length;
   const tag={converged:["st-done","converged"],oscillating:["st-prog","oscillating"],escalated:["st-block","escalated"],active:["st-prog","active"]};
   const host=$("#loops");host.replaceChildren();
+  if(!DATA.loops.length){host.appendChild(emptyHint("sin loops de QA todavía — arrancan en la fase QA loop"));return;}
   DATA.loops.forEach(l=>{
     const mx=l.max||l.iters||0,bars=node("span","bar");
     for(let i=0;i<mx;i++)bars.appendChild(node("b",i<l.iters?"on":""));
@@ -540,6 +575,67 @@ function renderTelemetry(){
   if(sec)sec.hidden=false;
 }
 
+/* ==== status story: cómo viene / qué lo traba / qué sigue — all from measured DATA ==== */
+function renderStatus(){
+  const sec=$("#status");if(!sec)return;
+  /* CÓMO VIENE — the measured dimensions, verbatim from the ledger's sub-scores */
+  const how=$("#s-how");how.replaceChildren();
+  const subs=DATA.subscores||[];
+  if(subs.length){
+    subs.forEach((s,i)=>{
+      if(i)how.appendChild(document.createTextNode(" · "));
+      how.appendChild(node("b",null,s.k));
+      how.appendChild(document.createTextNode(" "+(s.bd==null?(s.val==null?"—":String(s.val)):s.bd)));
+    });
+  }else how.appendChild(node("span","muted","sin dimensiones medidas todavía"));
+  /* QUÉ LO TRABA — hard blockers only, each traceable to a measured field */
+  const bl=$("#s-block");bl.replaceChildren();
+  const blockers=[];
+  const cap=DATA.readiness&&DATA.readiness.sub;
+  if(cap)blockers.push("tope de readiness — "+String(cap).replace(/<[^>]+>/g,"").trim());
+  subs.forEach(s=>{const bd=String(s.bd||"").toUpperCase();
+    if(bd.includes("FAIL")||bd.includes("MISS"))blockers.push("gate "+s.k+": "+s.bd);});
+  // NB: a failing gate already flips its CONSTITUTION invariant, so we do NOT also list the
+  // invariant here -- that would double-report one fact. Invariant status has its own card.
+  const di=DATA.discovery_intake||{};
+  if(countOf(di.production_findings))blockers.push(countOf(di.production_findings)+" hallazgo(s) de producción abiertos");
+  if(countOf(di.spec_doubts))blockers.push(countOf(di.spec_doubts)+" duda(s) de spec abiertas");
+  if(countOf(di.spec_change_requests))blockers.push(countOf(di.spec_change_requests)+" cambio(s) de spec pendientes");
+  const ex=DATA.adr_experiments||{};
+  if(ex.expired)blockers.push(ex.expired+" experimento(s) ADR vencidos");
+  if(ex.malformed)blockers.push(ex.malformed+" experimento(s) ADR malformados");
+  const seen=new Set(),uniq=blockers.filter(b=>!seen.has(b)&&seen.add(b));
+  if(uniq.length){
+    uniq.forEach(b=>{const row=node("div","bk");append(row,node("i",null,"▸"),document.createTextNode(b));bl.appendChild(row);});
+  }else{
+    const unmeasured=subs.filter(s=>s.val==null||s.val===0).map(s=>s.k);
+    const row=node("div","bk ok");
+    append(row,node("i",null,"✓"),document.createTextNode(
+      unmeasured.length?"nada bloquea — el score sube con evidencia medida en: "+unmeasured.join(", "):"nada bloquea"));
+    bl.appendChild(row);
+  }
+  /* QUÉ SIGUE — the active phase in the FSM + its method and execution hint */
+  const nx=$("#s-next");nx.replaceChildren();
+  const ph=DATA.phases||[];
+  let idx=ph.findIndex(p=>p.status==="prog"||p.status==="block");
+  if(idx<0)idx=ph.findIndex(p=>p.status==="todo");
+  if(idx<0)idx=ph.length-1;
+  const p=ph[idx];
+  if(p){
+    const pol=(DATA.execution_policy&&DATA.execution_policy.phases)||{};
+    const e=p.execution||pol[p.key]||{};
+    const head=node("div","nmethod");
+    head.appendChild(node("b",null,String(p.phase||"")+" "+String(p.label||p.key||"").toUpperCase()));
+    if(e.method)head.appendChild(document.createTextNode(" — "+e.method));
+    nx.appendChild(head);
+    const meta=node("div","nmeta");
+    append(meta,node("span",null,"tier="+(e.tier||"-")),node("span",null,"model="+(e.model||"default")),node("span",null,"effort="+(e.effort||"-")));
+    if(e.uncorrelated)meta.appendChild(node("span",null,"uncorrelated"));
+    nx.appendChild(meta);
+  }else nx.appendChild(node("span","muted","—"));
+  sec.hidden=false;
+}
+
 /* ==== evidence drawer ==== */
 function openEvidence(key){
   const e=DATA.evidence[key];if(!e)return;
@@ -562,7 +658,7 @@ function applySnapshot(i){
 scrub.addEventListener("input",()=>applySnapshot(+scrub.value));
 
 /* ==== init ==== */
-renderSpecs();renderAdrs();renderInv();renderHeat();renderLoops();renderSubs();renderExecutionPolicy();renderTelemetry();
+renderStatus();renderSpecs();renderAdrs();renderInv();renderHeat();renderLoops();renderSubs();renderExecutionPolicy();renderTelemetry();
 $("#asof").textContent=snaps.length?snaps[snaps.length-1].date:"no history yet (readiness --record)";
 renderTrail(null);
 </script>
