@@ -101,6 +101,20 @@ owns the merge.}
 \label{fig:system}
 \end{figure}
 
+A useful way to see the resulting shape is as a choice of control flow. The
+default agentic pattern is an \emph{open loop} --- investigate, edit, test, and
+then let the agent answer ``is it resolved?'' itself --- and that
+self-assessment is exactly the signal the two results above show to be
+unreliable. Uscha instead runs the same work through a \emph{measured graph}:
+the steps become defined stations whose transitions are gated by computational
+evidence in the ledger rather than by the agent's own verdict. The loop is not
+removed but bounded --- it lives inside one station (build--verify convergence)
+that either converges or escalates to a human when it stalls, instead of
+iterating on the model's judgment of its own doneness. What the practitioner
+authors is not the topology, which is fixed, but the guardrails the graph may
+not cross: the specification, the acceptance oracle, and the constitution of
+invariants.
+
 The methodology is built on one discipline and three architectural commitments:
 
 \begin{description}[leftmargin=1.2em]

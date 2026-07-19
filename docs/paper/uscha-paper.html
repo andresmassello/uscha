@@ -132,6 +132,20 @@ merge remains human.</p>
   still owns the merge.</figcaption>
 </figure>
 
+<p>A useful way to see the resulting shape is as a choice of control flow. The
+default agentic pattern is an <i>open loop</i> &mdash; investigate, edit, test,
+and then let the agent answer &ldquo;is it resolved?&rdquo; itself &mdash; and
+that self-assessment is exactly the signal the two results above show to be
+unreliable. Uscha instead runs the same work through a <i>measured graph</i>:
+the steps become defined stations whose transitions are gated by computational
+evidence in the ledger rather than by the agent's own verdict. The loop is not
+removed but bounded &mdash; it lives inside one station (build&ndash;verify
+convergence) that either converges or escalates to a human when it stalls,
+instead of iterating on the model's judgment of its own doneness. What the
+practitioner authors is not the topology, which is fixed, but the guardrails the
+graph may not cross: the specification, the acceptance oracle, and the
+constitution of invariants.</p>
+
 <p>The methodology is built on one discipline and three architectural
 commitments:</p>
 
