@@ -3110,6 +3110,136 @@ if [ "${USCHA_P0_A_SKIP:-0}" != "1" ]; then
   if [ "${P0_A_STATUS:-1}" -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 fi
 
+# ---------------------------------------------------------------------------- #
+# ACCEPTANCE EMISSION (kit 1.44.0) — uscha applied to itself.
+# Runs the repo's own ACCEPTANCE.md criteria and writes the JUnit report the engine
+# ingests. The evidence is captured BY EXECUTION here: nothing is hand-written, and a
+# failing criterion is emitted as a <failure>, never quietly omitted. Additive only —
+# it never changes the suite's PASS/FAIL or its exit code.
+# ---------------------------------------------------------------------------- #
+USCHA_ACC_OUT="$ROOT/reports/junit"   # raiz: NO entra al paquete npm (files: uscha-kit/)
+mkdir -p "$USCHA_ACC_OUT"
+ROOT="$ROOT" KIT="$KIT" ACC_OUT="$USCHA_ACC_OUT" SMOKE_FAIL="$FAIL" "$PY" <<'PYACC' || true
+import filecmp, json, os, re, sys
+root, kit, out = os.environ["ROOT"], os.environ["KIT"], os.environ["ACC_OUT"]
+results = []  # (id, name, failure_message_or_None)
+
+
+def check(ac, name, fn):
+    try:
+        msg = fn()
+    except Exception as exc:                      # a broken check is a RED criterion,
+        msg = f"check raised {type(exc).__name__}: {exc}"   # never a silent pass
+    results.append((ac, name, msg))
+
+
+def twins():
+    a, b = os.path.join(kit, ".claude", "skills"), os.path.join(kit, "skills")
+    def tree(base):
+        found = {}
+        for dp, dns, fns in os.walk(base):
+            dns[:] = [d for d in dns if d != "__pycache__"]
+            for fn in fns:
+                p = os.path.join(dp, fn)
+                found[os.path.relpath(p, base).replace("\\", "/")] = p
+        return found
+    ta, tb = tree(a), tree(b)
+    only = sorted(set(ta) ^ set(tb))
+    if only:
+        return "files present in only one tree: " + ", ".join(only[:5])
+    diff = [r for r in sorted(ta) if not filecmp.cmp(ta[r], tb[r], shallow=False)]
+    return ("byte differences in: " + ", ".join(diff[:5])) if diff else None
+
+
+def versions():
+    v = [open(os.path.join(kit, "VERSION"), encoding="utf-8").read().split()[-1]]
+    for rel in (("uscha.config.json",), (".claude-plugin", "plugin.json"),
+                (".codex-plugin", "plugin.json")):
+        v.append(json.load(open(os.path.join(kit, *rel), encoding="utf-8"))["version"])
+    v.append(json.load(open(os.path.join(root, "package.json"), encoding="utf-8"))["version"])
+    mk = json.load(open(os.path.join(root, ".claude-plugin", "marketplace.json"), encoding="utf-8"))
+    v.append(mk["plugins"][0]["version"])
+    if len(set(v)) != 1:
+        return "version surfaces disagree: " + ", ".join(sorted(set(v)))
+    if not os.path.isfile(os.path.join(kit, f"CHANGELOG-{v[0]}.md")):
+        return f"missing CHANGELOG-{v[0]}.md"
+    return None
+
+
+def anonymous():
+    pat = re.compile(r"PRIVATE-NAME-1|PRIVATE-NAME-2|PRIVATE-NAME-3|PRIVATE-NAME-4|PRIVATE-NAME-5|PRIVATE-NAME-6", re.I)
+    # This checker literally CONTAINS the forbidden names (they are its pattern), so it
+    # would always match itself. Excluding the checker's own file is the only honest way
+    # to state the criterion; any other file is still scanned.
+    self_file = os.path.abspath(__file__) if "__file__" in dir() else ""
+    skip_files = {"smoke-engine.sh", os.path.basename(self_file)}
+    hits = []
+    for base in (kit, os.path.join(root, "README.md")):
+        walk = [(os.path.dirname(base), [], [os.path.basename(base)])] if os.path.isfile(base) \
+            else os.walk(base)
+        for dp, dns, fns in walk:
+            dns[:] = [d for d in dns if d not in ("__pycache__", ".git", "node_modules")]
+            for fn in fns:
+                if not fn.endswith((".md", ".py", ".sh", ".json", ".html", ".ps1")):
+                    continue
+                if fn in skip_files:
+                    continue
+                p = os.path.join(dp, fn)
+                try:
+                    if pat.search(open(p, encoding="utf-8", errors="ignore").read()):
+                        hits.append(os.path.relpath(p, root).replace("\\", "/"))
+                except OSError:
+                    continue
+    return ("client/private references in: " + ", ".join(sorted(hits)[:5])) if hits else None
+
+
+def model_agnostic():
+    src = open(os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py"),
+               encoding="utf-8").read()
+    bad = [t for t in ("tokens_in", "tokens_out", "anthropic", "openai") if t in src]
+    return ("engine reads vendor/token data: " + ", ".join(bad)) if bad else None
+
+
+def doc_twins():
+    d = os.path.join(root, "docs")
+    html = [f for f in os.listdir(d) if f.endswith(".html")]
+    missing = [f[:-5] + "-EN.html" for f in html
+               if not f.endswith("-EN.html") and (f[:-5] + "-EN.html") not in html]
+    return ("missing EN twin: " + ", ".join(sorted(missing))) if missing else None
+
+
+def smoke_green():
+    n = int(os.environ.get("SMOKE_FAIL", "1") or 0)
+    return None if n == 0 else f"{n} smoke check(s) failed"
+
+
+check("AC-01", "twins_byte_identical", twins)
+check("AC-02", "version_surfaces_agree", versions)
+check("AC-03", "no_client_references", anonymous)
+check("AC-04", "engine_model_agnostic", model_agnostic)
+check("AC-05", "doc_es_en_twins", doc_twins)
+check("AC-06", "smoke_suite_green", smoke_green)
+
+failed = sum(1 for _, _, m in results if m)
+def esc(s):
+    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+             .replace('"', "&quot;"))
+lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+         f'<testsuite name="uscha-acceptance" tests="{len(results)}" '
+         f'failures="{failed}" errors="0" skipped="0">']
+for ac, name, msg in results:
+    lines.append(f'  <testcase classname="uscha.acceptance" name="{ac}_{name}">')
+    if msg:
+        lines.append(f'    <failure message="{esc(msg)}"/>')
+    lines.append("  </testcase>")
+lines.append("</testsuite>")
+with open(os.path.join(out, "uscha-acceptance.xml"), "w", encoding="utf-8") as fh:
+    fh.write("\n".join(lines) + "\n")
+print(f"ACCEPTANCE: {len(results) - failed}/{len(results)} criterios medidos en verde"
+      + ("" if not failed else " · ROJO: "
+         + ", ".join(ac for ac, _, m in results if m)))
+PYACC
+
 echo ""
 printf 'RESULTADO: %s ok · %s fail\n' "$PASS" "$FAIL"
 exit "${SMOKE_STATUS:-0}"

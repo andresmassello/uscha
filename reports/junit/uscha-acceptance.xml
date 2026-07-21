@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="uscha-acceptance" tests="6" failures="1" errors="0" skipped="0">
+  <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-03_no_client_references">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-04_engine_model_agnostic">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-05_doc_es_en_twins">
+    <failure message="missing EN twin: uscha-claude-code-doc-FINAL-EN.html"/>
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-06_smoke_suite_green">
+  </testcase>
+</testsuite>

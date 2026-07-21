@@ -1,0 +1,29 @@
+{
+  "version": "1.44.0",
+  "project": "uscha (self-applied)",
+  "defaults": {
+    "acceptance_file": "ACCEPTANCE.md",
+    "severity_gate": [
+      "BLOCKER",
+      "CRITICAL",
+      "HIGH"
+    ],
+    "qa_tools_order": [
+      "code-review",
+      "judgment-day",
+      "improve"
+    ],
+    "tools_per_cycle": 3,
+    "max_iterations": 5
+  },
+  "repos": [
+    {
+      "name": "uscha",
+      "path": ".",
+      "type": "python"
+    }
+  ],
+  "integration": {
+    "enabled": false
+  }
+}
