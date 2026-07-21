@@ -312,7 +312,25 @@ def gradle_coverage(repo_path):
             "report_found": bool(files)}
 
 
+def ant_coverage(repo_path):
+    """Ant + JaCoCo (kit 1.44.0). Ant has no standard output layout -- the jacoco
+    report task writes wherever the build file says -- so the report is discovered
+    RECURSIVELY by name instead of guessing one convention."""
+    files = _ant_reports(repo_path, "jacoco.xml")
+    missed = covered = 0
+    for f in files:
+        m, c = _jacoco_line_counter(f)
+        missed += m
+        covered += c
+    total = missed + covered
+    pct = round(covered / total * 100, 2) if total else 0.0
+    return {"covered": covered, "missed": missed, "pct": pct,
+            "report_found": bool(files)}
+
+
 def coverage(repo_path, repo_type):
+    if repo_type == "ant":
+        return ant_coverage(repo_path)
     if repo_type == "maven":
         return maven_coverage(repo_path)
     if repo_type == "gradle":
@@ -397,28 +415,83 @@ def _junit_counts(element, path):
     return (tests, failures, errors, skipped)
 
 
-def _perclass_xml_count(patterns):
+# Report discovery needs a DIFFERENT skip set than source scanning: SKIP_DIRS exists to
+# skip build OUTPUT while counting source, but reports LIVE in build output (build/,
+# target/, coverage/). Pruning those would hide the very files we are looking for. Here we
+# prune only third-party / VCS trees, whose reports are never ours (kit 1.44.0).
+_REPORT_SKIP = {".git", "node_modules", "vendor", ".venv", "venv", "__pycache__",
+                ".gradle", ".mvn", ".tox"}
+
+
+def _under_skipped(path, root, skip=_REPORT_SKIP):
+    """True if path sits under one of `skip`. Never raises: an unreachable path
+    (Windows reserved device name, different mount) is skipped, not fatal."""
+    try:
+        parts = set(os.path.relpath(path, root).split(os.sep))
+    except ValueError:
+        return True
+    return bool(parts & skip)
+
+
+def _ant_reports(repo_path, filename_glob):
+    """Ant has no standard todir, so its reports are discovered recursively BY NAME --
+    minus third-party trees, whose reports are never this repo's."""
+    return sorted({f for f in glob.glob(os.path.join(repo_path, "**", filename_glob),
+                                        recursive=True)
+                   if not _under_skipped(f, repo_path)})
+
+
+def _perclass_xml_count(patterns, skip_root=None, tolerant=False):
     """Sum per-class JUnit XML files (surefire/failsafe/gradle test-results):
     each file's root is a <testsuite> carrying the counters."""
     tests = failures = errors = skipped = 0
     seen = set()
+    used = 0
+    dropped = []
     for pat in patterns:
         for f in glob.glob(pat, recursive=True):
             if f in seen:
                 continue
+            if skip_root is not None and _under_skipped(f, skip_root):
+                continue
             seen.add(f)
-            root = _parse_junit_xml(f)
-            if _local(root.tag) != "testsuite":
-                _invalid_junit(f, "per-class report requires a <testsuite> root")
-            t, fl, er, sk = _junit_counts(root, f)
+            if tolerant:
+                # name-based recursive discovery (ant): a TEST-*.xml found anywhere may
+                # simply not be ours. Skip it instead of aborting the whole run -- but
+                # NEVER silently: every drop is returned so the ledger can surface it.
+                try:
+                    root = ET.parse(f).getroot()
+                except (ET.ParseError, OSError) as exc:
+                    dropped.append({"path": f, "reason": f"unreadable XML: {exc}"})
+                    continue
+                if _local(root.tag) != "testsuite":
+                    dropped.append({"path": f, "reason": "not a JUnit <testsuite> report"})
+                    continue
+                try:
+                    # counter validation ALSO exits hard (negative/inconsistent numbers);
+                    # inside tolerant discovery that must degrade to a recorded drop.
+                    t, fl, er, sk = _junit_counts(root, f)
+                except SystemExit:
+                    dropped.append({"path": f, "reason": "malformed JUnit counters"})
+                    continue
+            else:
+                root = _parse_junit_xml(f)
+                if _local(root.tag) != "testsuite":
+                    _invalid_junit(f, "per-class report requires a <testsuite> root")
+                t, fl, er, sk = _junit_counts(root, f)
+            used += 1
             tests += t
             failures += fl
             errors += er
             skipped += sk
+    for d in dropped:
+        print(f"[qa_ledger] dropped test report '{d['path']}': {d['reason']}",
+              file=sys.stderr)
     executed = tests - skipped
     return {"total": tests, "executed": executed, "failures": failures,
             "errors": errors, "skipped": skipped, "passed": executed - failures - errors,
-            "report_found": bool(seen)}
+            # report_found means a USABLE report: files that were dropped do not count
+            "report_found": used > 0, "skipped_reports": dropped}
 
 
 def maven_test_count(repo_path):
@@ -426,6 +499,15 @@ def maven_test_count(repo_path):
         os.path.join(repo_path, "**", "target", "surefire-reports", "TEST-*.xml"),
         os.path.join(repo_path, "**", "target", "failsafe-reports", "TEST-*.xml"),
     ])
+
+
+def ant_test_count(repo_path):
+    """Ant's <junit> XML formatter always emits per-class TEST-<class>.xml, but the
+    todir is build-file defined (build/test/results, reports/junit, test-results...).
+    Discover them recursively rather than hardcode one layout (kit 1.44.0)."""
+    return _perclass_xml_count([
+        os.path.join(repo_path, "**", "TEST-*.xml"),
+    ], skip_root=repo_path, tolerant=True)
 
 
 def gradle_test_count(repo_path):
@@ -469,6 +551,11 @@ def _junit_report_files(repo_path):
         [os.path.join(repo_path, "reports", "junit.xml")],
         [os.path.join(repo_path, "junit.xml")],
         sorted(glob.glob(os.path.join(repo_path, "reports", "TEST-*.xml"))),
+        # kit 1.44.0: runners that write a DIRECTORY of per-class XML under
+        # reports/junit/ were invisible -- the operator had to hand-copy reports
+        # to a path the engine knew, which breaks "evidence captured by execution".
+        sorted(glob.glob(os.path.join(repo_path, "reports", "junit", "**", "*.xml"),
+                         recursive=True)),
     ]
     for group in groups:
         found = [f for f in group if os.path.isfile(f)]
@@ -481,6 +568,8 @@ def _junit_files_for(repo_path, repo_type):
     """TODOS los reportes JUnit-family que el engine ya usa para contar tests
     del type dado — para leer nombres de testcase (trazabilidad AC-n).
     flutter no emite JUnit (conteo aproximado): devuelve []."""
+    if repo_type == "ant":
+        return _ant_reports(repo_path, "TEST-*.xml")
     if repo_type == "maven":
         pats = [os.path.join(repo_path, "**", "target", "surefire-reports", "TEST-*.xml"),
                 os.path.join(repo_path, "**", "target", "failsafe-reports", "TEST-*.xml")]
@@ -518,6 +607,22 @@ _SRC_SKIP_DIRS = SKIP_DIRS | {"reports", "Pods", ".vs"}
 _JUNIT_FRESHNESS_TOLERANCE_NS = 1_000_000_000
 
 
+# Windows reserved DEVICE names (kit 1.44.0): a file literally called 'nul' (or con,
+# aux, prn, com1..9, lpt1..9) is not a normal path -- os.path.relpath raises
+# ValueError("path is on mount '\\.\nul'") and used to take down a whole gate
+# mid-walk. A weird filename must degrade to a skip, never crash the run.
+_WIN_RESERVED = ({"con", "prn", "aux", "nul"}
+                 | {f"com{i}" for i in range(1, 10)}
+                 | {f"lpt{i}" for i in range(1, 10)})
+
+
+def _reserved_name(fn):
+    # Windows treats everything before the FIRST dot as the device name: 'nul.tar.gz' is
+    # just as reserved as 'nul.txt'. splitext() only strips the LAST extension, which left
+    # the very ValueError this guard exists to prevent reachable (kit 1.44.0).
+    return fn.split(".", 1)[0].strip().lower() in _WIN_RESERVED
+
+
 def _newest_source(repo_path, extensions=None):
     """Newest relevant source/test file, excluding the same generated, build,
     report, VCS, dependency, and vendor-like trees used by repo adapters."""
@@ -528,6 +633,8 @@ def _newest_source(repo_path, extensions=None):
                     and not d.startswith("cmake-build-")]
         for fn in files:
             if os.path.splitext(fn)[1].lower() not in allowed:
+                continue
+            if _reserved_name(fn):
                 continue
             path = os.path.join(root, fn)
             try:
@@ -729,7 +836,9 @@ def junit_test_count(repo_path, extra_files=None):
 
 
 def test_count(repo_path, repo_type):
-    if repo_type == "maven":
+    if repo_type == "ant":
+        result = ant_test_count(repo_path)
+    elif repo_type == "maven":
         result = maven_test_count(repo_path)
     elif repo_type == "gradle":
         result = gradle_test_count(repo_path)
@@ -824,6 +933,8 @@ def count_loc(repo_path, repo_type):
                     and not d.startswith("cmake-build-")]
         for fn in filenames:
             if os.path.splitext(fn)[1] not in exts:
+                continue
+            if _reserved_name(fn):
                 continue
             full = os.path.join(dirpath, fn)
             rel = os.path.relpath(full, repo_path)
@@ -1485,7 +1596,7 @@ def _prev_finding_ids(node, tool):
 # --------------------------------------------------------------------------- #
 SUPPORTED_REPO_TYPES = {
     "maven", "flutter", "python", "node", "go", "rust", "dotnet", "cpp",
-    "gradle", "swift",
+    "gradle", "swift", "ant",
 }
 
 
@@ -2760,6 +2871,14 @@ def _gate_open_and_sev(node):
     return gated_open, sev
 
 
+def _dropped_reports(node):
+    """Test reports discovered but NOT usable, from the latest snapshot. Dropping evidence
+    quietly would be silence buying a pass, so readiness names them (kit 1.44.0)."""
+    if node.get("snapshots"):
+        return node["snapshots"][-1].get("tests", {}).get("skipped_reports") or []
+    return []
+
+
 def _tests_red(node):
     """True if the system's tests are currently failing."""
     if node.get("snapshots"):
@@ -2793,12 +2912,21 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
     rtype = cfg.get("type", "maven")
     cov = coverage(cfg.get("path", "."), rtype)
     cov_dim = min(cov["pct"] / threshold, 1.0) if threshold else 0.0
+    # silence is not success, part two (kit 1.44.0, mirrors static_unmeasured below):
+    # NO coverage report at all is a different FACT from a report that says 0%. Both
+    # score 0.0 -- redistributing the weight automatically would let any repo raise its
+    # score by DELETING its instrumentation -- but only the first is a missing
+    # measurement, so it is surfaced: the operator either instruments, or DECLARES the
+    # exemption via defaults.readiness_weights.coverage = 0 (a config declaration is a
+    # human requirement, and carries provenance).
+    coverage_unmeasured = not cov.get("report_found", False)
+    dropped_reports = _dropped_reports(node)
     gated_open, sev = _gate_open_and_sev(node)
     # silence is not success: for a lint-capable repo (every type the ingest
     # parsers support) with NO static-gate record ever logged, the dimension is
     # UNMEASURED (0.0), not a perfect 1.0. A tool that didn't run is never green.
     static_unmeasured = (rtype in ("maven", "python", "node", "go", "rust",
-                                   "dotnet", "cpp", "gradle", "swift")
+                                   "dotnet", "cpp", "gradle", "swift", "ant")
                          and not _latest_static_by_tool(node))
     if static_unmeasured:
         static_dim = 0.0
@@ -2833,7 +2961,9 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
         "facts": {"coverage_pct": cov["pct"], "coverage_threshold": threshold,
                   "gated_open": gated_open, "severity": sev, "converged": converged,
                   "convergence_reasons": creasons, "tests_red": tests_red,
-                  "static_unmeasured": static_unmeasured},
+                  "static_unmeasured": static_unmeasured,
+                  "coverage_unmeasured": coverage_unmeasured,
+                  "dropped_reports": dropped_reports},
     }
 
 
@@ -3387,6 +3517,10 @@ def cmd_readiness(args):
     static_dim = (sum(static_dims) / len(static_dims)) if static_dims else 0.0
     unmeasured_repos = sorted(n for n, r in repos.items()
                               if r["facts"].get("static_unmeasured"))
+    cov_unmeasured_repos = sorted(n for n, r in repos.items()
+                                  if r["facts"].get("coverage_unmeasured"))
+    dropped_report_repos = sorted(n for n, r in repos.items()
+                                  if r["facts"].get("dropped_reports"))
 
     conv_flags = [r["facts"]["converged"] for r in repos.values()]
     conv_dim = (sum(1 for c in conv_flags if c) / len(conv_flags)) if conv_flags else 0.0
@@ -3506,6 +3640,8 @@ def cmd_readiness(args):
                   "gated_open": total_open, "severity": agg_sev,
                   "repos_converged": f"{sum(conv_flags)}/{len(conv_flags)}",
                   "static_unmeasured_repos": unmeasured_repos,
+                  "coverage_unmeasured_repos": cov_unmeasured_repos,
+                  "dropped_report_repos": dropped_report_repos,
                   "production_findings_open": len(production_open),
                   "spec_doubts_open": len(spec_doubts_open),
                   "spec_change_requests_open": len(spec_change_requests_open)},
@@ -3559,6 +3695,16 @@ def cmd_readiness(args):
     if unmeasured_repos:
         print(f"  ! static gate NEVER ran in: {', '.join(unmeasured_repos)} — "
               f"dimension scored UNMEASURED (0.0), silence is not success")
+    if dropped_report_repos:
+        n_dropped = sum(len(repos[r]["facts"]["dropped_reports"]) for r in dropped_report_repos)
+        print(f"  ! {n_dropped} test report(s) DROPPED in: {', '.join(dropped_report_repos)} — "
+              f"discovered but not usable JUnit; their tests do NOT count. Fix or remove "
+              f"them (see stderr for each path and reason)")
+    if cov_unmeasured_repos:
+        print(f"  ! NO coverage report found in: {', '.join(cov_unmeasured_repos)} — "
+              f"coverage scored UNMEASURED (0.0); that is NOT the same fact as a "
+              f"measured 0%. Instrument it, or DECLARE the exemption with "
+              f"defaults.readiness_weights.coverage = 0 (config = requirement)")
     if stale_reports:
         print(f"  ! {len(stale_reports)} reporte(s) JUnit STALE descartados "
               f"(codigo mas nuevo que la evidencia) — los AC que dependian solo "
@@ -3726,6 +3872,8 @@ def _test_file_set(repo_path, repo_type):
                     and not d.startswith("cmake-build-")]
         for fn in filenames:
             if os.path.splitext(fn)[1] not in exts:
+                continue
+            if _reserved_name(fn):
                 continue
             rel = os.path.relpath(os.path.join(dirpath, fn), repo_path).replace("\\", "/")
             if _is_test_path(rel, repo_type):
@@ -4351,6 +4499,8 @@ def _waste_repo_hashes(repo_root, touched, W, min_line_len, allow_paths):
         dirnames[:] = [d for d in dirnames
                        if d not in SKIP_DIRS and d not in _SIMPLICITY_SKIP]
         for fn in filenames:
+            if _reserved_name(fn):
+                continue
             full = os.path.join(dirpath, fn)
             rel = os.path.relpath(full, repo_root).replace("\\", "/")
             if (rel in touched or not _is_simplicity_code_file(rel)

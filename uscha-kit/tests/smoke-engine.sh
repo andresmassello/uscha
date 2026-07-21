@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.43.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.44.0.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.43.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.43.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.44.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.44.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.43.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.44.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.43.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.44.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.43.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.44.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.43.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.44.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.43.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.44.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2702,6 +2702,99 @@ else FAIL=$((FAIL+1)); echo "  FAIL uscha mirador did not render the dashboard";
 "$PY" "$KIT/install-uscha.py" mirador --ledger NOPE-missing.json --no-open >/dev/null 2>&1
 if [ $? -ne 0 ]; then PASS=$((PASS+1)); echo "  ok   uscha mirador fails clearly when the ledger is missing"; \
 else FAIL=$((FAIL+1)); echo "  FAIL uscha mirador did not fail on a missing ledger"; fi
+
+echo "== T82 (1.44.0): coverage sin reporte es UNMEASURED, distinto de un 0% medido =="
+mkdir -p t82-sin t82-con/target/site/jacoco
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<report name="r"><counter type="LINE" missed="10" covered="0"/></report>\n' > t82-con/target/site/jacoco/jacoco.xml
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" },\n  "repos": [ {"name":"t82sin","path":"t82-sin","type":"maven"}, {"name":"t82con","path":"t82-con","type":"maven"} ], "integration": {"enabled": false} }\n' > t82-cfg.json
+run init --config t82-cfg.json --out L-t82.json >/dev/null 2>&1
+run readiness --ledger L-t82.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin); by = d['by_repo']
+# el repo SIN reporte y el repo CON reporte que dice 0% puntuan igual (0.0) pero son
+# HECHOS distintos: solo el primero es una medicion faltante
+sys.exit(0 if (by['t82sin']['facts']['coverage_unmeasured'] is True
+               and by['t82con']['facts']['coverage_unmeasured'] is False
+               and by['t82con']['facts']['coverage_pct'] == 0.0
+               and d['facts'].get('coverage_unmeasured_repos') == ['t82sin']) else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   'sin reporte' y '0% medido' son hechos distintos"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL coverage no distingue no-instrumentado de cero medido"; }
+run readiness --ledger L-t82.json 2>/dev/null | grep -q "NO coverage report found in: t82sin" \
+  && { PASS=$((PASS+1)); echo "  ok   el aviso nombra el repo y el remedio (no hay que leer el motor)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin aviso visible de coverage UNMEASURED"; }
+# exencion DECLARADA por el humano: redistribuye el peso (procedencia config), no es silencio.
+# Con el resto de las dimensiones en verde, el repo legacy sin instrumentar queda clavado
+# en 66.7 (2 de 3 dimensiones) -- el techo real reportado en campo -- y solo la DECLARACION
+# humana lo libera. El silencio, por si solo, nunca sube el numero.
+t82_setup() { # $1 = config, $2 = ledger
+  run init --config "$1" --out "$2" >/dev/null 2>&1
+  for t in code-review judgment-day improve; do
+    run log-step --repo t82sin --tool "$t" --iteration 1 --tests-passed true --ledger "$2" >/dev/null 2>&1
+  done
+  run ingest-gate --repo t82sin --tool code-review --iteration 1 --json-report /dev/null --ledger "$2" >/dev/null 2>&1
+  run log-gate --repo t82sin --iteration 1 --kind simplicity --verdict pass --ledger "$2" >/dev/null 2>&1
+}
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" },\n  "repos": [ {"name":"t82sin","path":"t82-sin","type":"maven"} ], "integration": {"enabled": false} }\n' > t82-base.json
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "readiness_weights": {"coverage": 0} },\n  "repos": [ {"name":"t82sin","path":"t82-sin","type":"maven"} ], "integration": {"enabled": false} }\n' > t82-decl.json
+t82_setup t82-base.json L-t82b.json
+t82_setup t82-decl.json L-t82d.json
+T82_BASE=$(run readiness --ledger L-t82b.json --json 2>/dev/null | "$PY" -c "import json,sys; print(json.load(sys.stdin)['by_repo']['t82sin']['score'])")
+T82_DECL=$(run readiness --ledger L-t82d.json --json 2>/dev/null | "$PY" -c "import json,sys; print(json.load(sys.stdin)['by_repo']['t82sin']['score'])")
+if [ "$T82_BASE" = "66.7" ] && [ "$T82_DECL" = "100.0" ]; then
+  PASS=$((PASS+1)); echo "  ok   sin declarar 66.7 (techo real) -> declarando coverage=0 sube a 100.0"; \
+else FAIL=$((FAIL+1)); echo "  FAIL exencion declarada: base=$T82_BASE decl=$T82_DECL (esperado 66.7/100.0)"; fi
+
+echo "== T83 (1.44.0): tipo 'ant' + reportes JUnit fuera de la convencion maven =="
+mkdir -p t83-ant/reports/junit t83-ant/coverage
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="AppTest" tests="2" failures="0" errors="0" skipped="0">\n  <testcase classname="AppTest" name="testAC01_x"/>\n  <testcase classname="AppTest" name="testAC02_y"/>\n</testsuite>\n' > t83-ant/reports/junit/TEST-AppTest.xml
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<report name="a"><counter type="LINE" missed="30" covered="70"/></report>\n' > t83-ant/coverage/jacoco.xml
+# Dos trampas reales de un arbol legacy, que ejercitan los DOS mecanismos:
+#  (a) third-party: sus reportes nunca son nuestros -> PODADO
+#  (b) un XML que se llama TEST-*.xml pero NO es JUnit, en el arbol propio (un fixture) ->
+#      TOLERADO con aviso. Sin esto, un archivo suelto abortaba la corrida con SystemExit 2.
+# Nota: build/ y coverage/ NO se podan aca a proposito -- los reportes VIVEN ahi.
+mkdir -p t83-ant/node_modules/dep t83-ant/src/test/resources
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<report name="vendored"><counter type="LINE" missed="900" covered="100"/></report>\n' > t83-ant/node_modules/dep/jacoco.xml
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<project name="tampoco"/>\n' > t83-ant/node_modules/dep/TEST-Dep.xml
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<fixture name="no-soy-junit"/>\n' > t83-ant/src/test/resources/TEST-Fixture.xml
+#  (c) raiz <testsuite> VALIDA pero contadores imposibles (corrida truncada): la validacion
+#      de contadores TAMBIEN salia por SystemExit(2), fuera del bloque tolerante.
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="Trunc" tests="1" failures="5" errors="0" skipped="0"/>\n' > t83-ant/reports/junit/TEST-Truncado.xml
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "coverage_threshold": 60 },\n  "repos": [ {"name":"t83ant","path":"t83-ant","type":"ant"} ], "integration": {"enabled": false} }\n' > t83-cfg.json
+run init --config t83-cfg.json --out L-t83.json >/dev/null 2>&1
+"$PY" - "$QL" <<'PYIN'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("q", sys.argv[1])
+q = importlib.util.module_from_spec(spec); spec.loader.exec_module(q)
+tc = q.test_count("t83-ant", "ant")          # Ant escribe TEST-*.xml donde diga el build
+cov = q.coverage("t83-ant", "ant")           # y jacoco.xml fuera de target/site/
+files = q._junit_files_for("t83-ant", "ant")  # trazabilidad AC-n sobre los mismos reportes
+# los dos reportes inservibles se descartan SIN abortar, y quedan REGISTRADOS en el
+# resultado (stderr no alcanza: dashboard --json captura stdout, no stderr)
+reasons = {d["reason"] for d in tc["skipped_reports"]}
+sys.exit(0 if (tc["total"] == 2 and tc["report_found"] is True
+               and cov["pct"] == 70.0 and cov["report_found"] is True
+               and not any("node_modules" in f for f in files)
+               and len(tc["skipped_reports"]) == 2
+               and "malformed JUnit counters" in reasons) else 1)
+PYIN
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); echo "  ok   ant: descubre, poda third-party, y DESCARTA-REGISTRANDO lo inservible sin abortar"; \
+else FAIL=$((FAIL+1)); echo "  FAIL ant: no descubre, no poda third-party, o aborta con un XML ajeno"; fi
+
+echo "== T84 (1.44.0): nombres reservados de Windows no tumban el recorrido =="
+"$PY" - "$QL" <<'PYIN'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("q", sys.argv[1])
+q = importlib.util.module_from_spec(spec); spec.loader.exec_module(q)
+# Windows toma lo anterior al PRIMER punto: 'nul.tar.gz' es tan reservado como 'nul.txt'
+reserved = all(q._reserved_name(n) for n in ("nul", "NUL.txt", "con", "aux", "com3", "lpt9",
+                                             "nul.tar.gz", "con.spec.ts", "aux.d.ts"))
+sane = not any(q._reserved_name(n) for n in ("normal.java", "nullable.py", "console.ts",
+                                             "com1x.go", "auxiliary.md"))
+sys.exit(0 if (reserved and sane) else 1)
+PYIN
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); echo "  ok   nul/con/aux/com3/lpt9 se saltan y no hay falsos positivos"; \
+else FAIL=$((FAIL+1)); echo "  FAIL el filtro de nombres reservados es incorrecto"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
