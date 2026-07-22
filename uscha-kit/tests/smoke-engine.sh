@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.44.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.44.1.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.44.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.44.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.44.1.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.44.1.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.44.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.44.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.44.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.44.1' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.44.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.44.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.44.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.44.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.44.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.44.1'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -3239,6 +3239,33 @@ print(f"ACCEPTANCE: {len(results) - failed}/{len(results)} criterios medidos en 
       + ("" if not failed else " · ROJO: "
          + ", ".join(ac for ac, _, m in results if m)))
 PYACC
+
+echo "== T85 (1.44.1): 'uscha init' is per-file, not all-or-nothing =="
+T85=$(mktemp -d)
+printf '# my own CLAUDE.md\n' > "$T85/CLAUDE.md"
+# init exits 1 on a pending conflict BY DESIGN; guard so `set -e` (left on by the P0
+# blocks above) does not abort the suite here.
+T85_RC=0
+"$PY" "$KIT/install-uscha.py" init --repo "$T85" --json >"$T85/out.json" 2>&1 || T85_RC=$?
+T85_CHECK=0
+T85_HOME="$T85" "$PY" -c "
+import json, os, sys
+h = os.environ['T85_HOME']
+d = json.load(open(os.path.join(h, 'out.json'), encoding='utf-8'))
+wrote = {os.path.basename(p) for p in d.get('wrote', [])}
+conflicts = {os.path.basename(c['path']) for c in d['conflicts']}
+# the three non-conflicting files were written despite the CLAUDE.md conflict...
+ok = (d['status'] == 'partial'
+      and wrote == {'uscha.config.json', 'CONSTITUTION.md', '.gitattributes'}
+      and conflicts == {'CLAUDE.md'}
+      and os.path.isfile(os.path.join(h, 'CONSTITUTION.md'))
+      # ...and the user's own CLAUDE.md was left untouched
+      and open(os.path.join(h, 'CLAUDE.md'), encoding='utf-8').read().strip() == '# my own CLAUDE.md')
+sys.exit(0 if ok else 1)" || T85_CHECK=$?
+rm -rf "$T85"
+if [ "$T85_RC" -eq 1 ] && [ "$T85_CHECK" -eq 0 ]; then
+  PASS=$((PASS+1)); echo "  ok   init writes the clean files, leaves the conflicting CLAUDE.md intact, exits 1"; \
+else FAIL=$((FAIL+1)); echo "  FAIL init still all-or-nothing (rc=$T85_RC check=$T85_CHECK)"; fi
 
 echo ""
 printf 'RESULTADO: %s ok · %s fail\n' "$PASS" "$FAIL"

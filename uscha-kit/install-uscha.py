@@ -489,11 +489,23 @@ def cmd_init(args):
             operations.append({"action": "copy-file", "path": str(target), "source": str(source), "note": "force" if target.exists() else None})
             copies.append((source, target))
     conflicted = bool(conflicts)
-    if not conflicted and not args.dry_run:
+    # per-file, not all-or-nothing (kit 1.44.1): a differing CLAUDE.md (which EVERY repo
+    # already using Claude Code has) used to block ALL four copies, so `init` was unusable
+    # on any adopted repo -- and `--force` was the only escape, which would overwrite it.
+    # Now the non-conflicting files are written regardless; each conflict is reported and
+    # left untouched (resolve by hand, or re-run that file with --force). Exit stays nonzero
+    # while any conflict remains, so the partial state is visible and scriptable.
+    if not args.dry_run:
         for source, target in copies:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
-    emit({"status": "conflicts" if conflicted else ("planned" if args.dry_run else "initialized"), "dry_run": args.dry_run, "repo": str(repo), "operations": operations, "conflicts": conflicts}, args.json)
+    if conflicted:
+        status = "conflicts" if args.dry_run else "partial"
+    else:
+        status = "planned" if args.dry_run else "initialized"
+    emit({"status": status, "dry_run": args.dry_run, "repo": str(repo),
+          "wrote": [str(t) for _, t in copies] if not args.dry_run else [],
+          "operations": operations, "conflicts": conflicts}, args.json)
     if conflicted:
         raise SystemExit(1)
 
