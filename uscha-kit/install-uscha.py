@@ -469,9 +469,69 @@ def cmd_doctor(args):
         raise SystemExit(1)
 
 
+# statusline wiring (kit 1.46.0): the progress statusline + its Stop-hook refresher, installed
+# per-project. Commands are by NAME with forward slashes (Windows eats backslashes in the
+# statusLine command; absolute paths are brittle across machines).
+STATUSLINE_SCRIPTS = ("uscha_statusline.py", "uscha_progress.py")
+STATUSLINE_CMD = "python .claude/scripts/uscha_statusline.py"
+PROGRESS_CMD = "python .claude/scripts/uscha_progress.py"
+
+
+def _wire_statusline_settings(repo, force, dry_run):
+    """Merge statusLine + a Stop hook into <repo>/.claude/settings.json WITHOUT clobbering:
+    an existing DIFFERENT statusLine is reported as a conflict (never overwritten unless
+    --force); the Stop hook is appended only if not already registered (idempotent).
+    Returns (operations, wrote, conflicts)."""
+    path = repo / ".claude" / "settings.json"
+    ops, conflicts = [], []
+    data = {}
+    if path.exists():
+        if path.is_symlink() or not path.is_file():
+            raise InstallError("[install-uscha] settings.json must be a file: %s" % path)
+        data = load_json(path, "Claude settings.json")
+        if not isinstance(data, dict):
+            raise InstallError("[install-uscha] settings.json must be an object: %s" % path)
+    result = dict(data)
+    changed = False
+    want_sl = {"type": "command", "command": STATUSLINE_CMD}
+    cur_sl = result.get("statusLine")
+    if cur_sl is None or (force and cur_sl != want_sl):
+        result["statusLine"] = want_sl
+        changed = True
+        ops.append({"action": "wire-statusline", "path": str(path)})
+    elif cur_sl == want_sl:
+        ops.append({"action": "unchanged", "path": str(path) + " (statusLine)"})
+    else:
+        conflicts.append({"path": str(path), "source": "statusLine"})
+        ops.append({"action": "conflict", "path": str(path), "source": "statusLine"})
+    hooks = result.get("hooks") if isinstance(result.get("hooks"), dict) else {}
+    stop = hooks.get("Stop") if isinstance(hooks.get("Stop"), list) else []
+    registered = any(
+        isinstance(g, dict) and isinstance(g.get("hooks"), list)
+        and any(isinstance(h, dict) and h.get("command") == PROGRESS_CMD for h in g["hooks"])
+        for g in stop)
+    if not registered:
+        hooks = dict(hooks)
+        hooks["Stop"] = list(stop) + [{"hooks": [{"type": "command", "command": PROGRESS_CMD}]}]
+        result["hooks"] = hooks
+        changed = True
+        ops.append({"action": "wire-stop-hook", "path": str(path)})
+    else:
+        ops.append({"action": "unchanged", "path": str(path) + " (Stop hook)"})
+    wrote = False
+    if changed and not dry_run:
+        atomic_json(path, result)
+        wrote = True
+    return ops, wrote, conflicts
+
+
 def cmd_init(args):
     repo, operations, conflicts = Path(args.repo).expanduser().resolve(), [], []
-    sources = [(KIT_ROOT / "uscha.config.json", repo / "uscha.config.json")] + [(KIT_ROOT / "templates" / name, repo / name) for name in ("CLAUDE.md", "CONSTITUTION.md", ".gitattributes")]
+    sources = ([(KIT_ROOT / "uscha.config.json", repo / "uscha.config.json")]
+               + [(KIT_ROOT / "templates" / name, repo / name)
+                  for name in ("CLAUDE.md", "CONSTITUTION.md", ".gitattributes")]
+               + [(KIT_ROOT / "templates" / "scripts" / s, repo / ".claude" / "scripts" / s)
+                  for s in STATUSLINE_SCRIPTS])
     copies = []
     for source, target in sources:
         if not source.is_file():
@@ -488,24 +548,29 @@ def cmd_init(args):
         else:
             operations.append({"action": "copy-file", "path": str(target), "source": str(source), "note": "force" if target.exists() else None})
             copies.append((source, target))
-    conflicted = bool(conflicts)
     # per-file, not all-or-nothing (kit 1.44.1): a differing CLAUDE.md (which EVERY repo
-    # already using Claude Code has) used to block ALL four copies, so `init` was unusable
-    # on any adopted repo -- and `--force` was the only escape, which would overwrite it.
-    # Now the non-conflicting files are written regardless; each conflict is reported and
-    # left untouched (resolve by hand, or re-run that file with --force). Exit stays nonzero
-    # while any conflict remains, so the partial state is visible and scriptable.
+    # already using Claude Code has) used to block ALL four copies. Now the non-conflicting
+    # files are written regardless; each conflict is reported and left untouched (resolve by
+    # hand, or re-run with --force). Exit stays nonzero while any conflict remains.
     if not args.dry_run:
         for source, target in copies:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
+    # wire the statusline (kit 1.46.0): merge statusLine + Stop hook into the project's
+    # settings.json so the user never edits it by hand -- never clobbering existing keys.
+    sl_ops, sl_wrote, sl_conflicts = _wire_statusline_settings(repo, args.force, args.dry_run)
+    operations.extend(sl_ops)
+    conflicts.extend(sl_conflicts)
+    conflicted = bool(conflicts)
     if conflicted:
         status = "conflicts" if args.dry_run else "partial"
     else:
         status = "planned" if args.dry_run else "initialized"
+    wrote = [str(t) for _, t in copies] if not args.dry_run else []
+    if sl_wrote:
+        wrote.append(str(repo / ".claude" / "settings.json"))
     emit({"status": status, "dry_run": args.dry_run, "repo": str(repo),
-          "wrote": [str(t) for _, t in copies] if not args.dry_run else [],
-          "operations": operations, "conflicts": conflicts}, args.json)
+          "wrote": wrote, "operations": operations, "conflicts": conflicts}, args.json)
     if conflicted:
         raise SystemExit(1)
 

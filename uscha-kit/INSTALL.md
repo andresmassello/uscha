@@ -50,6 +50,11 @@ npx --yes @andresmassello/uscha@latest init --repo . --force
 
 `init` exits nonzero and reports conflicts for differing `uscha.config.json`, `CLAUDE.md`, `CONSTITUTION.md`, or `.gitattributes`; `--dry-run` performs the same conflict check without writing.
 
+`init` also installs the **progress statusline** (kit 1.46.0): it copies
+`.claude/scripts/uscha_{statusline,progress}.py` and merges a `statusLine` + a `Stop` hook into
+`.claude/settings.json` (never clobbering an existing `statusLine`). Add a `label`, `roadmap`
+and `build_priority` to your `repos[]` entry to drive it; with no data it stays hidden.
+
 Project state stays in the project: `uscha.config.json`, `QA-LEDGER.json`,
 `ACCEPTANCE.md`, and approved golden fixtures when used.
 

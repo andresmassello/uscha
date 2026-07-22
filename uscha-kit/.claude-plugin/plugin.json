@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "uscha",
-  "version": "1.45.0",
+  "version": "1.46.0",
   "displayName": "Uscha",
   "description": "Spec-driven development for LLM coding agents: 8 skills (discovery, adr-refine, reverse-discovery, characterize, devloop, sysdoc, rubric, mirador) + a stdlib measurement engine (qa_ledger.py, 29 subcommands + universal installer + npm/npx router). Facts block, guesses advise; the human approves.",
   "author": {
