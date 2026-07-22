@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.44.1.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.45.0.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.44.1.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.44.1.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.45.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.45.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.44.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.45.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.44.1' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.45.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.44.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.45.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.44.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.45.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.44.1'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.45.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2795,6 +2795,66 @@ sys.exit(0 if (reserved and sane) else 1)
 PYIN
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); echo "  ok   nul/con/aux/com3/lpt9 se saltan y no hay falsos positivos"; \
 else FAIL=$((FAIL+1)); echo "  FAIL el filtro de nombres reservados es incorrecto"; fi
+
+echo "== T86 (1.45.0): risk_profile is a named preset -- expands, explicit wins, unknown fails =="
+printf -- "# ACCEPTANCE\n\n- [ ] uno\n" > t86-acc.md
+# perfil E expande qa_tools_order + coverage_threshold + golden_required en el config del ledger
+printf '{ "defaults": { "acceptance_file": "t86-acc.md", "risk_profile": "E" },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > t86-E.json
+run init --config t86-E.json --out L-t86E.json >/dev/null 2>&1
+"$PY" -c "
+import json, sys
+d = json.load(open('L-t86E.json', encoding='utf-8'))['config']['defaults']
+sys.exit(0 if (d.get('qa_tools_order') == ['code-review','judgment-day','improve']
+               and d.get('golden_required') is True and d.get('coverage_threshold') == 80
+               and 'golden_required' in (d.get('_risk_profile_keys') or [])) else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   perfil E expande qa_tools_order/coverage/golden_required con marcador de procedencia"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL el perfil no expandio los knobs"; }
+# lo explicito gana sobre el perfil (perfil A pero qa_tools_order declarado a mano)
+printf '{ "defaults": { "acceptance_file": "t86-acc.md", "risk_profile": "A", "qa_tools_order": ["code-review","improve"] },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > t86-ov.json
+run init --config t86-ov.json --out L-t86o.json >/dev/null 2>&1
+"$PY" -c "
+import json, sys
+d = json.load(open('L-t86o.json', encoding='utf-8'))['config']['defaults']
+sys.exit(0 if (d.get('qa_tools_order') == ['code-review','improve']
+               and 'qa_tools_order' not in (d.get('_risk_profile_keys') or [])) else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   qa_tools_order explicito gana sobre el del perfil"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL el explicito no gano al perfil"; }
+# perfil desconocido -> error duro (una declaracion de riesgo nunca es inerte)
+printf '{ "defaults": { "acceptance_file": "t86-acc.md", "risk_profile": "Z" },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > t86-Z.json
+run init --config t86-Z.json --out L-t86z.json >/dev/null 2>&1
+if [ $? -ne 0 ]; then PASS=$((PASS+1)); echo "  ok   risk_profile desconocido falla duro (nunca inerte)"; \
+else FAIL=$((FAIL+1)); echo "  FAIL perfil desconocido no fallo"; fi
+# byte-identico sin perfil: un config sin risk_profile/golden_required NO gana campos nuevos
+printf '{ "defaults": { "acceptance_file": "t86-acc.md" },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > t86-bare.json
+run init --config t86-bare.json --out L-t86b.json >/dev/null 2>&1
+run readiness --ledger L-t86b.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+# sin golden_required en juego, ni el repo ni el agregado ganan el campo golden_missing
+sys.exit(0 if ('golden_missing' not in d['by_repo']['solo']['facts']
+               and 'golden_missing_repos' not in d['facts']) else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   sin perfil: readiness no gana campos golden (byte-identico)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL sin perfil aparecieron campos golden (rompe byte-identico)"; }
+
+echo "== T87 (1.45.0): golden_required caps readiness to 49 when the approved golden is ABSENT =="
+# pesos aislados en static+convergence (=1.0) -> base agregada 100, para ver morder el cap
+t87() { # $1 = extra defaults ; $2 = 'golden' para loguear golden aprobado ; imprime score|source
+  printf '{ "defaults": { "acceptance_file": "t86-acc.md", "readiness_weights": {"acceptance":0,"adr":0,"coverage":0,"static_gate":50,"convergence":50} %s },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' "$1" > t87.json
+  run init --config t87.json --out L-t87.json >/dev/null 2>&1
+  for tl in code-review judgment-day improve; do run log-step --repo solo --tool "$tl" --iteration 1 --tests-passed true --ledger L-t87.json >/dev/null 2>&1; done
+  run ingest-gate --repo solo --tool code-review --iteration 1 --json-report /dev/null --ledger L-t87.json >/dev/null 2>&1
+  run log-gate --repo solo --iteration 1 --kind simplicity --verdict pass --ledger L-t87.json >/dev/null 2>&1
+  [ "${2:-}" = golden ] && run log-gate --repo solo --iteration 1 --kind golden-diff --verdict pass --ledger L-t87.json >/dev/null 2>&1
+  run readiness --ledger L-t87.json --json 2>/dev/null | "$PY" -c "import json,sys;d=json.load(sys.stdin);print('%s|%s'%(d['score'], d.get('cap_source')))"
+}
+R_E=$(t87 ', "risk_profile": "E"')                              # perfil E, sin golden
+R_G=$(t87 ', "risk_profile": "E"' golden)                       # perfil E, con golden aprobado
+R_C=$(t87 ', "golden_required": true')                          # declarado directo, sin golden
+R_O=$(t87 ', "risk_profile": "E", "golden_required": false')    # override explicito
+if [ "$R_E" = "49|requerimiento (perfil E)" ] && [ "${R_G%%|*}" = "100.0" ] \
+   && [ "$R_C" = "49|requerimiento (config)" ] && [ "${R_O%%|*}" = "100.0" ]; then
+  PASS=$((PASS+1)); echo "  ok   sin golden -> cap 49 (perfil E / config); con golden o override -> no capea"; \
+else FAIL=$((FAIL+1)); echo "  FAIL golden cap: E=$R_E G=$R_G C=$R_C O=$R_O"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"

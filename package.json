@@ -1,6 +1,6 @@
 {
   "name": "@andresmassello/uscha",
-  "version": "1.44.1",
+  "version": "1.45.0",
   "description": "Uscha installer for Codex and Claude coding-agent workflows.",
   "bin": {
     "uscha": "bin/uscha.js",

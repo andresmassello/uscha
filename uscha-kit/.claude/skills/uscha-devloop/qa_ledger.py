@@ -1604,6 +1604,41 @@ def _has_text(value):
     return isinstance(value, str) and bool(value.strip())
 
 
+# risk_profile (kit 1.45.0, ADR-001): a NAMED PRESET, not a fixed engine gate. It expands
+# to knobs the config already understands; any explicit `defaults` key wins per-key; the
+# origin is tracked for provenance. An overridable default, never an imposed opinion.
+GOLDEN_REQUIRED_CEILING = 49  # ADR-002: no approved golden -> NOT READY (does not pass merge)
+RISK_PROFILES = {
+    "A": {"qa_tools_order": ["code-review"]},
+    "B": {"qa_tools_order": ["code-review", "improve"]},
+    "C": {"qa_tools_order": ["code-review", "judgment-day", "improve"]},
+    "D": {"qa_tools_order": ["code-review", "judgment-day", "improve"],
+          "coverage_threshold": 70, "golden_required": True},
+    "E": {"qa_tools_order": ["code-review", "judgment-day", "improve"],
+          "coverage_threshold": 80, "golden_required": True},
+}
+
+
+def _apply_risk_profile(defaults):
+    """Expand defaults['risk_profile'] into concrete knobs UNDER any explicit value (explicit
+    wins per key). Records the profile-provided keys in defaults['_risk_profile_keys'] so a cap
+    can label its provenance. Mutates + returns defaults. Unknown profile -> SystemExit (a
+    declared risk level is never inert -- INV-RISK-01)."""
+    profile = defaults.get("risk_profile")
+    if profile is None:
+        return defaults
+    if profile not in RISK_PROFILES:
+        raise SystemExit("[qa_ledger] invalid config: risk_profile must be one of "
+                         + ", ".join(sorted(RISK_PROFILES)))
+    provided = []
+    for key, value in RISK_PROFILES[profile].items():
+        if key not in defaults:  # an explicit declaration always wins
+            defaults[key] = list(value) if isinstance(value, list) else value
+            provided.append(key)
+    defaults["_risk_profile_keys"] = provided
+    return defaults
+
+
 def _validate_init_config(cfg):
     """Validate only the engine's core init contract before creating a ledger."""
     if not isinstance(cfg, dict):
@@ -1611,6 +1646,12 @@ def _validate_init_config(cfg):
     defaults = cfg.get("defaults", {})
     if not isinstance(defaults, dict):
         raise SystemExit("[qa_ledger] invalid config: defaults must be an object")
+    # expand a named risk profile into concrete knobs BEFORE validating them, so the merged
+    # values (qa_tools_order, coverage_threshold, golden_required) flow through the checks
+    # below. Explicit config wins per key; an unknown profile fails loud (INV-RISK-01).
+    _apply_risk_profile(defaults)
+    if "golden_required" in defaults and not isinstance(defaults["golden_required"], bool):
+        raise SystemExit("[qa_ledger] invalid config: golden_required must be a boolean")
 
     repos = cfg.get("repos", [])
     if not isinstance(repos, list):
@@ -2952,6 +2993,14 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
            if e.get("repo") == name and not e.get("resolved_at")]
     if esc:
         caps_active.append(("unresolved escalation", caps["escalation"]))
+    # golden_required (kit 1.45.0, ADR-002): if declared and NO approved golden-diff gate was
+    # ever logged for this repo, the frozen baseline is ABSENT -- a measured fact that caps
+    # readiness. A present-but-FAILED golden is already handled by the BLOCKER path above, so
+    # only the ABSENT case fires here (no double-cap).
+    golden_rec = _latest_static_by_tool(node).get("gate:golden-diff")
+    golden_missing = bool(defaults.get("golden_required")) and golden_rec is None
+    if golden_missing:
+        caps_active.append(("golden requerido: sin golden aprobado", GOLDEN_REQUIRED_CEILING))
     final, cap_reason = _apply_caps(raw, caps_active)
     return {
         "score": round(final, 1), "raw": round(raw, 1), "status": _band(final),
@@ -2963,7 +3012,11 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
                   "convergence_reasons": creasons, "tests_red": tests_red,
                   "static_unmeasured": static_unmeasured,
                   "coverage_unmeasured": coverage_unmeasured,
-                  "dropped_reports": dropped_reports},
+                  "dropped_reports": dropped_reports,
+                  # only surfaced when golden_required is in play, so a config with neither
+                  # risk_profile nor golden_required has byte-identical facts to before (1.45.0)
+                  **({"golden_missing": golden_missing}
+                     if defaults.get("golden_required") else {})},
     }
 
 
@@ -3586,12 +3639,27 @@ def cmd_readiness(args):
     if not acc_found:
         caps_active.append(("acceptance file not found",
                             caps["blocker_critical"], "blocker_critical"))
+    # golden_required (kit 1.45.0, ADR-002): any repo missing an approved golden caps the whole
+    # release. A human declaration (via profile or direct config), applied to a measured fact.
+    golden_missing_repos = sorted(n for n, r in repos.items()
+                                  if r["facts"].get("golden_missing"))
+    if golden_missing_repos:
+        caps_active.append((f"golden requerido: sin golden aprobado en "
+                            f"{', '.join(golden_missing_repos)}",
+                            GOLDEN_REQUIRED_CEILING, "golden_required"))
     final, cap_reason = _apply_caps(raw, caps_active)
     cap_key = next((c[2] for c in caps_active if c[0] == cap_reason), None)
     cap_source = None
     if cap_reason:
-        cap_source = ("requerimiento (config)" if cap_key in declared_caps
-                      else "default del kit")
+        if cap_key == "golden_required":
+            # provenance is three-way for the golden cap: profile-origin vs explicit config
+            profile = defaults.get("risk_profile")
+            from_profile = "golden_required" in (defaults.get("_risk_profile_keys") or [])
+            cap_source = (f"requerimiento (perfil {profile})"
+                          if (from_profile and profile) else "requerimiento (config)")
+        else:
+            cap_source = ("requerimiento (config)" if cap_key in declared_caps
+                          else "default del kit")
 
     # plateau / stop-signal (ADVISORY: recomienda, jamas gatea)
     qa_order = defaults.get("qa_tools_order")
@@ -3642,6 +3710,8 @@ def cmd_readiness(args):
                   "static_unmeasured_repos": unmeasured_repos,
                   "coverage_unmeasured_repos": cov_unmeasured_repos,
                   "dropped_report_repos": dropped_report_repos,
+                  **({"golden_missing_repos": golden_missing_repos}
+                     if golden_missing_repos else {}),
                   "production_findings_open": len(production_open),
                   "spec_doubts_open": len(spec_doubts_open),
                   "spec_change_requests_open": len(spec_change_requests_open)},
