@@ -40,3 +40,11 @@ written by the run itself, never by hand.
   as `coverage UNMEASURED`, which is deliberately NOT the same as a measured 0% — and it is not
   silently forgiven either. Instrumenting it, or declaring the exemption in `uscha.config.json`
   with provenance, is the honest fork; this repo has not chosen yet.
+
+## Recorded decisions
+- ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
+- ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".
+
+Each ADR carries its own checkable Verification block; the executable form of those checks is
+the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change
+is accepted by a green smoke, which is how uscha verifies its own engine.
