@@ -393,7 +393,7 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(1300px
 <!-- 2 Skills -->
 <g class="icod" transform="translate(267,818)"><rect x="-9" y="-7" width="18" height="14" rx="2"/><polyline points="-5,-2 -1,1 -5,4"/><line x1="1" y1="4" x2="5" y2="4"/></g>
 <text class="ft" x="287" y="810">Skills (/command)</text>
-<text class="fd" x="287" y="825">the kit's 8 skills</text>
+<text class="fd" x="287" y="825">the kit's 9 skills</text>
 <text class="fd" x="287" y="837">discovery → rubric</text>
 <!-- 3 Sub-agents -->
 <g class="icod" transform="translate(444,818)"><circle cx="0" cy="-6" r="2.5"/><circle cx="-6" cy="5" r="2.5"/><circle cx="6" cy="5" r="2.5"/><line x1="-1.4" y1="-3.8" x2="-5" y2="2.8"/><line x1="1.4" y1="-3.8" x2="5" y2="2.8"/></g>
@@ -439,9 +439,9 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(1300px
     <span class="node">Evidence</span><span class="ar">→</span>
     <span class="node red">Human gate</span>
   </div>
-  <p>Two things the flow guarantees: <strong>lowering the cost of entry</strong> (you don't have to design the system to be able to start — Discovery proposes that) and <strong>raising the certainty of the output</strong> (an honest state, with evidence and blockers, tells you how ready it truly is). In Claude Code all of this lives in eight callable skills (kit 1.27.0) and a measurement engine in Python.</p>
+  <p>Two things the flow guarantees: <strong>lowering the cost of entry</strong> (you don't have to design the system to be able to start — Discovery proposes that) and <strong>raising the certainty of the output</strong> (an honest state, with evidence and blockers, tells you how ready it truly is). In Claude Code all of this lives in nine callable skills (kit 1.50.0) and a measurement engine in Python.</p>
   <div class="tagrow">
-    <span class="chip red">/uscha-discovery</span><span class="chip red">/uscha-adr-refine</span><span class="chip red">/uscha-devloop</span><span class="chip red">/uscha-sysdoc</span><span class="chip red">/uscha-reverse-discovery</span><span class="chip red">/uscha-characterize</span><span class="chip red">/uscha-rubric</span><span class="chip red">/uscha-mirador</span><span class="chip">qa_ledger.py</span>
+    <span class="chip red">/uscha-discovery</span><span class="chip red">/uscha-adr-refine</span><span class="chip red">/uscha-devloop</span><span class="chip red">/uscha-sysdoc</span><span class="chip red">/uscha-reverse-discovery</span><span class="chip red">/uscha-characterize</span><span class="chip red">/uscha-rubric</span><span class="chip red">/uscha-mirador</span><span class="chip red">/uscha-status</span><span class="chip">qa_ledger.py</span>
   </div>
 </section>
 
@@ -574,7 +574,7 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
   <table>
     <thead><tr><th>Subcommand</th><th>What it does</th></tr></thead>
     <tbody>
-      <tr><td class="t">doctor</td><td>Installation diagnosis (flutter-doctor spirit): python/git, the 8 skills next to the engine, INV-GOLDEN-01 hook registered, project config/ACCEPTANCE/ledger and per-type toolchains. Exit 1 only on errors (1.22.0).</td></tr>
+      <tr><td class="t">doctor</td><td>Installation diagnosis (flutter-doctor spirit): python/git, the 9 skills next to the engine, INV-GOLDEN-01 hook registered, project config/ACCEPTANCE/ledger and per-type toolchains. Exit 1 only on errors (1.22.0).</td></tr>
       <tr><td class="t">init</td><td>Creates the ledger from <code class="in">uscha.config.json</code> (repos, thresholds, commands).</td></tr>
       <tr><td class="t">snapshot</td><td>Measures coverage / tests / LOC of a repo (<code class="in">--phase pre|post</code>).</td></tr>
       <tr><td class="t">check-coverage</td><td>Exit 0 if ≥ threshold, 1 if below. It's the phase 1 gate.</td></tr>

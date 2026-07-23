@@ -363,15 +363,13 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font
     <div class="term">
       <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; setup — una vez por máquina, 5 minutos</div>
       <div class="body">
-<span class="dim"># 1. skills del kit (uscha-kit 1.21.0) al Claude Code de cada uno</span><br>
-cp -r uscha-kit/.claude/skills/* ~/.claude/skills/<br>
-<span class="dim"># 2. el repo queda methodology-ready: protocolo + invariantes</span><br>
-cp uscha-kit/templates/CLAUDE.md uscha-kit/templates/CONSTITUTION.md &lt;repo&gt;/<br>
-cp uscha-kit/uscha-devloop.config.json &lt;repo&gt;/   <span class="dim"># repos, umbrales, gates</span><br>
-<span class="dim"># 3. (migraciones) el golden queda protegido: gitattributes + hook</span><br>
-cp uscha-kit/templates/.gitattributes &lt;repo&gt;/  <span class="dim"># + registrar hooks/block-approved-writes.ps1 como PreToolUse en settings.json</span><br>
-<span class="dim"># 4. verificar</span><br>
-bash uscha-kit/workbench-doctor.sh
+<span class="dim"># 1. las skills del kit en el Claude Code de cada uno (o --target codex / both)</span><br>
+npx --yes @andresmassello/uscha@latest install --target claude<br>
+<span class="dim"># 2. el repo queda methodology-ready de una: protocolo, invariantes,</span><br>
+<span class="dim">#    config, golden protegido (.gitattributes + hook) y statusline cableada</span><br>
+npx --yes @andresmassello/uscha@latest init<br>
+<span class="dim"># 3. verificar</span><br>
+npx --yes @andresmassello/uscha@latest doctor --target claude
       </div>
     </div>
     <ul class="v">
@@ -390,7 +388,7 @@ bash uscha-kit/workbench-doctor.sh
     <h2>No es para que codees distinto.<br><span class="a">Es para que el equipo recuerde.</span></h2>
     <p class="lead">Cada uno sigue usando Claude Code — con toda su potencia. Lo que cambia es dónde vive la verdad: <strong>en archivos versionados que cualquier agente y cualquier persona pueden leer</strong>, con evidencia medida en vez de narrada, y con un humano dueño de cada merge.</p>
     <div class="quote" style="font-size:1.5rem;margin-top:2rem">La herramienta ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</div>
-    <p class="foot-sign" style="margin-top:2.5rem">Uscha · instanciado en Claude Code vía uscha-kit 1.21.0 · preguntas → ahora</p>
+    <p class="foot-sign" style="margin-top:2.5rem">Uscha · instanciado en Claude Code vía uscha-kit 1.50.0 · preguntas → ahora</p>
   </div>
 </section>
 

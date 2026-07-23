@@ -363,15 +363,13 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap;font
     <div class="term">
       <div class="tbar"><span class="dot" style="background:#ff5d5d"></span><span class="dot" style="background:#f5b13d"></span><span class="dot" style="background:#4ddb95"></span>&nbsp; setup -- once per machine, 5 minutes</div>
       <div class="body">
-<span class="dim"># 1. kit skills (uscha-kit 1.21.0) into everyone's Claude Code</span><br>
-cp -r uscha-kit/.claude/skills/* ~/.claude/skills/<br>
-<span class="dim"># 2. the repo becomes methodology-ready: protocol + invariants</span><br>
-cp uscha-kit/templates/CLAUDE.md uscha-kit/templates/CONSTITUTION.md &lt;repo&gt;/<br>
-cp uscha-kit/uscha-devloop.config.json &lt;repo&gt;/   <span class="dim"># repos, thresholds, gates</span><br>
-<span class="dim"># 3. (migrations) protect golden: gitattributes + hook</span><br>
-cp uscha-kit/templates/.gitattributes &lt;repo&gt;/  <span class="dim"># + register hooks/block-approved-writes.ps1 as PreToolUse in settings.json</span><br>
-<span class="dim"># 4. verify</span><br>
-bash uscha-kit/workbench-doctor.sh
+<span class="dim"># 1. the kit skills into everyone's Claude Code (or --target codex / both)</span><br>
+npx --yes @andresmassello/uscha@latest install --target claude<br>
+<span class="dim"># 2. the repo becomes methodology-ready in one step: protocol,</span><br>
+<span class="dim">#    invariants, config, protected golden (.gitattributes + hook) and statusline</span><br>
+npx --yes @andresmassello/uscha@latest init<br>
+<span class="dim"># 3. verify</span><br>
+npx --yes @andresmassello/uscha@latest doctor --target claude
       </div>
     </div>
     <ul class="v">
@@ -390,7 +388,7 @@ bash uscha-kit/workbench-doctor.sh
     <h2>It is not about coding differently.<br><span class="a">It is about helping the team remember.</span></h2>
     <p class="lead">Everyone keeps using Claude Code -- with all its power. What changes is where truth lives: <strong>in versioned files that any agent and any person can read</strong>, with measured instead of narrated evidence, and a human owning every merge.</p>
     <div class="quote" style="font-size:1.5rem;margin-top:2rem">The tool executes -- the method governs -- evidence decides -- the human approves.</div>
-    <p class="foot-sign" style="margin-top:2.5rem">Uscha -- instantiated in Claude Code via uscha-kit 1.21.0 -- questions -- now</p>
+    <p class="foot-sign" style="margin-top:2.5rem">Uscha -- instantiated in Claude Code via uscha-kit 1.50.0 -- questions -- now</p>
   </div>
 </section>
 
