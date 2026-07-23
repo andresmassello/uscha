@@ -103,6 +103,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <a href="#sys-doc">uscha-sysdoc</a>
     <a href="#rubric">uscha-rubric</a>
     <a href="#mirador">uscha-mirador</a>
+    <a href="#status">uscha-status</a>
     <a href="#transversales">cross-cutting</a>
   </div>
 </nav>
@@ -111,10 +112,10 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <header class="hero">
   <div class="tag">complete reference · uscha-kit 1.27.0</div>
-  <h1>The eight skills <span class="a">of the method.</span></h1>
+  <h1>The nine skills <span class="a">of the method.</span></h1>
   <p>What each one does, phase by phase: purpose, when to invoke it, non-negotiable
   principles, protocol, artifacts, guardrails, and relationships. The source of truth is
-  the eight <code>SKILL.md</code> of <code>uscha-kit/.claude/skills/</code> — this document
+  the nine <code>SKILL.md</code> of <code>uscha-kit/.claude/skills/</code> — this document
   describes them; it does not replace them. If anything here conflicts with a SKILL.md, the SKILL.md wins.</p>
 </header>
 
@@ -486,6 +487,27 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
       <li><strong>Optional second-screen view.</strong> <code>mirador-watch.ps1</code>/<code>mirador-watch.sh</code> re-renders every N seconds; the page refreshes without a server and changes only at measured checkpoints.</li>
     </ol>
     <div class="rule go"><div class="rk">doctrinal boundary</div><p>Measured panels answer <strong>"is it correct?"</strong>; vendor-reported telemetry answers <strong>"what did it cost?"</strong> They appear together but are never mixed and never gate each other.</p></div>
+  </div>
+</article>
+
+<!-- ══════════════════════ 9 · STATUS ══════════════════════ -->
+<article class="play" id="status">
+  <div class="top"><div class="pn">09</div><div class="pt">uscha-status — the statusline on demand, in chat</div><div class="status">progress</div></div>
+  <div class="body">
+    <p><strong>What it is.</strong> A one-line progress readout, rendered <strong>in chat</strong>, for surfaces where the statusline is not visible (Claude Desktop, Codex, plain terminals, CI logs). It reads the same MEASURED facts the statusline reads — derived phase, loop odometer, acceptance bar, tests, next criterion — and prints them in a compact block.</p>
+    <p><strong>When.</strong> "uscha status", "/uscha-status", "where are we", "progress". Three zoom levels, each datum once: the <strong>push</strong> is the readiness line at every pass close (already exists); this is the <strong>pull</strong>; the <strong>mirador</strong> is the bird's-eye view.</p>
+    <h4>Non-negotiable contract</h4>
+    <ul class="do">
+      <li><strong>Read-only.</strong> It never runs <code>readiness</code>, tests, or gates. It renders already-persisted evidence (<code>ledger["measured"]</code>, refreshed by <code>uscha_progress.py</code>) or honestly says there is none.</li>
+      <li><strong>Measured beats narrated.</strong> With no recorded measurement and only ACCEPTANCE checkboxes, it may show the count but labeled <strong>narrated</strong>, never passed off as measured.</li>
+      <li><strong>Truth-pass.</strong> A datum with no source shrinks the block; it never becomes "n/a" noise or an invented number.</li>
+    </ul>
+    <h4>Flow</h4>
+    <ol class="steps">
+      <li><strong>Source, in order.</strong> Run <code>uscha_progress.py</code> if present (fast: parses JSON + one <code>.md</code>, never runs tests) and read <code>.claude/uscha-progress.json</code>; else read <code>QA-LEDGER.json</code> <code>measured</code> directly; no <code>uscha.config.json</code> means it is not a uscha project, and it says so.</li>
+      <li><strong>One compact block.</strong> Label · derived phase <code>×loops</code> · measured acceptance bar · tests · coverage · <code>next →</code> · per-repo odometer (multi-repo, with <code>plateau ⚠</code>) · roadmap · <code>recorded</code> with the timestamp and score/band of the last measurement.</li>
+    </ol>
+    <div class="rule go"><div class="rk">doctrinal boundary</div><p>The trail feeds itself: the dev-loop records with <code>readiness --record</code> at every pass close (kit 1.47.0). This skill only <strong>reads</strong> that evidence — it never measures on the fly.</p></div>
   </div>
 </article>
 

@@ -103,6 +103,7 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
     <a href="#sys-doc">uscha-sysdoc</a>
     <a href="#rubric">uscha-rubric</a>
     <a href="#mirador">uscha-mirador</a>
+    <a href="#status">uscha-status</a>
     <a href="#transversales">transversales</a>
   </div>
 </nav>
@@ -111,10 +112,10 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
 
 <header class="hero">
   <div class="tag">referencia exhaustiva · uscha-kit 1.27.0</div>
-  <h1>Las ocho skills <span class="a">del método.</span></h1>
+  <h1>Las nueve skills <span class="a">del método.</span></h1>
   <p>Qué hace cada una, fase por fase: propósito, cuándo se invoca, principios no
   negociables, protocolo, artefactos, guardrails y relaciones. La fuente de verdad son
-  los ocho <code>SKILL.md</code> de <code>uscha-kit/.claude/skills/</code> — este doc
+  los nueve <code>SKILL.md</code> de <code>uscha-kit/.claude/skills/</code> — este doc
   los describe, no los reemplaza. Si algo acá contradice un SKILL.md, gana el SKILL.md.</p>
 </header>
 
@@ -505,6 +506,27 @@ td:first-child{font-family:var(--mono);color:var(--cyan);white-space:nowrap}
       <li><strong>Segundo monitor opcional.</strong> <code>mirador-watch.ps1</code>/<code>mirador-watch.sh</code> re-renderiza cada N segundos; la página se refresca sin servidor y cambia solo en checkpoints medidos.</li>
     </ol>
     <div class="rule go"><div class="rk">frontera doctrinal</div><p>Los paneles medidos responden <strong>"¿es correcto?"</strong>; la telemetría vendor-reported responde <strong>"¿cuánto costó?"</strong>. Se muestran juntas, pero jamás se mezclan ni gatean entre sí.</p></div>
+  </div>
+</article>
+
+<!-- ══════════════════════ 9 · STATUS ══════════════════════ -->
+<article class="play" id="status">
+  <div class="top"><div class="pn">09</div><div class="pt">uscha-status — el statusline a demanda, en chat</div><div class="status">progreso</div></div>
+  <div class="body">
+    <p><strong>Qué es.</strong> Un readout de progreso de una línea, renderizado <strong>en el chat</strong>, para superficies donde el statusline no se ve (Claude Desktop, Codex, terminales peladas, logs de CI). Lee los mismos hechos MEDIDOS que el statusline — fase derivada, odómetro de loops, barra de acceptance, tests, próximo criterio — y los imprime en un bloque compacto.</p>
+    <p><strong>Cuándo.</strong> "uscha status", "/uscha-status", "cómo vamos", "progreso". Tres niveles de zoom, cada dato una sola vez: el <strong>push</strong> es la línea de readiness al cierre de cada pasada (ya existe); este es el <strong>pull</strong>; el <strong>mirador</strong> es la vista de pájaro.</p>
+    <h4>Contrato no negociable</h4>
+    <ul class="do">
+      <li><strong>Solo lectura.</strong> Jamás corre <code>readiness</code>, tests ni gates. Renderiza evidencia ya persistida (<code>ledger["measured"]</code>, refrescado por <code>uscha_progress.py</code>) o dice honestamente que no hay ninguna.</li>
+      <li><strong>Measured beats narrated.</strong> Si no hay medición grabada y solo hay checkboxes de ACCEPTANCE, puede mostrar el conteo pero etiquetado <strong>narrado</strong>, jamás pasado por medido.</li>
+      <li><strong>Truth-pass.</strong> Un dato sin fuente encoge el bloque; nunca se vuelve ruido "n/d" ni un número inventado.</li>
+    </ul>
+    <h4>Flujo</h4>
+    <ol class="steps">
+      <li><strong>Fuente, en orden.</strong> Corre <code>uscha_progress.py</code> si existe (rápido: parsea JSON + un <code>.md</code>, jamás corre tests) y lee <code>.claude/uscha-progress.json</code>; si no, lee <code>QA-LEDGER.json</code> <code>measured</code> directo; sin <code>uscha.config.json</code> no es un proyecto uscha y lo dice.</li>
+      <li><strong>Un bloque compacto.</strong> Etiqueta · fase derivada <code>×loops</code> · barra de acceptance medida · tests · coverage · <code>next →</code> · odómetro por repo (multi-repo, con <code>plateau ⚠</code>) · roadmap · <code>recorded</code> con timestamp y score/band de la última medición.</li>
+    </ol>
+    <div class="rule go"><div class="rk">frontera doctrinal</div><p>El sendero se alimenta solo: el dev-loop graba con <code>readiness --record</code> al cierre de cada pasada (kit 1.47.0). Esta skill solo <strong>lee</strong> esa evidencia — nunca mide sobre la marcha.</p></div>
   </div>
 </article>
 

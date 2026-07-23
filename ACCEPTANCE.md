@@ -25,7 +25,7 @@ written by the run itself, never by hand.
 - [x] AC-04 — The engine stays model-agnostic: `qa_ledger.py` never reads tokens, model names,
   or vendor telemetry. Any model-reported number enters through an adapter, never the engine.
 
-- [ ] AC-05 — Every published ES document under `docs/` has its `-EN` twin. The twins travel
+- [x] AC-05 — Every published ES document under `docs/` has its `-EN` twin. The twins travel
   together, or one of them silently rots.
 
 - [x] AC-06 — The smoke suite finishes with zero failures. It is the gate every engine change
