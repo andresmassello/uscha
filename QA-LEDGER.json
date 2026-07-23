@@ -2,7 +2,7 @@
   "schema": "dev-loop/qa-ledger@1",
   "run_id": "20260721-164219",
   "started_at": "2026-07-21T19:42:19+00:00",
-  "updated_at": "2026-07-21T19:42:19+00:00",
+  "updated_at": "2026-07-23T15:31:59+00:00",
   "config": {
     "version": "1.44.0",
     "project": "uscha (self-applied)",
@@ -102,6 +102,42 @@
   "spec_doubts": [],
   "spec_change_requests": [],
   "integrity": {
-    "sha256": "bba4626abd797776b19cb621afdbbb65aec0b8d75478830f64bea423c286724b"
+    "sha256": "bd8227988ee2b61100111673dcfcda8a8b68caf158c207a475f3755fd389c840"
+  },
+  "readiness_history": [
+    {
+      "at": "2026-07-23T00:06:02+00:00",
+      "score": 13.9
+    },
+    {
+      "at": "2026-07-23T15:11:49+00:00",
+      "score": 13.9
+    },
+    {
+      "at": "2026-07-23T15:13:45+00:00",
+      "score": 35
+    },
+    {
+      "at": "2026-07-23T15:31:59+00:00",
+      "score": 35
+    }
+  ],
+  "measured": {
+    "at": "2026-07-23T15:31:59+00:00",
+    "score": 35,
+    "band": "NOT READY",
+    "acceptance_done": 5,
+    "acceptance_total": 6,
+    "next": {
+      "id": "AC-5",
+      "text": "Every published ES document under `docs/` has its `-EN` twin. The twins travel"
+    },
+    "repos": {
+      "uscha": {
+        "phase": "build",
+        "loops": 0,
+        "stalled": false
+      }
+    }
   }
 }

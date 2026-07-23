@@ -1,0 +1,18 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "python .claude/scripts/uscha_statusline.py"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/scripts/uscha_progress.py"
+          }
+        ]
+      }
+    ]
+  }
+}
