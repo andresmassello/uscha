@@ -3396,26 +3396,6 @@ def cmd_dashboard(args):
             subscores.append({"k": key, "val": None,
                               "bd": gate_note.get(key) or ("FAIL" if gate_block[key] else "OK")})
 
-    # phases: esqueleto fijo de 8 nodos; status = proyeccion determinista del readiness
-    # (nodos < alcanzado = done; el alcanzado = block si hay cap, si no prog; resto todo).
-    # count/risk sin fuente -> null.
-    ridx = _reached_index(score)
-    phases = []
-    for i, (key, label, ph) in enumerate(_MIRADOR_PHASES):
-        st = "done" if i < ridx else ("todo" if i > ridx else ("block" if cap else "prog"))
-        phases.append({"key": key, "label": label, "phase": ph,
-                       "status": st, "count": None, "risk": None,
-                       "execution": exec_policy["phases"].get(key)})
-
-    # inv: nombres fijos; status del gate persistido donde mapea, si no null.
-    inv = []
-    for name in _MIRADOR_INV:
-        gk = _INV_GATE.get(name)
-        if gk and gk in gate_block:
-            inv.append({"name": name, "status": "miss" if gate_block[gk] else "ok"})
-        else:
-            inv.append({"name": name, "status": None})
-
     # loops: iters + estado por repo (escalated > converged > active). max sin fuente.
     by_repo = rd.get("by_repo", {})
     unresolved = {e.get("repo") for e in ledger.get("escalations", [])
@@ -3428,6 +3408,43 @@ def cmd_dashboard(args):
         state = ("escalated" if name in unresolved
                  else "converged" if conv else "active")
         loops.append({"mod": name, "iters": iters, "max": None, "state": state})
+
+    # odometro del QA loop (kit 1.47.0): badge del nodo "qa" del sendero. Solo hechos ya
+    # computados: pasadas (max iteration), escalaciones abiertas, plateau (advisory 1.14.0)
+    # o convergencia. Sin pasadas -> null (el template no dibuja el badge).
+    qa_count = None
+    _mx = max((l["iters"] for l in loops), default=0)
+    if _mx:
+        bits = [f"{_mx} loop" + ("s" if _mx != 1 else "")]
+        _esc = sum(1 for l in loops if l["state"] == "escalated")
+        if _esc:
+            bits.append(f"{_esc} escalado" + ("s" if _esc != 1 else ""))
+        if rd.get("advice", {}).get("stalled_repos"):
+            bits.append("plateau")
+        elif loops and all(l["state"] == "converged" for l in loops):
+            bits.append("convergido")
+        qa_count = " · ".join(bits)
+
+    # phases: esqueleto fijo de 8 nodos; status = proyeccion determinista del readiness
+    # (nodos < alcanzado = done; el alcanzado = block si hay cap, si no prog; resto todo).
+    # count = odometro medido para "qa"; el resto sin fuente -> null.
+    ridx = _reached_index(score)
+    phases = []
+    for i, (key, label, ph) in enumerate(_MIRADOR_PHASES):
+        st = "done" if i < ridx else ("todo" if i > ridx else ("block" if cap else "prog"))
+        phases.append({"key": key, "label": label, "phase": ph,
+                       "status": st, "count": qa_count if key == "qa" else None,
+                       "risk": None,
+                       "execution": exec_policy["phases"].get(key)})
+
+    # inv: nombres fijos; status del gate persistido donde mapea, si no null.
+    inv = []
+    for name in _MIRADOR_INV:
+        gk = _INV_GATE.get(name)
+        if gk and gk in gate_block:
+            inv.append({"name": name, "status": "miss" if gate_block[gk] else "ok"})
+        else:
+            inv.append({"name": name, "status": None})
 
     # snapshots: time-lapse del historial persistido por `readiness --record` (add-on
     # 1.32.0). Solo hacia adelante; [] hasta que se registre. reached = proyeccion.
@@ -3688,10 +3705,21 @@ def cmd_readiness(args):
         # and never re-runs the engine, and can never contradict the ledger it summarizes.
         _closed = set(measured_closed)
         _next = next((i for i in ac_ids if i["id"] not in _closed), None)
+        # kit 1.47.0: the loop odometer -- persist per repo the derived phase (FSM 1.18.0),
+        # the loop-pass count and the plateau flag. All facts this readiness ALREADY computed;
+        # the statusline shows WHERE the method is without re-deriving or running the engine.
+        _stalled = set(stalled_repos)
+        _odometer = {
+            name: {"phase": _derive_phase(ledger, name, node, k, qa_order)[0],
+                   "loops": max((it.get("iteration", 0) or 0
+                                 for it in node.get("iterations", [])), default=0),
+                   "stalled": name in _stalled}
+            for name, node in ledger["repos"].items()}
         ledger["measured"] = {
             "at": now, "score": round(final, 1), "band": _band(final),
             "acceptance_done": len(measured_closed), "acceptance_total": total,
             "next": ({"id": _next["id"], "text": _next.get("text", "")} if _next else None),
+            "repos": _odometer,
         }
         _save(args.ledger, ledger)
 

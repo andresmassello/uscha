@@ -61,6 +61,11 @@ def main():
     label = s.get("label") or "uscha"
     pct = s.get("pct")
     parts = [f"{B}{label}{R}"]
+    # loop odometer (kit 1.47.0): derived phase + pass count, e.g. "qa×3" -- WHERE the
+    # method is, measured by the engine. "plateau" warns when iterating stopped helping.
+    if s.get("phase"):
+        tok = s["phase"] + (f"×{s['loops']}" if s.get("loops") else "")
+        parts.append(f"{DIM}{tok}{R}" + (f" {YELLOW}plateau{R}" if s.get("stalled") else ""))
     if pct is None:
         parts.append(f"{DIM}avance n/d{R}")
     else:

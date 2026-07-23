@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.46.1.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.47.0.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.46.1.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.46.1.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.47.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.47.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.46.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.47.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.46.1' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.47.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.46.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.47.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.46.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.47.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.46.1'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.47.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2942,6 +2942,38 @@ rm -rf "$T90"
 if [ "$T90_BEFORE" = "0/2" ] && [ "$T90_AFTER" = "1/2" ]; then
   PASS=$((PASS+1)); echo "  ok   checkbox fallback 0/2 -> after readiness --record shows MEASURED 1/2 (agrees with the ledger)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL statusline not sourced from measured (before=$T90_BEFORE after=$T90_AFTER)"; fi
+
+echo "== T91 (1.47.0): the trail feeds itself -- loop odometer in measured, mirador QA badge, statusline phase token =="
+# isolated subdir (same reason as T90: acceptance_file resolves relative to CWD)
+T91="$(mktemp -d)"
+( cd "$T91" && mkdir -p .claude reports/junit
+  printf -- "# ACCEPTANCE\n\n- [ ] AC-01 — first\n" > ACCEPTANCE.md
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="acc" tests="1" failures="0" errors="0" skipped="0">\n  <testcase classname="acc" name="AC-01_first"/>\n</testsuite>\n' > reports/junit/TEST.xml
+  printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
+  run init --config uscha.config.json --out QA-LEDGER.json >/dev/null 2>&1
+  run snapshot --ledger QA-LEDGER.json --repo p >/dev/null 2>&1
+  # two QA loop passes -> phase "qa", loops 2
+  run log-step --ledger QA-LEDGER.json --repo p --tool code-review --iteration 1 --reported 3 --gated-reported 2 --fixed 2 >/dev/null 2>&1
+  run log-step --ledger QA-LEDGER.json --repo p --tool code-review --iteration 2 --reported 1 --gated-reported 1 --fixed 1 >/dev/null 2>&1
+  run readiness --ledger QA-LEDGER.json --record >/dev/null 2>&1
+  # 1) measured carries the odometer: derived phase + loop count + plateau flag per repo
+  odo=$("$PY" -c "import json;r=json.load(open('QA-LEDGER.json'))['measured']['repos']['p'];print('%s/%s/%s'%(r['phase'],r['loops'],r['stalled']))")
+  # 2) mirador trail: the 'qa' node badge shows the measured pass count
+  badge=$(run dashboard --ledger QA-LEDGER.json --json 2>/dev/null | "$PY" -c "import json,sys;d=json.load(sys.stdin);print(next(p['count'] for p in d['phases'] if p['key']=='qa'))")
+  # 3) statusline: the phase token comes from measured, rendered as 'qa×2'
+  CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_progress.py"
+  tok=$("$PY" -c "import json;s=json.load(open('.claude/uscha-progress.json'));print('%s/%s'%(s['phase'],s['loops']))")
+  line=$(CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_statusline.py" < /dev/null)
+  echo "$odo|$badge|$tok|$line" > result.txt )
+T91_RES="$(cat "$T91/result.txt")"
+rm -rf "$T91"
+T91_ODO="${T91_RES%%|*}"; T91_REST="${T91_RES#*|}"
+T91_BADGE="${T91_REST%%|*}"; T91_REST="${T91_REST#*|}"
+T91_TOK="${T91_REST%%|*}"; T91_LINE="${T91_REST#*|}"
+if [ "$T91_ODO" = "qa/2/False" ] && [ "$T91_BADGE" = "2 loops" ] && [ "$T91_TOK" = "qa/2" ] \
+   && printf '%s' "$T91_LINE" | grep -q "qa×2"; then
+  PASS=$((PASS+1)); echo "  ok   measured.repos.p={qa,2,not stalled} · mirador qa badge '2 loops' · statusline token 'qa×2'"; \
+else FAIL=$((FAIL+1)); echo "  FAIL odometer broken (odo=$T91_ODO badge=$T91_BADGE tok=$T91_TOK line=$T91_LINE)"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"

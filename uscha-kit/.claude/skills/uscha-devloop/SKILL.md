@@ -390,8 +390,14 @@ python3 $QL summary --json    # machine-readable, includes post_merge_calibratio
 the STATE of the result (not effort spent), as a weighted score 0..100 with hard caps:
 
 ```bash
-python3 $QL readiness --acceptance <ACCEPTANCE.md> --tools-per-cycle <count>
+python3 $QL readiness --acceptance <ACCEPTANCE.md> --tools-per-cycle <count> --record
 ```
+
+Always pass `--record` here (kit 1.47.0): it persists the score to `readiness_history`
+(the mirador time-lapse) and the measured summary + loop odometer — derived phase, pass
+count, plateau flag per repo — to `ledger["measured"]` (what the statusline reads).
+Without it the trail starves: the mirador shows "no history yet" and the statusline
+falls back to counting checkboxes. Recording is append-only facts, never a gate.
 
 **Single-verdict view (kit 1.25.0, anti-ceremony).** By default `readiness` is ONE
 screen: the verdict line, any conditional warning that actually fired (it speaks only

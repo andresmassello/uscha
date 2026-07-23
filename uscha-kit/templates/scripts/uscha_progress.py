@@ -32,7 +32,7 @@ def _statusline_repo(cfg):
     return repos[0] if repos else None
 
 
-def _measured(state):
+def _measured(state, repo_name=None):
     """Prefer the engine's MEASURED acceptance -- persisted into ledger['measured'] by
     `readiness --record` -- over counting checkboxes. The statusline summarizes the ledger; it
     must never contradict it (measured beats narrated, kit 1.46.1). Returns True if used."""
@@ -43,7 +43,15 @@ def _measured(state):
         m = (json.loads(ledger.read_text(encoding="utf-8")) or {}).get("measured")
     except Exception:
         return False
-    if not isinstance(m, dict) or not m.get("acceptance_total"):
+    if not isinstance(m, dict):
+        return False
+    # loop odometer (kit 1.47.0): the derived phase + pass count + plateau flag the engine
+    # persisted for this repo. Read even when there are no ACs -- phase is its own fact.
+    r = (m.get("repos") or {}).get(repo_name or "")
+    if isinstance(r, dict):
+        state["phase"], state["loops"] = r.get("phase"), r.get("loops")
+        state["stalled"] = bool(r.get("stalled"))
+    if not m.get("acceptance_total"):
         return False
     total, done = m["acceptance_total"], m.get("acceptance_done") or 0
     state["done"], state["total"] = done, total
@@ -131,10 +139,11 @@ def main():
         return
     state = {"label": repo.get("label") or str(repo.get("name", "uscha")).upper(),
              "pct": None, "done": None, "total": None, "tests": None, "coverage": None,
-             "next": None, "roadmap_done": None, "roadmap_total": None, "roadmap_next": None}
+             "next": None, "phase": None, "loops": None, "stalled": None,
+             "roadmap_done": None, "roadmap_total": None, "roadmap_next": None}
     # measured (ledger['measured']) wins; checkboxes are only the fallback until the engine
     # has recorded a measurement -- so a fresh project still shows *something*, honestly.
-    if not _measured(state):
+    if not _measured(state, repo.get("name")):
         _acceptance(state, cfg)
     _ledger(state, repo.get("name"))
     _roadmap(state, repo)

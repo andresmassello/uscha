@@ -83,8 +83,9 @@ wires the JSON the engine emits into the template. Read-only.
    python3 <skill-dir>/mirador-render.py --ledger QA-LEDGER.json
    ```
    The engine stays model-agnostic — telemetry is merged by the renderer (the adapter), NOT
-   by `dashboard`. If the ledger is missing, warn and stop (run `uscha-devloop` first). For
-   the time-lapse, `qa_ledger.py readiness --record` (opt-in) fills the history prospectively.
+   by `dashboard`. If the ledger is missing, warn and stop (run `uscha-devloop` first). The
+   time-lapse feeds from `qa_ledger.py readiness --record` — since kit 1.47.0 the dev-loop
+   records at every pass close, so history accumulates without extra ceremony.
 
 5. **Where to look:** the renderer already opened `mirador.html` and printed its absolute path
    on the `OPEN IT:` line — surface that path to the operator. Pass `--no-open` to write the
