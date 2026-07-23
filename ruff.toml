@@ -1,0 +1,34 @@
+# Static gate for this repo (uscha applied to itself).
+#
+# Provenance: this file IS the declaration of what "the static gate" means here.
+# The engine does not invent a rule set; a human declares it and the gate measures
+# against it. Reports land in reports/ruff.json and are ingested with
+# `qa_ledger.py ingest-gate --repo uscha --ruff reports/ruff.json`.
+
+target-version = "py38"   # the kit's floor: Python >= 3.8 (see the doctor's check)
+line-length = 100
+
+exclude = [
+    # The distributable mirror is BYTE-IDENTICAL to .claude/skills (AC-01 proves it).
+    # Linting both would double every finding and corrupt the count.
+    "uscha-kit/skills",
+    # Installed copies of uscha-kit/templates/scripts (self-application wiring).
+    # Same reason: the template is the source, these are its deployment.
+    ".claude/scripts",
+    # Vendored published package pulled by npx — third-party output, not our source.
+    ".npm-cache",
+]
+
+[lint]
+# E/F (ruff's default) = pycodestyle errors + pyflakes: undefined names, dead
+# imports, syntax. B (bugbear) = likely-bug patterns; the engine maps B* to MEDIUM.
+# Security rules (S*, mapped HIGH by the engine) are NOT enabled wholesale: on this
+# codebase they are dominated by deliberate design (subprocess called with a list of
+# args -- the safe form -- and documented best-effort try/except/pass). Enabling them
+# as-is would gate on noise and train the reader to ignore the gate. The few that do
+# deserve attention are tracked as real findings, not silenced here.
+select = ["E4", "E7", "E9", "F", "B"]
+
+[lint.per-file-ignores]
+# Test helpers legitimately use assert and long fixture literals.
+"uscha-kit/tests/*" = ["E501"]

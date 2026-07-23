@@ -1,0 +1,667 @@
+[
+  {
+    "cell": null,
+    "code": "B904",
+    "end_location": {
+      "column": 90,
+      "row": 126
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 123
+    },
+    "message": "Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling",
+    "name": "raise-without-from-inside-except",
+    "noqa_row": 123,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/raise-without-from-inside-except"
+  },
+  {
+    "cell": null,
+    "code": "B007",
+    "end_location": {
+      "column": 10,
+      "row": 2709
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 2709
+    },
+    "message": "Loop control variable `t` not used within loop body",
+    "name": "unused-loop-control-variable",
+    "noqa_row": 2709,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-loop-control-variable"
+  },
+  {
+    "cell": null,
+    "code": "B034",
+    "end_location": {
+      "column": 32,
+      "row": 3240
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 3240
+    },
+    "message": "`re.split` should pass `maxsplit` and `flags` as keyword arguments to avoid confusion due to unintuitive argument positions",
+    "name": "re-sub-positional-args",
+    "noqa_row": 3240,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/re-sub-positional-args"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 32,
+      "row": 3416
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 31,
+      "row": 3416
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 3416,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 27,
+      "row": 3419
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 26,
+      "row": 3419
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 3419,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 59,
+      "row": 3424
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 58,
+      "row": 3424
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 3424,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "B007",
+    "end_location": {
+      "column": 16,
+      "row": 3568
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 12,
+      "row": 3568
+    },
+    "message": "Loop control variable `node` not used within loop body",
+    "name": "unused-loop-control-variable",
+    "noqa_row": 3568,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-loop-control-variable"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 14,
+      "row": 4643
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 13,
+      "row": 4643
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 4643,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 29,
+      "row": 4907
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 28,
+      "row": 4907
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 4907,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 42,
+      "row": 4907
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 41,
+      "row": 4907
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 4907,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "B904",
+    "end_location": {
+      "column": 96,
+      "row": 5380
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 5379
+    },
+    "message": "Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling",
+    "name": "raise-without-from-inside-except",
+    "noqa_row": 5379,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/raise-without-from-inside-except"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 44,
+      "row": 43
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-mirador\\mirador-render.py",
+    "fix": null,
+    "location": {
+      "column": 43,
+      "row": 43
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 43,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 46,
+      "row": 44
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-mirador\\mirador-render.py",
+    "fix": null,
+    "location": {
+      "column": 45,
+      "row": 44
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 44,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 36,
+      "row": 45
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-mirador\\mirador-render.py",
+    "fix": null,
+    "location": {
+      "column": 35,
+      "row": 45
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 45,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 10,
+      "row": 47
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-mirador\\mirador-render.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 47
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 47,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 41,
+      "row": 54
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-mirador\\mirador-render.py",
+    "fix": null,
+    "location": {
+      "column": 40,
+      "row": 54
+    },
+    "message": "Ambiguous variable name: `l`",
+    "name": "ambiguous-variable-name",
+    "noqa_row": 54,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E701",
+    "end_location": {
+      "column": 36,
+      "row": 640
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 35,
+      "row": 640
+    },
+    "message": "Multiple statements on one line (colon)",
+    "name": "multiple-statements-on-one-line-colon",
+    "noqa_row": 640,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-colon"
+  },
+  {
+    "cell": null,
+    "code": "E701",
+    "end_location": {
+      "column": 37,
+      "row": 641
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 36,
+      "row": 641
+    },
+    "message": "Multiple statements on one line (colon)",
+    "name": "multiple-statements-on-one-line-colon",
+    "noqa_row": 641,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-colon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 63,
+      "row": 647
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 62,
+      "row": 647
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 647,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E701",
+    "end_location": {
+      "column": 53,
+      "row": 650
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 52,
+      "row": 650
+    },
+    "message": "Multiple statements on one line (colon)",
+    "name": "multiple-statements-on-one-line-colon",
+    "noqa_row": 650,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-colon"
+  },
+  {
+    "cell": null,
+    "code": "E701",
+    "end_location": {
+      "column": 50,
+      "row": 653
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 49,
+      "row": 653
+    },
+    "message": "Multiple statements on one line (colon)",
+    "name": "multiple-statements-on-one-line-colon",
+    "noqa_row": 653,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-colon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 91,
+      "row": 661
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 90,
+      "row": 661
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 661,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 144,
+      "row": 661
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 143,
+      "row": 661
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 661,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 91,
+      "row": 663
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 90,
+      "row": 663
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 663,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 165,
+      "row": 663
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 164,
+      "row": 663
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 663,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 197,
+      "row": 663
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 196,
+      "row": 663
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 663,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 253,
+      "row": 663
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 252,
+      "row": 663
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 663,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 306,
+      "row": 663
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 305,
+      "row": 663
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 663,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 90,
+      "row": 665
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 89,
+      "row": 665
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 665,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 121,
+      "row": 665
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 120,
+      "row": 665
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 665,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 173,
+      "row": 665
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 172,
+      "row": 665
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 665,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 46,
+      "row": 667
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 45,
+      "row": 667
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 667,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 147,
+      "row": 667
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 146,
+      "row": 667
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 667,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 200,
+      "row": 667
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 199,
+      "row": 667
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 667,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 250,
+      "row": 667
+    },
+    "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\install-uscha.py",
+    "fix": null,
+    "location": {
+      "column": 249,
+      "row": 667
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 667,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  }
+]
