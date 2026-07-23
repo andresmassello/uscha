@@ -3679,8 +3679,20 @@ def cmd_readiness(args):
     # historial top-level para el mirador. readiness sigue read-only por default; solo
     # hacia adelante (no backfillea). El dashboard lo consume, nunca escribe.
     if getattr(args, "record", False):
+        now = _now()
         ledger.setdefault("readiness_history", []).append(
-            {"at": _now(), "score": round(final, 1)})
+            {"at": now, "score": round(final, 1)})
+        # kit 1.46.1: persist a compact MEASURED summary so the statusline (uscha_progress.py)
+        # shows MEASURED acceptance -- the same truth this readiness computed -- instead of
+        # counting checkboxes (narrated). Write-once/read-many: the fast Stop hook reads this
+        # and never re-runs the engine, and can never contradict the ledger it summarizes.
+        _closed = set(measured_closed)
+        _next = next((i for i in ac_ids if i["id"] not in _closed), None)
+        ledger["measured"] = {
+            "at": now, "score": round(final, 1), "band": _band(final),
+            "acceptance_done": len(measured_closed), "acceptance_total": total,
+            "next": ({"id": _next["id"], "text": _next.get("text", "")} if _next else None),
+        }
         _save(args.ledger, ledger)
 
     out = {

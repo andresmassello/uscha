@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.46.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.46.1.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.46.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.46.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.46.1.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.46.1.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.46.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.46.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.46.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.46.1' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.46.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.46.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.46.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.46.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.46.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.46.1'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2918,6 +2918,30 @@ rm -rf "$T89"
 if [ "$T89_RC" -eq 0 ] && [ "$T89_WIRED" -eq 0 ] && [ "$T89_KEEP" -eq 0 ]; then
   PASS=$((PASS+1)); echo "  ok   init wires statusLine + Stop hook + scripts, and never clobbers a foreign statusLine"; \
 else FAIL=$((FAIL+1)); echo "  FAIL init statusline wiring (rc=$T89_RC wired=$T89_WIRED keep=$T89_KEEP)"; fi
+
+echo "== T90 (1.46.1): statusline shows MEASURED acceptance, never narrated (measured beats narrated) =="
+# isolated subdir: the engine resolves acceptance_file relative to CWD, so it must run inside it
+T90="$(mktemp -d)"
+( cd "$T90" && mkdir -p .claude reports/junit
+  # AC-01 and AC-02 both UNCHECKED, but AC-01 has a green testcase -> checkbox 0/2, MEASURED 1/2
+  printf -- "# ACCEPTANCE\n\n- [ ] AC-01 — first\n- [ ] AC-02 — second\n" > ACCEPTANCE.md
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="acc" tests="1" failures="0" errors="0" skipped="0">\n  <testcase classname="acc" name="AC-01_first"/>\n</testsuite>\n' > reports/junit/TEST.xml
+  printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
+  run init --config uscha.config.json --out QA-LEDGER.json >/dev/null 2>&1
+  run snapshot --ledger QA-LEDGER.json --repo p >/dev/null 2>&1
+  # BEFORE record: no measured summary -> falls back to checkbox (0/2)
+  CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_progress.py"
+  before=$("$PY" -c "import json;s=json.load(open('.claude/uscha-progress.json'));print('%s/%s'%(s['done'],s['total']))")
+  run readiness --ledger QA-LEDGER.json --record >/dev/null 2>&1   # persist ledger['measured']
+  CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_progress.py"
+  after=$("$PY" -c "import json;s=json.load(open('.claude/uscha-progress.json'));print('%s/%s'%(s['done'],s['total']))")
+  echo "$before $after" > result.txt )
+read T90_BEFORE T90_AFTER < "$T90/result.txt"
+rm -rf "$T90"
+# checkboxes say 0/2 (narrated); once the engine records, the statusline shows the MEASURED 1/2
+if [ "$T90_BEFORE" = "0/2" ] && [ "$T90_AFTER" = "1/2" ]; then
+  PASS=$((PASS+1)); echo "  ok   checkbox fallback 0/2 -> after readiness --record shows MEASURED 1/2 (agrees with the ledger)"; \
+else FAIL=$((FAIL+1)); echo "  FAIL statusline not sourced from measured (before=$T90_BEFORE after=$T90_AFTER)"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
