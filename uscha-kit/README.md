@@ -1,10 +1,10 @@
 # uscha-kit
 
-**Kit version:** v1.47.0 <!-- uscha:version -->
+**Kit version:** v1.48.0 <!-- uscha:version -->
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
-**Eight skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
-`uscha-characterize`, `uscha-rubric`, `uscha-mirador`) and a measurement engine (`qa_ledger.py`).
+**Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
+`uscha-characterize`, `uscha-rubric`, `uscha-mirador`, `uscha-status`) and a measurement engine (`qa_ledger.py`).
 
 **Who it's for:** a solo operator carrying ONE non-trivial or risky change, kept
 honest by a deterministic ledger and a human gate at the merge. It is NOT for trivial
@@ -257,7 +257,7 @@ python uscha-kit/install-uscha.py doctor --target both
 # or engine-only: python3 ~/.claude/skills/uscha-devloop/qa_ledger.py doctor
 ```
 
-It checks: Python >=3.8 · git · the 8 skills alongside the engine (frontmatter
+It checks: Python >=3.8 · git · the 9 skills alongside the engine (frontmatter
 verified) · the INV-GOLDEN-01 hook (present + registered in settings.json +
 powershell/pwsh interpreter) · and if there is a `uscha.config.json` in the cwd:
 config parseable, ACCEPTANCE with AC-IDs, ledger integrity, the QA skills

@@ -1,6 +1,6 @@
 {
   "name": "uscha",
-  "version": "1.47.0",
+  "version": "1.48.0",
   "description": "Uscha spec-driven development methodology for coding agents. Includes npm/npx router.",
   "author": {
     "name": "Andres Massello",
@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "Uscha",
     "shortDescription": "Spec-driven development with fact gates and readiness.",
-    "longDescription": "Uscha installs discovery, ADR, characterization, devloop, rubric, sysdoc and Mirador skills plus the qa_ledger.py evidence engine.",
+    "longDescription": "Uscha installs discovery, ADR, characterization, devloop, rubric, sysdoc, Mirador and status skills plus the qa_ledger.py evidence engine.",
     "developerName": "Andres Massello",
     "category": "Productivity",
     "capabilities": [

@@ -43,6 +43,7 @@ each change lives in `SPEC.md` / `docs/adr/` / `ACCEPTANCE.md`, not here.
 - `/uscha-adr-refine` — known feature → SPEC + ADR + ACCEPTANCE
 - `/uscha-devloop` — plan → build → QA loop → PR (stops at the merge)
 - `/uscha-sysdoc` — documents the system from the ledger
+- `/uscha-status` — one-glance progress readout in chat (statusline on demand)
 
 ## Project adapter (TO COMPLETE per repo)
 

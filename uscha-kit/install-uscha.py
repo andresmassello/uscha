@@ -18,7 +18,8 @@ from pathlib import Path
 KIT_ROOT = Path(__file__).resolve().parent
 PLUGIN_NAME = "uscha"
 SKILLS = ["uscha-discovery", "uscha-adr-refine", "uscha-reverse-discovery", "uscha-characterize",
-          "uscha-devloop", "uscha-sysdoc", "uscha-rubric", "uscha-mirador"]
+          "uscha-devloop", "uscha-sysdoc", "uscha-rubric", "uscha-mirador",
+          "uscha-status"]
 TARGETS = ("codex", "claude")
 HOOK_NAME = "block-approved-writes.py"
 

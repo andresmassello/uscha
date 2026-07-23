@@ -5758,7 +5758,7 @@ def cmd_golden_diff(args):
 USCHA_SKILLS = ["uscha-discovery", "uscha-adr-refine",
                    "uscha-reverse-discovery", "uscha-characterize",
                    "uscha-devloop", "uscha-sysdoc", "uscha-rubric",
-                   "uscha-mirador"]
+                   "uscha-mirador", "uscha-status"]
 # herramienta primaria por type - su ausencia es AVISO, no error
 DOCTOR_TOOLS = {"maven": "mvn", "flutter": "flutter", "python": "pytest",
                 "node": "npm", "go": "go", "rust": "cargo", "dotnet": "dotnet",

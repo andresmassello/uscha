@@ -1034,7 +1034,7 @@ ok = (d['errors'] == 0 and d['global_install'] is False
       and any(c['title'].startswith('ACCEPTANCE') and c['level'] == 'ok'
               for c in d['checks']))
 sys.exit(0 if ok else 1)" \
-  && { PASS=$((PASS+1)); echo "  ok   doctor: 6/6 skills, install por proyecto, config y ACCEPTANCE leidos"; } \
+  && { PASS=$((PASS+1)); echo "  ok   doctor: full skill roster, install por proyecto, config y ACCEPTANCE leidos"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor json"; }
 # ledger corrupto = ERROR (no aviso): el doctor debe salir 1
 "$PY" -c "open('QA-LEDGER.json','a',encoding='utf-8').write('{trunc')"
@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.47.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.48.0.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.47.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.47.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.48.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.48.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.47.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.48.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.47.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.48.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.47.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.48.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.47.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.48.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.47.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.48.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2974,6 +2974,28 @@ if [ "$T91_ODO" = "qa/2/False" ] && [ "$T91_BADGE" = "2 loops" ] && [ "$T91_TOK"
    && printf '%s' "$T91_LINE" | grep -q "qa×2"; then
   PASS=$((PASS+1)); echo "  ok   measured.repos.p={qa,2,not stalled} · mirador qa badge '2 loops' · statusline token 'qa×2'"; \
 else FAIL=$((FAIL+1)); echo "  FAIL odometer broken (odo=$T91_ODO badge=$T91_BADGE tok=$T91_TOK line=$T91_LINE)"; fi
+
+echo "== T92 (1.48.0): installer skill roster == dirs on disk, and uscha-status has a valid frontmatter =="
+# same no-drift spirit as T57 (doctor roster): a new skill dir without registering it in
+# install-uscha.py SKILLS would silently not install. The installer list must match disk.
+"$PY" - "$KIT" <<'PY'
+import os, re, sys
+kit = sys.argv[1]
+src = open(os.path.join(kit, "install-uscha.py"), encoding="utf-8").read()
+m = re.search(r"SKILLS = \[(.*?)\]", src, re.DOTALL)
+listed = set(re.findall(r'"(uscha-[a-z-]+)"', m.group(1)))
+ondisk = {d for d in os.listdir(os.path.join(kit, ".claude", "skills"))
+          if d.startswith("uscha-")}
+front = open(os.path.join(kit, ".claude", "skills", "uscha-status", "SKILL.md"),
+             encoding="utf-8").read()
+ok = (listed == ondisk
+      and re.search(r"^name: uscha-status$", front, re.MULTILINE)
+      and "read-only" in front.lower())
+sys.exit(0 if ok else 1)
+PY
+if [ $? -eq 0 ]; then
+  PASS=$((PASS+1)); echo "  ok   install-uscha.py SKILLS matches skill dirs; uscha-status frontmatter valid and read-only by contract"; \
+else FAIL=$((FAIL+1)); echo "  FAIL installer roster drifted or uscha-status SKILL.md malformed"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
