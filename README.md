@@ -1,112 +1,129 @@
 # Uscha
 
-**Uscha** is a spec-driven, tool-agnostic methodology for development with
-LLM coding agents — *you bring the idea, the method builds the rest* — with its
-instantiation in Claude Code, the **uscha-kit**.
-
-> **On the name.** *Uscha* is the methodology's name; the pattern it operationalizes is a *spec-loop* — the concept, not the branding. The name was chosen partly to avoid collision with [spec-loop](https://github.com/dpolivaev/spec-loop) by D. Polivaev — an independently developed, actively maintained project that shares the term and the spec-driven, review-per-increment philosophy while taking a different implementation path (shell-based agent skills via npx). It was found late in this project's development; the two are convergent, not derivative. (The local checkout keeps the path `SpecLoop`.)
+**Spec-driven development for LLM coding agents.** *You bring the idea, the method builds
+the rest.* Uscha gives a coding agent a spec to build against, a QA loop that converges
+instead of looping forever, and a deterministic ledger that records what was **measured** —
+never what was claimed.
 
 > The tool executes · the method governs · evidence decides · the human approves.
 
-## Repo map
-
-```
-SpecLoop/
-??? package.json        # npm package: @andresmassello/uscha
-??? bin/uscha.js        # thin npx router to uscha-kit/install-uscha.py
-├── uscha-kit/          # ★ canonical SOURCE of the kit (v1.50.0)
-│   ├── .claude/skills/    #   9 skills: uscha-discovery · uscha-adr-refine · uscha-devloop · uscha-sysdoc
-│   │                      #             uscha-reverse-discovery · uscha-characterize · uscha-rubric · uscha-mirador
-│   ├── .claude/skills/uscha-devloop/qa_ledger.py   # evidence engine (29 subcommands, stdlib)
-│   ├── hooks/             #   PreToolUse: the agent never writes .approved (INV-GOLDEN-01)
-│   ├── templates/         #   CLAUDE.md · CONSTITUTION.md · .gitattributes · docs/adr
-│   └── CHANGELOG-*.md     #   1.2.x → 1.3.0 ("facts block, wired") → 1.4.0 (python) → 1.5.0 (node) → 1.6.0 (go) → 1.7.0 (rust+dotnet) → 1.8.0 (cpp) → 1.9.0 (gradle+swift) → 1.10.0 (traceable acceptance) → 1.11.0 (tests outside the budget) → 1.12.0 (secret-scan) → 1.13.0 (atomic ledger) → 1.14.0 (plateau/stop-signal) → 1.15.0 (golden scrub) → 1.16.0 (regression-capture) → 1.17.0 (threshold provenance) → 1.18.0 (derived FSM) → 1.19.0 (spikes — PragProg backlog CLOSED) → 1.20.0 (global install) → 1.21.0 (namespace uscha-*) → 1.22.0 (doctor) → 1.23.0 (rubric layer) → 1.24.0 (Claude Code plugin) → 1.25.0 (anti-ceremony) → 1.26.0 (waste-check REUSE-FIRST) → 1.27.0 (FTY) → 1.28.0 (measured acceptance %) → 1.29.0 (rebrand → Uscha) → 1.30.0 (dependency gate) → 1.31.0 (evidence freshness + doc-version gate) → 1.32.0 (mirador — bird's-eye view + dashboard --json) → 1.33.0 (mirador telemetry — per-model tokens/time/model + transcript extractor) → 1.34.0 (mirador: project name from config + live watch/auto-refresh) -> 1.35.0 (execution-policy routing) -> 1.36.0 (discovery-intake: production findings + spec-doubt) -> 1.37.0 (ADR experiments: visible hypotheses) -> 1.38.0 (contract closure: SCR bridge + golden labels + calibration) -> 1.39.0 (universal Codex/Claude installer) -> 1.40.0 (npm/npx router) -> 1.40.1 (npm package hygiene) -> 1.40.2 (install docs) -> 1.41.0 (safety release) -> 1.41.1 (adversarial-review hardening: JUnit/integration evidence + Codex rollback) -> 1.41.2 (mirador launch UX: self-resolving render + auto-open + honest readiness title) -> 1.41.3 (mirador live view no longer spams browser tabs) -> 1.42.0 (mirador status story: how it's going / what's blocking / what's next) -> 1.43.0 (uscha mirador verb: one command, no python) -> 1.44.0 (brownfield truth: coverage UNMEASURED, ant type, wider JUnit discovery) -> 1.44.1 (init is per-file, not all-or-nothing) -> 1.45.0 (risk_profile modulates the flow: named presets + golden_required cap) -> 1.46.0 (progress statusline: generic + auto-wired by init) -> 1.46.1 (the statusline reads MEASURED acceptance, never narrated) -> 1.47.0 (the trail feeds itself: loop odometer + measured phase, devloop records every pass) -> 1.48.0 (uscha-status: the statusline on demand, in chat -- 9th skill) -> 1.48.1 (one derivation: narrated is labeled, escalation agrees across views) -> 1.48.2 (the engine measures its own coverage: opt-in seam, 84.2%) -> 1.49.0 (the mirador tells what the ledger knows: acceptance panel, loop burn-down, policy demoted) -> 1.50.0 (receipts: every number cites its evidence -- testcase, report, file, when)
-├── docs/                  # published artifacts (canonical here; Downloads = snapshots)
-│   ├── uscha-claude-code-doc.html         # long deck ES (36 slides) · twin: -EN.html
-│   ├── uscha-claude-code-doc-EN.html      # long deck EN
-│   ├── uscha-playbook{,-EN}.html          # Operator's Manual (trigger/move/gate)
-│   ├── uscha-onepager{,-EN}.html          # one-page sheet
-│   ├── uscha-team-pitch.html              # team adoption pitch (Vale/Martín story, 14 slides)
-│   ├── uscha-team-pitch-extended.html     # extended pitch: + typical day, readiness KPI, 2-story ledger, pilot (22 slides)
-│   ├── skills-referencia.html                 # exhaustive reference of the skills (what each does, phase by phase)
-│   ├── casos-reales.md                        # logbook: real moments where the method intervenes (anonymized)
-│   ├── *.png                                  # system map · 10 steps · reverse-discovery
-│   └── diagram-sources/                       # source HTML of the PNGs (re-renderable)
-├── formats/               # 6 format explorations (A-F); playbook + atlas-map were adopted
-└── audits/                # outputs of the adversarial audits (2026-07)
-    ├── audit-metodologia-7-lentes.json        # 33 weaknesses confirmed / 13 refuted
-    ├── audit-fidelidad-doc-codigo-idea.json   # 171 claims verified doc↔code↔idea
-    ├── truth-pass-6-docs.json                 # 130 truthfulness edits post-wiring
-    └── verificacion-team-pitch.json           # 3 lenses over the pitch
+```bash
+npx --yes @andresmassello/uscha@latest install --target claude
+npx --yes @andresmassello/uscha@latest doctor  --target claude
 ```
 
-## Status (2026-07-10)
-
-- **Kit v1.50.0** <!-- uscha:version --> — the fact-gates are WIRED into the engine (1.3.0: `log-gate`,
-  `flag-blocker`, `resolve-escalation`; UNMEASURED; per-tool convergence with a veto from
-  the measured snapshot) and the engine measures **Python** repos (1.4.0: pytest/Cobertura + ruff +
-  mypy) **TypeScript/JS** (1.5.0: lcov + jest-junit + eslint + tsc) **Go** (1.6.0: native cover
-  profile + gotestsum + golangci via checkstyle), **Rust** (1.7.0: Cobertura +
-  nextest + clippy) **C#/.NET** (1.7.0: coverlet + junit
-  logger + SARIF/Roslyn), **C++** (1.8.0: gcovr/Cobertura + ctest junit +
-  clang-tidy), **Kotlin/JVM Gradle** and **Swift** (1.9.0: zero new parsers —
-  JaCoCo/lcov/JUnit/checkstyle reused; detekt + SwiftLint). **Traceable acceptance** (1.10.0: AC-n closes on a
-  MEASURED testcase, the dominant dimension of readiness — M2 of the PragProg backlog). **Tests outside
-  the simplicity budget** (1.11.0: writing tests does not penalize the gate — M9).
-  **Secret-scan in gate-check** (1.12.0: added private keys/tokens/containers
-  block as a fact — M8). **Atomic ledger** (1.13.0: integrity checksum + hardened
-  load — M3). **Plateau/stop-signal** (1.14.0: stall and PR-candidate as
-  advisories — M6). **Golden scrub** (1.15.0: declared volatiles are masked with
-  visible masking — M7). **Regression-capture** (1.16.0: closing findings without a test =
-  narrated; escape-analysis mandatory when resolving blockers — M1). **Threshold
-  provenance** (1.17.0: each threshold is tagged by provenance — a requirement
-  declared in config vs the kit's default opinion; the biting cap says so in the
-  headline — M5). **Derived FSM** (1.18.0: `phase` computes the workflow state
-  from the ledger's facts, never declared; the PR is gated with `--require
-  pr-ready` — M4). **Formal spikes** (1.19.0: a `spike/*` branch never passes the PR
-  gate; the legitimate output is an ADR with lessons — M10). **Execution policy routing** (1.35.0: phase-level methodology/model/effort metadata for the operator and Mirador, not readiness scoring). **Discovery intake** (1.36.0: production findings + spec-doubt/SPEC-WRONG enter the ledger and reopen discovery instead of disappearing into narration). **ADR experiments** (1.37.0: `Status: Experiment` is visible/advisory in dashboard/Mirador with feedback/review metadata, not a readiness score). **Contract closure** (1.38.0: structured `spec-change-request`, golden intended vs observed-accidental labels, and post-merge calibration metrics). **Universal installer** (1.39.0: one machine installer for Codex plugin adoption and Claude global install, with dry-run/doctor/version checks). **npm/npx router** (1.40.0: `@andresmassello/uscha` exposes `uscha`/`uscha-kit` and delegates to the canonical Python installer). **Safety release** (1.41.0: WU1–WU7 plus post-audit P0/P1 hardening for evidence freshness, fail-closed reports, Mirador safety, installer transactions, ledger integrity, and current documentation). Smoke suite 381/381 green.
-  **The PragProg backlog is CLOSED: 10 of 10** (see
-  `docs/analisis-pragmatic-programmer.md`).
-  License: MIT. The principle "facts block, guesses advise" is an enforced property,
-  not a slogan.
-- **Docs** — passed through truth-pass against the real engine: every claim describes what
-  v1.41.0 does; the references appendix has **fetch-verified links** to the 10
-  sources. Status convention in the docs: `in the kit` / `new` / `proposal`.
-- **In progress** — dogfooding on a real case (pilot project, Python): the 1.4.0 adapter unblocked it;
-  what remains is the read-only dry-run (criterion 2 of the python-adapter HANDOFF) and the on-ramp.
-  Conscious deferrals in CHANGELOG-1.4.0 (assert density in rebuild, mechanized A-E
-  profiles).
-
-
-## Install
-
-Recommended for Codex and Claude Code:
+`--target codex` for Codex, `--target both` for both. Then, in your project:
 
 ```bash
-npx --yes @andresmassello/uscha@latest install --target codex
-npx --yes @andresmassello/uscha@latest doctor --target codex
-# or both Codex + Claude Code:
-npx --yes @andresmassello/uscha@latest install --target both
-npx --yes @andresmassello/uscha@latest doctor --target both
+npx --yes @andresmassello/uscha@latest init
 ```
 
-Full install guide: [`uscha-kit/INSTALL.md`](uscha-kit/INSTALL.md).
+Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip installs, no
+runtime dependencies). The npm package is a thin router; the canonical installer is
+`uscha-kit/install-uscha.py`.
 
-The npm package is only a thin router. The canonical installer remains
-`uscha-kit/install-uscha.py`, and Python 3.8+ is still required on the target
-machine.
+**Kit v1.50.0** <!-- uscha:version --> · [changelog](uscha-kit/CHANGELOG-1.50.0.md)
 
-## How the kit is re-packaged
+---
 
-```bash
-powershell -NoProfile -Command "Compress-Archive -Path 'uscha-kit' -DestinationPath 'uscha-kit-X.Y.Z.zip' -Force"
+## The problem it solves
+
+An agent will tell you the tests pass. It will tell you the feature is done. It is often
+right — and when it is wrong, you find out in production.
+
+Uscha refuses to take the agent's word for anything. Every claim that matters has to be
+backed by a report the agent did not write: a JUnit file, a coverage report, a linter's
+output. **Facts block; guesses advise.** A checkbox ticked by hand is recorded as
+`narrated` and does not close a criterion. A test named after that criterion, green, in an
+ingested report — that closes it.
+
+The result is a readiness score you can actually trust, because you can click any number
+and see which file, which test, and when.
+
+## What you get
+
+**Nine skills** that drive the method end to end:
+
+| Skill | What it does |
+|---|---|
+| `/uscha-discovery` | Idea → spec package (CONTEXT, SPEC, ADRs, CONSTITUTION, ACCEPTANCE) |
+| `/uscha-adr-refine` | Known feature → ADR + ACCEPTANCE, by interrogating you first |
+| `/uscha-reverse-discovery` | Existing system → extracted facts (brownfield migrations) |
+| `/uscha-characterize` | Capture a golden suite of current behavior before touching it |
+| `/uscha-devloop` | Plan → build → severity-gated QA loop → PR (stops at the merge) |
+| `/uscha-rubric` | Grade the non-testable (conventions, ergonomics) against a versioned rubric |
+| `/uscha-sysdoc` | Generate a system deck from the ledger |
+| `/uscha-mirador` | Bird's-eye HTML dashboard: readiness, trail, acceptance, loops |
+| `/uscha-status` | One-line progress readout, in chat |
+
+**A measurement engine** (`qa_ledger.py`, 29 subcommands, Python stdlib) that ingests
+evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
+cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
+
+## The loop, in short
+
+1. **Model first.** `/uscha-discovery` (new) or `/uscha-adr-refine` (known feature) writes
+   the spec package. No code until the package exists.
+2. **Build.** `/uscha-devloop` implements against the SPEC, with tests as a guardrail.
+3. **QA loop.** Independent review passes (maker ≠ checker) run until the change
+   **converges** — findings at or above the severity gate are fixed, the rest go to
+   `ISSUES-DEFERRED.md` with their evidence. Converge, don't chase zero.
+4. **Readiness.** One score, one screen: acceptance (measured) 30 · static gate 20 ·
+   ADR 15 · coverage 15 · convergence 10 · integration 10, with hard caps that say *why*
+   they bit and whether the threshold was your requirement or the kit's default.
+5. **You decide.** The agent proposes, measures and stops at the PR. Merging is a human act.
+
+## What makes it different
+
+- **Measured beats narrated.** An acceptance criterion closes on a green test that carries
+  its name — never on a checkbox. Stale evidence (a report older than the code) is
+  discarded, not honored.
+- **Absence is not success.** A gate that never ran scores `UNMEASURED`, which is
+  deliberately *not* the same as a measured zero — and it is not silently forgiven either.
+- **Receipts.** Every number in the dashboard traces to its evidence: which testcase, which
+  report, which timestamp.
+- **Anti-ceremony.** Gates stay quiet by default and collapse into one verdict line. The
+  method is enforced by the engine, not by asking the agent to be disciplined.
+- **Model-agnostic.** The engine never reads tokens, model names or vendor telemetry. Any
+  model-reported number enters through an adapter, never the engine.
+
+## Documentation
+
+- **[`uscha-kit/INSTALL.md`](uscha-kit/INSTALL.md)** — full install guide (npm, git, plugin)
+- **[`uscha-kit/README.md`](uscha-kit/README.md)** — kit reference: configuration, every
+  subcommand, the readiness KPI, the simplicity and rebuild gates
+- **[`docs/`](docs/)** — the long deck, the operator's playbook, a skills reference and a
+  one-pager (ES + EN)
+- **[`docs/paper/`](docs/paper/)** — the method written up as a paper
+
+Each release ships a `uscha-kit/CHANGELOG-X.Y.Z.md` explaining what changed and why.
+
+## Developing Uscha itself
+
+This repository is the source of the kit, and the method is applied to itself: it carries
+its own `uscha.config.json`, `ACCEPTANCE.md` and `CONSTITUTION.md`, and its readiness is
+measured by the same engine it ships.
+
+```
+uscha-kit/              # canonical source of the kit
+  .claude/skills/       #   the 9 skills + qa_ledger.py (the engine)
+  templates/            #   CLAUDE.md · CONSTITUTION.md · scripts · docs/adr
+  tests/smoke-engine.sh #   the suite every engine change must pass
+docs/                   # published artifacts (ES/EN twins) + the paper
+audits/                 # adversarial audit outputs
 ```
 
-The zips are build artifacts: they are not committed. The kit source in this repo is the truth.
+The rules are in [`CLAUDE.md`](CLAUDE.md). The short version: no doc may claim what the
+engine does not do; the ES and EN twins travel together; every engine change carries a
+smoke test; and the agent never writes a `.approved` file — that one is enforced by a hook.
 
 ## History
 
-It was born as a methodology for working with Claude Code, was distilled with the
-Böckeler principle (computational blocks / inferential advises), survived two
-adversarial audits (231 agents) that found the central principle inverted in the code
-— and 1.3.0 flipped it right. The details are in `audits/` and in the CHANGELOGs.
+Born as a methodology for working with Claude Code, distilled with the Böckeler principle
+(computational blocks, inferential advises), and put through two adversarial audits (231
+agents) that found the central principle **inverted in the code** — 1.3.0 flipped it right.
+The details are in `audits/` and in the changelogs.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).

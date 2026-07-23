@@ -1,7 +1,7 @@
 {
   "name": "@andresmassello/uscha",
   "version": "1.50.0",
-  "description": "Uscha installer for Codex and Claude coding-agent workflows.",
+  "description": "Spec-driven development for LLM coding agents: 9 skills + a stdlib evidence engine. Facts block, guesses advise; the human approves.",
   "bin": {
     "uscha": "bin/uscha.js",
     "uscha-kit": "bin/uscha.js"
@@ -24,12 +24,16 @@
     "url": "https://github.com/andresmassello/uscha/issues"
   },
   "keywords": [
+    "claude-code",
     "codex",
-    "claude",
-    "spec-driven",
-    "qa",
     "coding-agents",
-    "sdd"
+    "spec-driven",
+    "sdd",
+    "ai-agents",
+    "qa",
+    "code-review",
+    "test-evidence",
+    "agent-skills"
   ],
   "license": "MIT",
   "engines": {
