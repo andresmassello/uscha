@@ -16,7 +16,12 @@ itself.
    equivalent edit in the other.
 4. **Zero references to projects/clients**: the kit and the docs are generic
    (example repos: `backend-api`/`mobile-app`). Verify with grep before committing
-   (note: `rg` needs `--hidden` to see `.claude/`).
+   (note: `rg` needs `--hidden` to see `.claude/`). AC-03 automates this, reading the
+   names to hunt for from **`.uscha-private-names`** at the repo root — UNTRACKED on
+   purpose: hardcoding that list would publish, in a public repo and inside the npm
+   tarball, exactly what the criterion exists to keep out. Without the file AC-03 is
+   emitted as `<skipped/>` → **UNMEASURED**, never a silent pass. Keep the file on the
+   machines that release; it is one name (or regex) per line.
 5. **Changes to the engine carry a smoke test**: `bash uscha-kit/tests/smoke-engine.sh`
    must exit 0 BEFORE committing any change to `qa_ledger.py`. If the change
    adds behavior, its check is added to the suite in the same commit.

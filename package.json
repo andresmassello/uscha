@@ -9,6 +9,7 @@
   "files": [
     "bin/",
     "uscha-kit/",
+    "!uscha-kit/tests/",
     "!uscha-kit/**/__pycache__/",
     "!uscha-kit/**/*.pyc",
     "!uscha-kit/**/*.pyo",

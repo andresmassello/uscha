@@ -3504,6 +3504,9 @@ root, kit, out = os.environ["ROOT"], os.environ["KIT"], os.environ["ACC_OUT"]
 results = []  # (id, name, failure_message_or_None)
 
 
+SKIP = object()   # criterion could not be measured (no source configured)
+
+
 def check(ac, name, fn):
     try:
         msg = fn()
@@ -3546,12 +3549,24 @@ def versions():
 
 
 def anonymous():
-    pat = re.compile(r"PRIVATE-NAME-1|PRIVATE-NAME-2|PRIVATE-NAME-3|PRIVATE-NAME-4|PRIVATE-NAME-5|PRIVATE-NAME-6", re.I)
-    # This checker literally CONTAINS the forbidden names (they are its pattern), so it
-    # would always match itself. Excluding the checker's own file is the only honest way
-    # to state the criterion; any other file is still scanned.
+    # The names to hunt for are PRIVATE: hardcoding them here would publish, in a public
+    # repo and inside the npm tarball, the very list this criterion exists to keep out.
+    # They live in an untracked file instead (one name or regex per line, '#' comments).
+    # No list -> the criterion is UNMEASURED, never a silent pass: absence is not success.
+    names_file = os.path.join(root, ".uscha-private-names")
+    names = []
+    try:
+        with open(names_file, encoding="utf-8") as fh:
+            names = [ln.strip() for ln in fh
+                     if ln.strip() and not ln.lstrip().startswith("#")]
+    except OSError:
+        pass
+    if not names:
+        return SKIP  # sentinel: emitted as <skipped/>, closes nothing
+    pat = re.compile("|".join(names), re.I)
+    # The list file is itself the one place the names legitimately live.
     self_file = os.path.abspath(__file__) if "__file__" in dir() else ""
-    skip_files = {"smoke-engine.sh", os.path.basename(self_file)}
+    skip_files = {".uscha-private-names", os.path.basename(self_file)}
     hits = []
     for base in (kit, os.path.join(root, "README.md")):
         walk = [(os.path.dirname(base), [], [os.path.basename(base)])] if os.path.isfile(base) \
@@ -3599,24 +3614,31 @@ check("AC-04", "engine_model_agnostic", model_agnostic)
 check("AC-05", "doc_es_en_twins", doc_twins)
 check("AC-06", "smoke_suite_green", smoke_green)
 
-failed = sum(1 for _, _, m in results if m)
+failed = sum(1 for _, _, m in results if m and m is not SKIP)
+skipped = sum(1 for _, _, m in results if m is SKIP)
 def esc(s):
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
              .replace('"', "&quot;"))
 lines = ['<?xml version="1.0" encoding="UTF-8"?>',
          f'<testsuite name="uscha-acceptance" tests="{len(results)}" '
-         f'failures="{failed}" errors="0" skipped="0">']
+         f'failures="{failed}" errors="0" skipped="{skipped}">']
 for ac, name, msg in results:
     lines.append(f'  <testcase classname="uscha.acceptance" name="{ac}_{name}">')
-    if msg:
+    if msg is SKIP:
+        # UNMEASURED, on purpose: the engine counts a skipped testcase for neither
+        # side, so the criterion stays open instead of turning green by default.
+        lines.append('    <skipped message="no source configured for this criterion"/>')
+    elif msg:
         lines.append(f'    <failure message="{esc(msg)}"/>')
     lines.append("  </testcase>")
 lines.append("</testsuite>")
 with open(os.path.join(out, "uscha-acceptance.xml"), "w", encoding="utf-8") as fh:
     fh.write("\n".join(lines) + "\n")
-print(f"ACCEPTANCE: {len(results) - failed}/{len(results)} criterios medidos en verde"
+print(f"ACCEPTANCE: {len(results) - failed - skipped}/{len(results)} criterios medidos en verde"
+      + ("" if not skipped else " · SIN MEDIR: "
+         + ", ".join(ac for ac, _, m in results if m is SKIP))
       + ("" if not failed else " · ROJO: "
-         + ", ".join(ac for ac, _, m in results if m)))
+         + ", ".join(ac for ac, _, m in results if m and m is not SKIP)))
 PYACC
 
 echo "== T85 (1.44.1): 'uscha init' is per-file, not all-or-nothing =="
