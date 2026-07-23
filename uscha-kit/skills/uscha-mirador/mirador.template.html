@@ -80,6 +80,8 @@ svg{display:block;width:100%;height:auto}
 .spec .t{flex:1;color:var(--ink-soft)}
 .spec .chip{font-family:var(--mono);font-size:.66rem;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:20px}
 .spec .acc{font-family:var(--mono);font-size:.72rem;color:var(--ink-mute);min-width:38px;text-align:right}
+.spec.clickable{cursor:pointer;border-radius:8px;padding:.15rem .35rem;margin:-.15rem -.35rem}
+.spec.clickable:hover,.spec.clickable:focus-visible{background:#f2f5f8;outline:none}
 .st-done{background:var(--green-soft);color:var(--green)}
 .st-prog{background:var(--amber-soft);color:var(--amber)}
 .st-block{background:var(--red-soft);color:var(--red-deep)}
@@ -338,7 +340,8 @@ const DATA = {
   /* acceptance: the engine's real currency — AC-nn criteria, closed only by green tests */
   acceptance:{found:true,file:"ACCEPTANCE.md",traceable:true,total:7,measured_done:4,
     measured_pct:57.1,stale_reports:0,items:[
-    {id:"AC-1",text:"Alta de comprobante persiste y numera",status:"measured"},
+    {id:"AC-1",text:"Alta de comprobante persiste y numera",status:"measured",
+     cases:[{test:"AC-1_alta_persiste_y_numera",report:"reports/junit/TEST-alta.xml",ok:true}]},
     {id:"AC-2",text:"Numeración sin huecos bajo concurrencia",status:"measured"},
     {id:"AC-3",text:"Reintento idempotente por request-id",status:"measured"},
     {id:"AC-4",text:"Cierre de caja concilia contra el ledger",status:"measured"},
@@ -411,6 +414,10 @@ const DATA = {
       pre:"<span class='m'>docs/adr/</span>\n  <span class='g'>✓</span> ADR-001 append-only\n  <span class='g'>✓</span> ADR-002 idempotencia\n  <span class='g'>✓</span> ADR-003 reintentos\n  <span class='a'>◐</span> ADR-004 rollback (proposed)\n<span class='m'>CONSTITUTION:</span> 6/7 invariantes OK · <span class='a'>Reuso: WARN</span>"},
     idea:{ey:"origen",title:"Idea",desc:"El punto de partida. Traés la idea; el método la cruza.",
       pre:"<span class='m'># el sendero arranca acá.</span>\n\"API fiscal que autoriza cada comprobante,\n sin numeración con huecos ni facturas duplicadas.\""},
+    /* per-criterion receipt: an acceptance row click opens "ac:<id>" */
+    "ac:AC-1":{ey:"criterio · measured",title:"AC-1 — Alta de comprobante persiste y numera",
+      desc:"Cerrado MEDIDO: estos testcases verdes llevan su nombre.",
+      pre:"<span class='g'>AC-1_alta_persiste_y_numera</span>\n    reports/junit/TEST-alta.xml"},
   },
 };
 /*MIRADOR_DATA_END*/
@@ -538,8 +545,14 @@ function renderAcceptance(){
   if(!items.length){host.appendChild(emptyHint("ACCEPTANCE.md sin criterios AC-nn trazables — nombrá los testcases 'AC-n_...' y el readiness los cierra medidos"));return;}
   const st={measured:["st-done","measured"],narrated:["st-prog","narrated — sin test"],open:["st-todo","open"]};
   items.forEach(it=>{const t=st[it.status]||["st-todo",String(it.status)];
-    append(host,append(node("div","spec"),node("span","id",it.id),node("span","t",it.text),
-      node("span","chip "+t[0],t[1])));});
+    const row=append(node("div","spec clickable"),node("span","id",it.id),node("span","t",it.text),
+      node("span","chip "+t[0],t[1]));
+    /* receipt: which testcases back this verdict (drawer key "ac:<id>") */
+    row.setAttribute("role","button");row.setAttribute("tabindex","0");
+    row.setAttribute("aria-label","recibo de "+it.id);
+    row.addEventListener("click",()=>openEvidence("ac:"+it.id));
+    row.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openEvidence("ac:"+it.id);}});
+    host.appendChild(row);});
   if(a.untagged)host.appendChild(emptyHint(a.untagged+" criterio(s) sin ID AC-nn — cuentan en el total pero no pueden cerrarse medidos; etiquetalos para que un test los cierre"));
   const sr=(a.stale_reports||[]).length;
   if(sr)host.appendChild(emptyHint(sr+" reporte(s) JUnit stale descartados — re-corré los tests antes de leer este panel"));
@@ -704,7 +717,11 @@ function renderStatus(){
 
 /* ==== evidence drawer ==== */
 function openEvidence(key){
-  const e=DATA.evidence[key];if(!e)return;
+  /* no receipt recorded -> say so, never a silent no-op: a click that does nothing
+     reads as "broken", and a missing receipt is itself an honest fact. */
+  const e=(DATA.evidence||{})[key]||{ey:"sin recibo",title:key,
+    desc:"El ledger no registra evidencia para esta fase.",
+    pre:"sin hechos medidos para esta fase — el ledger instrumenta lo que el loop ejecuta."};
   $("#d-ey").textContent=e.ey;$("#d-title").textContent=e.title;$("#d-desc").textContent=e.desc;renderEvidencePre($("#d-pre"),e.pre);
   $("#drawer").classList.add("open");$("#drawer").setAttribute("aria-hidden","false");$("#scrim").classList.add("open");
 }

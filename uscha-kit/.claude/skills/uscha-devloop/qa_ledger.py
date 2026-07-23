@@ -199,7 +199,8 @@ def maven_coverage(repo_path):
     total = missed + covered
     pct = round(covered / total * 100, 2) if total else 0.0
     return {"covered": covered, "missed": missed, "pct": pct,
-            "report_found": bool(files)}
+            "report_found": bool(files),
+            "reports": [f.replace("\\", "/") for f in files]}
 
 
 def flutter_coverage(repo_path):
@@ -220,7 +221,8 @@ def flutter_coverage(repo_path):
             continue
     pct = round(hit / found * 100, 2) if found else 0.0
     return {"covered": hit, "missed": found - hit, "pct": pct,
-            "report_found": bool(lcov)}
+            "report_found": bool(lcov),
+            "reports": [f.replace("\\", "/") for f in lcov]}
 
 
 def cobertura_coverage(repo_path):
@@ -249,7 +251,7 @@ def cobertura_coverage(repo_path):
         return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
     pct = round(covered / valid * 100, 2) if valid else 0.0
     return {"covered": covered, "missed": max(0, valid - covered), "pct": pct,
-            "report_found": True}
+            "report_found": True, "reports": [path.replace("\\", "/")]}
 
 
 def go_coverage(repo_path):
@@ -289,7 +291,7 @@ def go_coverage(repo_path):
     covered = sum(n for n, hits in blocks.values() if hits > 0)
     pct = round(covered / total * 100, 2) if total else 0.0
     return {"covered": covered, "missed": total - covered, "pct": pct,
-            "report_found": True}
+            "report_found": True, "reports": [path.replace("\\", "/")]}
 
 
 def gradle_coverage(repo_path):
@@ -309,7 +311,8 @@ def gradle_coverage(repo_path):
     total = missed + covered
     pct = round(covered / total * 100, 2) if total else 0.0
     return {"covered": covered, "missed": missed, "pct": pct,
-            "report_found": bool(files)}
+            "report_found": bool(files),
+            "reports": [f.replace("\\", "/") for f in files]}
 
 
 def ant_coverage(repo_path):
@@ -325,7 +328,8 @@ def ant_coverage(repo_path):
     total = missed + covered
     pct = round(covered / total * 100, 2) if total else 0.0
     return {"covered": covered, "missed": missed, "pct": pct,
-            "report_found": bool(files)}
+            "report_found": bool(files),
+            "reports": [f.replace("\\", "/") for f in files]}
 
 
 def coverage(repo_path, repo_type):
@@ -769,8 +773,16 @@ def _ac_tags(repo_path, repo_type):
             # debe taggear los OTROS tests del mismo archivo/clase.
             blob = tc.get("name") or ""
             for num in _AC_TAG.findall(blob):
-                d = tags.setdefault(f"AC-{int(num)}", {"green": 0, "red": 0})
+                d = tags.setdefault(f"AC-{int(num)}",
+                                    {"green": 0, "red": 0, "cases": []})
                 d[status] += 1
+                # RECEIPT (kit 1.50.0): keep WHICH testcase in WHICH report backed the
+                # verdict -- the name and path were always in scope here and were being
+                # thrown away. Capped: a receipt cites evidence, it is not a dump.
+                if len(d["cases"]) < 8:
+                    d["cases"].append({"test": blob,
+                                       "report": f.replace("\\", "/"),
+                                       "ok": status == "green"})
     return tags, stale
 
 
@@ -3338,7 +3350,9 @@ def _mirador_adrs(adr_dir):
         ms = re.search(r"(?im)^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?status\s*[:=]\s*([A-Za-z_-]+)", body)
         adr_status = ms.group(1).lower().replace("_", "-") if ms else None
         phase_status = _ADR_STATUS_TO_PHASE.get((adr_status or "").replace("-", "_"), "todo")
-        row = {"id": aid, "t": title, "status": phase_status, "adr_status": adr_status}
+        # RECEIPT (kit 1.50.0): the source filename travels -- `f` was always in scope.
+        row = {"id": aid, "t": title, "status": phase_status, "adr_status": adr_status,
+               "file": f.replace("\\", "/")}
         if adr_status in ("experiment", "experimental"):
             row["adr_status"] = "experiment"
             row.update(_adr_experiment_fields(body))
@@ -3431,7 +3445,9 @@ def cmd_dashboard(args):
         "stale_reports": _acc.get("stale_reports"),
         "items": [{"id": it["id"], "text": it["text"],
                    "status": ("measured" if it["id"] in _mc
-                              else "narrated" if it["id"] in _no else "open")}
+                              else "narrated" if it["id"] in _no else "open"),
+                   # receipt (kit 1.50.0): the testcases backing the verdict travel too
+                   "cases": it.get("cases") or []}
                   for it in (_acc.get("items") or [])],
     }
 
@@ -3513,6 +3529,156 @@ def cmd_dashboard(args):
     # se deriva juntando los repos. Truth-pass: nombre puesto si existe, si no derivado.
     project = cfg.get("project") or cfg.get("name") or (" + ".join(names) if names else None)
     adrs = _mirador_adrs(getattr(args, "adr_dir", "docs/adr"))
+
+    # evidence (kit 1.50.0): RECEIPTS. The template shipped a click-a-milestone drawer
+    # since 1.32.0 and the engine fed it {} -- the machinery waited for data that never
+    # came. Every receipt below quotes only facts the ledger/reports already hold (paths,
+    # timestamps, counts); a phase with no recorded facts gets NO key and the template
+    # says so honestly. <span class='g|r|a|m'> are the drawer's whitelisted tokens.
+    def _fmtd(iso):
+        return (iso or "")[:16].replace("T", " ")
+
+    def _esc(s):
+        # user-authored strings (testcase names, file paths, titles) must render as
+        # TEXT: the drawer tokenizer treats a literal <span class='g'> as markup, so a
+        # crafted testcase name could paint fake verdicts over the receipt. '&lt;'
+        # round-trips back to a literal '<' on screen.
+        return str(s or "").replace("<", "&lt;")
+
+    ev = {}
+    if acceptance.get("found"):
+        _l = [f"archivo: {_esc(acceptance.get('file'))}",
+              f"criterios: {acceptance.get('total')} "
+              f"({len(acceptance.get('items') or [])} con ID AC-nn)",
+              f"cerrados por test verde: <span class='g'>"
+              f"{acceptance.get('measured_done')}</span>"]
+        if acceptance.get("untagged"):
+            _l.append(f"<span class='a'>{acceptance['untagged']} sin ID</span> "
+                      f"— no pueden cerrarse medidos")
+        ev["spec"] = {"ey": "acceptance · medido",
+                      "title": "SPEC — criterios de aceptacion",
+                      "desc": "La moneda del engine: un AC-nn cierra solo con un "
+                              "testcase verde que lleva su nombre.",
+                      "pre": "\n".join(_l)}
+    if adrs:
+        _l = [f"{_esc(a['id'])} — {_esc(a.get('adr_status') or a['status'])} — "
+              f"{_esc(a.get('file', ''))}" for a in adrs[:8]]
+        ev["adr"] = {"ey": "decisiones · docs/adr",
+                     "title": f"{len(adrs)} ADR registrados",
+                     "desc": "Cada decision con su archivo fuente.",
+                     "pre": "\n".join(_l)}
+    _l = []
+    for name, rnode in ledger.get("repos", {}).items():
+        snaps = rnode.get("snapshots") or []
+        if not snaps:
+            continue
+        s = snaps[-1]
+        t = s.get("tests") or {}
+        c = s.get("coverage") or {}
+        loc = s.get("loc") or {}
+        _l.append(f"{_esc(name)} @ {_fmtd(s.get('at'))}")
+        _l.append(f"  loc prod/test: {loc.get('prod_loc')}/{loc.get('test_loc')}")
+        if t.get("report_found"):
+            _ok = ((t.get("failures", 0) or 0) + (t.get("errors", 0) or 0)) == 0
+            _tk = "g" if _ok else "r"
+            _fr = (t.get("freshness") or {}).get("status", "?")
+            _l.append(f"  tests: <span class='{_tk}'>{t.get('passed')}/"
+                      f"{t.get('executed')}</span> · evidencia {_fr}")
+            for r in (t.get("reports") or [])[:3]:
+                _l.append(f"    {_esc(r.get('path'))} ({_fmtd(r.get('mtime'))})")
+        if c.get("report_found"):
+            _l.append(f"  coverage: {c.get('pct')}%")
+            for rp in (c.get("reports") or [])[:3]:
+                _l.append(f"    {_esc(rp)}")
+    if _l:
+        ev["build"] = {"ey": "snapshot · medido",
+                       "title": "Build — ultimo snapshot por repo",
+                       "desc": "Lo que el engine midio del arbol: tests, coverage y "
+                               "tamano, con sus reportes y frescura.",
+                       "pre": "\n".join(_l)}
+    _l = []
+    for l in loops:
+        if not l.get("iters"):
+            continue
+        _l.append(f"{_esc(l['mod'])}: {l['iters']} ciclo(s) · fase {l.get('phase')} "
+                  f"· {l['state']}")
+        for c in (l.get("series") or [])[-4:]:
+            _tk = "r" if c.get("gated") else "g"
+            _l.append(f"  c{c['cycle']}: <span class='{_tk}'>gated {c['gated']}</span> "
+                      f"· fixed {c['fixed']} · defer {c['deferred']}")
+    _gates = rd.get("gates") or []
+    if _gates:
+        _l.append(f"gates persistidos: {len(_gates)} "
+                  f"({', '.join(sorted({g.get('tool', '?') for g in _gates})[:6])})")
+    if _l:
+        ev["qa"] = {"ey": "loop · medido",
+                    "title": "QA loop — pasadas y gates",
+                    "desc": "El burn-down por ciclo sale de los pasos registrados; "
+                            "los gates, de los reportes ingeridos.",
+                    "pre": "\n".join(_l)}
+    if snapshots:
+        _last = snapshots[-1]
+        _l = [f"ultimo registro: {_fmtd(_last.get('date'))} — "
+              f"readiness {_last.get('readiness')}",
+              f"ahora: <span class='{'g' if (score or 0) >= 80 else 'a'}'>"
+              f"{score}</span> — {band}"]
+        if cap:
+            _l.append(f"<span class='r'>cap: {cap}</span>")
+        _l.append(f"historial: {len(snapshots)} registro(s) de `readiness --record`")
+        ev["verify"] = {"ey": "readiness · medido",
+                        "title": "Verify — el numero y su historia",
+                        "desc": "Cada registro es una corrida real de readiness; "
+                                "el time-lapse los reproduce.",
+                        "pre": "\n".join(_l)}
+    ev["prod"] = {"ey": "gate humano · por diseno",
+                  "title": "Produccion — sin evidencia, a proposito",
+                  "desc": "El metodo se detiene en el PR: mergear y deployar son "
+                          "actos humanos que el ledger no registra.",
+                  "pre": "el agente propone, mide y frena;\n"
+                         "<span class='m'>el humano decide</span>."}
+    _di = rd.get("discovery_intake") or {}
+    _din = sum(len(_di.get(k) or []) for k in
+               ("production_findings", "spec_doubts", "spec_change_requests"))
+    if _din:
+        ev["disc"] = {"ey": "intake · abierto",
+                      "title": "Discovery intake — feedback esperando",
+                      "desc": "Hechos post-produccion que deben entrar al proximo "
+                              "ciclo de discovery.",
+                      "pre": "\n".join(
+                          f"{k.replace('_', ' ')}: {len(_di.get(k) or [])}"
+                          for k in ("production_findings", "spec_doubts",
+                                    "spec_change_requests") if _di.get(k))}
+    # per-criterion receipts: click an AC row -> which testcases back the verdict.
+    # CASES-DRIVEN, never status-driven: a criterion with green AND red testcases must
+    # show BOTH and name the veto -- a receipt that hides the vetoed green (or the
+    # vetoing red) lies about the very evidence it exists to cite.
+    for it in acceptance.get("items") or []:
+        _st = it.get("status")
+        _cases = it.get("cases") or []
+        _l = [(f"<span class='{'g' if c.get('ok') else 'r'}'>{_esc(c.get('test'))}"
+               f"</span>\n    {_esc(c.get('report'))}") for c in _cases]
+        _reds = any(not c.get("ok") for c in _cases)
+        if _st == "measured":
+            _desc = "Cerrado MEDIDO: estos testcases verdes llevan su nombre."
+            _pre = "\n".join(_l) or "cerrado por test verde"
+        elif _reds:
+            _desc = ("NO cierra: la evidencia roja veta (fail-closed) — un criterio "
+                     "cierra con >=1 testcase verde y 0 rojos.")
+            _pre = "<span class='r'>veto rojo</span>\n" + "\n".join(_l)
+            if _st == "narrated":
+                _pre += ("\n<span class='a'>ademas esta tildado a mano</span> — "
+                         "el checkbox no anula un rojo.")
+        elif _st == "narrated":
+            _pre = (f"<span class='a'>tildado a mano</span> — ningun testcase "
+                    f"'{_esc(it.get('id'))}_...' lo respalda.\n"
+                    "El checkbox es relato; el test es hecho.")
+            _desc = "Narrado: el humano lo marco, la evidencia no lo confirma."
+        else:
+            _pre = "sin test y sin tilde — criterio abierto."
+            _desc = "Abierto: nada lo respalda todavia."
+        ev[f"ac:{it['id']}"] = {"ey": f"criterio · {_st}",
+                                "title": f"{it['id']} — {(it.get('text') or '')[:70]}",
+                                "desc": _desc, "pre": _pre}
     out = {
         "project": project,
         "generated": _now(),
@@ -3528,7 +3694,7 @@ def cmd_dashboard(args):
         "capas": [],          # NO SOURCE: el engine no puntua las 6 capas de verdad
         "loops": loops,
         "snapshots": snapshots,
-        "evidence": {},       # NO SOURCE: steps[] es log plano, no output por fase
+        "evidence": ev,       # receipts (kit 1.50.0): facts with paths + timestamps
     }
     if getattr(args, "json", False):
         print(json.dumps(out, indent=2, ensure_ascii=False))
@@ -3576,9 +3742,10 @@ def cmd_readiness(args):
         rtags, rstale = _ac_tags(rcfg.get("path", "."),
                                  rcfg.get("type", "maven"))
         for cid, v in rtags.items():
-            d = ac_tags.setdefault(cid, {"green": 0, "red": 0})
+            d = ac_tags.setdefault(cid, {"green": 0, "red": 0, "cases": []})
             d["green"] += v["green"]
             d["red"] += v["red"]
+            d["cases"] = (d["cases"] + v.get("cases", []))[:8]
         stale_reports.extend(rstale)
     stale_reports = sorted(set(stale_reports))
 
@@ -3793,8 +3960,12 @@ def cmd_readiness(args):
                        "traceable": acc_traceable, "ids": len(ac_ids),
                        # kit 1.49.0: per-criterion detail so the mirador can show WHICH
                        # criteria are closed by a green test vs merely ticked. Additive.
+                       # kit 1.50.0: each item carries its RECEIPT -- the testcases (name
+                       # + report) that back the verdict, capped at 8 by _ac_tags.
                        "items": [{"id": i["id"], "text": i["text"],
-                                  "checked": bool(i["checked"])} for i in ac_ids],
+                                  "checked": bool(i["checked"]),
+                                  "cases": ac_tags.get(i["id"], {}).get("cases", [])}
+                                 for i in ac_ids],
                        "untagged": ac_untagged, "duplicate_ids": dupe_ids,
                        "measured_closed": measured_closed,
                        "measured_pct": (round(100.0 * len(measured_closed) / total, 1)

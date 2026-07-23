@@ -747,8 +747,10 @@ d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, 'reports'))
 open(os.path.join(d, 'reports', 'junit.xml'), 'w').write(xml_)
 t, _stale = q._ac_tags(d, 'python')
 assert 'AC-9' not in t, 'classname no taggea'
-assert t['AC-1'] == {'green': 1, 'red': 0}, 'flaky-que-paso = verde'
-assert t['AC-2'] == {'green': 0, 'red': 1}, 'fallo-tras-reruns = rojo'
+# kit 1.50.0: tags also carry 'cases' (the receipt) -- assert counts by key, not dict shape
+assert (t['AC-1']['green'], t['AC-1']['red']) == (1, 0), 'flaky-que-paso = verde'
+assert (t['AC-2']['green'], t['AC-2']['red']) == (0, 1), 'fallo-tras-reruns = rojo'
+assert all('test' in c and 'report' in c for c in t['AC-1']['cases']), 'cases con recibo'
 sys.exit(0)" "$QL" \
   && { PASS=$((PASS+1)); echo "  ok   sin falsos positivos (HVAC2/mac1/track12); classname no taggea; flaky ok"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL edges regex/flaky 1.10.0"; }
@@ -1445,11 +1447,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.49.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.50.0.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.49.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.49.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.50.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.50.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1879,7 +1881,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.49.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.50.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1903,7 +1905,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.49.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.50.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1911,7 +1913,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.49.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.50.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1925,7 +1927,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.49.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.50.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1937,7 +1939,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.49.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.50.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -3131,6 +3133,47 @@ rm -rf "$T95"
 if [ "$T95_RES" = "OK" ]; then
   PASS=$((PASS+1)); echo "  ok   acceptance items measured/narrated/open · specs gone · loops carry phase + agent-only series"; \
 else FAIL=$((FAIL+1)); echo "  FAIL $T95_RES"; fi
+
+echo "== T96 (1.50.0): receipts -- every number cites its evidence (report, file, when) =="
+# The drawer machinery shipped in 1.32.0 fed by a hardcoded {}. Now: per-AC receipts cite
+# the testcase + report; build cites snapshot reports + coverage path; a phase with no
+# recorded facts gets NO key (the template says so honestly, never a silent no-op).
+T96="$(mktemp -d)"
+( cd "$T96" && mkdir -p reports/junit docs/adr
+  printf -- "# ACCEPTANCE\n\n- [ ] AC-01 — closed by green test\n- [x] AC-02 — ticked, no test\n- [ ] AC-03 — mixed: one green AND one red\n" > ACCEPTANCE.md
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="acc" tests="3" failures="1" errors="0" skipped="0">\n  <testcase classname="acc" name="AC-01_green_case"/>\n  <testcase classname="acc" name="AC-03_green_but_vetoed"/>\n  <testcase classname="acc" name="AC-03_red_case"><failure message="boom"/></testcase>\n</testsuite>\n' > reports/junit/TEST.xml
+  printf '<?xml version="1.0" ?>\n<coverage lines-valid="100" lines-covered="70" line-rate="0.70"><packages/></coverage>\n' > reports/coverage.xml
+  printf -- "# ADR-001 First decision\n\nStatus: accepted\n" > docs/adr/ADR-001.md
+  printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
+  run init --config uscha.config.json --out L.json >/dev/null 2>&1
+  run snapshot --ledger L.json --repo p >/dev/null 2>&1
+  run dashboard --ledger L.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+ev = d['evidence']
+it = {i['id']: i for i in d['acceptance']['items']}
+cov = None
+# the snapshot's coverage dict must now carry the report path it read
+snapcov = None
+ok = ('spec' in ev and 'build' in ev and 'prod' in ev
+      and 'idea' not in ev                                   # no facts -> no key (honest)
+      and 'AC-01_green_case' in ev['ac:AC-1']['pre']         # receipt cites the testcase
+      and 'reports/junit/TEST.xml' in ev['ac:AC-1']['pre']   # ...and its report
+      and 'tildado a mano' in ev['ac:AC-2']['pre']           # narrated says so
+      and 'reports/coverage.xml' in ev['build']['pre']       # coverage cites its file
+      and it['AC-1']['cases'] and it['AC-1']['cases'][0]['test'] == 'AC-01_green_case'
+      # mixed green+red: fail-closed veto, and the receipt shows BOTH cases + names it
+      and it['AC-3']['status'] != 'measured'
+      and 'veto rojo' in ev['ac:AC-3']['pre']
+      and 'AC-03_green_but_vetoed' in ev['ac:AC-3']['pre']
+      and 'AC-03_red_case' in ev['ac:AC-3']['pre']
+      and d['adrs'] and d['adrs'][0].get('file', '').endswith('ADR-001.md'))
+print('OK' if ok else 'BAD keys=%s ac1=%s' % (sorted(ev.keys()), ev.get('ac:AC-1')))" > result.txt )
+T96_RES="$(cat "$T96/result.txt")"
+rm -rf "$T96"
+if [ "$T96_RES" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   AC receipt cites testcase+report · narrated says so · build cites coverage path · ADR carries file · no-facts phase has no key"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T96_RES"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
