@@ -1445,11 +1445,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.48.2.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.49.0.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.48.2.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.48.2.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.49.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.49.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1518,15 +1518,17 @@ run init --config mir.json --out L-mir.json >/dev/null 2>&1
 run dashboard --ledger L-mir.json --adr-dir docs/adr-mir --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-keys = ['project','generated','readiness','subscores','phases','specs','adrs','inv','capas','loops','snapshots','evidence']
+keys = ['project','generated','readiness','subscores','phases','acceptance','adrs','inv','capas','loops','snapshots','evidence']
 assert all(k in d for k in keys), 'faltan claves: ' + str([k for k in keys if k not in d])
+assert 'specs' not in d, 'specs (hardcodeado sin fuente) fue reemplazado por acceptance en 1.49.0'
 assert isinstance(d['readiness']['score'], (int, float)), 'readiness.score'
-assert d['specs'] == [] and d['capas'] == [], 'specs/capas deben ser [] (truth-pass, sin fuente)'
+assert isinstance(d['acceptance'].get('items'), list), 'acceptance.items lista'
+assert d['capas'] == [], 'capas debe ser [] (truth-pass, sin fuente)'
 assert len(d['adrs']) == 2 and d['adrs'][0]['status'] == 'done' and d['adrs'][1]['status'] == 'prog', 'adrs glob'
 assert d['snapshots'] == [], 'snapshots vacio antes de --record'
 assert len(d['phases']) == 8 and len(d['inv']) == 7, 'esqueleto phases(8)/inv(7)'
 sys.exit(0)" \
-  && { PASS=$((PASS+1)); echo "  ok   contrato completo; specs/capas []; adrs del glob; snapshots vacio pre-record"; } \
+  && { PASS=$((PASS+1)); echo "  ok   contrato completo; acceptance con items; capas []; adrs del glob; snapshots vacio pre-record"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL contrato dashboard mal formado"; }
 DS=$(run dashboard --ledger L-mir.json --adr-dir docs/adr-mir --json 2>/dev/null | "$PY" -c "import json,sys;print(json.load(sys.stdin)['readiness']['score'])")
 RS=$(run readiness --ledger L-mir.json --json 2>/dev/null | "$PY" -c "import json,sys;print(json.load(sys.stdin)['score'])")
@@ -1877,7 +1879,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.49.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1901,7 +1903,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.48.2' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.49.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1909,7 +1911,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.2' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.49.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1923,7 +1925,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.49.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1935,7 +1937,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.48.2'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.49.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -3092,6 +3094,43 @@ rm -rf "$T94"
 if [ "$T94_OPTIN" -eq 1 ] && [ "$T94_COV" = "True|84" ]; then
   PASS=$((PASS+1)); echo "  ok   coverage is opt-in (suite runs without coverage.py) and reports/coverage.xml is ingested as MEASURED 84%"; \
 else FAIL=$((FAIL+1)); echo "  FAIL optin=$T94_OPTIN ingest=$T94_COV"; fi
+
+echo "== T95 (1.49.0): the mirador tells what the ledger knows -- acceptance panel + agent-only burn-down =="
+# (a) dashboard emits per-AC status (measured/narrated/open) replacing the sourceless
+# 'specs' panel; (b) loops carry the REAL derived phase + a per-cycle series built from
+# AGENT steps only -- a static-gate ingest with below-gate noise must NOT pollute it.
+T95="$(mktemp -d)"
+( cd "$T95" && mkdir -p reports/junit
+  printf -- "# ACCEPTANCE\n\n- [ ] AC-01 — closed by green test\n- [x] AC-02 — ticked, no test\n- [ ] AC-03 — untouched\n" > ACCEPTANCE.md
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="acc" tests="1" failures="0" errors="0" skipped="0">\n  <testcase classname="acc" name="AC-01_green"/>\n</testsuite>\n' > reports/junit/TEST.xml
+  printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
+  run init --config uscha.config.json --out L.json >/dev/null 2>&1
+  run snapshot --ledger L.json --repo p >/dev/null 2>&1
+  run log-step --ledger L.json --repo p --tool code-review --iteration 1 --reported 3 --gated-reported 2 --fixed 1 >/dev/null 2>&1
+  run log-step --ledger L.json --repo p --tool code-review --iteration 2 --reported 1 --gated-reported 1 --fixed 1 >/dev/null 2>&1
+  # a static-gate ingest in cycle 2 with a below-gate LOW: must NOT enter the series
+  printf '[{"code":"E702","filename":"a.py","location":{"row":1}}]\n' > ruff.json
+  run ingest-gate --ledger L.json --repo p --iteration 2 --ruff ruff.json >/dev/null 2>&1
+  run dashboard --ledger L.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+a = d['acceptance']
+st = {i['id']: i['status'] for i in a['items']}
+l = d['loops'][0]
+ok = (a['measured_done'] == 1 and a['total'] == 3
+      and st.get('AC-1') == 'measured' and st.get('AC-2') == 'narrated'
+      and st.get('AC-3') == 'open'
+      and 'specs' not in d
+      and l['phase'] == 'qa'
+      and l['series'] == [
+          {'cycle': 1, 'reported': 3, 'gated': 2, 'fixed': 1, 'deferred': 0},
+          {'cycle': 2, 'reported': 1, 'gated': 1, 'fixed': 1, 'deferred': 0}])
+print('OK' if ok else 'BAD %s %s %s' % (a['measured_done'], st, l))" > result.txt )
+T95_RES="$(cat "$T95/result.txt")"
+rm -rf "$T95"
+if [ "$T95_RES" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   acceptance items measured/narrated/open · specs gone · loops carry phase + agent-only series"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T95_RES"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"

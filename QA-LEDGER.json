@@ -2,7 +2,7 @@
   "schema": "dev-loop/qa-ledger@1",
   "run_id": "20260721-164219",
   "started_at": "2026-07-21T19:42:19+00:00",
-  "updated_at": "2026-07-23T21:30:53+00:00",
+  "updated_at": "2026-07-23T22:19:12+00:00",
   "config": {
     "version": "1.44.0",
     "project": "uscha (self-applied)",
@@ -32,7 +32,7 @@
       "enabled": false
     }
   },
-  "step_counter": 20,
+  "step_counter": 22,
   "repos": {
     "uscha": {
       "type": "python",
@@ -320,6 +320,88 @@
           },
           "loc": {
             "prod_loc": 13353,
+            "test_loc": 116,
+            "prod_files": 12,
+            "test_files": 1
+          }
+        },
+        {
+          "at": "2026-07-23T22:09:25+00:00",
+          "coverage": {
+            "covered": 3191,
+            "missed": 597,
+            "pct": 84.24,
+            "report_found": true
+          },
+          "tests": {
+            "total": 6,
+            "executed": 6,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0,
+            "passed": 6,
+            "report_found": true,
+            "reports": [
+              {
+                "path": "reports/junit/uscha-acceptance.xml",
+                "mtime_ns": 1784844564684396900,
+                "mtime": "2026-07-23T22:09:24.684397+00:00"
+              }
+            ],
+            "freshness": {
+              "status": "fresh",
+              "reason": "selected JUnit report(s) are current relative to source/test files",
+              "newest_source": {
+                "path": "uscha-kit/skills/uscha-devloop/qa_ledger.py",
+                "mtime_ns": 1784844135335451600,
+                "mtime": "2026-07-23T22:02:15.335452+00:00"
+              },
+              "tolerance_ns": 1000000000
+            }
+          },
+          "loc": {
+            "prod_loc": 13437,
+            "test_loc": 116,
+            "prod_files": 12,
+            "test_files": 1
+          }
+        },
+        {
+          "at": "2026-07-23T22:19:12+00:00",
+          "coverage": {
+            "covered": 3191,
+            "missed": 597,
+            "pct": 84.24,
+            "report_found": true
+          },
+          "tests": {
+            "total": 6,
+            "executed": 6,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0,
+            "passed": 6,
+            "report_found": true,
+            "reports": [
+              {
+                "path": "reports/junit/uscha-acceptance.xml",
+                "mtime_ns": 1784845136752815100,
+                "mtime": "2026-07-23T22:18:56.752815+00:00"
+              }
+            ],
+            "freshness": {
+              "status": "fresh",
+              "reason": "selected JUnit report(s) are current relative to source/test files",
+              "newest_source": {
+                "path": "uscha-kit/skills/uscha-devloop/qa_ledger.py",
+                "mtime_ns": 1784845028252843000,
+                "mtime": "2026-07-23T22:17:08.252843+00:00"
+              },
+              "tolerance_ns": 1000000000
+            }
+          },
+          "loc": {
+            "prod_loc": 13445,
             "test_loc": 116,
             "prod_files": 12,
             "test_files": 1
@@ -773,6 +855,20 @@
       "kind": "snapshot",
       "repo": "uscha",
       "phase": "post"
+    },
+    {
+      "n": 21,
+      "at": "2026-07-23T22:09:25+00:00",
+      "kind": "snapshot",
+      "repo": "uscha",
+      "phase": "post"
+    },
+    {
+      "n": 22,
+      "at": "2026-07-23T22:19:12+00:00",
+      "kind": "snapshot",
+      "repo": "uscha",
+      "phase": "post"
     }
   ],
   "escalations": [],
@@ -780,7 +876,7 @@
   "spec_doubts": [],
   "spec_change_requests": [],
   "integrity": {
-    "sha256": "c8fb4f1926304235d2337f54993176a34efbc37965dc9017217a1219bdba0522"
+    "sha256": "a270c437ebeed455ca01510692571369d91916f7ff2446764513a423a4fd5bda"
   },
   "readiness_history": [
     {
@@ -822,10 +918,18 @@
     {
       "at": "2026-07-23T21:30:53+00:00",
       "score": 100.0
+    },
+    {
+      "at": "2026-07-23T22:09:25+00:00",
+      "score": 100.0
+    },
+    {
+      "at": "2026-07-23T22:19:12+00:00",
+      "score": 100.0
     }
   ],
   "measured": {
-    "at": "2026-07-23T21:30:53+00:00",
+    "at": "2026-07-23T22:19:12+00:00",
     "score": 100.0,
     "band": "READY",
     "acceptance_done": 6,

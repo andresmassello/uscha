@@ -11,8 +11,12 @@ They are deferred, not forgiven. Each carries the evidence that found it.
 
 ## 2026-07-23 — QA loop over releases 1.46.1 → 1.48.1 (3 cycles, converged)
 
-### D-01 (MEDIUM) — the mirador discards the phase it already derived
+### D-01 (MEDIUM) — the mirador discards the phase it already derived — **RESOLVED in 1.49.0**
 `uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py` · `cmd_dashboard`
+
+> **Resolution (kit 1.49.0):** `loops[]` entries now carry `"phase": phase_d` — the full
+> derived FSM value travels alongside the coarse 3-state badge, and the mirador renders it
+> as a chip per repo. Regression: smoke T95. Entry kept for the record.
 
 `loops[].state` collapses the 5-state FSM (`plan` / `build` / `qa` / `pr-ready` / `escalated`)
 into 3 buckets (`active` / `converged` / `escalated`), so "never touched" and "measured but

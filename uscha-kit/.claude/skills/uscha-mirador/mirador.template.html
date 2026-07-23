@@ -88,6 +88,8 @@ svg{display:block;width:100%;height:auto}
 .inv{display:flex;flex-wrap:wrap;gap:.5rem}
 .inv .item{display:flex;align-items:center;gap:.4rem;font-size:.82rem;background:#f7f9fb;border:1px solid var(--rule);border-radius:9px;padding:.4rem .6rem}
 .inv .item i{width:8px;height:8px;border-radius:50%}
+.inv .item.unmeasured{border-style:dashed;color:var(--ink-mute)}
+.inv .item .nm{font-style:normal;font-family:var(--mono);font-size:.64rem;color:var(--ink-mute);margin-left:.15rem}
 .ok i{background:var(--green)} .warn i{background:var(--amber)} .miss i{background:var(--red)}
 .ok{color:var(--ink)} .warn{color:var(--ink)} .miss{color:var(--ink)}
 
@@ -105,6 +107,16 @@ svg{display:block;width:100%;height:auto}
 .loop .bar b{height:14px;border-radius:2px;flex:1;background:#e7ebef}
 .loop .bar b.on{background:var(--stone)}
 .loop .tag{font-family:var(--mono);font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:20px}
+.loop .phch{font-family:var(--mono);font-size:.64rem;color:var(--ink-mute);border:1px solid var(--rule);border-radius:20px;padding:2px 7px}
+/* burn-down: one line per QA cycle -- gated hot while >0, cool at 0 (converging) */
+.burn{margin:-.15rem 0 .7rem 96px;display:flex;flex-direction:column;gap:.2rem}
+.bcy{display:flex;align-items:center;gap:.55rem;font-size:.72rem}
+.bcy .bnum{font-family:var(--mono);font-size:.66rem;color:var(--ink-mute);min-width:20px}
+.bcy i{font-style:normal;font-family:var(--mono);font-size:.68rem;padding:1px 7px;border-radius:20px}
+.bcy .bg.hot{background:var(--red-soft);color:var(--red-deep)}
+.bcy .bg.cool{background:var(--green-soft);color:var(--green)}
+.bcy .bf{background:#f7f9fb;border:1px solid var(--rule);color:var(--ink)}
+.bcy .bd2{color:var(--ink-mute)}
 
 /* subscores collapsed */
 .subs summary{cursor:pointer;font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);list-style:none;display:flex;align-items:center;gap:.5rem}
@@ -220,8 +232,8 @@ svg{display:block;width:100%;height:auto}
 
   <section class="grid">
     <div class="card col6">
-      <h2>Specifications <span class="n" id="spec-n">—</span></h2>
-      <div class="speclist" id="speclist"></div>
+      <h2>Acceptance — measured <span class="n" id="acc-n">—</span></h2>
+      <div class="speclist" id="acclist"></div>
     </div>
 
     <div class="card col6">
@@ -245,8 +257,14 @@ svg{display:block;width:100%;height:auto}
     </div>
 
     <div class="card col6">
-      <h2>Execution policy <span class="n" id="exec-n">&mdash;</span></h2>
-      <div class="exec" id="exec"></div>
+      <details class="subs">
+        <summary>Execution policy <span class="n" id="exec-n">&mdash;</span></summary>
+        <div class="exec" id="exec"></div>
+      </details>
+      <p style="font-size:.8rem;color:var(--ink-mute);margin-top:.9rem;line-height:1.5">
+        Kit routing (tier/model/effort per phase) — policy, not project state. Identical
+        across projects; open it only when tuning how phases execute.
+      </p>
     </div>
 
     <div class="card col6">
@@ -317,15 +335,17 @@ const DATA = {
     verify:{phase:"verify",method:"Re-run measured release gates",tier:"standard",model:null,effort:"medium"},
     prod:{phase:"prod",method:"Stop at the human gate",tier:"human",model:null,effort:"none"}
   }},
-  specs:[
-    {id:"SPEC-001",t:"Alta de comprobante",status:"done",acc:100},
-    {id:"SPEC-002",t:"Numeración sin huecos",status:"done",acc:100},
-    {id:"SPEC-003",t:"Reintento idempotente",status:"done",acc:100},
-    {id:"SPEC-004",t:"Cierre de caja",status:"prog",acc:70},
-    {id:"SPEC-005",t:"Exportación fiscal",status:"prog",acc:55},
-    {id:"SPEC-006",t:"Rollback de despliegue",status:"block",acc:20},
-    {id:"SPEC-007",t:"Reporte de conciliación",status:"todo",acc:0},
-  ],
+  /* acceptance: the engine's real currency — AC-nn criteria, closed only by green tests */
+  acceptance:{found:true,file:"ACCEPTANCE.md",traceable:true,total:7,measured_done:4,
+    measured_pct:57.1,stale_reports:0,items:[
+    {id:"AC-1",text:"Alta de comprobante persiste y numera",status:"measured"},
+    {id:"AC-2",text:"Numeración sin huecos bajo concurrencia",status:"measured"},
+    {id:"AC-3",text:"Reintento idempotente por request-id",status:"measured"},
+    {id:"AC-4",text:"Cierre de caja concilia contra el ledger",status:"measured"},
+    {id:"AC-5",text:"Exportación fiscal valida contra schema",status:"narrated"},
+    {id:"AC-6",text:"Rollback de despliegue verificado",status:"open"},
+    {id:"AC-7",text:"Reporte de conciliación diario",status:"open"},
+  ]},
   adrs:[
     {id:"ADR-001",t:"Almacenamiento append-only",status:"done"},
     {id:"ADR-002",t:"Idempotencia por request-id",status:"done"},
@@ -347,9 +367,20 @@ const DATA = {
     {name:"Operacional",status:"miss",v:"rollback sin validar"},
   ],
   loops:[
-    {mod:"pagos",iters:4,max:6,state:"converged"},
-    {mod:"ticket",iters:6,max:6,state:"oscillating"},
-    {mod:"auth",iters:2,max:6,state:"escalated"},
+    {mod:"pagos",iters:4,max:6,state:"converged",phase:"pr-ready",series:[
+      {cycle:1,reported:9,gated:6,fixed:5,deferred:1},
+      {cycle:2,reported:4,gated:2,fixed:2,deferred:0},
+      {cycle:3,reported:2,gated:1,fixed:1,deferred:0},
+      {cycle:4,reported:1,gated:0,fixed:0,deferred:1},
+    ]},
+    {mod:"ticket",iters:6,max:6,state:"oscillating",phase:"qa",series:[
+      {cycle:5,reported:3,gated:2,fixed:2,deferred:0},
+      {cycle:6,reported:3,gated:2,fixed:1,deferred:0},
+    ]},
+    {mod:"auth",iters:2,max:6,state:"escalated",phase:"escalated",series:[
+      {cycle:1,reported:5,gated:4,fixed:2,deferred:0},
+      {cycle:2,reported:4,gated:4,fixed:0,deferred:0},
+    ]},
   ],
   /* time-lapse: cada snapshot = readiness + hasta qué fase se había llegado */
   snapshots:[
@@ -494,13 +525,24 @@ function renderTrail(activeReached){
   });
 }
 
-/* ==== specs / adrs / inv / heat / loops / subs ==== */
-function renderSpecs(){
-  $("#spec-n").textContent=DATA.specs.filter(s=>s.status==="done").length+"/"+DATA.specs.length;
-  const host=$("#speclist");host.replaceChildren();
-  if(!DATA.specs.length){host.appendChild(emptyHint("sin specs medidas todavía — la fase SPEC las declara"));return;}
-  DATA.specs.forEach(s=>append(host,append(node("div","spec"),node("span","id",s.id),node("span","t",s.t),
-    node("span","chip "+(chipClass[s.status]||"st-todo"),chipText[s.status]||s.status),node("span","acc",String(s.acc)+"%"))));
+/* ==== acceptance / adrs / inv / heat / loops / subs ==== */
+function renderAcceptance(){
+  /* the engine's real currency: AC-nn criteria, each closed only by a GREEN test.
+     status comes precomputed from the engine (the template paints, never derives):
+     measured = closed by a green named test · narrated = ticked by hand, no green
+     test backs it · open = neither. */
+  const a=DATA.acceptance||{},items=a.items||[];
+  $("#acc-n").textContent=(a.total?((a.measured_done||0)+"/"+a.total+" measured"):"—");
+  const host=$("#acclist");host.replaceChildren();
+  if(a.found===false){host.appendChild(emptyHint("sin ACCEPTANCE.md — /uscha-discovery o /uscha-adr-refine lo generan; el readiness lo mide"));return;}
+  if(!items.length){host.appendChild(emptyHint("ACCEPTANCE.md sin criterios AC-nn trazables — nombrá los testcases 'AC-n_...' y el readiness los cierra medidos"));return;}
+  const st={measured:["st-done","measured"],narrated:["st-prog","narrated — sin test"],open:["st-todo","open"]};
+  items.forEach(it=>{const t=st[it.status]||["st-todo",String(it.status)];
+    append(host,append(node("div","spec"),node("span","id",it.id),node("span","t",it.text),
+      node("span","chip "+t[0],t[1])));});
+  if(a.untagged)host.appendChild(emptyHint(a.untagged+" criterio(s) sin ID AC-nn — cuentan en el total pero no pueden cerrarse medidos; etiquetalos para que un test los cierre"));
+  const sr=(a.stale_reports||[]).length;
+  if(sr)host.appendChild(emptyHint(sr+" reporte(s) JUnit stale descartados — re-corré los tests antes de leer este panel"));
 }
 function adrLabel(a){
   if(a.adr_status==="experiment"){
@@ -519,8 +561,13 @@ function renderAdrs(){
     node("span","chip "+(chipClass[a.status]||"st-todo"),adrLabel(a)))));
 }
 function renderInv(){
+  /* a null status is NOT ok and NOT a miss: no gate maps to that invariant, so it is
+     unmeasured. Say so on screen — a silent blank reads as "fine", which is the exact
+     lie the truth-pass forbids. */
   const host=$("#inv");host.replaceChildren();
-  DATA.inv.forEach(v=>{const item=node("span","item "+(v.status||""));append(item,node("i"),document.createTextNode(String(v.name||"")));host.appendChild(item);});
+  DATA.inv.forEach(v=>{const item=node("span","item "+(v.status||"unmeasured"));append(item,node("i"),document.createTextNode(String(v.name||"")));
+    if(!v.status)item.appendChild(node("em","nm","sin gate — no medido"));
+    host.appendChild(item);});
 }
 function renderHeat(){
   const cls={ok:"h-ok",warn:"h-warn",miss:"h-miss"},host=$("#heat");host.replaceChildren();
@@ -539,7 +586,26 @@ function renderLoops(){
     const mx=l.max||l.iters||0,bars=node("span","bar");
     for(let i=0;i<mx;i++)bars.appendChild(node("b",i<l.iters?"on":""));
     const t=tag[l.state]||["st-todo","—"];
-    append(host,append(node("div","loop"),node("span","mod",l.mod),bars,node("span","tag "+t[0],t[1])));
+    const row=append(node("div","loop"),node("span","mod",l.mod));
+    if(l.phase)row.appendChild(node("span","phch",l.phase));  /* real FSM phase (derived) */
+    append(row,bars,node("span","tag "+t[0],t[1]));
+    host.appendChild(row);
+    /* burn-down: the loop's STORY per cycle — findings gated (red while >0, green at 0)
+       and fixed, straight from the recorded steps. Reading it left to right answers
+       "is iterating helping?" without opening the ledger. */
+    const s=l.series||[];
+    if(s.length){
+      const bd=node("div","burn");
+      s.forEach(c=>{
+        const cy=node("span","bcy");
+        append(cy,node("b","bnum","c"+c.cycle),
+          node("i","bg "+(c.gated?"hot":"cool"),"gated "+c.gated),
+          node("i","bf","fixed "+c.fixed));
+        if(c.deferred)cy.appendChild(node("i","bd2","defer "+c.deferred));
+        bd.appendChild(cy);
+      });
+      host.appendChild(bd);
+    }
   });
 }
 function renderSubs(){
@@ -658,7 +724,7 @@ function applySnapshot(i){
 scrub.addEventListener("input",()=>applySnapshot(+scrub.value));
 
 /* ==== init ==== */
-renderStatus();renderSpecs();renderAdrs();renderInv();renderHeat();renderLoops();renderSubs();renderExecutionPolicy();renderTelemetry();
+renderStatus();renderAcceptance();renderAdrs();renderInv();renderHeat();renderLoops();renderSubs();renderExecutionPolicy();renderTelemetry();
 $("#asof").textContent=snaps.length?snaps[snaps.length-1].date:"no history yet (readiness --record)";
 renderTrail(null);
 </script>

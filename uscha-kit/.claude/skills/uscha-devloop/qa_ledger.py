@@ -3412,6 +3412,29 @@ def cmd_dashboard(args):
     # el agente cuando no hay snapshot medido, mientras _derive_phase exige evidencia
     # medida para 'pr-ready'). Resultado: el mirador cantaba "convergido" sobre tests que
     # nadie midio, justo en la vista que decide un merge. Una sola derivacion, una verdad.
+    # acceptance (kit 1.49.0): reemplaza al panel "specs" (que era [] hardcodeado — el
+    # engine trackea AC-nn, no SPEC-nnn: mostrar la moneda real). Reusa VERBATIM el bloque
+    # acceptance del readiness capturado; el status por criterio se computa ACA porque el
+    # template pinta, no deriva: measured = cerrado por test verde; narrated = tildado a
+    # mano SIN test verde; open = ni lo uno ni lo otro.
+    _acc = rd.get("acceptance") or {}
+    _mc = set(_acc.get("measured_closed") or [])
+    _no = set(_acc.get("narrated_only") or [])
+    acceptance = {
+        "found": _acc.get("found"), "file": _acc.get("file"),
+        "traceable": _acc.get("traceable"), "total": _acc.get("total"),
+        "measured_done": len(_mc), "measured_pct": _acc.get("measured_pct"),
+        # untagged travels too: `total` counts EVERY checkbox but `items` only the AC-nn
+        # tagged ones -- without this the panel shows fewer rows than the header counts,
+        # a silent gap with no reason given (the exact sin this panel exists to remove).
+        "untagged": _acc.get("untagged"),
+        "stale_reports": _acc.get("stale_reports"),
+        "items": [{"id": it["id"], "text": it["text"],
+                   "status": ("measured" if it["id"] in _mc
+                              else "narrated" if it["id"] in _no else "open")}
+                  for it in (_acc.get("items") or [])],
+    }
+
     qa_order_d = (cfg.get("defaults") or {}).get("qa_tools_order")
     k_d = getattr(args, "tools_per_cycle", 3)
     loops = []
@@ -3419,8 +3442,28 @@ def cmd_dashboard(args):
         phase_d, _ = _derive_phase(ledger, name, rnode, k_d, qa_order_d)
         state = ("escalated" if phase_d == "escalated"
                  else "converged" if phase_d == "pr-ready" else "active")
+        # burn-down (kit 1.49.0): the loop's STORY, not just its count — findings
+        # reported/gated/fixed/deferred per cycle, straight from the recorded steps.
+        # AGENT steps only (same filter as _converged): static-gate ingests carry noisy
+        # below-gate counts (a linter's 35 LOWs re-reported every refresh) that drown the
+        # loop's trend, and the gates already speak through readiness's own gate line.
+        _cycles = {}
+        for s in rnode.get("iterations", []):
+            if s.get("category", "agent") != "agent":
+                continue
+            c = s.get("iteration", 0) or 0
+            row = _cycles.setdefault(c, {"cycle": c, "reported": 0, "gated": 0,
+                                         "fixed": 0, "deferred": 0})
+            row["reported"] += s.get("reported") or 0
+            row["gated"] += s.get("gated_reported") or 0
+            row["fixed"] += s.get("fixed") or 0
+            row["deferred"] += s.get("deferred") or 0
         loops.append({"mod": name, "iters": _repo_loop_count(rnode),
-                      "max": None, "state": state})
+                      "max": None, "state": state,
+                      # the REAL derived phase (kit 1.49.0, closes deferred D-01): the
+                      # 3-state badge stays, the FSM detail travels alongside it.
+                      "phase": phase_d,
+                      "series": [_cycles[c] for c in sorted(_cycles)]})
 
     # odometro del QA loop (kit 1.47.0): badge del nodo "qa" del sendero. Solo hechos ya
     # computados: pasadas (max iteration), escalaciones abiertas, plateau (advisory 1.14.0)
@@ -3479,7 +3522,7 @@ def cmd_dashboard(args):
         "execution_policy": exec_policy,
         "discovery_intake": rd.get("discovery_intake", {}),
         "adr_experiments": _adr_experiment_summary(adrs),
-        "specs": [],          # NO SOURCE: el engine trackea AC-nn, no SPEC-nnn
+        "acceptance": acceptance,
         "adrs": adrs,
         "inv": inv,
         "capas": [],          # NO SOURCE: el engine no puntua las 6 capas de verdad
@@ -3748,6 +3791,10 @@ def cmd_readiness(args):
         "acceptance": {"done": done, "total": total, "found": acc_found,
                        "file": acc_path, "section": args.section,
                        "traceable": acc_traceable, "ids": len(ac_ids),
+                       # kit 1.49.0: per-criterion detail so the mirador can show WHICH
+                       # criteria are closed by a green test vs merely ticked. Additive.
+                       "items": [{"id": i["id"], "text": i["text"],
+                                  "checked": bool(i["checked"])} for i in ac_ids],
                        "untagged": ac_untagged, "duplicate_ids": dupe_ids,
                        "measured_closed": measured_closed,
                        "measured_pct": (round(100.0 * len(measured_closed) / total, 1)

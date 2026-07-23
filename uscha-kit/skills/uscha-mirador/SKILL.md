@@ -20,7 +20,7 @@ wires the JSON the engine emits into the template. Read-only.
 ## Contract
 
 - **Source of truth:** `qa_ledger.py dashboard --json` — aggregates ONLY state the
-  ledger already has (readiness, subscores, phases, specs, adrs, inv, layers, loops,
+  ledger already has (readiness, subscores, phases, acceptance, adrs, inv, layers, loops,
   snapshots, evidence). A field with no source comes out `null`/`[]`; the template
   degrades. **A datum is never invented.**
 - **Template:** `mirador.template.html` (in this folder). The data block lives between
