@@ -2724,7 +2724,7 @@ def _fty(ledger):
         if not its:
             continue  # never entered QA — not part of the yield base
         total += 1
-        max_cycle = max((s.get("iteration", 0) or 0) for s in its)
+        max_cycle = _repo_loop_count(node)
         regr = sum((s.get("new_regressions") or 0) for s in its)
         yielded = (max_cycle <= 1 and regr == 0 and name not in escalated)
         first_pass += 1 if yielded else 0
@@ -3195,6 +3195,14 @@ def cmd_execution_policy(args):
         print(_execution_line(policy["phases"][key]))
 
 
+def _repo_loop_count(node):
+    """Pasadas del QA loop de un repo = la iteracion mas alta registrada. UNA definicion:
+    el badge del mirador, el churn del readiness y el odometro persistido leian lo mismo
+    calculado en tres lugares distintos — un cambio en uno los desincronizaba en silencio
+    (kit 1.48.1)."""
+    return max((s.get("iteration", 0) or 0 for s in node.get("iterations", [])), default=0)
+
+
 def _reached_index(score):
     """Proyecta un readiness MEDIDO sobre el sendero de 8 nodos (idea..prod) para el
     time-lapse. Transformacion determinista del score (como la band), NO un dato
@@ -3397,17 +3405,22 @@ def cmd_dashboard(args):
                               "bd": gate_note.get(key) or ("FAIL" if gate_block[key] else "OK")})
 
     # loops: iters + estado por repo (escalated > converged > active). max sin fuente.
-    by_repo = rd.get("by_repo", {})
-    unresolved = {e.get("repo") for e in ledger.get("escalations", [])
-                  if not e.get("resolved_at")}
+    # El estado se deriva ENTERO con _derive_phase (kit 1.48.1) — la MISMA funcion que
+    # alimenta el odometro del statusline. Antes esta vista mezclaba dos fuentes:
+    # ledger["escalations"] a secas (se perdia spec-doubts, spec-change-requests y
+    # production findings gateados) y _converged() a secas (que ACEPTA tests narrados por
+    # el agente cuando no hay snapshot medido, mientras _derive_phase exige evidencia
+    # medida para 'pr-ready'). Resultado: el mirador cantaba "convergido" sobre tests que
+    # nadie midio, justo en la vista que decide un merge. Una sola derivacion, una verdad.
+    qa_order_d = (cfg.get("defaults") or {}).get("qa_tools_order")
+    k_d = getattr(args, "tools_per_cycle", 3)
     loops = []
     for name, rnode in ledger.get("repos", {}).items():
-        iters = max((it.get("iteration", 0) for it in rnode.get("iterations", [])),
-                    default=0)
-        conv = by_repo.get(name, {}).get("facts", {}).get("converged")
-        state = ("escalated" if name in unresolved
-                 else "converged" if conv else "active")
-        loops.append({"mod": name, "iters": iters, "max": None, "state": state})
+        phase_d, _ = _derive_phase(ledger, name, rnode, k_d, qa_order_d)
+        state = ("escalated" if phase_d == "escalated"
+                 else "converged" if phase_d == "pr-ready" else "active")
+        loops.append({"mod": name, "iters": _repo_loop_count(rnode),
+                      "max": None, "state": state})
 
     # odometro del QA loop (kit 1.47.0): badge del nodo "qa" del sendero. Solo hechos ya
     # computados: pasadas (max iteration), escalaciones abiertas, plateau (advisory 1.14.0)
@@ -3687,8 +3700,7 @@ def cmd_readiness(args):
 
     # churn (separate from readiness)
     tool_roll = _tool_rollup(ledger)
-    cycles = max([s.get("iteration", 0) for node in ledger["repos"].values()
-                  for s in node["iterations"]] + [0])
+    cycles = max([_repo_loop_count(node) for node in ledger["repos"].values()] + [0])
     regressions = sum((s.get("new_regressions") or 0) for node in ledger["repos"].values()
                       for s in node["iterations"])
 
@@ -3711,8 +3723,7 @@ def cmd_readiness(args):
         _stalled = set(stalled_repos)
         _odometer = {
             name: {"phase": _derive_phase(ledger, name, node, k, qa_order)[0],
-                   "loops": max((it.get("iteration", 0) or 0
-                                 for it in node.get("iterations", [])), default=0),
+                   "loops": _repo_loop_count(node),
                    "stalled": name in _stalled}
             for name, node in ledger["repos"].items()}
         ledger["measured"] = {
@@ -5079,8 +5090,7 @@ def cmd_regression_check(args):
         # default: suma de 'fixed' de la iteracion MAS RECIENTE del repo
         ledger = _load(args.ledger)
         node = _repo_node(ledger, args.repo)
-        its = [s.get("iteration") or 0 for s in node["iterations"]]
-        last_it = max(its) if its else 0
+        last_it = _repo_loop_count(node)
         fixed = sum((s.get("fixed") or 0) for s in node["iterations"]
                     if (s.get("iteration") or 0) == last_it)
     test_files = set()

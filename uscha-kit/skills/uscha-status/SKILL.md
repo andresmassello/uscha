@@ -26,7 +26,9 @@ is the same data, printed in chat when requested.
   — never measure on the fly, never invent.
 - **Source, in order:**
   1. If `.claude/scripts/uscha_progress.py` exists, run it (fast: it parses JSON +
-     one .md, never runs tests), then read `.claude/uscha-progress.json`.
+     one .md, never runs tests), then read `.claude/uscha-progress.json`. Since kit
+     1.48.1 that file carries everything this block needs: `measured_at`, `score`,
+     `band`, `acceptance_source`, and the full per-repo `repos` odometer.
   2. Else read `QA-LEDGER.json` directly: `measured` (summary + per-repo odometer)
      and, for tests/coverage, the last snapshot of the tracked repo.
   3. No `uscha.config.json` → this is not a uscha project; say so and stop.
@@ -50,14 +52,15 @@ recorded 2026-07-23 · score 35 NOT READY
 
 Line guide:
 - **Header**: label · derived phase (+`×loops` when > 0) · acceptance bar with `%`
-  and `done/total`, tagged `(measured)` or `(narrated — checkboxes)` · tests ·
-  coverage. Build the bar with `█`/`░` (12 cells).
-- **next**: the first criterion not closed by a green test (from `measured.next`).
-- **loops**: only for multi-repo projects — one entry per repo from
-  `measured.repos`: name, phase, `×N`, and `plateau ⚠` when `stalled` is true.
+  and `done/total`, tagged from `acceptance_source`: `(measured)` or
+  `(narrated — checkboxes)` · tests · coverage. Build the bar with `█`/`░` (12 cells).
+- **next**: the first criterion not closed by a green test (from `next`).
+- **loops**: only for multi-repo projects — one entry per repo from the `repos`
+  map: name, phase, `×N`, and `plateau ⚠` when `stalled` is true.
 - **roadmap**: only if the config declares one (`roadmap_done/roadmap_total/next`).
-- **recorded**: the `at` timestamp + score/band of the last `--record`. This is
-  WHEN the evidence was captured — facts do not move without new evidence.
+- **recorded**: `measured_at` + `score`/`band` of the last `--record`. This is
+  WHEN the evidence was captured — facts do not move without new evidence. If the
+  field is absent (nothing recorded yet), omit the line; never guess a timestamp.
 
 ## Degradation (honest, specific)
 

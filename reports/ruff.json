@@ -42,17 +42,17 @@
     "code": "B034",
     "end_location": {
       "column": 32,
-      "row": 3240
+      "row": 3248
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 9,
-      "row": 3240
+      "row": 3248
     },
     "message": "`re.split` should pass `maxsplit` and `flags` as keyword arguments to avoid confusion due to unintuitive argument positions",
     "name": "re-sub-positional-args",
-    "noqa_row": 3240,
+    "noqa_row": 3248,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/re-sub-positional-args"
   },
@@ -61,17 +61,17 @@
     "code": "E741",
     "end_location": {
       "column": 32,
-      "row": 3416
+      "row": 3429
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 31,
-      "row": 3416
+      "row": 3429
     },
     "message": "Ambiguous variable name: `l`",
     "name": "ambiguous-variable-name",
-    "noqa_row": 3416,
+    "noqa_row": 3429,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
   },
@@ -80,17 +80,17 @@
     "code": "E741",
     "end_location": {
       "column": 27,
-      "row": 3419
+      "row": 3432
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 26,
-      "row": 3419
+      "row": 3432
     },
     "message": "Ambiguous variable name: `l`",
     "name": "ambiguous-variable-name",
-    "noqa_row": 3419,
+    "noqa_row": 3432,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
   },
@@ -99,17 +99,17 @@
     "code": "E741",
     "end_location": {
       "column": 59,
-      "row": 3424
+      "row": 3437
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 58,
-      "row": 3424
+      "row": 3437
     },
     "message": "Ambiguous variable name: `l`",
     "name": "ambiguous-variable-name",
-    "noqa_row": 3424,
+    "noqa_row": 3437,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
   },
@@ -118,17 +118,17 @@
     "code": "B007",
     "end_location": {
       "column": 16,
-      "row": 3568
+      "row": 3581
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 12,
-      "row": 3568
+      "row": 3581
     },
     "message": "Loop control variable `node` not used within loop body",
     "name": "unused-loop-control-variable",
-    "noqa_row": 3568,
+    "noqa_row": 3581,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/unused-loop-control-variable"
   },
@@ -137,17 +137,17 @@
     "code": "E741",
     "end_location": {
       "column": 14,
-      "row": 4643
+      "row": 4654
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 13,
-      "row": 4643
+      "row": 4654
     },
     "message": "Ambiguous variable name: `l`",
     "name": "ambiguous-variable-name",
-    "noqa_row": 4643,
+    "noqa_row": 4654,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
   },
@@ -156,17 +156,17 @@
     "code": "E702",
     "end_location": {
       "column": 29,
-      "row": 4907
+      "row": 4918
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 28,
-      "row": 4907
+      "row": 4918
     },
     "message": "Multiple statements on one line (semicolon)",
     "name": "multiple-statements-on-one-line-semicolon",
-    "noqa_row": 4907,
+    "noqa_row": 4918,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
   },
@@ -175,17 +175,17 @@
     "code": "E702",
     "end_location": {
       "column": 42,
-      "row": 4907
+      "row": 4918
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 41,
-      "row": 4907
+      "row": 4918
     },
     "message": "Multiple statements on one line (semicolon)",
     "name": "multiple-statements-on-one-line-semicolon",
-    "noqa_row": 4907,
+    "noqa_row": 4918,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
   },
@@ -194,17 +194,17 @@
     "code": "B904",
     "end_location": {
       "column": 96,
-      "row": 5380
+      "row": 5390
     },
     "filename": "C:\\Work\\AI\\SpecLoop\\uscha-kit\\.claude\\skills\\uscha-devloop\\qa_ledger.py",
     "fix": null,
     "location": {
       "column": 9,
-      "row": 5379
+      "row": 5389
     },
     "message": "Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling",
     "name": "raise-without-from-inside-except",
-    "noqa_row": 5379,
+    "noqa_row": 5389,
     "severity": "error",
     "url": "https://docs.astral.sh/ruff/rules/raise-without-from-inside-except"
   },

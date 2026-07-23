@@ -45,9 +45,19 @@ def _measured(state, repo_name=None):
         return False
     if not isinstance(m, dict):
         return False
+    # WHEN the evidence was captured, and the verdict it produced. Without these a reader
+    # cannot tell a fresh measurement from a stale one (kit 1.48.1) -- and a consumer that
+    # needs them would have to re-read the ledger, defeating this fast path.
+    state["measured_at"], state["score"] = m.get("at"), m.get("score")
+    state["band"] = m.get("band")
     # loop odometer (kit 1.47.0): the derived phase + pass count + plateau flag the engine
     # persisted for this repo. Read even when there are no ACs -- phase is its own fact.
-    r = (m.get("repos") or {}).get(repo_name or "")
+    # The FULL per-repo map travels too: a multi-repo readout needs every repo, not just
+    # the one the statusline tracks (kit 1.48.1).
+    repos = m.get("repos")
+    if isinstance(repos, dict):
+        state["repos"] = repos
+    r = (repos or {}).get(repo_name or "")
     if isinstance(r, dict):
         state["phase"], state["loops"] = r.get("phase"), r.get("loops")
         state["stalled"] = bool(r.get("stalled"))
@@ -56,6 +66,7 @@ def _measured(state, repo_name=None):
     total, done = m["acceptance_total"], m.get("acceptance_done") or 0
     state["done"], state["total"] = done, total
     state["pct"] = round(100 * done / total)
+    state["acceptance_source"] = "measured"
     nx = m.get("next")
     if isinstance(nx, dict) and nx.get("id"):
         txt = re.sub(r"[*_`]", "", str(nx.get("text", ""))).strip()
@@ -76,6 +87,10 @@ def _acceptance(state, cfg):
     if total:
         state["done"], state["total"] = done, total
         state["pct"] = round(100 * done / total)
+        # ticked by a human, not closed by a green test. The renderer MUST say so: showing
+        # a narrated number with the same face as a measured one is the exact dishonesty
+        # this kit exists to remove (kit 1.48.1).
+        state["acceptance_source"] = "narrated"
     m = re.search(r"- \[ \]\s*[*_`]*\s*(AC[-_]?\d+)[*_`]*\s*[—–-]\s*(.+)", text, re.IGNORECASE)
     if m:
         nxt = re.sub(r"[*_`]", "", m.group(2)).strip()
@@ -140,6 +155,8 @@ def main():
     state = {"label": repo.get("label") or str(repo.get("name", "uscha")).upper(),
              "pct": None, "done": None, "total": None, "tests": None, "coverage": None,
              "next": None, "phase": None, "loops": None, "stalled": None,
+             "acceptance_source": None, "measured_at": None, "score": None, "band": None,
+             "repos": None,
              "roadmap_done": None, "roadmap_total": None, "roadmap_next": None}
     # measured (ledger['measured']) wins; checkboxes are only the fallback until the engine
     # has recorded a measurement -- so a fresh project still shows *something*, honestly.

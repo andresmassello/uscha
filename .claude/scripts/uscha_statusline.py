@@ -71,7 +71,11 @@ def main():
     else:
         parts.append(f"{_bar(pct, _color(pct))} {_color(pct)}{pct}%{R}")
         if s.get("total"):
-            parts.append(f"AC {s['done']}/{s['total']}")
+            # a checkbox count is NARRATED progress; it must never wear the same face as
+            # acceptance closed by a green test. Measured is the norm and stays unlabeled;
+            # the fallback is marked, every time it is shown (kit 1.48.1).
+            tag = " narrado" if s.get("acceptance_source") == "narrated" else ""
+            parts.append(f"AC {s['done']}/{s['total']}{DIM}{tag}{R}")
     if s.get("tests") is not None:
         parts.append(f"{GREEN}{s['tests']}✓{R}")
     if s.get("coverage") is not None:

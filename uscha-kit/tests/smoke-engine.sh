@@ -1423,11 +1423,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.48.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.48.1.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.48.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.48.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.48.1.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.48.1.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1855,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.48.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1879,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.48.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.48.1' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1887,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.48.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1901,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.48.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1913,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.48.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.48.1'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2996,6 +2996,47 @@ PY
 if [ $? -eq 0 ]; then
   PASS=$((PASS+1)); echo "  ok   install-uscha.py SKILLS matches skill dirs; uscha-status frontmatter valid and read-only by contract"; \
 else FAIL=$((FAIL+1)); echo "  FAIL installer roster drifted or uscha-status SKILL.md malformed"; fi
+
+echo "== T93 (1.48.1): one derivation -- narrated is LABELED, and an open spec-doubt escalates BOTH views =="
+# QA-loop findings: (a) the statusline dressed narrated checkboxes exactly like measured
+# acceptance; (b) the mirador derived 'escalated' from ledger["escalations"] alone, so an
+# open spec-doubt showed escalated in the statusline and NOT in the mirador badge.
+T93="$(mktemp -d)"
+( cd "$T93" && mkdir -p .claude reports/junit
+  printf -- "# ACCEPTANCE\n\n- [x] AC-01 — ticked by a human, closed by NO test\n" > ACCEPTANCE.md
+  printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
+  run init --config uscha.config.json --out QA-LEDGER.json >/dev/null 2>&1
+  run snapshot --ledger QA-LEDGER.json --repo p >/dev/null 2>&1
+  # (a) no measurement recorded -> the checkbox fallback must be MARKED as narrated
+  CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_progress.py"
+  src=$("$PY" -c "import json;print(json.load(open('.claude/uscha-progress.json'))['acceptance_source'])")
+  line=$(CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_statusline.py" < /dev/null)
+  # (b) NARRATED tests (agent-reported, no measured snapshot) must NEVER read as
+  # 'converged' on the mirador while the odometer withholds readiness: same ledger,
+  # same derivation. This is the view a human reads before deciding a merge.
+  for t in code-review judgment-day improve; do
+    run log-step --ledger QA-LEDGER.json --repo p --tool $t --iteration 1 \
+      --tests-passed true --files-changed 0 >/dev/null 2>&1
+  done
+  narr=$(run dashboard --ledger QA-LEDGER.json --json 2>/dev/null | "$PY" -c "import json,sys;d=json.load(sys.stdin);print(next(l['state'] for l in d['loops'] if l['mod']=='p'))")
+  # (c) an open spec-doubt is an escalation: the mirador badge must say so too
+  run spec-doubt --ledger QA-LEDGER.json --repo p --kind ambiguous --note "SPEC unclear" >/dev/null 2>&1
+  badge=$(run dashboard --ledger QA-LEDGER.json --json 2>/dev/null | "$PY" -c "import json,sys;d=json.load(sys.stdin);print(next(l['state'] for l in d['loops'] if l['mod']=='p'))")
+  # and the persisted odometer (what the statusline reads) must agree with it
+  run readiness --ledger QA-LEDGER.json --record >/dev/null 2>&1
+  odo=$("$PY" -c "import json;print(json.load(open('QA-LEDGER.json'))['measured']['repos']['p']['phase'])")
+  echo "$src|$badge|$odo|$narr|$line" > result.txt )
+T93_RES="$(cat "$T93/result.txt")"
+rm -rf "$T93"
+T93_SRC="${T93_RES%%|*}"; T93_R="${T93_RES#*|}"
+T93_BADGE="${T93_R%%|*}"; T93_R="${T93_R#*|}"
+T93_ODO="${T93_R%%|*}"; T93_R="${T93_R#*|}"
+T93_NARR="${T93_R%%|*}"; T93_LINE="${T93_R#*|}"
+if [ "$T93_SRC" = "narrated" ] && printf '%s' "$T93_LINE" | grep -q "narrado" \
+   && [ "$T93_NARR" != "converged" ] \
+   && [ "$T93_BADGE" = "escalated" ] && [ "$T93_ODO" = "escalated" ]; then
+  PASS=$((PASS+1)); echo "  ok   checkbox fallback labeled 'narrado' · narrated tests never read 'convergido' · spec-doubt escalates mirador AND odometer"; \
+else FAIL=$((FAIL+1)); echo "  FAIL src=$T93_SRC badge=$T93_BADGE odo=$T93_ODO narrated_state=$T93_NARR line=$T93_LINE"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
