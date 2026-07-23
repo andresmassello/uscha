@@ -36,10 +36,17 @@ written by the run itself, never by hand.
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
   outside this file: the first by review, the second mechanically by the `PreToolUse` hook.
   They are invariants, not acceptance criteria — nothing here should pretend to measure them.
-- **Coverage** of the engine is currently **not instrumented**. Per kit 1.44.0 that is reported
-  as `coverage UNMEASURED`, which is deliberately NOT the same as a measured 0% — and it is not
-  silently forgiven either. Instrumenting it, or declaring the exemption in `uscha.config.json`
-  with provenance, is the honest fork; this repo has not chosen yet.
+- **Coverage** of the engine is **instrumented** (the fork this file used to leave open was
+  resolved by measuring, not by declaring an exemption). `USCHA_COVERAGE=1` wraps the one
+  choke point the suite drives the engine through — ~370 subprocess calls — and the combined
+  Cobertura report lands in `reports/coverage.xml`: **84.2%** against a declared threshold of
+  60. Opt-in, so the default suite stays fast and needs no `coverage.py`.
+  Honest limit, recorded in `uscha.config.json` as `defaults._coverage_scope`: the number
+  covers the **engine** (`qa_ledger.py`) — what the seam actually executes. The auxiliary
+  scripts (`templates/scripts`, the mirador renderer) are exercised by the suite but invoked
+  outside it, and coverage.py does not report never-imported files, so they are **absent from
+  the number, not counted as 0**. Widening the seam is deferred work (`ISSUES-DEFERRED.md`
+  D-03), not a silent omission.
 
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).

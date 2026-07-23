@@ -245,7 +245,29 @@ chk() { # $1 = descripción, $2 = exit esperado, $3.. = comando
   if [ "$got" -eq "$want" ]; then PASS=$((PASS+1)); echo "  ok   $desc"
   else FAIL=$((FAIL+1)); echo "  FAIL $desc (exit $got, esperado $want)"; fi
 }
-run() { PYTHONIOENCODING=utf-8 "$PY" "$QL" "$@"; }
+# Coverage of the engine is OPT-IN (USCHA_COVERAGE=1). The engine is exercised through
+# ~370 subprocess calls, so measuring it means wrapping the ONE choke point they all pass
+# through -- not instrumenting the suite. Off by default: the normal smoke stays fast and
+# dependency-free (coverage.py is not required to run the suite).
+if [ "${USCHA_COVERAGE:-0}" = "1" ]; then
+  COV_DATA="$ROOT/.coverage-data/.coverage"
+  mkdir -p "$(dirname "$COV_DATA")"
+  export COVERAGE_FILE="$COV_DATA"
+  # ONE absolute --source path, deliberately. Two reasons, both learned the hard way:
+  # (1) git-bash/MSYS rewrites only the FIRST POSIX path embedded in an argument, so a
+  #     comma-joined list arrives at Windows Python as C:/... , /c/... , /c/... -- the tail
+  #     entries are unresolvable and coverage warns once per call;
+  # (2) coverage.py does not report never-imported files under a --source directory anyway,
+  #     so extra roots buy nothing.
+  # What gets measured is what the suite EXECUTES through this seam: the engine. The twin
+  # tree (uscha-kit/skills) is absent from the report because the suite never runs it --
+  # $QL points at .claude/skills -- not because a flag excluded it.
+  COV_SRC="$KIT/.claude/skills/uscha-devloop"
+  run() { PYTHONIOENCODING=utf-8 "$PY" -m coverage run --parallel-mode \
+            --source="$COV_SRC" "$QL" "$@"; }
+else
+  run() { PYTHONIOENCODING=utf-8 "$PY" "$QL" "$@"; }
+fi
 
 cat > uscha.config.json <<'EOF'
 { "version": "1.3.0",
@@ -1423,11 +1445,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.48.1.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.48.2.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.48.1.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.48.1.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.48.2.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.48.2.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1855,7 +1877,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.48.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1879,7 +1901,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.48.1' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.48.2' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1887,7 +1909,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.48.2' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1901,7 +1923,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.48.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.48.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1913,7 +1935,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.48.1'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.48.2'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -3037,6 +3059,39 @@ if [ "$T93_SRC" = "narrated" ] && printf '%s' "$T93_LINE" | grep -q "narrado" \
    && [ "$T93_BADGE" = "escalated" ] && [ "$T93_ODO" = "escalated" ]; then
   PASS=$((PASS+1)); echo "  ok   checkbox fallback labeled 'narrado' · narrated tests never read 'convergido' · spec-doubt escalates mirador AND odometer"; \
 else FAIL=$((FAIL+1)); echo "  FAIL src=$T93_SRC badge=$T93_BADGE odo=$T93_ODO narrated_state=$T93_NARR line=$T93_LINE"; fi
+
+echo "== T94 (1.48.2): the coverage seam is OPT-IN and the engine ingests what it emits =="
+# The suite must NOT require coverage.py to run: instrumentation is opt-in via USCHA_COVERAGE.
+# And the report it produces must be the shape the engine actually reads (Cobertura at
+# reports/coverage.xml) -- emitting a report nothing ingests would be ceremony.
+T94="$(mktemp -d)"
+# BEHAVIOURAL opt-in check, not a string match: grepping the suite for its own guard would
+# match the grep's own line and pass even if the feature were deleted. Instead -- when the
+# switch is OFF, an engine call must leave NO coverage data behind.
+T94_OPTIN=0
+if [ "${USCHA_COVERAGE:-0}" = "1" ]; then
+  T94_OPTIN=1   # instrumented on purpose this run; the off-path is not observable here
+else
+  mkdir -p "$T94/nocov"
+  COVERAGE_FILE="$T94/nocov/.coverage" run --help >/dev/null 2>&1
+  [ -z "$(find "$T94/nocov" -name '.coverage*' 2>/dev/null)" ] && T94_OPTIN=1
+fi
+( cd "$T94" && mkdir -p reports
+  printf '{ "defaults": {"acceptance_file":"ACCEPTANCE.md"}, "repos": [ {"name":"p","path":".","type":"python"} ], "integration": {"enabled": false} }\n' > uscha.config.json
+  printf -- "# ACCEPTANCE\n\n- [ ] AC-01 — x\n" > ACCEPTANCE.md
+  # a minimal Cobertura report, exactly the shape coverage.py emits
+  printf '<?xml version="1.0" ?>\n<coverage lines-valid="100" lines-covered="84" line-rate="0.84"><packages/></coverage>\n' > reports/coverage.xml
+  run init --config uscha.config.json --out L.json >/dev/null 2>&1
+  run snapshot --ledger L.json --repo p >/dev/null 2>&1
+  "$PY" -c "
+import json
+s=json.load(open('L.json'))['repos']['p']['snapshots'][-1]['coverage']
+print('%s|%s' % (s.get('report_found'), round(s.get('pct') or 0)))" > result.txt )
+T94_COV="$(cat "$T94/result.txt")"
+rm -rf "$T94"
+if [ "$T94_OPTIN" -eq 1 ] && [ "$T94_COV" = "True|84" ]; then
+  PASS=$((PASS+1)); echo "  ok   coverage is opt-in (suite runs without coverage.py) and reports/coverage.xml is ingested as MEASURED 84%"; \
+else FAIL=$((FAIL+1)); echo "  FAIL optin=$T94_OPTIN ingest=$T94_COV"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"

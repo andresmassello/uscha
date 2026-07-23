@@ -42,6 +42,26 @@ exactly this reason.
 - **Not gated because:** no current failure mode; all reads already degrade. Found by the
   `improve` pass, cycle 3.
 
+### D-03 (LOW) — coverage measures the engine, not the auxiliary scripts
+`uscha-kit/tests/smoke-engine.sh` (the `USCHA_COVERAGE=1` seam)
+
+Coverage wraps `run()`, the choke point the suite drives the engine through (~370 subprocess
+calls) — that yields 84.2% on `qa_ledger.py`. The statusline scripts (`templates/scripts/*`)
+and the mirador renderer are exercised by T88/T90/T91/T93 and the mirador tests, but through
+direct `"$PY" "$SCRIPT"` invocations that bypass the seam, so they contribute nothing. Note
+they are **absent** from the report, not scored 0: coverage.py does not surface files it never
+imported, so no `--source` entry can conjure them — only routing their invocations through the
+seam will.
+
+- **Cost if ignored:** the number is honest about what it measures (declared in
+  `uscha.config.json` as `defaults._coverage_scope`), but a reader could take "84%" for the
+  whole kit. The scripts stay unmeasured while carrying real logic (provenance labeling,
+  odometer reads).
+- **Fix when scheduled:** route the ~6 direct script invocations through a wrapper honoring the
+  same `USCHA_COVERAGE` switch.
+- **Not gated because:** the scope is declared, not hidden, and the engine is where the risk
+  concentrates (13.3k of the kit's statements).
+
 ### Also surfaced, deliberately NOT enabled: ruff security rules
 `ruff.toml`
 

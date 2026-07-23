@@ -14,7 +14,9 @@
       "improve"
     ],
     "tools_per_cycle": 3,
-    "max_iterations": 5
+    "max_iterations": 5,
+    "coverage_threshold": 60,
+    "_coverage_scope": "measured on the ENGINE (qa_ledger.py) -- the ~370 subprocess calls the smoke drives through its run() choke point. That is what the seam EXECUTES; the auxiliary scripts (templates/scripts, mirador render) are exercised by the suite but invoked outside it, and coverage.py does not report never-imported files, so they are absent from the number rather than counted as 0. Regenerate: USCHA_COVERAGE=1 bash uscha-kit/tests/smoke-engine.sh, then coverage combine && coverage xml -o reports/coverage.xml"
   },
   "repos": [
     {
