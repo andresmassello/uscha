@@ -35,3 +35,4 @@ that ingests evidence from 11 language stacks. Install:
 - [Versión en español](https://uscha.dev/es/index.html): Spanish twin of the site — every English page has one
 - [GitHub](https://github.com/andresmassello/uscha): source repository (public soon)
 - [npm](https://www.npmjs.com/package/@andresmassello/uscha): @andresmassello/uscha — the installable kit
+- [Contact](mailto:info@uscha.dev): info@uscha.dev
