@@ -2457,9 +2457,13 @@ EOF
   else
     ROUTER_RC=99
   fi
+  # "without another interpreter" = the installer ran EXACTLY ONCE, by the primary, and no
+  # fallback retried it. Counting total install invocations captures that intent directly and
+  # is platform-robust; the old `! grep -Fq "$ROUTER_FALLBACK"` matched a substring and broke
+  # on POSIX, where the fallback "python" is a prefix of the primary "python3" (found by CI).
   if [ "$ROUTER_FIXTURE_READY" -eq 1 ] && [ "$ROUTER_RC" -eq 23 ] && grep -Fxq "$ROUTER_PRIMARY --version" "$ROUTER_LOG" \
     && [ "$(grep -F "$ROUTER_PRIMARY " "$ROUTER_LOG" | grep -c 'install-uscha.py version')" -eq 1 ] \
-    && ! grep -Fq "$ROUTER_FALLBACK" "$ROUTER_LOG"; then
+    && [ "$(grep -c 'install-uscha.py version' "$ROUTER_LOG")" -eq 1 ]; then
     PASS=$((PASS+1)); echo "  ok   installer exit 23 is preserved without another interpreter"
   else
     FAIL=$((FAIL+1)); echo "  FAIL router retried or changed installer failure status"

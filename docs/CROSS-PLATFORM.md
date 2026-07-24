@@ -26,6 +26,19 @@ box. CI turns the audit's hypotheses into facts, surfaces anything the static re
 gives every fix below a red-to-green signal to build against. **Start here, then fix #1–#3 with
 evidence in hand.**
 
+### First run — what CI already found (the point, working)
+
+The very first matrix run confirmed the value of measuring: **Windows green, Linux and macOS
+red on both Python versions**, with a single failing check — and it was *not* one of the five
+audited findings. The npm-router test's assertion `! grep -Fq "$ROUTER_FALLBACK"` matched a
+**substring**: on POSIX the fallback interpreter `python` is a prefix of the primary `python3`,
+so the check believed the fallback had run when it had not. The router itself is correct
+(`bin/uscha.js` selects an interpreter by its `--version` probe and preserves the installer's
+exit code without retrying). The test now counts total installer invocations instead — the
+platform-robust way to encode "without another interpreter". A Windows-only assumption baked
+into the kit's own cross-platform test, invisible to a static read and to every Windows run.
+That is exactly what this workflow exists to catch.
+
 ## Findings
 
 Verified by reading the code (file:line), classified for the macOS/Linux goal.
