@@ -4,14 +4,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+rm -rf site/docs
 mkdir -p site/docs
-cp docs/uscha-playbook.html docs/uscha-playbook-EN.html \
-   docs/skills-referencia.html docs/skills-referencia-EN.html \
-   docs/uscha-onepager.html docs/uscha-onepager-EN.html \
-   docs/uscha-team-pitch-extended.html docs/uscha-team-pitch-extended-EN.html \
+
+cp docs/uscha-claude-code-doc.html docs/uscha-claude-code-doc-EN.html \
+   docs/uscha-dev-course.html docs/uscha-dev-course-EN.html \
    site/docs/
 
-rm -rf site/docs/paper
 cp -r docs/paper site/docs/paper
 
 echo "site/docs synced from docs/"

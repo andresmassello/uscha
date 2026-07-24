@@ -24,14 +24,12 @@ that ingests evidence from 11 language stacks. Install:
 
 - [Home](https://uscha.dev/index.html): landing page — the method, the five rules, the nine skills, the engine's numbers
 - [Why uscha exists](https://uscha.dev/why/index.html): essay — open loop vs. measured graph, who answers the gates, why the loop is caged
-- [The Playbook](https://uscha.dev/docs/uscha-playbook-EN.html): the operator's manual — plays 00–10, setup, command reference
-- [Skills reference](https://uscha.dev/docs/skills-referencia-EN.html): the nine skills phase by phase — what each reads, writes, and must never do
-- [Uscha, distilled](https://uscha.dev/docs/uscha-onepager-EN.html): the whole method on one page
+- [2-day developer course](https://uscha.dev/docs/uscha-dev-course-EN.html): from zero to production — day 1 greenfield (discovery), day 2 migration (characterize, reverse-discovery)
+- [Complete documentation](https://uscha.dev/docs/uscha-claude-code-doc-EN.html): the whole method in one place — rules, phases, every skill, gates and the ledger
 - [The paper](https://uscha.dev/docs/paper/uscha-paper.html): formal treatment — a fact-gated, tool-agnostic methodology for specification-driven development with LLM coding agents ([PDF](https://uscha.dev/docs/paper/uscha-paper.pdf))
 
 ## Optional
 
-- [Team pitch](https://uscha.dev/docs/uscha-team-pitch-extended-EN.html): extended deck for bringing the method to a team
 - [Versión en español](https://uscha.dev/es/index.html): Spanish twin of the site — every English page has one
 - [GitHub](https://github.com/andresmassello/uscha): source repository (public soon)
 - [npm](https://www.npmjs.com/package/@andresmassello/uscha): @andresmassello/uscha — the installable kit

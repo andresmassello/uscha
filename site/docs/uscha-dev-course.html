@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>uscha — Curso de 2 días para developers · de cero a producción</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c1618;
+      --card: #14282b;
+      --accent: #ff6b4a;
+      --accent2: #4fd6c9;
+      --text: #dbe8e6;
+      --muted: #9db3b0;
+      --green: #4ddb95;
+      --orange: #f5b13d;
+      --red: #ff5d5d;
+      --day2: #4fd6c9;
+      --border: #22403f;
+      --disp: "Chivo", sans-serif;
+      --body: "Inter", sans-serif;
+      --mono: "JetBrains Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: var(--body);
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    body {
+      background-image:
+        radial-gradient(1200px 500px at 80% -10%, rgba(255,107,74,.07), transparent 60%),
+        radial-gradient(900px 500px at 0% 110%, rgba(79,214,201,.06), transparent 60%);
+    }
+
+    .deck { height: 100vh; width: 100vw; position: relative; }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 3.2rem 4.2rem;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.22s ease;
+    }
+
+    .slide.active { display: flex; opacity: 1; }
+    .slide.center { align-items: center; text-align: center; }
+
+    h1 { font-family: var(--disp); font-size: 2.6rem; font-weight: 900; line-height: 1.12; letter-spacing: -.02em; margin-bottom: 0.8rem; }
+    h2 { font-family: var(--disp); font-size: 2.0rem; font-weight: 800; letter-spacing: -.015em; margin-bottom: 1.1rem; color: var(--accent); }
+    h3 { font-family: var(--disp); font-size: 1.3rem; font-weight: 700; margin-bottom: 0.7rem; color: var(--accent2); }
+
+    p, li { font-size: 1.18rem; line-height: 1.5; }
+    .muted { color: var(--muted); }
+    .green { color: var(--green); }
+    .orange { color: var(--orange); }
+    .red { color: var(--red); }
+    .small { font-size: 1.02rem; }
+    .tiny { font-size: 0.92rem; }
+
+    ul, ol { margin-left: 1.5rem; margin-top: 0.5rem; }
+    li { margin-bottom: 0.45rem; }
+
+    .tagline { font-size: 1.25rem; color: var(--muted); margin-top: 0.6rem; }
+    .doctrine {
+      font-family: var(--disp); font-size: 1.45rem; font-weight: 700; color: var(--green);
+      margin: 1.3rem 0; padding: 0.9rem 1.3rem;
+      border-left: 4px solid var(--green); background: rgba(77,219,149,0.07);
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem; margin-top: 1rem; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 11px; padding: 1.2rem 1.4rem;
+    }
+    .card h3 { margin-top: 0; }
+
+    .rule-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 2.2rem; height: 2.2rem; background: var(--accent); color: #16110f;
+      font-family: var(--mono); font-weight: 700; border-radius: 50%; margin-right: 0.6rem; font-size: 1.05rem;
+    }
+    .rule-title { font-family: var(--disp); font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; }
+
+    .footer {
+      position: absolute; bottom: 1.2rem; left: 4.2rem; right: 4.2rem;
+      display: flex; justify-content: space-between; align-items: center;
+      font-family: var(--mono); font-size: 0.82rem; color: var(--muted);
+    }
+
+    .progress-bar {
+      position: absolute; top: 0; left: 0; height: 4px; z-index: 5;
+      background: var(--accent); transition: width 0.25s ease;
+    }
+
+    .badge {
+      display: inline-block; background: rgba(255,107,74,0.12); color: var(--accent);
+      font-family: var(--mono); padding: 0.22rem 0.7rem; border-radius: 999px; font-size: 0.82rem;
+      font-weight: 500; letter-spacing: .06em; margin-bottom: 0.7rem;
+    }
+    .badge-day2 { background: rgba(79,214,201,0.12); color: var(--day2); }
+
+    .highlight {
+      background: rgba(255,107,74,0.07); border: 1px solid rgba(255,107,74,0.25);
+      border-radius: 10px; padding: 1.1rem 1.4rem; margin: 0.9rem 0;
+    }
+    .highlight-green {
+      background: rgba(77,219,149,0.06); border: 1px solid rgba(77,219,149,0.22);
+      border-radius: 10px; padding: 1.1rem 1.4rem; margin: 0.9rem 0;
+    }
+
+    .timeline {
+      display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.8rem; align-items: center;
+    }
+    .timeline span {
+      background: var(--card); border: 1px solid var(--border);
+      font-family: var(--mono); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.85rem;
+    }
+    .timeline span.current { background: var(--accent); border-color: var(--accent); color: #16110f; font-weight: 700; }
+    .timeline span.done { background: rgba(77,219,149,0.14); border-color: var(--green); color: var(--green); }
+
+    code {
+      background: #102023; padding: 0.12rem 0.38rem; border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 0.9em; color: var(--accent2);
+    }
+
+    .big-quote { font-family: var(--disp); font-size: 1.65rem; font-weight: 700; line-height: 1.4; max-width: 880px; margin: 0 auto; }
+
+    kbd {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.08rem 0.4rem; font-size: 0.82rem;
+    }
+
+    .example-box {
+      background: var(--card); border-left: 4px solid var(--accent);
+      padding: 1rem 1.3rem; margin: 0.8rem 0; border-radius: 0 8px 8px 0;
+    }
+    .example-box.cyan { border-left-color: var(--accent2); }
+
+    .step {
+      display: flex; gap: 1rem; margin-bottom: 0.9rem; align-items: flex-start;
+    }
+    .step-num {
+      flex-shrink: 0; width: 1.8rem; height: 1.8rem; background: var(--accent);
+      color: #16110f; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="progress-bar" id="progress"></div>
+  <div class="deck" id="deck">
+
+    <!-- ===================== DIA 1 ===================== -->
+
+    <!-- 1 Titulo -->
+    <section class="slide center active" data-title="Título">
+      <div class="badge">Curso intensivo de 2 días</div>
+      <h1>uscha</h1>
+      <p class="tagline" style="font-size:1.4rem;">
+        Desarrollo medido con agentes de código LLM
+      </p>
+      <p class="muted" style="margin-top:1.8rem; font-size:1.15rem;">
+        Día 1 — Fundamentos + Discovery (proyecto nuevo)<br/>
+        Día 2 — Reverse-Discovery + Migración + Adopción (sistema existente)
+      </p>
+      <p style="margin-top:2.5rem; font-size:1.1rem;">
+        Instructor: <strong>Andrés Massello</strong> · uscha.dev
+      </p>
+    </section>
+
+    <!-- 2 Agenda Dia 1 -->
+    <section class="slide" data-title="Agenda Día 1">
+      <div class="badge">Día 1</div>
+      <h2>Agenda — Fundamentos + Discovery</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Mañana</h3>
+          <ul class="small">
+            <li>Por qué existe uscha</li>
+            <li>Loop abierto vs. grafo medido</li>
+            <li>Las cinco reglas (en profundidad)</li>
+            <li>Artefactos centrales y QA-LEDGER</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Tarde</h3>
+          <ul class="small">
+            <li>La skill Discovery en detalle</li>
+            <li><strong>Ejemplo de extremo a extremo greenfield</strong></li>
+            <li>De la idea → SPEC → ACCEPTANCE → primer loop medido</li>
+            <li>Patrón práctico + preguntas</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 El Problema -->
+    <section class="slide" data-title="El Problema">
+      <h2>El problema</h2>
+      <p style="margin-bottom:1.2rem;">La mayoría de los equipos que usan agentes de código todavía operan en un <strong class="orange">loop abierto</strong>:</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="orange">Loop abierto</h3>
+          <ul class="small">
+            <li>El agente decide el recorrido</li>
+            <li>El agente se autoevalúa como "terminado"</li>
+            <li>Las afirmaciones viven en el chat</li>
+            <li>No hay contradicción externa</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="red">Consecuencia</h3>
+          <ul class="small">
+            <li>Los tests se pueden debilitar</li>
+            <li>Producción se convierte en la primera compuerta real</li>
+            <li>Inaceptable cuando el software mueve dinero o personas</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 Nota de Campo -->
+    <section class="slide" data-title="Nota de Campo">
+      <h2>Nota de campo · Caso real 001</h2>
+      <div class="highlight">
+        <p style="font-size:1.25rem; margin-bottom:0.8rem;">
+          Humano: "Revisá los errores de QA."
+        </p>
+        <p class="small">
+          El agente diagnosticó, editó tests <em>y</em> código de producción en el mismo turno,
+          corrió el build y declaró "diseño cerrado" — con <strong>cero puntos de decisión humana</strong>.
+        </p>
+      </div>
+      <p style="margin-top:1.6rem; font-size:1.3rem;">
+        <span class="green">La ejecución fue competente.</span><br/>
+        <span class="orange">La gobernanza falló.</span>
+      </p>
+      <p class="muted" style="margin-top:1.2rem;">Ese es exactamente el agujero que uscha cierra.</p>
+    </section>
+
+    <!-- 5 Dos Paradigmas -->
+    <section class="slide" data-title="Dos Paradigmas">
+      <h2>Dos paradigmas</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="orange">Loop abierto</h3>
+          <ul class="small">
+            <li>El agente elige el recorrido</li>
+            <li>El agente se pregunta "¿terminamos?"</li>
+            <li>La narración = la verdad</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="green">Grafo medido</h3>
+          <ul class="small">
+            <li>El humano define los caminos posibles</li>
+            <li>Cada compuerta se contesta con evidencia</li>
+            <li>Los loops están enjaulados → escalan al humano</li>
+          </ul>
+        </div>
+      </div>
+      <div class="doctrine">uscha es el grafo medido.</div>
+    </section>
+
+    <!-- 6 Doctrina -->
+    <section class="slide center" data-title="Doctrina">
+      <p class="big-quote">
+        "Los gates que leen <span class="green">HECHOS</span> bloquean.<br/>
+        Los que <span class="orange">ADIVINAN</span> sobre prosa, avisan."
+      </p>
+      <p class="muted" style="margin-top:2rem; font-size:1.15rem;">
+        Mecanismo central: un ledger determinístico que separa<br/>
+        lo que fue <strong>medido</strong> de lo que fue <strong>narrado</strong>.
+      </p>
+    </section>
+
+    <!-- 7 Cinco Reglas -->
+    <section class="slide" data-title="Cinco Reglas">
+      <h2>La columna vertebral — cinco reglas</h2>
+      <ol style="margin-top:1.3rem; font-size:1.3rem;">
+        <li style="margin-bottom:0.75rem;"><strong>No hay código sin SPEC + ACCEPTANCE</strong></li>
+        <li style="margin-bottom:0.75rem;"><strong>La verdad vive en archivos versionados</strong></li>
+        <li style="margin-bottom:0.75rem;"><strong>El humano siempre aprueba el merge</strong></li>
+        <li style="margin-bottom:0.75rem;"><strong>Los tests deben asertar</strong></li>
+        <li style="margin-bottom:0.75rem;"><strong>Las migraciones se anclan con un golden</strong></li>
+      </ol>
+      <p class="muted" style="margin-top:1.3rem;">No negociables. Todo lo demás se deriva de estas.</p>
+    </section>
+
+    <!-- 8 Reglas 1-2 -->
+    <section class="slide" data-title="Reglas 1-2">
+      <div class="rule-title"><span class="rule-num">1</span> No hay código sin SPEC + ACCEPTANCE</div>
+      <p class="small" style="margin:0.8rem 0 1.2rem;">El agente no tiene permitido inventar la definición de "terminado".</p>
+      <div class="grid-2">
+        <div class="card"><h3>SPEC.md</h3><p class="small">Qué y por qué. Restricciones, no-objetivos, interfaces.</p></div>
+        <div class="card"><h3>ACCEPTANCE.md</h3><p class="small">Criterios concretos y testeables de "hecho".</p></div>
+      </div>
+      <div class="rule-title" style="margin-top:1.8rem;"><span class="rule-num">2</span> La verdad vive en archivos versionados</div>
+      <p class="small" style="margin-top:0.6rem;">Si no está en el repositorio, el método no lo trata como verdadero.</p>
+    </section>
+
+    <!-- 9 Reglas 3-5 -->
+    <section class="slide" data-title="Reglas 3-5">
+      <div class="rule-title"><span class="rule-num">3</span> El humano siempre aprueba el merge</div>
+      <p class="small" style="margin:0.5rem 0 1.2rem;">El pipeline frena en el gate de merge. Sin excepciones. El agente prepara y mide; el humano decide.</p>
+
+      <div class="rule-title"><span class="rule-num">4</span> Los tests deben asertar</div>
+      <p class="small" style="margin:0.5rem 0 1.2rem;">Un test que no aserta algo no es un test. El gate nunca se debilita para que el agente pase.</p>
+
+      <div class="rule-title"><span class="rule-num">5</span> Las migraciones se anclan con un golden</div>
+      <p class="small" style="margin:0.5rem 0;">El comportamiento actual se captura mecánicamente antes de cambiar. El agente jamás authorea archivos <code>.approved</code>.</p>
+    </section>
+
+    <!-- 10 Artefactos -->
+    <section class="slide" data-title="Artefactos">
+      <h2>Artefactos centrales y QA-LEDGER</h2>
+      <div class="grid-2">
+        <div>
+          <ul class="small">
+            <li><code>SPEC.md</code> · <code>ACCEPTANCE.md</code></li>
+            <li><code>ADR/</code> — decisiones</li>
+            <li>Suites golden</li>
+            <li><code>RUBRIC.md</code></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>QA-LEDGER.json</h3>
+          <p class="small">Registro determinístico de <strong>mediciones</strong>, nunca de afirmaciones. Cero dependencias runtime. 11 stacks de lenguaje.</p>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:1.5rem;">El chat es efímero. El ledger es la fuente de verdad.</p>
+    </section>
+
+    <!-- 11 El Camino -->
+    <section class="slide" data-title="El Camino">
+      <h2>El sendero — idea → producción</h2>
+      <div class="timeline" style="justify-content:center; margin-top:1.8rem;">
+        <span>idea</span><span>→</span>
+        <span class="current">discovery</span><span>→</span>
+        <span>spec</span><span>→</span>
+        <span>adr</span><span>→</span>
+        <span>build</span><span>→</span>
+        <span>qa loop</span><span>→</span>
+        <span>verify</span><span>→</span>
+        <span>gate humano</span><span>→</span>
+        <span>producción</span>
+      </div>
+      <p class="muted" style="margin-top:2rem; text-align:center;">Los loops existen pero están acotados. Escalan cuando no pueden converger.</p>
+    </section>
+
+    <!-- 12 Skill Discovery -->
+    <section class="slide" data-title="Skill Discovery">
+      <div class="badge">Día 1 · Skill central</div>
+      <h2>/uscha-discovery</h2>
+      <p style="margin-bottom:1rem;">Convierte una idea vaga en un paquete completo y versionado de SPEC + ACCEPTANCE mediante interrogación estructurada.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Qué hace</h3>
+          <ul class="small">
+            <li>Hace preguntas clarificadoras, de a una</li>
+            <li>Saca a la luz restricciones y no-objetivos</li>
+            <li>Fuerza criterios de aceptación concretos</li>
+            <li>Escribe los artefactos en el repositorio</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Qué no hace jamás</h3>
+          <ul class="small">
+            <li>Escribir código de implementación</li>
+            <li>Inventar requisitos en silencio</li>
+            <li>Saltear la aprobación humana del paquete</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13 E2E Greenfield Intro -->
+    <section class="slide" data-title="E2E Greenfield Intro">
+      <div class="badge">Ejemplo de extremo a extremo · Greenfield</div>
+      <h2>Feature nueva: "Motor de política de reembolsos"</h2>
+      <p style="margin:1rem 0;">Un servicio chico y realista en contexto retail/pagos.</p>
+      <div class="example-box">
+        <p class="small"><strong>Punto de partida (idea vaga):</strong><br/>
+        "Necesitamos algo que decida si un reembolso está permitido según fecha de compra, categoría de producto y nivel del cliente."</p>
+      </div>
+      <p class="muted" style="margin-top:1.2rem;">Vamos a caminar el recorrido medido completo desde esta idea hasta la primera implementación con compuertas.</p>
+    </section>
+
+    <!-- 14 Discovery en accion -->
+    <section class="slide" data-title="Discovery en acción">
+      <h2>Paso 1 — Correr Discovery</h2>
+      <div class="step"><div class="step-num">1</div><div><p class="small">Invocar <code>/uscha-discovery</code> con la idea vaga.</p></div></div>
+      <div class="step"><div class="step-num">2</div><div><p class="small">El agente interroga: ¿ventanas de tiempo? ¿categorías? ¿reglas por nivel? ¿casos borde? ¿no-objetivos?</p></div></div>
+      <div class="step"><div class="step-num">3</div><div><p class="small">El humano responde (o corrige).</p></div></div>
+      <div class="step"><div class="step-num">4</div><div><p class="small">El agente escribe <code>SPEC.md</code> + <code>ACCEPTANCE.md</code> en el repositorio.</p></div></div>
+      <div class="step"><div class="step-num">5</div><div><p class="small">El humano revisa y aprueba el paquete antes de cualquier código.</p></div></div>
+      <p class="green" style="margin-top:1.2rem;">Todavía no se escribió código. La definición de "hecho" ya está cerrada.</p>
+    </section>
+
+    <!-- 15 Ejemplo SPEC -->
+    <section class="slide" data-title="Ejemplo SPEC">
+      <h2>Ejemplo · SPEC.md (extracto)</h2>
+      <div class="card" style="font-family:var(--mono); font-size:0.95rem; line-height:1.45;">
+        <p class="tiny muted"># Motor de política de reembolsos</p>
+        <p class="tiny"><strong>Objetivo:</strong> Decidir elegibilidad de reembolso de una orden completada.</p>
+        <p class="tiny"><strong>Entradas:</strong> order_id, request_timestamp</p>
+        <p class="tiny"><strong>Reglas (iniciales):</strong></p>
+        <p class="tiny">- Estándar: ≤ 30 días desde la compra</p>
+        <p class="tiny">- Nivel Premium: ≤ 60 días</p>
+        <p class="tiny">- Categoría "Digital": nunca reembolsable después de la descarga</p>
+        <p class="tiny"><strong>No-objetivos:</strong> ejecución de pago, restock de inventario, UI</p>
+        <p class="tiny"><strong>Restricciones:</strong> función pura de decisión, determinística, sin efectos secundarios</p>
+      </div>
+    </section>
+
+    <!-- 16 Ejemplo ACCEPTANCE -->
+    <section class="slide" data-title="Ejemplo ACCEPTANCE">
+      <h2>Ejemplo · ACCEPTANCE.md (extracto)</h2>
+      <div class="card" style="font-family:var(--mono); font-size:0.95rem; line-height:1.45;">
+        <p class="tiny">1. Dado un cliente estándar con orden de 15 días → eligible = true</p>
+        <p class="tiny">2. Dado un cliente estándar con orden de 35 días → eligible = false</p>
+        <p class="tiny">3. Dado un cliente premium con orden de 45 días → eligible = true</p>
+        <p class="tiny">4. Dada cualquier orden de categoría Digital después del flag de descarga → eligible = false</p>
+        <p class="tiny">5. La función es pura: mismas entradas siempre producen la misma salida</p>
+        <p class="tiny">6. Todos los casos de aceptación se expresan como tests automatizados que asertan</p>
+      </div>
+      <p class="muted" style="margin-top:1rem;">Estos se convierten en las primeras compuertas reales del ledger.</p>
+    </section>
+
+    <!-- 17 Primer Devloop -->
+    <section class="slide" data-title="Primer Devloop">
+      <h2>Paso 2 — Primer devloop medido</h2>
+      <div class="timeline" style="margin:1.2rem 0;">
+        <span class="done">discovery</span><span>→</span>
+        <span class="done">spec + acceptance</span><span>→</span>
+        <span class="current">devloop</span><span>→</span>
+        <span>gate humano</span>
+      </div>
+      <ul class="small">
+        <li>El agente implementa solo lo que el SPEC permite</li>
+        <li>Escribe tests que asertan los casos de ACCEPTANCE</li>
+        <li>QA-LEDGER registra resultados medidos (pass/fail, cobertura, etc.)</li>
+        <li>El loop está acotado — no puede declararse terminado sin evidencia</li>
+        <li>Frena en la aprobación humana del merge</li>
+      </ul>
+      <div class="highlight-green" style="margin-top:1.2rem;">
+        <p class="small">El agente nunca puede cerrar la historia solo. Se requieren evidencia + humano.</p>
+      </div>
+    </section>
+
+    <!-- 18 Cierre Dia 1 -->
+    <section class="slide center" data-title="Cierre Día 1">
+      <div class="badge">Fin del Día 1</div>
+      <h2>Lo que logramos hoy</h2>
+      <p style="margin-top:1.5rem; font-size:1.25rem; max-width:800px;">
+        Convertimos una idea vaga en SPEC + ACCEPTANCE versionados,<br/>
+        y después corrimos el primer loop de desarrollo medido<br/>
+        que no puede cerrarse sin evidencia y aprobación humana.
+      </p>
+      <p class="muted" style="margin-top:2rem;">Mañana: el mismo rigor aplicado a sistemas existentes.</p>
+    </section>
+
+    <!-- ===================== DIA 2 ===================== -->
+
+    <!-- 19 Titulo Dia 2 -->
+    <section class="slide center" data-title="Título Día 2">
+      <div class="badge badge-day2">Día 2</div>
+      <h1>Reverse-Discovery<br/>+ Migración</h1>
+      <p class="tagline" style="margin-top:1.2rem;">
+        Compuertas medidas aplicadas a sistemas que ya existen<br/>
+        y que ya importan.
+      </p>
+    </section>
+
+    <!-- 20 Agenda Dia 2 -->
+    <section class="slide" data-title="Agenda Día 2">
+      <div class="badge badge-day2">Día 2</div>
+      <h2>Agenda — Reverse-Discovery y Migración</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Mañana</h3>
+          <ul class="small">
+            <li>Por qué la migración es diferente</li>
+            <li>/uscha-characterize</li>
+            <li>/uscha-reverse-discovery</li>
+            <li><strong>Ejemplo de extremo a extremo de migración</strong></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Tarde</h3>
+          <ul class="small">
+            <li>Evolución segura bajo suites golden</li>
+            <li>Patrones de adopción en equipos</li>
+            <li>Errores comunes y señales de éxito</li>
+            <li>Práctica + cierre</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 21 Por que Migracion -->
+    <section class="slide" data-title="Por qué Migración">
+      <h2>Por qué la migración es el camino de mayor valor</h2>
+      <ul style="margin-top:1.2rem;">
+        <li>Los sistemas existentes ya cargan riesgo real y dinero real</li>
+        <li>El dolor es visible <em>hoy</em></li>
+        <li>Los equipos ya usan agentes de código sobre ellos (a menudo en loop abierto)</li>
+        <li>Las suites golden + reverse-discovery son las fortalezas propias de uscha</li>
+        <li>El éxito acá genera credibilidad interna rápido</li>
+      </ul>
+      <div class="doctrine" style="margin-top:1.5rem;">Nunca cambies un comportamiento que no mediste primero.</div>
+    </section>
+
+    <!-- 22 Characterize -->
+    <section class="slide" data-title="Characterize">
+      <div class="badge badge-day2">Skill central</div>
+      <h2>/uscha-characterize</h2>
+      <p style="margin-bottom:1rem;">Congela el comportamiento actual como una <strong>suite golden</strong> antes de cualquier modificación.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Qué produce</h3>
+          <ul class="small">
+            <li>Captura mecánica de las salidas observadas (<code>.received</code>)</li>
+            <li>Línea base aprobada que el agente no puede reescribir</li>
+            <li>Red de regresión para cambios futuros</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Recordatorio de regla</h3>
+          <p class="small">La skill emite <code>.received</code> y <strong>FRENA</strong>. El agente tiene prohibido authorear archivos <code>.approved</code> — solo el humano promueve el golden.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 23 Reverse Discovery -->
+    <section class="slide" data-title="Reverse Discovery">
+      <div class="badge badge-day2">Skill central</div>
+      <h2>/uscha-reverse-discovery</h2>
+      <p style="margin-bottom:1rem;">Extrae hechos de un sistema existente cuando la documentación falta, está vieja o es incorrecta.</p>
+      <ul>
+        <li>Lee código, tests, configs y comportamiento en runtime</li>
+        <li>Saca a la luz reglas implícitas y casos borde</li>
+        <li>Produce solo hechos: mapa del sistema + golden capturado en los bordes</li>
+        <li>Nunca inventa requisitos — <strong>el humano escribe el SPEC/ADR leyendo esos hechos</strong>; la skill no infiere specs del sistema viejo</li>
+      </ul>
+    </section>
+
+    <!-- 24 E2E Migracion Intro -->
+    <section class="slide" data-title="E2E Migración Intro">
+      <div class="badge badge-day2">Ejemplo de extremo a extremo · Migración</div>
+      <h2>Legado: "Calculadora simple de descuentos"</h2>
+      <div class="example-box cyan">
+        <p class="small"><strong>Realidad de partida:</strong><br/>
+        Un módulo existente usado en producción durante años. Tests escasos. Las reglas de negocio viven en parte en comentarios de código y conocimiento tribal. El equipo quiere permitir que los agentes de código lo mejoren de forma segura.</p>
+      </div>
+      <p class="muted" style="margin-top:1.2rem;">Vamos a caracterizar → reverse-discovery → agregar una mejora medida → mantener el golden intacto.</p>
+    </section>
+
+    <!-- 25 Migracion Paso 1 -->
+    <section class="slide" data-title="Migración Paso 1">
+      <h2>Migración Paso 1 — Characterize</h2>
+      <div class="step"><div class="step-num">1</div><div><p class="small">Seleccionar el módulo (o un conjunto crítico de funciones).</p></div></div>
+      <div class="step"><div class="step-num">2</div><div><p class="small">Correr <code>/uscha-characterize</code>.</p></div></div>
+      <div class="step"><div class="step-num">3</div><div><p class="small">La suite golden se genera a partir del comportamiento observado (<code>.received</code>).</p></div></div>
+      <div class="step"><div class="step-num">4</div><div><p class="small">El humano revisa y promueve el golden (o ajusta las entradas).</p></div></div>
+      <div class="highlight-green" style="margin-top:1.2rem;">
+        <p class="small">A partir de este momento, cualquier desviación del golden se convierte en evidencia visible en el ledger.</p>
+      </div>
+    </section>
+
+    <!-- 26 Migracion Paso 2 -->
+    <section class="slide" data-title="Migración Paso 2">
+      <h2>Migración Paso 2 — Reverse-Discovery</h2>
+      <p class="small" style="margin-bottom:1rem;">Ahora extraemos las reglas reales que el código implementa.</p>
+      <div class="card" style="font-family:var(--mono); font-size:0.92rem; line-height:1.4;">
+        <p class="tiny muted">Hechos observados (ejemplo):</p>
+        <p class="tiny">- 10% de descuento si el carrito > $100</p>
+        <p class="tiny">- Extra 5% si el cliente es "gold"</p>
+        <p class="tiny">- Los productos Digitales nunca reciben el descuento por valor de carrito</p>
+        <p class="tiny">- El descuento se aplica antes del impuesto</p>
+        <p class="tiny">- Redondeo: banker's rounding a 2 decimales</p>
+      </div>
+      <p class="muted" style="margin-top:1rem;">Con estos hechos, el humano escribe el nuevo SPEC si decidimos evolucionar el módulo.</p>
+    </section>
+
+    <!-- 27 Migracion Paso 3 -->
+    <section class="slide" data-title="Migración Paso 3">
+      <h2>Migración Paso 3 — Evolución medida</h2>
+      <div class="timeline" style="margin:1rem 0;">
+        <span class="done">characterize</span><span>→</span>
+        <span class="done">reverse-discovery</span><span>→</span>
+        <span class="current">nuevo SPEC + ACCEPTANCE</span><span>→</span>
+        <span>devloop</span><span>→</span>
+        <span>gate humano</span>
+      </div>
+      <ul class="small">
+        <li>Escribir una mejora chica y explícita (ej. soportar un nivel nuevo)</li>
+        <li>Los criterios de aceptación incluyen: todos los casos golden anteriores siguen pasando</li>
+        <li>Se agregan y asertan los casos nuevos</li>
+        <li>El agente trabaja adentro del devloop acotado</li>
+        <li>El ledger muestra tanto resultados de regresión como mediciones nuevas</li>
+      </ul>
+    </section>
+
+    <!-- 28 El Golden es Sagrado -->
+    <section class="slide" data-title="El Golden es Sagrado">
+      <h2>El golden es sagrado</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="green">Permitido</h3>
+          <ul class="small">
+            <li>El humano actualiza el golden después de un cambio deliberado y revisado</li>
+            <li>Se agrega comportamiento nuevo con casos de aceptación nuevos</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="orange">Prohibido</h3>
+          <ul class="small">
+            <li>Que el agente reescriba archivos <code>.approved</code></li>
+            <li>Cambiar en silencio las salidas esperadas para que los tests pasen</li>
+            <li>Eliminar casos golden sin decisión humana</li>
+          </ul>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:1.5rem;">Así es como dejás que los agentes toquen sistemas de producción sin perder el control.</p>
+    </section>
+
+    <!-- 29 Adopcion en Equipo -->
+    <section class="slide" data-title="Adopción en Equipo">
+      <h2>Adoptar uscha en un equipo</h2>
+      <ol style="margin-top:1rem;">
+        <li style="margin-bottom:0.6rem;"><strong>Empezá con un módulo crítico</strong> — no con todo el monorepo</li>
+        <li style="margin-bottom:0.6rem;"><strong>Caracterizá primero</strong>, siempre</li>
+        <li style="margin-bottom:0.6rem;"><strong>Hacé visible el gate humano</strong> — y no opcional</li>
+        <li style="margin-bottom:0.6rem;"><strong>Entrená en las cinco reglas</strong>, no en el CLI</li>
+        <li style="margin-bottom:0.6rem;"><strong>Usá el ledger en los stand-ups</strong> — "¿qué muestra la evidencia?"</li>
+      </ol>
+      <p class="muted" style="margin-top:1.3rem;">El cambio cultural > la instalación de la herramienta.</p>
+    </section>
+
+    <!-- 30 Errores Comunes -->
+    <section class="slide" data-title="Errores Comunes">
+      <h2>Errores comunes</h2>
+      <ul style="margin-top:1rem;">
+        <li>Tratar al agente como la autoridad en lugar del ejecutor</li>
+        <li>Saltear la caracterización en código legado</li>
+        <li>Dejar que "los tests pasan" reemplace aserciones con significado</li>
+        <li>Mantener decisiones solo en el historial del chat</li>
+        <li>Sacar el gate humano "solo por esta vez"</li>
+        <li>Querer hervir el océano el primer día</li>
+      </ul>
+    </section>
+
+    <!-- 31 Senales de Exito -->
+    <section class="slide" data-title="Señales de Éxito">
+      <h2>Cómo sabés que está funcionando</h2>
+      <ul style="margin-top:1.1rem;">
+        <li>Los agentes dejan de declarar victoria solo en el chat</li>
+        <li>Cada cambio significativo tiene una entrada en el ledger</li>
+        <li>Las suites golden atrapan regresiones antes de producción</li>
+        <li>Los merges sin aprobación humana están bloqueados por proceso</li>
+        <li>Las conversaciones pasan de "el agente dijo…" a "el ledger muestra…"</li>
+      </ul>
+    </section>
+
+    <!-- 32 Practica Dia 2 -->
+    <section class="slide" data-title="Práctica Día 2">
+      <h2>Patrón práctico (Día 2)</h2>
+      <div class="card" style="margin-top:0.8rem;">
+        <ol class="small">
+          <li>Elegir una función o módulo existente chico</li>
+          <li>Correr <code>/uscha-characterize</code> → producir el <code>.received</code> y promover el golden</li>
+          <li>Correr <code>/uscha-reverse-discovery</code> → extraer las reglas reales</li>
+          <li>Escribir un SPEC + ACCEPTANCE mínimo para una mejora segura</li>
+          <li>Ejecutar adentro de <code>/uscha-devloop</code></li>
+          <li>Inspeccionar el ledger: regresiones + mediciones nuevas</li>
+          <li>El humano aprueba o rechaza el merge</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 33 Recursos -->
+    <section class="slide" data-title="Recursos">
+      <h2>Recursos</h2>
+      <ul style="margin-top:1.1rem; font-size:1.2rem;">
+        <li><strong>uscha.dev</strong> — el hogar de la metodología</li>
+        <li>Ensayo: "Why uscha exists" (uscha.dev/why)</li>
+        <li>Documentación completa (el doc grande del método)</li>
+        <li>El paper — tratamiento formal (uscha.dev/docs/paper/uscha-paper.html)</li>
+        <li>Kit: <code>npx --yes @andresmassello/uscha@latest install --target claude</code></li>
+      </ul>
+    </section>
+
+    <!-- 34 Cierre -->
+    <section class="slide center" data-title="Cierre">
+      <h1 style="font-size:2.3rem;">El método construye el resto</h1>
+      <p class="tagline" style="margin-top:1.4rem; font-size:1.3rem;">
+        Lo medido le gana a lo narrado.<br/>
+        Los hechos bloquean. Las conjeturas avisan.<br/>
+        Los humanos aprueban.
+      </p>
+      <div style="margin-top:2.5rem; font-size:1.1rem;">
+        <p><strong>Día 1</strong> — Discovery convirtió una idea en compuertas medidas.</p>
+        <p style="margin-top:0.5rem;"><strong>Día 2</strong> — Reverse-discovery + caracterización nos dejaron evolucionar sistemas existentes sin perder el control.</p>
+      </div>
+      <p style="margin-top:2.2rem; font-size:1.05rem;">
+        Andrés Massello · uscha.dev · info@uscha.dev
+      </p>
+      <p class="muted" style="margin-top:1.2rem;">Preguntas y discusión</p>
+    </section>
+
+  </div>
+
+  <div class="footer">
+    <span id="slide-counter">1 / 34</span>
+    <span><kbd>←</kbd> <kbd>→</kbd> o clic · <span id="day-label">Día 1</span></span>
+  </div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    let current = 0;
+
+    const DAY2_START = 18; // 0-based index of the Day 2 title slide
+
+    function show(index) {
+      if (index < 0 || index >= slides.length) return;
+      slides[current].classList.remove('active');
+      current = index;
+      slides[current].classList.add('active');
+      document.getElementById('slide-counter').textContent = `${current + 1} / ${slides.length}`;
+      document.getElementById('progress').style.width = `${((current + 1) / slides.length) * 100}%`;
+      document.getElementById('day-label').textContent = current >= DAY2_START ? 'Día 2' : 'Día 1';
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault(); show(current + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault(); show(current - 1);
+      } else if (e.key === 'Home') show(0);
+      else if (e.key === 'End') show(slides.length - 1);
+    });
+
+    document.getElementById('deck').addEventListener('click', (e) => {
+      if (e.clientX > window.innerWidth / 2) show(current + 1);
+      else show(current - 1);
+    });
+
+    show(0);
+  </script>
+</body>
+</html>

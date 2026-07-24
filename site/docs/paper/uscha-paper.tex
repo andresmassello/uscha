@@ -46,8 +46,8 @@ human at three fixed points: approving the shape, approving the golden baseline,
 and merging. The methodology also applies its own Lean discipline reflexively:
 a meta-invariant that keeps a growing set of good gates from becoming an audit
 (over-processing waste), enforced by collapsing every persisted gate into a
-single readiness verdict. A reference implementation (seven agent skills and a
-dependency-free Python engine with 24 subcommands and adapters for nine language
+single readiness verdict. A reference implementation (nine agent skills and a
+dependency-free Python engine with 29 subcommands and adapters for eleven language
 stacks) is described, together with its design
 validation: two adversarial audits (231 agent evaluations) that initially found
 the central principle inverted in code and drove its re-wiring; a systematic
@@ -318,7 +318,7 @@ failure or refinement is the expected shape of the process, not an anomaly.}
 
 The engine is a single dependency-free Python file. It never runs an LLM and
 never runs the tools it scores: it \emph{ingests} their reports (JUnit-family
-XML, Cobertura and lcov coverage, nine linter formats across nine language
+XML, Cobertura and lcov coverage, thirteen linter formats across eleven language
 stacks) and validates structures. Every verdict is persisted in a
 deterministic ledger with an integrity checksum; external mutation or a
 truncated write blocks loading with a recovery message.
@@ -442,10 +442,11 @@ requirement or a kit default.}
 
 \section{Reference Implementation}\label{sec:impl}
 
-The reference implementation packages the methodology as seven agent skills
+The reference implementation packages the methodology as nine agent skills
 (the two fronts, a precision interview for known features, the loop
 orchestrator, golden capture, a two-audience system-documentation generator,
-and the rubric grader adapter) plus the engine (24 subcommands). Three
+the rubric grader adapter, and two read-only status views --- a dashboard and
+an in-chat readout) plus the engine (29 subcommands). Three
 properties matter for portability. First, the skills are markdown instruction
 files readable by any instruction-following agent; the engine is invoked
 identically from any of them. Second, every LLM-judgment interface is a
@@ -456,7 +457,7 @@ loop. Third, the one mechanical prohibition (the agent must not write approved
 golden fixtures) is enforced by a pre-tool-use hook at the runtime boundary,
 not by instruction --- during development of the implementation itself the hook
 blocked one of its author's own commands, which is the property working as
-designed. Table~\ref{tab:skills} maps the seven skills to the phase each serves.
+designed. Table~\ref{tab:skills} maps the nine skills to the phase each serves.
 
 \begin{table}[t]
 \centering
@@ -479,23 +480,29 @@ $\to$ derived PR gate; records every step in the ledger \\
 generated from the ledger \\
 \texttt{rubric} & advisory gate & thin adapter that grades against a versioned
 \texttt{RUBRIC.md} via the vendor-neutral JSON contract \\
+\texttt{mirador} & reporting & read-only dashboard rendered from the ledger:
+readiness, measured acceptance, loop burn-down, and per-figure receipts \\
+\texttt{status} & reporting & the same measured facts as a one-line in-chat
+readout, for surfaces with no persistent status line \\
 \bottomrule
 \end{tabular}
-\caption{The seven agent skills. Each is a markdown instruction file readable by
+\caption{The nine agent skills. Each is a markdown instruction file readable by
 any instruction-following agent; the engine is invoked identically from each.}
 \label{tab:skills}
 \end{table}
 
 The implementation carries its process in executable form. A smoke suite of
-161 checks exercises the engine against a synthetic ledger --- including,
+381 checks exercises the implementation --- the engine against synthetic
+ledgers, plus the installer and the distribution router --- including,
 deliberately, the agnosticism claim: the rubric-layer tests fill the grader's
 JSON by hand, with no model in the loop. The engine also reports a passive Lean
 process metric --- first-time yield, the fraction of repositories that cleared
 QA on the first cycle with no rework or escalation --- derived from ledger facts
 and kept strictly informational, never a gate: it measures the process, not the
-state of the result. Version consistency across the five
-release artifacts (version file, configuration, changelog, plugin manifest,
-marketplace manifest) is itself a suite check, converting a release convention
+state of the result. Version consistency across the six
+release artifacts (version file, configuration, two plugin manifests,
+marketplace manifest and package manifest, plus the matching changelog) is
+itself a suite check, converting a release convention
 into a verifiable fact. An installation-diagnosis subcommand in the spirit of
 \texttt{flutter doctor} verifies interpreter, per-stack toolchains, hook
 presence and registration, skill integrity, and per-project configuration ---
@@ -537,10 +544,10 @@ definition; only the numbers are opinion, and they now state their
 provenance), and the workflow state machine is derived rather than declared.
 
 \textbf{Self-application.} The implementation is developed under its own
-process. Across the eighteen releases of the self-application arc (versions
-1.10 through 1.27), each engine change carried smoke checks in the same commit,
-a fresh-context review before merge, and a five-way version consistency check
-enforced by the suite. These reviews repeatedly caught real defects prior to
+process. Across the self-application arc (versions 1.10 through 1.50), each engine
+change carried smoke checks in the same commit, a fresh-context review before
+merge, and a version consistency check across every release artifact, enforced
+by the suite. These reviews repeatedly caught real defects prior to
 merge --- the changelogs record the resulting hardening across the series ---
 including: test-file
 classifier gaps that made a documented guarantee an overclaim; a blank-line
