@@ -553,7 +553,9 @@ def cmd_init(args):
     repo, operations, conflicts = Path(args.repo).expanduser().resolve(), [], []
     sources = ([(KIT_ROOT / "uscha.config.json", repo / "uscha.config.json")]
                + [(KIT_ROOT / "templates" / name, repo / name)
-                  for name in ("CLAUDE.md", "CONSTITUTION.md", ".gitattributes")]
+                  # AGENTS.md (kit 1.50.2): the context file Codex/pi read (they do not read
+                  # CLAUDE.md); shipped as a thin pointer to CLAUDE.md so there is ONE source.
+                  for name in ("CLAUDE.md", "AGENTS.md", "CONSTITUTION.md", ".gitattributes")]
                + [(KIT_ROOT / "templates" / "scripts" / s, repo / ".claude" / "scripts" / s)
                   for s in STATUSLINE_SCRIPTS])
     copies = []

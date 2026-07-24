@@ -25,9 +25,10 @@ itself.
 5. **Changes to the engine carry a smoke test**: `bash uscha-kit/tests/smoke-engine.sh`
    must exit 0 BEFORE committing any change to `qa_ledger.py`. If the change
    adds behavior, its check is added to the suite in the same commit.
-6. **Versioning**: bump `VERSION` + `uscha.config.json` + `CHANGELOG-X.Y.Z.md`
-   + `uscha-kit/.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`
-   in the same commit. All five must match (smoke T44 verifies it).
+6. **Versioning**: bump all **six** version surfaces + a `CHANGELOG-X.Y.Z.md` in the same
+   commit: `VERSION`, `uscha.config.json`, `uscha-kit/.claude-plugin/plugin.json`,
+   `uscha-kit/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `package.json`.
+   All six must match (smoke T44 verifies it).
 7. **Conventional commits** (`feat:`, `fix:`, `docs:`…), small and atomic.
 8. **INV-GOLDEN-01 governs here too**: never write/rename a `.approved`
    (the kit's hook applies to this repo like any other).

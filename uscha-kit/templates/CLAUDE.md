@@ -3,8 +3,9 @@
 **Permanent** rules for this repo. Claude Code reads them at every session. What is specific to
 each change lives in `SPEC.md` / `docs/adr/` / `ACCEPTANCE.md`, not here.
 
-> If you use other agents besides Claude Code, copy this file as `AGENTS.md`
-> (same content) so they read it too.
+> Codex, pi and other agents read `AGENTS.md`, not this file. `uscha init` writes an
+> `AGENTS.md` that points here, so there is one canonical source — keep the rules in THIS
+> file and let the pointer do its job.
 
 ## Non-negotiable rules
 
