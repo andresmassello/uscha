@@ -1447,11 +1447,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.50.2.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.51.0.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.50.2.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.50.2.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.51.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.51.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1881,7 +1881,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.50.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.51.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1905,7 +1905,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.50.2' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.51.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1913,7 +1913,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.50.2' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.51.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1927,7 +1927,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.50.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.51.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1939,7 +1939,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.50.2'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.51.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -3292,6 +3292,55 @@ PY
 if [ "$T100" = "OK" ]; then
   PASS=$((PASS+1)); echo "  ok   hooks.json invokes the portable .py; the PowerShell .ps1 is removed"; \
 else FAIL=$((FAIL+1)); echo "  FAIL $T100"; fi
+
+echo "== T101 (1.51.0): the pi target installs skills to ~/.agents/skills, doctor measures it =="
+# pi (Earendil) is a third install target: the 9 skills land flat under ~/.agents/skills (the
+# harness-neutral sibling of codex's ~/.agents/plugins), with a marker so doctor can measure
+# presence/version. `--target all` covers all three; `both` stays the legacy codex+claude alias.
+T101H="$(mktemp -d)"
+python "$KIT/install-uscha.py" install --target pi --home "$T101H" >/dev/null 2>&1
+T101=$("$PY" - "$KIT" "$T101H" <<'PY'
+import importlib.util, json, os, subprocess, sys
+kit, home = sys.argv[1], sys.argv[2]
+sk = os.path.join(home, ".agents", "skills")
+present = sum(1 for d in os.listdir(sk) if d.startswith("uscha-")
+              and os.path.isfile(os.path.join(sk, d, "SKILL.md"))) if os.path.isdir(sk) else 0
+marker = os.path.isfile(os.path.join(sk, "uscha-install.json"))
+def doc(h):
+    r = subprocess.run([sys.executable, os.path.join(kit, "install-uscha.py"),
+                        "doctor", "--target", "pi", "--home", h, "--json"],
+                       stdout=subprocess.PIPE, text=True)
+    return json.loads(r.stdout)["targets"]["pi"]
+pi_status = doc(home)
+healthy = pi_status["healthy"]
+# golden_guard: pi is ADVISORY (the tool_call extension ships but its block is not measured here)
+pi_guard = pi_status.get("golden_guard")
+empty = os.path.join(home, "empty"); os.makedirs(empty, exist_ok=True)
+unhealthy = doc(empty)["healthy"]        # a home with no install must read unhealthy
+# a Claude install reports golden_guard ENFORCED (the PreToolUse hook is registered)
+ch = os.path.join(home, "claudehome"); os.makedirs(ch, exist_ok=True)
+subprocess.run([sys.executable, os.path.join(kit, "install-uscha.py"),
+                "install", "--target", "claude", "--home", ch], stdout=subprocess.DEVNULL)
+r = subprocess.run([sys.executable, os.path.join(kit, "install-uscha.py"),
+                    "doctor", "--target", "claude", "--home", ch, "--json"],
+                   stdout=subprocess.PIPE, text=True)
+cl_guard = json.loads(r.stdout)["targets"]["claude"]["golden_guard"]
+ext = os.path.isfile(os.path.join(kit, "pi", "golden-guard.js"))  # the extension artifact ships
+# `all` lists pi; `both` does not (legacy)
+spec = importlib.util.spec_from_file_location("iu", os.path.join(kit, "install-uscha.py"))
+iu = importlib.util.module_from_spec(spec); spec.loader.exec_module(iu)
+ok = (present == 9 and marker and healthy is True and unhealthy is False
+      and pi_guard == "advisory" and cl_guard == "enforced" and ext
+      and iu.selected_targets("all") == ["codex", "claude", "pi"]
+      and iu.selected_targets("both") == ["codex", "claude"])
+print("OK" if ok else "BAD present=%s marker=%s healthy=%s unhealthy=%s pi_guard=%s cl_guard=%s ext=%s"
+      % (present, marker, healthy, unhealthy, pi_guard, cl_guard, ext))
+PY
+)
+rm -rf "$T101H"
+if [ "$T101" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   pi: 9 skills + marker; doctor healthy/unhealthy; golden_guard pi=advisory claude=enforced; all vs both"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T101"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"

@@ -20,7 +20,7 @@ PLUGIN_NAME = "uscha"
 SKILLS = ["uscha-discovery", "uscha-adr-refine", "uscha-reverse-discovery", "uscha-characterize",
           "uscha-devloop", "uscha-sysdoc", "uscha-rubric", "uscha-mirador",
           "uscha-status"]
-TARGETS = ("codex", "claude")
+TARGETS = ("codex", "claude", "pi")
 HOOK_NAME = "block-approved-writes.py"
 
 
@@ -41,7 +41,9 @@ def home_path(args):
 
 
 def selected_targets(value):
-    return list(TARGETS) if value == "both" else [value]
+    # `all` = every target (codex+claude+pi, kit 1.51.0); `both` stays a LEGACY alias for
+    # codex+claude so existing scripts/users keep their exact prior behavior when pi landed.
+    return {"all": list(TARGETS), "both": ["codex", "claude"]}.get(value, [value])
 
 
 def load_json(path, label):
@@ -420,6 +422,86 @@ def install_claude(home, mode, dry_run, operations):
                 pass
     return root
 
+def install_pi(home, mode, dry_run, operations):
+    # pi (Earendil) reads Agent Skills from ~/.agents/skills -- the harness-neutral sibling of
+    # the codex target's ~/.agents/plugins. Skills only: no settings.json and no hook here (the
+    # golden guard ships as a pi `tool_call` extension, see cmd doctor golden_guard). Same
+    # transactional shape as install_claude: stage -> back up -> atomic replace -> marker last.
+    source = source_skills()
+    root = home / ".agents" / "skills"
+    install_marker = root / "uscha-install.json"
+    marker_data = marker("pi", root, mode)
+    operations.extend({"action": "install-skill", "path": str(root / skill)} for skill in SKILLS)
+    operations.append({"action": "write-marker-last", "path": str(install_marker)})
+    if dry_run:
+        return root
+
+    home_existed = home.exists()
+    home.mkdir(parents=True, exist_ok=True)
+    transaction = home / (".uscha-pi-transaction-%s" % uuid.uuid4().hex)
+    staged = transaction / "staged"
+    backups = transaction / "backups"
+    cleanup_transaction = True
+    try:
+        staged.mkdir(parents=True)
+        backups.mkdir()
+        for skill in SKILLS:
+            copy_skill(source / skill, staged / skill, mode)
+        atomic_json(staged / "uscha-install.json", marker_data)
+
+        entries = [(root / skill, staged / skill, backups / skill) for skill in SKILLS]
+        entries.append((install_marker, staged / "uscha-install.json", backups / "uscha-install.json"))
+        preexisting = {target: target.exists() or target.is_symlink()
+                       for target, _, _ in entries}
+        created_dirs = []
+        backed_up = set()
+        installed = set()
+        try:
+            for directory in (root.parent, root):   # ~/.agents then ~/.agents/skills
+                if not directory.exists():
+                    directory.mkdir(parents=True)
+                    created_dirs.append(directory)
+            for target, replacement, backup in entries:
+                if preexisting[target]:
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(target, backup)
+                    backed_up.add(target)
+                os.replace(replacement, target)
+                installed.add(target)
+        except Exception as exc:
+            rollback_errors = []
+            for target, _, backup in reversed(entries):
+                try:
+                    if target in installed and (target.exists() or target.is_symlink()):
+                        remove_path(target)
+                    if target in backed_up and (backup.exists() or backup.is_symlink()):
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        os.replace(backup, target)
+                except Exception as rollback_exc:
+                    rollback_errors.append("%s: %s" % (target, rollback_exc))
+            for directory in reversed(created_dirs):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+            if rollback_errors:
+                cleanup_transaction = False
+                raise InstallError(
+                    "[install-uscha] pi rollback incomplete; recovery retained at %s (%s)"
+                    % (transaction, "; ".join(rollback_errors))
+                ) from exc
+            raise
+    finally:
+        if cleanup_transaction and (transaction.exists() or transaction.is_symlink()):
+            remove_path(transaction)
+        if not home_existed:
+            try:
+                home.rmdir()
+            except OSError:
+                pass
+    return root
+
+
 def marker_ok(path, target):
     if not path.is_file():
         return False, None
@@ -447,6 +529,16 @@ def target_status(home, target):
         except InstallError:
             marketplace_ok = False
         checks = {"skills_present": skills_present, "manifest": manifest_ok, "marketplace_registered": marketplace_ok}
+        guard = "advisory"   # Codex has no hooks mechanism (verified: .codex-plugin has no "hooks")
+    elif target == "pi":
+        # pi: skills live FLAT under ~/.agents/skills/<skill>/; no manifest, no hook. INV-GOLDEN-01
+        # ships as a pi `tool_call` extension (uscha-kit/pi/golden-guard.js) but is reported
+        # ADVISORY until a real pi run confirms the block -- the runtime is not measured here.
+        root = home / ".agents" / "skills"
+        skills_root, marker_path = root, root / "uscha-install.json"
+        skills_present = [skill for skill in SKILLS if (skills_root / skill / "SKILL.md").is_file()]
+        checks = {"skills_present": skills_present}
+        guard = "advisory"
     else:
         root = home / ".claude"
         skills_root, marker_path = root / "skills", root / "uscha-install.json"
@@ -457,12 +549,15 @@ def target_status(home, target):
         except InstallError:
             settings_ok = False
         checks = {"skills_present": skills_present, "hook_file": hook.is_file(), "hook_registered": settings_ok}
+        # INV-GOLDEN-01 is MECHANICAL on Claude only when the PreToolUse hook is registered.
+        guard = "enforced" if settings_ok else "advisory"
     marker_valid, installed_version = marker_ok(marker_path, target)
     checks["marker"] = marker_valid
     checks["source_version_match"] = installed_version == source_version()
     healthy = len(skills_present) == len(SKILLS) and all(value is True for key, value in checks.items() if key != "skills_present")
     return {"healthy": healthy, "installed": healthy, "install_root": str(root), "installed_version": installed_version,
             "source_version": source_version(), "version_match": installed_version == source_version(), "checks": checks,
+            "golden_guard": guard,   # per-target INV-GOLDEN-01: enforced (mechanical) | advisory
             "content_integrity": "not measured; checks verify presence, registration, marker, and version only"}
 
 
@@ -472,8 +567,9 @@ def cmd_version(args):
 
 def cmd_install(args):
     home, operations, installed = home_path(args), [], {}
+    installers = {"codex": install_codex, "claude": install_claude, "pi": install_pi}
     for target in selected_targets(args.target):
-        installed[target] = str(install_codex(home, args.mode, args.dry_run, operations) if target == "codex" else install_claude(home, args.mode, args.dry_run, operations))
+        installed[target] = str(installers[target](home, args.mode, args.dry_run, operations))
     emit({"status": "planned" if args.dry_run else "installed", "dry_run": args.dry_run, "source_version": source_version(), "home": str(home), "installed": installed, "operations": operations, "next": next_steps(args.target)}, args.json)
 
 
@@ -675,9 +771,11 @@ def cmd_mirador(args):
 
 
 def next_steps(target):
+    picked = selected_targets(target)   # resolves both/all so each installed target speaks
     steps = []
-    if target in ("codex", "both"): steps.append("Codex: restart or open a new thread, then install/use uscha from the Personal marketplace if needed.")
-    if target in ("claude", "both"): steps.append("Claude: restart Claude Code so global skills/hooks are reloaded.")
+    if "codex" in picked: steps.append("Codex: restart or open a new thread, then install/use uscha from the Personal marketplace if needed.")
+    if "claude" in picked: steps.append("Claude: restart Claude Code so global skills/hooks are reloaded.")
+    if "pi" in picked: steps.append("pi: restart pi; the 9 uscha-* skills load from ~/.agents/skills. INV-GOLDEN-01 is advisory until the tool_call extension is installed (doctor reports golden_guard).")
     return steps + ["Run: python install-uscha.py doctor --target %s" % target]
 
 
@@ -699,9 +797,9 @@ def build_parser():
     sub = parser.add_subparsers(dest="cmd", required=True)
     version = sub.add_parser("version", help="show source version and supported targets"); version.add_argument("--json", action="store_true"); version.set_defaults(func=cmd_version)
     install = sub.add_parser("install", help="install Uscha globally for a machine")
-    install.add_argument("--target", choices=["codex", "claude", "both"], default="both"); install.add_argument("--mode", choices=["copy", "link"], default="copy"); install.add_argument("--home"); install.add_argument("--dry-run", action="store_true"); install.add_argument("--json", action="store_true"); install.set_defaults(func=cmd_install)
+    install.add_argument("--target", choices=["codex", "claude", "pi", "both", "all"], default="both"); install.add_argument("--mode", choices=["copy", "link"], default="copy"); install.add_argument("--home"); install.add_argument("--dry-run", action="store_true"); install.add_argument("--json", action="store_true"); install.set_defaults(func=cmd_install)
     doctor = sub.add_parser("doctor", help="check installed Uscha presence, registrations, and version drift")
-    doctor.add_argument("--target", choices=["codex", "claude", "both"], default="both"); doctor.add_argument("--home"); doctor.add_argument("--json", action="store_true"); doctor.set_defaults(func=cmd_doctor)
+    doctor.add_argument("--target", choices=["codex", "claude", "pi", "both", "all"], default="both"); doctor.add_argument("--home"); doctor.add_argument("--json", action="store_true"); doctor.set_defaults(func=cmd_doctor)
     init = sub.add_parser("init", help="prepare a repo with Uscha config/templates")
     init.add_argument("--repo", default="."); init.add_argument("--force", action="store_true", help="replace differing init files deliberately"); init.add_argument("--dry-run", action="store_true"); init.add_argument("--json", action="store_true"); init.set_defaults(func=cmd_init)
     mirador = sub.add_parser("mirador", help="render + open the project's mirador dashboard from QA-LEDGER.json")

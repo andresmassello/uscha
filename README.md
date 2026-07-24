@@ -12,7 +12,8 @@ npx --yes @andresmassello/uscha@latest install --target claude
 npx --yes @andresmassello/uscha@latest doctor  --target claude
 ```
 
-`--target codex` for Codex, `--target both` for both. Then, in your project:
+`--target codex` for Codex, `--target pi` for pi (Earendil), `--target all` for all three
+(`both` stays a legacy alias for codex+claude). Then, in your project:
 
 ```bash
 npx --yes @andresmassello/uscha@latest init
@@ -22,7 +23,7 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.50.2** <!-- uscha:version --> · [changelog](uscha-kit/CHANGELOG-1.50.2.md)
+**Kit v1.51.0** <!-- uscha:version --> · [changelog](uscha-kit/CHANGELOG-1.51.0.md)
 
 ---
 
