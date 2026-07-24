@@ -15,7 +15,7 @@ lives in versioned files, not in the chat; (3) the human always approves the
 merge; (4) tests must assert — the gate is never weakened; (5) migrations are
 anchored with a mechanically captured golden suite the agent must never author.
 
-The kit (v1.50.0, MIT license) ships 9 skills for Claude Code and Codex plus a
+The kit (v1.50.1, MIT license) ships 9 skills for Claude Code and Codex plus a
 pure-Python engine (qa_ledger.py, 29 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. Install:
 `npx --yes @andresmassello/uscha@latest install --target claude`
