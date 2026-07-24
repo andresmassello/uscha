@@ -97,7 +97,7 @@ other repos must be mounted via `--add-dir` or `additionalDirectories`; the `pat
 fields in the config are relative to where you run `init`.
 
 For migration/legacy (risk profile E) work, also wire the golden invariant once:
-install `hooks/block-approved-writes.ps1` (or its bash twin) as a `PreToolUse` hook in
+install `hooks/block-approved-writes.py` as a `PreToolUse` hook in
 `settings.json`, and add `*.approved.* binary` to `.gitattributes` (ships in
 `templates/.gitattributes`) so line endings can't lie in the byte-compare.
 

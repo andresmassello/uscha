@@ -40,6 +40,8 @@ itself.
 - The HTML decks are paginated by JS (`querySelectorAll('.slide')`): inserting a
   `<section class="slide">` auto-integrates into the navigation; the `#NN` deep-links
   shift when slides are inserted.
-- PowerShell 5.1 breaks with em-dashes/emoji in `.ps1` — the hook stays ASCII.
+- PowerShell 5.1 breaks with em-dashes/emoji in `.ps1` — the shipped `.ps1` (`mirador-watch`)
+  stays ASCII. The INV-GOLDEN hook is now the portable `.py`; the `.ps1` was removed in 1.50.2
+  (PowerShell is absent on macOS/Linux), and the plugin `hooks.json` invokes the `.py` directly.
 
 > The tool executes · the method governs · evidence decides · the human approves.

@@ -6106,8 +6106,9 @@ def cmd_doctor(args):
     registered = next((r for p in settings_paths if os.path.isfile(p)
                        for r in [_doctor_hook_registered(p)] if r), None)
     if is_plugin and os.path.isfile(os.path.join(kit_root, "hooks", "hooks.json")):
-        # los hooks del plugin se auto-registran via hooks/hooks.json (1.24.0) -> el .ps1
-        registered = registered or "block-approved-writes.ps1"
+        # los hooks del plugin se auto-registran via hooks/hooks.json (1.24.0); desde 1.50.2
+        # apunta al .py portable (el .ps1 fue borrado -- PowerShell no existe en mac/Linux)
+        registered = registered or "block-approved-writes.py"
     # interpretabilidad atada al hook REAL: el .py corre con el mismo Python que este engine
     # (siempre disponible aca); solo el .ps1 necesita powershell/pwsh. Exigirlo para el .py
     # era el bug -- un install .py sano se reportaba roto, peor en mac/Linux sin pwsh.

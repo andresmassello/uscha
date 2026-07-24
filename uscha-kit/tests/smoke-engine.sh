@@ -3268,6 +3268,27 @@ if [ "$T99" = "OK" ]; then
   PASS=$((PASS+1)); echo "  ok   stale entry pruned, current kept once, foreign preserved, idempotent"; \
 else FAIL=$((FAIL+1)); echo "  FAIL $T99"; fi
 
+echo "== T100 (1.50.2): the plugin hook is portable -- hooks.json invokes the .py, no PowerShell =="
+# The plugin-marketplace flow reads the static hooks.json; a powershell-only command left
+# INV-GOLDEN-01 dead on macOS/Linux. It now invokes the portable .py directly (runs via its
+# shebang+exec bit on POSIX, the .py association on Windows -- enabled by P0-4). The .ps1 is gone.
+T100=$("$PY" - "$KIT" <<'PY'
+import json, os, sys
+kit = sys.argv[1]
+hj = json.load(open(os.path.join(kit, "hooks", "hooks.json"), encoding="utf-8"))
+cmds = [h.get("command", "") for g in hj["hooks"]["PreToolUse"] for h in g["hooks"]]
+c = " ".join(cmds)
+ps1_gone = not os.path.isfile(os.path.join(kit, "hooks", "block-approved-writes.ps1"))
+py_present = os.path.isfile(os.path.join(kit, "hooks", "block-approved-writes.py"))
+ok = ("block-approved-writes.py" in c and "powershell" not in c.lower()
+      and ".ps1" not in c and ps1_gone and py_present)
+print("OK" if ok else "BAD cmd=%r ps1_gone=%s py=%s" % (c, ps1_gone, py_present))
+PY
+)
+if [ "$T100" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   hooks.json invokes the portable .py; the PowerShell .ps1 is removed"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T100"; fi
+
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"

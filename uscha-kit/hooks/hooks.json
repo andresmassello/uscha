@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/block-approved-writes.ps1\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/block-approved-writes.py\""
           }
         ]
       }

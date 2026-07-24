@@ -87,7 +87,7 @@ covered.
 
 - The skill STOPS at the approval point (Phase 4); it never creates/renames/edits `.approved`.
 - A `PreToolUse` hook on `**/*.approved.*` should make agent writes mechanically impossible
-  (see `hooks/block-approved-writes.ps1` + the settings snippet in the kit).
+  (see `hooks/block-approved-writes.py` + the settings snippet in the kit).
 - `.gitattributes`: `*.approved.* binary` — line endings must not create false diffs
   (Windows/SQL Server).
 
