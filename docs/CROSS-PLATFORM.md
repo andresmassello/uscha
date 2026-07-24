@@ -50,8 +50,15 @@ document's central claim independently: **the engine and all three installer com
 already portable — 0 engine defects.** `doctor --target both` reported `ok: true`, 9/9 skills,
 hook present + registered, on both targets. It also found what a static read could not — a
 BLOCKER this audit missed (P0-4 below) — and measured the T75/router bug that the CI matrix had
-already turned red. Findings folded in below. Not yet verified on macOS (shares POSIX
-`python3`-only, but case-insensitive-by-default differs from Linux).
+already turned red. Findings folded in below.
+
+**macOS is measured (1.51.x):** the CI matrix runs the suite on real `macos-latest` runners,
+and a CI step now runs the REAL installer end-to-end there (`install --target all` →
+`doctor --target all`, asserting `ok: true` + per-target `golden_guard`). Its one difference
+from Linux — case-insensitive-by-default — is guarded by smoke **T102** (fails on any two
+tracked paths that collide when lowercased). What is STILL out of CI reach: the
+plugin-marketplace hook execution (P0-3) and pi's `tool_call` block (the `advisory`
+golden_guard), both needing a real Claude-Code-plugin / real-pi run — not a macOS gap.
 
 ### BLOCKERS — a documented install path fails, or the guard silently blocks everything
 

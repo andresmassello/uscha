@@ -47,6 +47,22 @@ jobs:
         shell: bash
         run: bash uscha-kit/tests/smoke-engine.sh
 
+      # The smoke exercises the installer with synthetic fixtures; this runs the REAL
+      # installer end-to-end (install all three targets into a temp home, then doctor them)
+      # so the primary `install-uscha.py` flow is measured on a real macOS/Linux/Windows box,
+      # not just approximated. Closes the "no real end-user install on macOS" gap for the
+      # installer path (the plugin-marketplace and pi-runtime paths remain out of CI reach).
+      - name: Real installer end-to-end (install --target all + doctor)
+        shell: bash
+        run: |
+          set -e
+          H="$(mktemp -d)/uscha-home"
+          python uscha-kit/install-uscha.py install --target all --home "$H" --json > /tmp/install.json
+          python uscha-kit/install-uscha.py doctor  --target all --home "$H" --json > /tmp/doctor.json
+          cat /tmp/doctor.json
+          python -c "import json; d=json.load(open('/tmp/doctor.json')); assert d['ok'] is True, d; \
+            [print(t, s['golden_guard'], s['healthy']) for t, s in d['targets'].items()]"
+
       # AC-03 (the private-name scan) goes UNMEASURED in CI on purpose: .uscha-private-names
       # is untracked and never checked in, so the acceptance block emits it as <skipped/>.
       # That is the honest state -- the criterion cannot be measured without the release

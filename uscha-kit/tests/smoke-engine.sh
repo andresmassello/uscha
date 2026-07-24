@@ -3342,6 +3342,19 @@ if [ "$T101" = "OK" ]; then
   PASS=$((PASS+1)); echo "  ok   pi: 9 skills + marker; doctor healthy/unhealthy; golden_guard pi=advisory claude=enforced; all vs both"; \
 else FAIL=$((FAIL+1)); echo "  FAIL $T101"; fi
 
+echo "== T102 (1.51.x): no case-only filename collisions (macOS/Windows case-insensitive vs Linux) =="
+# The ONE difference between the Linux and macOS CI cells: Linux is case-sensitive, macOS
+# (and Windows) are not. Two tracked files whose paths differ ONLY by case both exist on
+# Linux but clobber each other on a macOS/Windows checkout -- a green Linux repo that breaks
+# elsewhere. Lowercasing every repo path and looking for duplicates catches it on all three.
+T102_DUPS="$(find "$ROOT" -type f \
+  -not -path '*/.git/*' -not -path '*/.npm-cache/*' -not -path '*/node_modules/*' \
+  -not -path '*/__pycache__/*' -not -path '*/.coverage-data/*' \
+  | tr 'A-Z' 'a-z' | sort | uniq -d | head -5)"
+if [ -z "$T102_DUPS" ]; then
+  PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
+else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
+
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"
