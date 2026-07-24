@@ -188,10 +188,22 @@ def hook_command(hook):
 
 
 def hook_registered(settings, command):
+    # Match a registered PreToolUse "*" hook by the guard SCRIPT it references (PATH-ANCHORED),
+    # not by exact command equality. `command` embeds sys.executable, an absolute interpreter
+    # path: install-time and doctor-time can run under different interpreters (a `python` that
+    # resolves to a different sys.executable between two invocations -- observed on Windows CI),
+    # so an exact-match false-reports a healthy hook as unregistered. Anchoring on a path
+    # separator before HOOK_NAME (the installer always writes it under a `hooks/` dir) keeps a
+    # foreign command that merely MENTIONS the name -- `...not-block-approved-writes.py`, or the
+    # literal inside a `-c` snippet -- from reading as our enforced guard, since this check feeds
+    # the golden_guard trust signal. Exact `command` stays a fallback; a None command is skipped.
+    anchored = ("/" + HOOK_NAME, "\\" + HOOK_NAME)
+    def _is_ours(cmd):
+        return isinstance(cmd, str) and (any(a in cmd for a in anchored) or cmd == command)
     hooks = settings.get("hooks", {}) if isinstance(settings, dict) else {}
     groups = hooks.get("PreToolUse", []) if isinstance(hooks, dict) else []
     return any(isinstance(group, dict) and group.get("matcher") == "*"
-               and any(isinstance(item, dict) and item.get("type") == "command" and item.get("command") == command
+               and any(isinstance(item, dict) and item.get("type") == "command" and _is_ours(item.get("command"))
                        for item in group.get("hooks", []) if isinstance(group.get("hooks", []), list))
                for group in groups if isinstance(groups, list))
 

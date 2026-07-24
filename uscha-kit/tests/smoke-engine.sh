@@ -1447,11 +1447,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.51.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.51.1.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.51.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.51.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.51.1.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.51.1.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1881,7 +1881,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.51.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1905,7 +1905,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.51.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.51.1' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1913,7 +1913,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.51.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1927,7 +1927,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.51.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1939,7 +1939,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.51.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.51.1'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -3354,6 +3354,50 @@ T102_DUPS="$(find "$ROOT" -type f \
 if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
+
+echo "== T103 (1.51.x): doctor recognizes the hook across an interpreter change (install vs doctor) =="
+# install-uscha.py's doctor used to EXACT-match the hook command, which embeds sys.executable
+# (an absolute interpreter path). When install-time and doctor-time run under different pythons
+# -- e.g. a `python` that resolves to a different sys.executable between two invocations, seen
+# on Windows CI -- the exact-match false-reported a healthy claude hook as `hook_registered:
+# False`, failing the real-installer end-to-end step. hook_registered now matches by the guard
+# SCRIPT (block-approved-writes.py), not the full command string, like the N-1 prune does.
+T103=$("$PY" - "$KIT/install-uscha.py" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("iu", sys.argv[1])
+iu = importlib.util.module_from_spec(spec); spec.loader.exec_module(iu)
+# settings as INSTALL wrote them: command references the hook via interpreter A
+settings = {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command",
+    "command": "C:/py-A/python.exe C:/Users/u/.claude/hooks/block-approved-writes.py"}]}]}}
+# doctor recomputes hook_command under interpreter B (different absolute path) -- same script
+doctor_cmd = "C:/py-B/python.exe C:/Users/u/.claude/hooks/block-approved-writes.py"
+mismatch_ok = iu.hook_registered(settings, doctor_cmd) is True
+# a DIFFERENT script must NOT be treated as our hook (no false positive)
+foreign = {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command",
+    "command": "python /home/u/.claude/hooks/some-other-linter.py"}]}]}}
+foreign_ok = iu.hook_registered(foreign, doctor_cmd) is False
+# path-anchored: a SUFFIX-collision script and a bare mention in a -c snippet must NOT match --
+# the match anchors on a path separator before HOOK_NAME, else golden_guard could read enforced
+# off a foreign or spoofed entry.
+suffix = {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command",
+    "command": "python /home/u/.claude/hooks/not-block-approved-writes.py"}]}]}}
+mention = {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command",
+    "command": "python -c \"print('block-approved-writes.py')\""}]}]}}
+anchor_ok = (iu.hook_registered(suffix, doctor_cmd) is False
+             and iu.hook_registered(mention, doctor_cmd) is False)
+# a None command in a group must be skipped, not crash
+noneish = {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": None}]}]}}
+none_ok = iu.hook_registered(noneish, doctor_cmd) is False
+# empty settings -> not registered
+empty_ok = iu.hook_registered({}, doctor_cmd) is False
+print("OK" if mismatch_ok and foreign_ok and anchor_ok and none_ok and empty_ok else
+      "BAD mismatch=%s foreign=%s anchor=%s none=%s empty=%s"
+      % (mismatch_ok, foreign_ok, anchor_ok, none_ok, empty_ok))
+PY
+)
+if [ "$T103" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   hook_registered matches by script across interpreter change; no false positive on a foreign hook"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T103"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
