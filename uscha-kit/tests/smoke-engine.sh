@@ -1447,11 +1447,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.51.1.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.51.2.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.51.1.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.51.1.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.51.2.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.51.2.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1786,7 +1786,7 @@ ok = (
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   dashboard expone experiment ADR valido/malformado como advisory"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL dashboard no modela ADR experiment correctamente"; }
-"$PY" "$RENDER" --engine "$QL" --ledger L-intake.json --template "$TPL" --out exp-mir.html >/dev/null 2>&1
+"$PY" "$RENDER" --engine "$QL" --ledger L-intake.json --template "$TPL" --out exp-mir.html --no-open >/dev/null 2>&1
 "$PY" -c "
 import re, json, sys
 h = open('exp-mir.html', encoding='utf-8').read()
@@ -1881,7 +1881,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.51.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1905,7 +1905,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.51.1' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.51.2' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1913,7 +1913,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.1' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.51.2' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1927,7 +1927,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.1' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.51.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1939,7 +1939,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.51.1'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.51.2'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
@@ -2681,8 +2681,8 @@ sys.exit(0 if (r['band'] == 'NOT READY' and 0 < (r['score'] or 0) < 50
   echo "$PASS $FAIL" > title-counts.txt )
 read PASS FAIL < title-sb/title-counts.txt
 
-echo "== T79 (1.41.3): --refresh (live) never auto-opens -- one open tab self-reloads, no tab spam =="
-"$PY" - "$KIT/.claude/skills/uscha-mirador/mirador-render.py" "$KIT/.claude/skills/uscha-mirador/mirador.template.html" <<'PY'
+echo "== T79 (1.51.2): auto-open fires on FIRST materialization only -- re-renders reuse one self-refreshing tab =="
+T79_RES="$("$PY" - "$KIT/.claude/skills/uscha-mirador/mirador-render.py" "$KIT/.claude/skills/uscha-mirador/mirador.template.html" <<'PY'
 import importlib.util, os, pathlib, shutil, sys, tempfile
 render_path, tpl = sys.argv[1], sys.argv[2]
 spec = importlib.util.spec_from_file_location("mr", render_path)
@@ -2691,19 +2691,36 @@ tmp = pathlib.Path(tempfile.mkdtemp())
 eng = tmp / "eng.py"
 eng.write_text('import sys; sys.stdout.write(\'{"readiness":{"score":22,"band":"NOT READY","title":"x"}}\')\n', encoding="utf-8")
 opens = {"n": 0}
-mr._open_best_effort = lambda p: opens.__setitem__("n", opens["n"] + 1)  # count instead of launching a browser
-def run(extra):
+mr._open_best_effort = lambda p: opens.__setitem__("n", opens["n"] + 1)
+_real_stdout = sys.stdout           # silence the renderer's chatter so only the verdict is captured
+sys.stdout = open(os.devnull, "w")
+def run(out, extra):
     sys.argv = ["mirador-render.py", "--engine", str(eng), "--ledger", str(tmp / "L.json"),
-                "--template", tpl, "--out", str(tmp / "m.html"), "--sidecar", str(tmp / "none.jsonl")] + extra
+                "--template", tpl, "--out", str(out), "--sidecar", str(tmp / "none.jsonl")] + extra
     return mr.main()
-b = opens["n"]; run(["--refresh", "30"]); live = opens["n"] - b        # live view -> 0 (page self-reloads)
-b = opens["n"]; run([]); oneshot = opens["n"] - b                       # one-shot -> 1 (open once)
-b = opens["n"]; run(["--no-open"]); noopen = opens["n"] - b             # explicit suppress -> 0
+m1 = tmp / "m1.html"
+b = opens["n"]; run(m1, []); first = opens["n"] - b               # fresh file -> materialize -> open once
+b = opens["n"]; run(m1, []); again = opens["n"] - b               # exists -> re-render, NO reopen (anti-spam)
+b = opens["n"]; run(m1, ["--open"]); forced = opens["n"] - b      # --open forces a reopen (tab was closed)
+b = opens["n"]; run(m1, ["--no-open", "--open"]); wins = opens["n"] - b  # --no-open beats --open
+# --no-open must suppress on a GENUINELY FRESH file too -- on an existing one `pre_existed`
+# alone would suppress, so that assertion could pass with the no_open check deleted.
+m4 = tmp / "m4.html"
+b = opens["n"]; run(m4, ["--no-open"]); noopen_fresh = opens["n"] - b
+m2 = tmp / "m2.html"
+b = opens["n"]; run(m2, ["--refresh", "30"]); liverefresh = opens["n"] - b  # open gated by EXISTENCE, not --refresh
+default_refresh = 'http-equiv="refresh" content="10"' in m1.read_text(encoding="utf-8")
+m3 = tmp / "m3.html"; run(m3, ["--refresh", "0", "--no-open"]); frozen = 'http-equiv="refresh"' not in m3.read_text(encoding="utf-8")
 shutil.rmtree(tmp, ignore_errors=True)
-sys.exit(0 if (live == 0 and oneshot == 1 and noopen == 0) else 1)
+sys.stdout = _real_stdout
+print("OK" if (first == 1 and again == 0 and forced == 1 and wins == 0 and noopen_fresh == 0
+               and liverefresh == 1 and default_refresh and frozen) else
+      "BAD first=%s again=%s forced=%s wins=%s noopen_fresh=%s liverefresh=%s default_refresh=%s frozen=%s"
+      % (first, again, forced, wins, noopen_fresh, liverefresh, default_refresh, frozen))
 PY
-if [ $? -eq 0 ]; then PASS=$((PASS+1)); echo "  ok   live=0 opens, one-shot=1, --no-open=0 (no browser-tab spam under watch)"; \
-else FAIL=$((FAIL+1)); echo "  FAIL auto-open policy wrong -- a live/watch render would spam browser tabs"; fi
+)"
+if [ "$T79_RES" = "OK" ]; then PASS=$((PASS+1)); echo "  ok   first=1 open, re-render=0 (one self-refreshing tab), --open forces, --no-open wins (fresh too), --refresh 0 frozen"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T79_RES"; fi
 
 echo "== T80 (1.42.0): mirador status story (como viene/que lo traba/que sigue) present + fed by the ledger =="
 printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > status-cfg.json

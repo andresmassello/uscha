@@ -760,8 +760,11 @@ def cmd_mirador(args):
         raise SystemExit(1)
     base = [sys.executable, str(render), "--ledger", args.ledger, "--out", args.out]
     if not args.watch:
-        # one-shot: the renderer writes the file and opens it (unless --no-open)
-        rc = subprocess.call(base + (["--no-open"] if args.no_open else []))
+        # one-shot: the renderer writes the file and opens it only when FIRST materializing it
+        # -- a re-render updates the already-open tab in place instead of spawning another
+        # (kit 1.51.2). --no-open suppresses; --open forces a reopen when the tab was closed.
+        extra = ["--no-open"] if args.no_open else (["--open"] if args.force_open else [])
+        rc = subprocess.call(base + extra)
         if rc:
             raise SystemExit(rc)
         return
@@ -820,6 +823,8 @@ def build_parser():
     mirador.add_argument("--watch", action="store_true", help="live second-screen view: re-render every --interval seconds")
     mirador.add_argument("--interval", type=int, default=30)
     mirador.add_argument("--no-open", action="store_true", help="write the file but do not open a browser")
+    mirador.add_argument("--open", dest="force_open", action="store_true",
+                         help="open the browser even if mirador.html already existed (you closed the tab)")
     mirador.set_defaults(func=cmd_mirador)
     return parser
 

@@ -94,10 +94,13 @@ def main():
                     help="path to mirador.template.html (default: the sibling template)")
     ap.add_argument("--out", default="mirador.html")
     ap.add_argument("--sidecar", default=os.path.join(".uscha", "telemetry.jsonl"))
-    ap.add_argument("--refresh", type=int, default=0,
-                    help="if >0, the page auto-reloads every N seconds (live second-screen view)")
+    ap.add_argument("--refresh", type=int, default=10,
+                    help="auto-reload the open tab every N seconds so a SINGLE tab stays live "
+                         "(0 = frozen snapshot; default 10)")
     ap.add_argument("--no-open", action="store_true",
                     help="write the file but do not open it in a browser")
+    ap.add_argument("--open", dest="force_open", action="store_true",
+                    help="open the browser even if the file already existed (the tab was closed)")
     args = ap.parse_args()
 
     try:
@@ -127,10 +130,12 @@ def main():
     out = re.sub(r"/\*MIRADOR_DATA_START\*/.*?/\*MIRADOR_DATA_END\*/",
                  lambda m: payload, tpl, count=1, flags=re.S)
     if args.refresh and args.refresh > 0:
-        # opt-in live reload: a meta-refresh, injected only when watching
+        # a meta-refresh so the ONE open tab reloads itself in place (on by default) --
+        # pass --refresh 0 for a frozen snapshot
         out = out.replace("</head>",
                           f'<meta http-equiv="refresh" content="{args.refresh}">\n</head>', 1)
-    live = bool(args.refresh and args.refresh > 0)
+    # capture BEFORE writing: auto-open fires only when the mirador is FIRST materialized
+    pre_existed = os.path.exists(args.out)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(out)
     score = (data.get("readiness") or {}).get("score")
@@ -139,10 +144,13 @@ def main():
     print(f"[mirador-render]   readiness {score} | telemetry {'on' if tel else 'off'} | "
           f"refresh {args.refresh or 'off'}")
     print(f"[mirador-render]   OPEN IT:  {out_abs}")
-    # Auto-open only a ONE-SHOT view. In live mode (--refresh) the page carries its own
-    # meta-refresh and reloads in the SAME tab, so opening on every render cycle would
-    # spawn a new browser tab each time (kit 1.41.3). Open it once by hand and let it live.
-    if not args.no_open and not live:
+    # Auto-open ONLY the first time the file is created. Repeated renders (the agent per
+    # pass, or a watch loop) rewrite the SAME file, and the meta-refresh reloads the already-
+    # open tab in place -- so a re-render never spawns a new browser tab (kit 1.51.2; 1.41.3
+    # gated this on --refresh, which spammed a tab per one-shot re-render). `pre_existed`
+    # tracks the FILE, not a live tab, so --open forces a reopen when the tab was closed;
+    # --no-open suppresses everywhere and wins over it. The OPEN IT path is always printed.
+    if not args.no_open and (args.force_open or not pre_existed):
         _open_best_effort(out_abs)
     return 0
 

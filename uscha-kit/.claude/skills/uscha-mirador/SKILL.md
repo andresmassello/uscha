@@ -76,7 +76,8 @@ wires the JSON the engine emits into the template. Read-only.
 
 4. **Render `mirador.html`** with the standalone renderer — it runs `dashboard --json`,
    merges the sidecar telemetry if present, injects `const DATA`, writes the file, prints its
-   absolute path (`OPEN IT: ...`), and opens it in the default browser. From the project root,
+   absolute path (`OPEN IT: ...`), and opens it in the default browser **the first time it
+   creates the file** (see step 5 — a re-render updates the open tab instead). From the project root,
    with no long paths — `--engine` and `--template` default to the renderer's sibling skill
    files (kit 1.41.2):
    ```bash
@@ -87,9 +88,15 @@ wires the JSON the engine emits into the template. Read-only.
    time-lapse feeds from `qa_ledger.py readiness --record` — since kit 1.47.0 the dev-loop
    records at every pass close, so history accumulates without extra ceremony.
 
-5. **Where to look:** the renderer already opened `mirador.html` and printed its absolute path
-   on the `OPEN IT:` line — surface that path to the operator. Pass `--no-open` to write the
-   file without opening a browser (headless/CI, or the watch loop below, which passes it).
+5. **Where to look:** the renderer opens `mirador.html` **once — only the first time it is
+   created** — and always prints its absolute path on the `OPEN IT:` line; surface that path to
+   the operator. Re-rendering (this skill invoked again on a later pass, or the watch loop)
+   rewrites the SAME file, and the page's built-in auto-refresh reloads the already-open tab in
+   place, so a re-render never spawns a new browser tab. On a fresh session the file is already
+   on disk, so nothing pops — open the printed path once, or pass `--open` (`uscha mirador
+   --open`) to force a reopen when you closed the tab. `--no-open` suppresses opening
+   everywhere and wins over `--open` (headless/CI, or the watch loop, which passes it);
+   `--refresh 0` writes a frozen snapshot with no auto-reload.
 
 ## For a human at a terminal: `uscha mirador`
 
