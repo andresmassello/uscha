@@ -1,0 +1,60 @@
+name: smoke
+
+# Cross-platform validation. The audit that motivated this (docs/CROSS-PLATFORM.md) was
+# STATIC -- nobody had run the suite on a real Linux or macOS box. Per the kit's own
+# doctrine, "cross-platform" is a claim until it is MEASURED on all three OSes. This is
+# that measurement. A red cell here is a real finding, not a flake.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: smoke (${{ matrix.os }}, py${{ matrix.python }})
+    strategy:
+      fail-fast: false   # one OS red must not hide the others -- we want the full grid
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.8", "3.13"]   # the declared floor and a current release
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # Node is only needed by the npm-router tests (T74/T75); they degrade to a skip
+      # if a compiler/shim is unavailable, so this is belt-and-suspenders, not required.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Report the interpreter the suite will use
+        shell: bash
+        run: |
+          python --version
+          python3 --version || echo "no python3 on PATH (Windows) -- the suite probes for it"
+
+      # shell: bash forces Git-Bash on Windows and the native shell on Linux/macOS, so the
+      # ONE suite runs on all three. The engine is Python; only the harness is bash.
+      - name: Run the smoke suite
+        shell: bash
+        run: bash uscha-kit/tests/smoke-engine.sh
+
+      # AC-03 (the private-name scan) goes UNMEASURED in CI on purpose: .uscha-private-names
+      # is untracked and never checked in, so the acceptance block emits it as <skipped/>.
+      # That is the honest state -- the criterion cannot be measured without the release
+      # machine's private list -- and it does not change the suite's exit code.
+      - name: Show the self-application acceptance emission
+        if: always()
+        shell: bash
+        run: |
+          test -f reports/junit/uscha-acceptance.xml \
+            && cat reports/junit/uscha-acceptance.xml \
+            || echo "no acceptance report emitted"
