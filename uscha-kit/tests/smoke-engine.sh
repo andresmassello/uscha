@@ -2926,9 +2926,11 @@ T89_HOME="$T89" "$PY" -c "
 import json, os, sys
 h = os.environ['T89_HOME']
 s = json.load(open(os.path.join(h, '.claude', 'settings.json'), encoding='utf-8'))
-sl_ok = s.get('statusLine', {}).get('command') == 'python .claude/scripts/uscha_statusline.py'
+# the interpreter is OS-resolved (kit 1.51.0): python3 on POSIX, python on Windows
+py = 'python' if os.name == 'nt' else 'python3'
+sl_ok = s.get('statusLine', {}).get('command') == py + ' .claude/scripts/uscha_statusline.py'
 stop = s.get('hooks', {}).get('Stop', [])
-stop_ok = any(hh.get('command') == 'python .claude/scripts/uscha_progress.py'
+stop_ok = any(hh.get('command') == py + ' .claude/scripts/uscha_progress.py'
               for g in stop for hh in (g.get('hooks') or []))
 scripts_ok = (os.path.isfile(os.path.join(h, '.claude', 'scripts', 'uscha_statusline.py'))
               and os.path.isfile(os.path.join(h, '.claude', 'scripts', 'uscha_progress.py')))

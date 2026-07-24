@@ -473,9 +473,14 @@ def cmd_doctor(args):
 # statusline wiring (kit 1.46.0): the progress statusline + its Stop-hook refresher, installed
 # per-project. Commands are by NAME with forward slashes (Windows eats backslashes in the
 # statusLine command; absolute paths are brittle across machines).
+# The interpreter is OS-resolved (kit 1.51.0): `python3` on POSIX -- stock mac/Linux often
+# ships only python3, so a bare `python` left the whole feature silently dead there -- and
+# `python` on Windows, where `python3` may be a non-executing Store stub. Same rule as
+# bin/uscha.js and workbench-doctor.sh; init runs on the target machine, so os.name is right.
 STATUSLINE_SCRIPTS = ("uscha_statusline.py", "uscha_progress.py")
-STATUSLINE_CMD = "python .claude/scripts/uscha_statusline.py"
-PROGRESS_CMD = "python .claude/scripts/uscha_progress.py"
+_STATUSLINE_PY = "python" if os.name == "nt" else "python3"
+STATUSLINE_CMD = _STATUSLINE_PY + " .claude/scripts/uscha_statusline.py"
+PROGRESS_CMD = _STATUSLINE_PY + " .claude/scripts/uscha_progress.py"
 
 
 def _wire_statusline_settings(repo, force, dry_run):
@@ -496,7 +501,12 @@ def _wire_statusline_settings(repo, force, dry_run):
     changed = False
     want_sl = {"type": "command", "command": STATUSLINE_CMD}
     cur_sl = result.get("statusLine")
-    if cur_sl is None or (force and cur_sl != want_sl):
+    # ours-by-suffix (kit 1.51.0): an existing statusLine that runs OUR script but with a
+    # different interpreter (e.g. a pre-1.51 `python` entry on an upgraded mac) is refreshed,
+    # not reported as a foreign conflict. A truly foreign statusLine still conflicts.
+    cur_cmd = cur_sl.get("command", "") if isinstance(cur_sl, dict) else ""
+    ours_sl = isinstance(cur_sl, dict) and cur_cmd.endswith("uscha_statusline.py")
+    if cur_sl is None or ((ours_sl or force) and cur_sl != want_sl):
         result["statusLine"] = want_sl
         changed = True
         ops.append({"action": "wire-statusline", "path": str(path)})
