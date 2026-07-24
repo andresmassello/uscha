@@ -1,0 +1,26 @@
+# Repo-root line-ending policy (cross-platform, kit 1.50.2).
+# Rationale: a CRLF that sneaks into a `.sh`/`.py` breaks its shebang on Linux
+# (`bad interpreter: ...^M`), and a BOM before a shebang makes the kernel hand the file
+# to /bin/sh -> exit 2 -> a PreToolUse guard silently blocks every tool call. Both were
+# field-measured; this file makes them structurally impossible. Last matching rule wins.
+
+# Everything is text, normalized to LF in the repo.
+* text=auto eol=lf
+
+# PowerShell stays CRLF: Windows PowerShell 5.1 (shipped with Windows) mishandles a
+# .ps1 that is not CRLF. These are the only files that must NOT be LF.
+*.ps1 text eol=crlf
+
+# Golden fixtures are binary field-truth: an approval suite is bytes a human signed off,
+# never re-encoded. The repo has none today; this is a guard for when tests add them
+# (the shipped template `uscha-kit/templates/.gitattributes` carries the same for user repos).
+*.approved   binary
+*.received   binary
+*.approved.* binary
+*.received.* binary
+
+# Binary assets never get EOL/whitespace touched.
+*.png  binary
+*.pdf  binary
+*.jpg  binary
+*.webp binary
