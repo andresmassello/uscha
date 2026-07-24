@@ -18,7 +18,7 @@ uscha-kit/
 ?? install-uscha.py             # canonical installer used by npm/npx
 ├─ uscha.config.json            # config: repos, thresholds, commands
 ├─ hooks/
-│  └─ block-approved-writes.ps1    # PreToolUse: the agent CANNOT write .approved (INV-GOLDEN-01)
+│  └─ block-approved-writes.py     # PreToolUse: the agent CANNOT write .approved (INV-GOLDEN-01)
 ├─ templates/
 │  ├─ CLAUDE.md                    # permanent repo protocol
 │  ├─ CONSTITUTION.md              # inviolable invariants (fill in the domain)

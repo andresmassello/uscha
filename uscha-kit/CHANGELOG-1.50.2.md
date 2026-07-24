@@ -18,7 +18,8 @@ invocations. A Windows-only assumption baked into the kit's own cross-platform t
 to every prior local run.
 
 ## Runtime fixes
-- **The INV-GOLDEN hook had a UTF-8 BOM before its shebang, and CRLF.** On direct execution the
+- **The INV-GOLDEN hook shipped with a UTF-8 BOM before its shebang** (and CRLF in Windows /
+  zip working trees). On direct execution the
   kernel does not see the shebang, hands the file to `/bin/sh`, which syntax-errors and exits
   2 — the exact PreToolUse *block* code. The guard looked installed while blocking **every**
   tool call on POSIX. Stripped BOM, normalized to LF, set the exec bit. Smoke **T98** now runs

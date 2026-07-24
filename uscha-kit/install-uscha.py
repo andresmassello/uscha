@@ -220,8 +220,11 @@ def prepared_settings(path, command):
     # Windows Store python) would otherwise leave a dead entry that fails on every tool call
     # while the fresh one is merely appended. Suffix-pruning makes a reinstall self-heal.
     def _ours(item):
+        # substring, NOT suffix: list2cmdline (Windows) / shlex.quote (POSIX) wrap a path
+        # with spaces in quotes, so the command can end in `...block-approved-writes.py"`.
+        # The script basename is specific enough that a foreign hook won't contain it.
         c = str(item.get("command", "")).replace("\\", "/") if isinstance(item, dict) else ""
-        return c.endswith("/" + HOOK_NAME) or c == HOOK_NAME or c.endswith(" " + HOOK_NAME)
+        return HOOK_NAME in c
     groups = []
     for group in groups_data:
         kept = [it for it in group.get("hooks", []) if not _ours(it)]
@@ -486,7 +489,7 @@ def cmd_doctor(args):
 # statusline wiring (kit 1.46.0): the progress statusline + its Stop-hook refresher, installed
 # per-project. Commands are by NAME with forward slashes (Windows eats backslashes in the
 # statusLine command; absolute paths are brittle across machines).
-# The interpreter is OS-resolved (kit 1.51.0): `python3` on POSIX -- stock mac/Linux often
+# The interpreter is OS-resolved (kit 1.50.2): `python3` on POSIX -- stock mac/Linux often
 # ships only python3, so a bare `python` left the whole feature silently dead there -- and
 # `python` on Windows, where `python3` may be a non-executing Store stub. Same rule as
 # bin/uscha.js and workbench-doctor.sh; init runs on the target machine, so os.name is right.
@@ -514,8 +517,8 @@ def _wire_statusline_settings(repo, force, dry_run):
     changed = False
     want_sl = {"type": "command", "command": STATUSLINE_CMD}
     cur_sl = result.get("statusLine")
-    # ours-by-suffix (kit 1.51.0): an existing statusLine that runs OUR script but with a
-    # different interpreter (e.g. a pre-1.51 `python` entry on an upgraded mac) is refreshed,
+    # ours-by-suffix (kit 1.50.2): an existing statusLine that runs OUR script but with a
+    # different interpreter (e.g. a pre-1.50.2 `python` entry on an upgraded mac) is refreshed,
     # not reported as a foreign conflict. A truly foreign statusLine still conflicts.
     cur_cmd = cur_sl.get("command", "") if isinstance(cur_sl, dict) else ""
     ours_sl = isinstance(cur_sl, dict) and cur_cmd.endswith("uscha_statusline.py")
@@ -530,13 +533,24 @@ def _wire_statusline_settings(repo, force, dry_run):
         ops.append({"action": "conflict", "path": str(path), "source": "statusLine"})
     hooks = result.get("hooks") if isinstance(result.get("hooks"), dict) else {}
     stop = hooks.get("Stop") if isinstance(hooks.get("Stop"), list) else []
-    registered = any(
-        isinstance(g, dict) and isinstance(g.get("hooks"), list)
-        and any(isinstance(h, dict) and h.get("command") == PROGRESS_CMD for h in g["hooks"])
-        for g in stop)
-    if not registered:
+    # prune OUR Stop hook by script suffix (not exact command) before re-adding, so an
+    # upgraded install whose entry runs the old `python` interpreter self-heals to `python3`
+    # instead of accumulating a dead duplicate -- the same self-healing N-1 gives the golden
+    # hook and the ours-by-suffix refresh gives the statusLine. Foreign Stop hooks are kept.
+    def _ours_prog(h):
+        return isinstance(h, dict) and "uscha_progress.py" in str(h.get("command", ""))
+    pruned = []
+    for g in stop:
+        if isinstance(g, dict) and isinstance(g.get("hooks"), list):
+            kept = [h for h in g["hooks"] if not _ours_prog(h)]
+            if kept:
+                gg = dict(g); gg["hooks"] = kept; pruned.append(gg)
+        else:
+            pruned.append(g)
+    new_stop = pruned + [{"hooks": [{"type": "command", "command": PROGRESS_CMD}]}]
+    if new_stop != stop:                 # differs -> a stale entry was pruned or none existed
         hooks = dict(hooks)
-        hooks["Stop"] = list(stop) + [{"hooks": [{"type": "command", "command": PROGRESS_CMD}]}]
+        hooks["Stop"] = new_stop
         result["hooks"] = hooks
         changed = True
         ops.append({"action": "wire-stop-hook", "path": str(path)})

@@ -3249,6 +3249,10 @@ d = tempfile.mkdtemp(); p = pathlib.Path(d) / "settings.json"
 p.write_text(json.dumps({"hooks": {"PreToolUse": [
     {"matcher": "*", "hooks": [{"type": "command",
      "command": "/old/py3.11 /home/u/.claude/hooks/block-approved-writes.py"}]},
+    # a QUOTED path (list2cmdline/shlex wrap a profile dir with a space) -- the prune must
+    # still catch it despite the trailing quote (the substring, not suffix, match)
+    {"matcher": "*", "hooks": [{"type": "command",
+     "command": "\"C:/Users/John Doe/.claude/hooks/block-approved-writes.py\""}]},
     {"matcher": "*", "hooks": [{"type": "command", "command": "my-own-linter"}]},
 ]}}))
 cur = "/new/py3 /home/u/.claude/hooks/block-approved-writes.py"
