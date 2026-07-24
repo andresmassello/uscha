@@ -43,10 +43,21 @@ That is exactly what this workflow exists to catch.
 
 Verified by reading the code (file:line), classified for the macOS/Linux goal.
 
-### BLOCKERS — a documented install path fails
+### Field evidence (kit 1.50.1 on real Linux — Python 3.12, Node 22)
+
+A separate discovery run installed and ran the FULL kit on Linux and confirmed this
+document's central claim independently: **the engine and all three installer commands are
+already portable — 0 engine defects.** `doctor --target both` reported `ok: true`, 9/9 skills,
+hook present + registered, on both targets. It also found what a static read could not — a
+BLOCKER this audit missed (P0-4 below) — and measured the T75/router bug that the CI matrix had
+already turned red. Findings folded in below. Not yet verified on macOS (shares POSIX
+`python3`-only, but case-insensitive-by-default differs from Linux).
+
+### BLOCKERS — a documented install path fails, or the guard silently blocks everything
 
 | # | Finding | Evidence |
 |---|---------|----------|
+| 0 | ~~**The `.py` hook has a UTF-8 BOM before its shebang, and CRLF**~~ **DONE (1.50.2).** On direct execution the kernel did not recognize `\xef\xbb\xbf#!…`, handed the file to `/bin/sh`, which syntax-errored and **exited 2 — the exact PreToolUse BLOCK code.** The guard appeared installed while blocking EVERY tool call. Stripped BOM, normalized to LF, set the exec bit (`100755` in the index). Regression: smoke **T98** — byte hygiene (no BOM/CRLF) on every OS, and DIRECT execution (`allow→0`, `block→2`) on POSIX. Field-measured; missed by the static audit and by the kit's own hook test (which ran the hook *through* an interpreter). | fixed; `head -c3` → `#!/` |
 | 1 | **`hooks.json` invokes PowerShell only.** The packaged Claude Code plugin registers the golden-write guard as `powershell -NoProfile … block-approved-writes.ps1`. `powershell` is absent by default on macOS/Linux, so the plugin-marketplace install path cannot wire INV-GOLDEN-01 there. | `uscha-kit/hooks/hooks.json` · `uscha-kit/.claude-plugin/plugin.json` (`"hooks": "./hooks/hooks.json"`) |
 
 Note the kit ships **two** install mechanisms that disagree on the canonical hook: the plugin
@@ -93,6 +104,35 @@ mechanism and make both paths agree.
 Each engine or installer change carries a smoke check in the same commit (repo rule 5), and
 CI must stay green on all three OSes before the kit claims cross-platform support anywhere in
 its docs (repo rule 2 — no doc may claim what is not measured).
+
+## Beyond the runtime fixes (field-run roadmap)
+
+The Linux discovery run also scoped two larger threads, out of this document's original
+"three seams" but part of the same goal:
+
+- **`AGENTS.md` (P0-5)** — has cp1252 double-encoding mojibake, has drifted from `CLAUDE.md`
+  (missing the `.uscha-private-names`/AC-03 paragraph), and is NOT in `templates/`, so `init`
+  never emits it — yet it is the context file Codex and pi read (they do not read `CLAUDE.md`).
+- **N-1 — stale hook accumulation** (field-measured by simulation, all OSes, amplified by
+  the port): `install-uscha.py`'s hook registration checks only whether the EXACT current
+  command is present, never prunes old ones. Reinstalling after an interpreter upgrade
+  (homebrew 3.12→3.13, pyenv, …) leaves a dead PreToolUse entry that fails on every tool call.
+  Fix (with P0-3): prune by suffix `/hooks/block-approved-writes.py` before adding, so
+  reinstall self-heals — the same ours-by-suffix pattern #3 gave the statusLine. Regression:
+  reinstall with a stale entry planted → exactly one uscha hook remains.
+- **N-6 — root dogfooding config drift**: repo-root `uscha.config.json` says `1.44.0` vs kit
+  `1.50.1`. T44 checks the KIT's config, so it does not gate; a one-line cleanup.
+- **A third install target, `pi`** (Earendil, Agent Skills standard): the 9 skills load
+  unmodified; INV-GOLDEN-01 is portable to pi's blocking `tool_call` event as a small
+  extension. This is a FEATURE, with ten design decisions (D-01…D-10 in the field handoff) the
+  human must make before code — target root, `--target all` vs `both`, the hook extension's
+  build story, etc.
+
+**Version plan** (from the field handoff, cleaner than a single bundle): the portability
+FIXES (P0-0 BOM, P0-2 statusline ✓, P0-3 hook, P0-6 EOL/exec, P0-5 AGENTS.md, plus the
+already-shipped T75 and doctor fixes) ship as a **1.50.2** patch; the `pi` target ships as a
+**1.51.0** feature. (Note: repo rule 6 says "five" version surfaces but T44 checks six — fix
+the doc in the same commit; with `pi` the plugin count grows again.)
 
 ## What is explicitly NOT broken
 

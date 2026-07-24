@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Portable Claude PreToolUse hook for INV-GOLDEN-01."""
 import json
 import sys

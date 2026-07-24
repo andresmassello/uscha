@@ -3206,6 +3206,36 @@ if [ "$T97_RES" = "OK" ]; then
   PASS=$((PASS+1)); echo "  ok   .py hook registered -> INV-GOLDEN reads OK without powershell (portable doctor)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL $T97_RES"; fi
 
+echo "== T98 (1.50.2): the INV-GOLDEN hook is clean bytes AND runs DIRECTLY (BOM/CRLF regression) =="
+# A UTF-8 BOM before the shebang makes the kernel hand the file to /bin/sh, which syntax-errors
+# and exits 2 -- the exact PreToolUse BLOCK code -- so a corrupt hook LOOKS strict while it
+# blocks EVERY tool call. Testing the hook only THROUGH an interpreter (as every other check
+# does) masks it; only DIRECT execution reveals it. Field-measured on Linux, missed by the
+# static audit.
+HOOK="$KIT/hooks/block-approved-writes.py"
+# 1) byte hygiene, on every OS: no BOM, no CRLF (the root cause). Pure bash -- passing an
+#    MSYS path (/c/...) to Windows Python does not resolve; od/grep handle it natively.
+T98_BOM="$(head -c3 "$HOOK" | od -An -tx1 | tr -d ' \n')"
+# grep -c prints its count even on zero (and exits 1 then) -- capture the count, don't chain
+# `|| echo 0` (that would emit a second line and break the integer test). Empty -> 0.
+T98_CR="$(grep -c "$(printf '\r')" "$HOOK" 2>/dev/null)"; : "${T98_CR:=0}"
+if [ "$T98_BOM" != "efbbbf" ] && [ "$T98_CR" -eq 0 ]; then T98_BYTES=ok; else T98_BYTES="bom=$T98_BOM cr=$T98_CR"; fi
+# 2) behavioral proof via DIRECT execution (POSIX only: Windows git-bash does not honor a
+#    script shebang for direct exec, and there the hook runs through a python command anyway)
+T98_EXEC="skipped"
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*) : ;;   # Windows shell -> shebang direct-exec not meaningful
+  *)
+    chmod +x "$HOOK" 2>/dev/null
+    printf '{"tool_name":"Write","tool_input":{"file_path":"src/app.py"}}' | "$HOOK" >/dev/null 2>&1; ALLOW=$?
+    printf '{"tool_name":"Write","tool_input":{"file_path":"tests/x.approved"}}' | "$HOOK" >/dev/null 2>&1; BLOCK=$?
+    [ "$ALLOW" -eq 0 ] && [ "$BLOCK" -eq 2 ] && T98_EXEC="ok" || T98_EXEC="allow=$ALLOW block=$BLOCK"
+    ;;
+esac
+if [ "$T98_BYTES" = "ok" ] && { [ "$T98_EXEC" = "ok" ] || [ "$T98_EXEC" = "skipped" ]; }; then
+  PASS=$((PASS+1)); echo "  ok   hook is BOM/CRLF-free; direct exec allow=0 block=2 (POSIX) [$T98_EXEC]"; \
+else FAIL=$((FAIL+1)); echo "  FAIL bytes=$T98_BYTES exec=$T98_EXEC"; fi
+
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"
