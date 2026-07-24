@@ -3236,6 +3236,38 @@ if [ "$T98_BYTES" = "ok" ] && { [ "$T98_EXEC" = "ok" ] || [ "$T98_EXEC" = "skipp
   PASS=$((PASS+1)); echo "  ok   hook is BOM/CRLF-free; direct exec allow=0 block=2 (POSIX) [$T98_EXEC]"; \
 else FAIL=$((FAIL+1)); echo "  FAIL bytes=$T98_BYTES exec=$T98_EXEC"; fi
 
+echo "== T99 (1.50.2): reinstall self-heals a stale hook entry (N-1: prune by suffix, keep foreign) =="
+# The hook command carries an ABSOLUTE sys.executable; an interpreter move would leave a dead
+# PreToolUse entry that fails on every tool call. prepared_settings must prune ANY prior uscha
+# hook (matched by the script basename, not the exact command) before adding the current one,
+# and must NOT touch a user's own foreign hook. Field-found by simulation (N-1 / AC-P7).
+T99=$("$PY" - "$KIT/install-uscha.py" <<'PY'
+import importlib.util, json, os, sys, tempfile, pathlib
+spec = importlib.util.spec_from_file_location("iu", sys.argv[1])
+iu = importlib.util.module_from_spec(spec); spec.loader.exec_module(iu)
+d = tempfile.mkdtemp(); p = pathlib.Path(d) / "settings.json"
+p.write_text(json.dumps({"hooks": {"PreToolUse": [
+    {"matcher": "*", "hooks": [{"type": "command",
+     "command": "/old/py3.11 /home/u/.claude/hooks/block-approved-writes.py"}]},
+    {"matcher": "*", "hooks": [{"type": "command", "command": "my-own-linter"}]},
+]}}))
+cur = "/new/py3 /home/u/.claude/hooks/block-approved-writes.py"
+g = iu.prepared_settings(p, cur)["hooks"]["PreToolUse"]
+ours = [h["command"] for grp in g for h in grp["hooks"] if "block-approved-writes.py" in h["command"]]
+foreign = [h["command"] for grp in g for h in grp["hooks"] if "block-approved-writes.py" not in h["command"]]
+# reinstall must be idempotent too: run it again on its own output
+p.write_text(json.dumps({"hooks": {"PreToolUse": g}}))
+g2 = iu.prepared_settings(p, cur)["hooks"]["PreToolUse"]
+ours2 = [h["command"] for grp in g2 for h in grp["hooks"] if "block-approved-writes.py" in h["command"]]
+import shutil; shutil.rmtree(d)
+print("OK" if ours == [cur] and "my-own-linter" in foreign and ours2 == [cur] else
+      "BAD ours=%s foreign=%s ours2=%s" % (ours, foreign, ours2))
+PY
+)
+if [ "$T99" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   stale entry pruned, current kept once, foreign preserved, idempotent"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T99"; fi
+
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"

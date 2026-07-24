@@ -214,9 +214,22 @@ def prepared_settings(path, command):
             raise InstallError("[install-uscha] Claude PreToolUse hook item must be an object: %s" % path)
     result = dict(data)
     hooks = dict(hooks_data)
-    groups = list(groups_data)
-    if not hook_registered(result, command):
-        groups.append({"matcher": "*", "hooks": [{"type": "command", "command": command}]})
+    # N-1 (kit 1.50.2): prune ANY prior uscha hook entry -- matched by the hook script's
+    # basename, NOT the exact command -- before adding the current one. The command carries
+    # an ABSOLUTE sys.executable, so an interpreter move (homebrew 3.12->3.13, pyenv, the
+    # Windows Store python) would otherwise leave a dead entry that fails on every tool call
+    # while the fresh one is merely appended. Suffix-pruning makes a reinstall self-heal.
+    def _ours(item):
+        c = str(item.get("command", "")).replace("\\", "/") if isinstance(item, dict) else ""
+        return c.endswith("/" + HOOK_NAME) or c == HOOK_NAME or c.endswith(" " + HOOK_NAME)
+    groups = []
+    for group in groups_data:
+        kept = [it for it in group.get("hooks", []) if not _ours(it)]
+        if kept:                          # keep foreign hooks; drop a group that was ONLY ours
+            g = dict(group)
+            g["hooks"] = kept
+            groups.append(g)
+    groups.append({"matcher": "*", "hooks": [{"type": "command", "command": command}]})
     hooks["PreToolUse"] = groups
     result["hooks"] = hooks
     return result

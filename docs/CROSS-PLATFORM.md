@@ -113,13 +113,11 @@ The Linux discovery run also scoped two larger threads, out of this document's o
 - **`AGENTS.md` (P0-5)** — has cp1252 double-encoding mojibake, has drifted from `CLAUDE.md`
   (missing the `.uscha-private-names`/AC-03 paragraph), and is NOT in `templates/`, so `init`
   never emits it — yet it is the context file Codex and pi read (they do not read `CLAUDE.md`).
-- **N-1 — stale hook accumulation** (field-measured by simulation, all OSes, amplified by
-  the port): `install-uscha.py`'s hook registration checks only whether the EXACT current
-  command is present, never prunes old ones. Reinstalling after an interpreter upgrade
-  (homebrew 3.12→3.13, pyenv, …) leaves a dead PreToolUse entry that fails on every tool call.
-  Fix (with P0-3): prune by suffix `/hooks/block-approved-writes.py` before adding, so
-  reinstall self-heals — the same ours-by-suffix pattern #3 gave the statusLine. Regression:
-  reinstall with a stale entry planted → exactly one uscha hook remains.
+- ~~**N-1 — stale hook accumulation**~~ **DONE (1.50.2).** `prepared_settings` now prunes any
+  prior uscha hook (matched by the script basename, not the exact command) before adding the
+  current one, so a reinstall after an interpreter move self-heals; a user's foreign PreToolUse
+  hook is preserved untouched. Regression: smoke **T99** — a planted stale entry is pruned,
+  the current stays once, foreign preserved, idempotent on re-run.
 - **N-6 — root dogfooding config drift**: repo-root `uscha.config.json` says `1.44.0` vs kit
   `1.50.1`. T44 checks the KIT's config, so it does not gate; a one-line cleanup.
 - **A third install target, `pi`** (Earendil, Agent Skills standard): the 9 skills load
