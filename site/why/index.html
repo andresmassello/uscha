@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why uscha exists — open loop vs. measured graph</title>
+<meta name="description" content="Open loop vs. measured graph: who answers the gates, and why the loop gets caged instead of removed. The essay behind the uscha methodology.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/uscha.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="wordmark" href="../index.html">uscha<b>.</b>dev</a>
+    <nav>
+      <a href="../index.html#paradigm">paradigm</a>
+      <a href="../index.html#skills">skills</a>
+      <a href="../index.html#library">library</a>
+      <a href="https://github.com/andresmassello/uscha">github</a>
+      <a class="lang" href="../es/why/index.html">ES</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <article class="article">
+    <div class="kicker">essay</div>
+    <h1>Open loop vs. measured graph: why uscha exists</h1>
+    <p class="epigraph">The agent executes · the method governs · evidence decides · the human approves.</p>
+
+    <p>
+      There are two ways to put an AI agent to work on code. The difference between them is,
+      literally, uscha's reason for being.
+    </p>
+
+    <h2>The two paradigms</h2>
+
+    <div class="duel">
+      <div class="panel bad">
+        <div class="ptitle">Open loop</div>
+        <div class="psub">The agent decides the path</div>
+        <ul class="flow">
+          <li>investigate</li>
+          <li>modify code</li>
+          <li>run tests</li>
+          <li>review the result</li>
+          <li class="self" data-tag="ASKS ITSELF">resolved?</li>
+          <li>done — or decide what to try, and loop</li>
+        </ul>
+      </div>
+      <div class="panel good">
+        <div class="ptitle">Measured graph</div>
+        <div class="psub">You define the possible paths</div>
+        <ul class="flow">
+          <li>reproduce the bug</li>
+          <li class="gate">reproduced? — no → ask for info</li>
+          <li>find root cause · attempt fix</li>
+          <li class="gate">tests pass? — no → fix again</li>
+          <li>review</li>
+          <li class="gate">approved? — no → correct</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>The sin of the open loop</h2>
+    <p>
+      Look at the diamond on the left: <code>REVIEW RESULT → RESOLVED?</code>
+    </p>
+    <p>
+      Who answers that "resolved?" <strong>The agent, judging itself.</strong> That is the hole at
+      the center of the whole open-loop paradigm: the model decides when it is finished,
+      <em>narrates</em> that it is done, and you believe it. Nothing outside the agent can
+      contradict it.
+    </p>
+    <p>uscha was designed to close exactly that hole. Its doctrine:</p>
+
+    <div class="rulebox">
+      <div class="rk">Doctrine</div>
+      <p><span class="fact">Measured</span> beats narrated. Facts <span class="fact">block</span>; guesses <span class="guess">advise</span>.</p>
+    </div>
+
+    <h2>uscha IS the graph — but with two twists</h2>
+    <p>The right-hand column describes uscha's dev-loop almost literally:</p>
+
+    <table>
+      <thead>
+        <tr><th>Generic fix graph</th><th>uscha</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Reproduce bug / reproduced?</td><td><code>regression-capture</code> / characterization: reproduce BEFORE touching</td></tr>
+        <tr><td>Root cause → fix → tests</td><td>build with tests as the guardrail between passes</td></tr>
+        <tr><td>Pass? NO → fix again</td><td>the <strong>bounded</strong> convergence loop (not infinite)</td></tr>
+        <tr><td>Review → approved?</td><td>the QA loop (<code>code-review</code> / <code>judgment-day</code>), measured by the ledger</td></tr>
+        <tr><td>Approved? YES → done</td><td><strong>the human gate</strong> (merge gate)</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      And above that fix graph lives the <strong>macro-graph of phases</strong> —
+      <code>idea → discovery → spec → adr/constitution → build → qa loop → verify → production</code> —
+      a derived FSM that the mirador draws as "the trail".
+    </p>
+    <p>
+      Using a graph is not the novelty; plenty of frameworks already preach "define the state
+      graph". What is uscha's own are <strong>two things</strong> the diagram hints at but does
+      not say:
+    </p>
+
+    <ol class="twists">
+      <li>
+        <strong>Who answers the gates.</strong> In the open loop, "resolved?" is answered by the
+        agent. In uscha, every gate — <code>pass?</code>, <code>approved?</code> — is answered by
+        <strong>measured evidence</strong>: the ledger, the gates, coverage, the golden suite. The
+        judgment is taken out of the model's head and put into a deterministic, auditable artifact.
+      </li>
+      <li>
+        <strong>The loop does not vanish: it is caged.</strong> It still exists, but inside a graph
+        node (the QA convergence node), and it is <strong>bounded</strong>: it converges, or it
+        <strong>escalates to a human</strong> when it stalls (plateau / stop-signal). It is never
+        the "decide what to try" that spins forever.
+      </li>
+    </ol>
+
+    <h2>One honest caveat</h2>
+    <p>
+      uscha is not "draw whatever graph you like". It is a <strong>fixed pipeline of phases +
+      bounded loops inside + measured gates</strong>. What YOU define is not the topology, it is
+      the <strong>guardrails</strong>: <code>SPEC.md</code>, <code>ACCEPTANCE.md</code>,
+      <code>CONSTITUTION.md</code>, the invariants. Those are the limits the agent cannot cross;
+      the macro-graph is given.
+    </p>
+
+    <h2>The line that sums it up</h2>
+    <div class="pullquote">
+      The open loop gives you an agent that <span class="no">believes</span> it is finished.
+      uscha gives you an agent that <span class="yes">cannot finish</span> until the evidence
+      permits it and a human approves it.
+    </div>
+
+    <div class="backlinks">
+      <a href="../docs/paper/uscha-paper.html">Read the paper →</a>
+      <a href="../docs/uscha-playbook-EN.html">Open the playbook →</a>
+      <a href="../index.html">← Back to home</a>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="foot-motto">The agent executes · the method governs · evidence decides · the human approves.</p>
+    <div class="foot-links">
+      <a href="https://github.com/andresmassello/uscha">github.com/andresmassello/uscha</a>
+      <a href="https://www.npmjs.com/package/@andresmassello/uscha">npm · @andresmassello/uscha</a>
+      <a href="../es/why/index.html">Versión en español</a>
+    </div>
+    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.50.0</p>
+  </div>
+</footer>
+
+</body>
+</html>

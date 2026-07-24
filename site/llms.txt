@@ -1,0 +1,37 @@
+# uscha
+
+> Uscha is a spec-driven, tool-agnostic methodology for software development with LLM coding agents. Its doctrine: measured beats narrated — gates that read facts block; gates that guess over prose advise. The agent executes, the method governs, evidence decides, the human approves.
+
+Uscha closes the central hole of the "open loop" paradigm, where the agent decides
+for itself when it is finished. Instead, work moves through a fixed pipeline of
+phases (idea → discovery → spec → adr/constitution → build → qa loop → verify →
+production) whose gates are answered by deterministic, auditable artifacts — a
+ledger (QA-LEDGER.json), coverage, golden suites — never by the agent's own
+narration. The QA loop is bounded: it converges or escalates to a human, and the
+human always approves the merge.
+
+Five rules form the spine: (1) no code without SPEC + ACCEPTANCE; (2) the truth
+lives in versioned files, not in the chat; (3) the human always approves the
+merge; (4) tests must assert — the gate is never weakened; (5) migrations are
+anchored with a mechanically captured golden suite the agent must never author.
+
+The kit (v1.50.0, MIT license) ships 9 skills for Claude Code and Codex plus a
+pure-Python engine (qa_ledger.py, 29 subcommands, zero runtime dependencies)
+that ingests evidence from 11 language stacks. Install:
+`npx --yes @andresmassello/uscha@latest install --target claude`
+
+## Docs
+
+- [Home](https://uscha.dev/index.html): landing page — the method, the five rules, the nine skills, the engine's numbers
+- [Why uscha exists](https://uscha.dev/why/index.html): essay — open loop vs. measured graph, who answers the gates, why the loop is caged
+- [The Playbook](https://uscha.dev/docs/uscha-playbook-EN.html): the operator's manual — plays 00–10, setup, command reference
+- [Skills reference](https://uscha.dev/docs/skills-referencia-EN.html): the nine skills phase by phase — what each reads, writes, and must never do
+- [Uscha, distilled](https://uscha.dev/docs/uscha-onepager-EN.html): the whole method on one page
+- [The paper](https://uscha.dev/docs/paper/uscha-paper.html): formal treatment — a fact-gated, tool-agnostic methodology for specification-driven development with LLM coding agents ([PDF](https://uscha.dev/docs/paper/uscha-paper.pdf))
+
+## Optional
+
+- [Team pitch](https://uscha.dev/docs/uscha-team-pitch-extended-EN.html): extended deck for bringing the method to a team
+- [Versión en español](https://uscha.dev/es/index.html): Spanish twin of the site — every English page has one
+- [GitHub](https://github.com/andresmassello/uscha): source repository (public soon)
+- [npm](https://www.npmjs.com/package/@andresmassello/uscha): @andresmassello/uscha — the installable kit

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>uscha — the method builds the rest</title>
+<meta name="description" content="Uscha is a spec-driven, tool-agnostic methodology for development with LLM coding agents. The agent executes · the method governs · evidence decides · the human approves.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/uscha.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="wordmark" href="index.html">uscha<b>.</b>dev</a>
+    <nav>
+      <a href="#paradigm">paradigm</a>
+      <a href="#rules">rules</a>
+      <a href="#method">method</a>
+      <a href="#skills">skills</a>
+      <a href="#library">library</a>
+      <a href="https://github.com/andresmassello/uscha">github</a>
+      <a class="lang" href="es/index.html">ES</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <div class="hero">
+      <div class="kicker">a spec-driven methodology for LLM coding agents</div>
+      <h1>You bring the idea.<br>The method builds <em>the rest</em>.</h1>
+      <p class="sub">
+        Uscha is a <b>spec-driven, tool-agnostic</b> methodology for developing with coding agents.
+        No ceremony where it isn't earned — rigor where the stakes justify it.
+        Its central mechanism: a deterministic ledger that separates what was <b>measured</b>
+        from what was <b>narrated</b>.
+      </p>
+      <p class="motto"><b>The agent executes · the method governs · evidence decides · the human approves.</b></p>
+
+      <div class="install">
+        <code><span class="dim">$</span> npx --yes @andresmassello/uscha@latest install --target claude</code>
+      </div>
+
+      <div class="hero-cta">
+        <a class="btn primary" href="https://github.com/andresmassello/uscha">View on GitHub <span class="soon">public soon</span></a>
+        <a class="btn ghost" href="why/index.html">Why does it exist? →</a>
+      </div>
+
+      <div class="badges">
+        <span class="badge">kit <b>v1.50.0</b></span>
+        <span class="badge"><b>MIT</b> license</span>
+        <span class="badge">Python 3.8+ · <b>zero dependencies</b></span>
+        <span class="badge"><b>9</b> skills</span>
+        <span class="badge">Claude Code · Codex</span>
+      </div>
+    </div>
+
+    <section id="problem">
+      <div class="sec-kicker">the problem</div>
+      <h2 class="sec-title">The agent says it's done. Who contradicts it?</h2>
+      <div class="problem-quote">
+        An agent will tell you the tests pass. It will tell you the feature is done.
+        It is often right — <span class="hl">and when it is wrong, you find out in production.</span>
+      </div>
+    </section>
+
+    <section id="paradigm">
+      <div class="sec-kicker">the two paradigms</div>
+      <h2 class="sec-title">Open loop vs. measured graph</h2>
+      <p class="lead">
+        There are two ways to put an agent to work on code. In the <b>open loop</b>, the agent
+        decides the path and asks itself whether it is done — nothing outside it can contradict it.
+        In the <b>measured graph</b>, the human defines the possible paths and every gate is
+        answered by <b>measured evidence</b>, not the agent.
+      </p>
+
+      <div class="duel">
+        <div class="panel bad">
+          <div class="ptitle">Open loop</div>
+          <div class="psub">The agent decides the path</div>
+          <ul class="flow">
+            <li>investigate</li>
+            <li>modify code</li>
+            <li>run tests</li>
+            <li>review the result</li>
+            <li class="self" data-tag="ASKS ITSELF">solved?</li>
+            <li>done — or try again</li>
+          </ul>
+        </div>
+        <div class="panel good">
+          <div class="ptitle">Measured graph</div>
+          <div class="psub">You define the possible paths</div>
+          <ul class="flow">
+            <li>reproduce the bug</li>
+            <li class="gate">does it reproduce?</li>
+            <li>find root cause · attempt fix</li>
+            <li class="gate">do the tests pass?</li>
+            <li>review</li>
+            <li class="gate">approved by a human?</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="duel-note">
+        Uscha is that measured graph, with two twists of its own: every gate is answered by a
+        <b>deterministic, auditable artifact</b> — the ledger, the gates, coverage, the golden suite —
+        and the loop does not vanish: it is <b>caged</b> inside a bounded convergence node that
+        either converges or escalates to a human.
+      </p>
+
+      <div class="pullquote">
+        The open loop gives you an agent that <span class="no">believes</span> it is finished.
+        Uscha gives you an agent that <span class="yes">cannot finish</span> until the evidence
+        permits it and a human approves it.
+      </div>
+      <p class="after-quote"><a href="why/index.html">Read the full essay: why uscha exists →</a></p>
+
+      <div class="rulebox">
+        <div class="rk">The rule that orders everything</div>
+        <p>Gates that read <span class="fact">FACTS</span> block; those that <span class="guess">GUESS</span> over prose advise.</p>
+      </div>
+    </section>
+
+    <section id="rules">
+      <div class="sec-kicker">the spine</div>
+      <h2 class="sec-title">Five rules. Nothing more — and nothing less.</h2>
+      <div class="rules">
+        <div class="rule-card">
+          <span class="num">01</span>
+          <h3>No code without SPEC + ACCEPTANCE</h3>
+          <p>Before anything is built, what is being built exists — and so does how you'll know it's right.</p>
+        </div>
+        <div class="rule-card">
+          <span class="num">02</span>
+          <h3>The truth lives in versioned files</h3>
+          <p>Not in the chat. <code>SPEC.md</code>, <code>ADR</code>, <code>ACCEPTANCE.md</code>, <code>QA-LEDGER.json</code> — all in the repo.</p>
+        </div>
+        <div class="rule-card">
+          <span class="num">03</span>
+          <h3>The human always approves the merge</h3>
+          <p>The pipeline stops at the merge gate. Always. No exceptions.</p>
+        </div>
+        <div class="rule-card">
+          <span class="num">04</span>
+          <h3>Tests must assert</h3>
+          <p>The gate is never weakened to make it pass. A test that doesn't assert is not a test.</p>
+        </div>
+        <div class="rule-card">
+          <span class="num">05</span>
+          <h3>Migrations anchored with a golden</h3>
+          <p>Old behavior is captured mechanically before touching it. The agent never authors the <code>.approved</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="method">
+      <div class="sec-kicker">the trail</div>
+      <h2 class="sec-title">From idea to production, with gates along the way</h2>
+      <div class="chain">
+        <span class="node">idea</span><span class="arr">→</span>
+        <span class="node">discovery</span><span class="arr">→</span>
+        <span class="node">spec</span><span class="arr">→</span>
+        <span class="node">adr / constitution</span><span class="arr">→</span>
+        <span class="node">build</span><span class="arr">→</span>
+        <span class="node gate">qa loop</span><span class="arr">→</span>
+        <span class="node gate">verify</span><span class="arr">→</span>
+        <span class="node human">human gate</span><span class="arr">→</span>
+        <span class="node">production</span>
+      </div>
+      <div class="chain-legend">
+        <span><i style="background:var(--cyan)"></i>measured gate</span>
+        <span><i style="background:var(--coral)"></i>human approval</span>
+      </div>
+    </section>
+
+    <section id="skills">
+      <div class="sec-kicker">the kit</div>
+      <h2 class="sec-title">Nine skills covering the full cycle</h2>
+      <p class="lead">From the opening interrogation to the status dashboard. Each skill does one thing; the ledger ties them together.</p>
+      <div class="skills">
+        <div class="skill">
+          <span class="sname">/uscha-discovery</span>
+          <p>From a bare idea to a spec package: the skill interrogates until a shared shape of the system exists, writing the documents as it goes.</p>
+        </div>
+        <div class="skill">
+          <span class="sname">/uscha-adr-refine</span>
+          <p>Interview, then distill: the same interview applied to a feature you already know. Not a generator — an interrogator.</p>
+        </div>
+        <div class="skill">
+          <span class="sname">/uscha-devloop</span>
+          <p>The build + QA orchestrator: a disciplined cycle, every step in the ledger, and a hard stop at the human merge gate.</p>
+        </div>
+        <div class="skill">
+          <span class="sname">/uscha-characterize</span>
+          <p>Freeze current behavior as field truth: the golden suite — the one artifact the agent must not author.</p>
+        </div>
+        <div class="skill">
+          <span class="sname">/uscha-reverse-discovery</span>
+          <p>The inverse of discovery, for brownfield: nothing is invented — facts are extracted from the existing system, as a map + golden.</p>
+        </div>
+        <div class="skill">
+          <span class="sname">/uscha-rubric</span>
+          <p>The ACCEPTANCE of the non-testable: grades the change against a versioned RUBRIC.md. Advisory by default.</p>
+        </div>
+        <div class="skill">
+          <span class="sname">/uscha-mirador</span>
+          <p>Real status at a glance: readiness, sub-scores, phases, invariants and QA loops. The skill wires — it never computes.</p>
+        </div>
+        <div class="skill">
+          <span class="sname">/uscha-sysdoc</span>
+          <p>The system deck in two tracks — commercial and technical — with real metrics from the ledger. An optional report, on request.</p>
+        </div>
+        <div class="skill">
+          <span class="sname">/uscha-status</span>
+          <p>The statusline on demand: a one-line progress readout, for surfaces where the statusline isn't visible.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="library">
+      <div class="sec-kicker">the library</div>
+      <h2 class="sec-title">Go deeper: the full documentation</h2>
+      <p class="lead">Everything below is generated from the same repo the kit ships from — the docs and the code travel together.</p>
+      <div class="lib">
+        <a class="lib-card" href="why/index.html">
+          <span class="lk">essay</span>
+          <h3>Why uscha exists</h3>
+          <p>Open loop vs. measured graph: who answers the gates, and why the loop gets caged instead of removed.</p>
+        </a>
+        <a class="lib-card" href="docs/uscha-playbook-EN.html">
+          <span class="lk">deck <span class="fmt">html</span></span>
+          <h3>The Playbook</h3>
+          <p>The operator's manual: plays 00–10, from reading the board to knowing when to skip the method entirely.</p>
+        </a>
+        <a class="lib-card" href="docs/skills-referencia-EN.html">
+          <span class="lk">deck <span class="fmt">html</span></span>
+          <h3>Skills reference</h3>
+          <p>The nine skills, phase by phase: what each one reads, what it writes, and what it must never do.</p>
+        </a>
+        <a class="lib-card" href="docs/uscha-onepager-EN.html">
+          <span class="lk">brief <span class="fmt">html</span></span>
+          <h3>Uscha, distilled</h3>
+          <p>The whole method on one page: rules, gates, and the ledger — the printable brief.</p>
+        </a>
+        <a class="lib-card" href="docs/uscha-team-pitch-extended-EN.html">
+          <span class="lk">deck <span class="fmt">html</span></span>
+          <h3>Team pitch</h3>
+          <p>The extended deck for bringing the method to a team: the case, the mechanics, the adoption path.</p>
+        </a>
+        <a class="lib-card" href="docs/paper/uscha-paper.html">
+          <span class="lk">paper <span class="fmt">html · pdf</span></span>
+          <h3>The paper</h3>
+          <p>The formal treatment: a fact-gated, tool-agnostic methodology for specification-driven development with LLM coding agents.</p>
+        </a>
+      </div>
+    </section>
+
+    <section id="evidence">
+      <div class="sec-kicker">the engine's numbers</div>
+      <h2 class="sec-title">Measured beats narrated — here too</h2>
+      <div class="stats">
+        <div class="stat"><div class="v">29</div><div class="k">engine subcommands</div></div>
+        <div class="stat"><div class="v">11</div><div class="k">language stacks</div></div>
+        <div class="stat"><div class="v">9</div><div class="k">skills in the kit</div></div>
+        <div class="stat"><div class="v">0</div><div class="k">runtime dependencies</div></div>
+        <div class="stat"><div class="v">100<small>%</small></div><div class="k">Python stdlib</div></div>
+      </div>
+      <p class="ev-note">
+        The engine is <code>qa_ledger.py</code>: pure Python, no pip installs. It ingests evidence from
+        maven, gradle, ant, python, node, go, rust, dotnet, cpp, swift and flutter, and records it in
+        <code>QA-LEDGER.json</code> — a deterministic ledger that records what was measured, never what was claimed.
+      </p>
+
+      <div class="field">
+        <div class="fk">Field note · real case 001</div>
+        <blockquote><span class="q">"Check"</span> is a question. The agent answered with a commit.</blockquote>
+        <p>
+          A human asked the agent to "check" some remote QA errors. The agent diagnosed them well — and
+          in the same turn, without showing the diagnosis or waiting for a reply, it announced "design
+          closed", edited tests and production code, and ran the build. Between the question and the
+          modified code: zero human decision points. The execution was competent; the failure was
+          <b>governance</b>. That is exactly the hole Uscha exists to close.
+        </p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="foot-motto">The agent executes · the method governs · evidence decides · the human approves.</p>
+    <div class="foot-links">
+      <a href="https://github.com/andresmassello/uscha">github.com/andresmassello/uscha</a>
+      <a href="https://www.npmjs.com/package/@andresmassello/uscha">npm · @andresmassello/uscha</a>
+      <a href="es/index.html">Versión en español</a>
+    </div>
+    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.50.0</p>
+  </div>
+</footer>
+
+</body>
+</html>

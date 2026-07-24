@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Por qué existe uscha — loop abierto vs. grafo medido</title>
+<meta name="description" content="Loop abierto vs. grafo medido: quién contesta las compuertas, y por qué el loop se enjaula en vez de eliminarse. El ensayo detrás de la metodología uscha.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/uscha.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="wordmark" href="../index.html">uscha<b>.</b>dev</a>
+    <nav>
+      <a href="../index.html#paradigma">paradigma</a>
+      <a href="../index.html#skills">skills</a>
+      <a href="../index.html#biblioteca">biblioteca</a>
+      <a href="https://github.com/andresmassello/uscha">github</a>
+      <a class="lang" href="../../why/index.html">EN</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <article class="article">
+    <div class="kicker">ensayo</div>
+    <h1>Loop abierto vs. grafo medido: por qué existe uscha</h1>
+    <p class="epigraph">El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</p>
+
+    <p>
+      Hay dos formas de poner un agente de IA a trabajar sobre código. La diferencia entre
+      ellas es, literalmente, la razón de ser de uscha.
+    </p>
+
+    <h2>Los dos paradigmas</h2>
+
+    <div class="duel">
+      <div class="panel bad">
+        <div class="ptitle">Loop abierto</div>
+        <div class="psub">El agente decide el recorrido</div>
+        <ul class="flow">
+          <li>investiga</li>
+          <li>modifica código</li>
+          <li>ejecuta tests</li>
+          <li>revisa el resultado</li>
+          <li class="self" data-tag="SE PREGUNTA A SÍ MISMO">¿resuelto?</li>
+          <li>termina — o decide qué intentar, y vuelve al loop</li>
+        </ul>
+      </div>
+      <div class="panel good">
+        <div class="ptitle">Grafo medido</div>
+        <div class="psub">Vos definís los caminos posibles</div>
+        <ul class="flow">
+          <li>reproducir el bug</li>
+          <li class="gate">¿lo reproduce? — no → pedir info</li>
+          <li>hallar causa · intentar fix</li>
+          <li class="gate">¿pasan los tests? — no → volver a corregir</li>
+          <li>revisión</li>
+          <li class="gate">¿aprobado? — no → corregir</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>El pecado del loop abierto</h2>
+    <p>
+      Mirá el rombo de la izquierda: <code>REVISA RESULTADO → ¿RESUELTO?</code>
+    </p>
+    <p>
+      ¿Quién contesta ese "¿resuelto?"? <strong>El agente, evaluándose a sí mismo.</strong> Ese es
+      el agujero de todo el paradigma de loop abierto: el modelo decide cuándo terminó,
+      <em>narra</em> que está listo, y vos le creés. No hay nada afuera del agente que lo
+      contradiga.
+    </p>
+    <p>uscha fue diseñado para cerrar exactamente ese agujero. Su doctrina:</p>
+
+    <div class="rulebox">
+      <div class="rk">Doctrina</div>
+      <p>Lo <span class="fact">medido</span> le gana a lo narrado. Los hechos <span class="fact">bloquean</span>; las conjeturas <span class="guess">avisan</span>.</p>
+    </div>
+
+    <h2>uscha ES el grafo — pero con dos vueltas de tuerca</h2>
+    <p>La columna derecha describe casi literalmente el <em>dev-loop</em> de uscha:</p>
+
+    <table>
+      <thead>
+        <tr><th>Grafo genérico de fix</th><th>uscha</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Reproducir bug / ¿lo reproduce?</td><td><code>regression-capture</code> / caracterización: reproducir ANTES de tocar</td></tr>
+        <tr><td>Hallar causa → fix → tests</td><td>build con los tests como guardrail entre pasos</td></tr>
+        <tr><td>¿Pasan? NO → volver a corregir</td><td>el loop de convergencia <strong>acotado</strong> (no infinito)</td></tr>
+        <tr><td>Revisión → ¿aprobado?</td><td>el QA loop (<code>code-review</code> / <code>judgment-day</code>) medido por el ledger</td></tr>
+        <tr><td>¿Aprobado? SÍ → termina</td><td><strong>la compuerta humana</strong> (merge gate)</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      Y por encima de ese grafo de fix vive el <strong>macro-grafo de fases</strong> —
+      <code>idea → discovery → spec → adr/constitution → build → qa loop → verify → producción</code> —
+      un FSM derivado que el mirador dibuja como "el sendero".
+    </p>
+    <p>
+      Usar un grafo no es la novedad; muchos frameworks ya predican "definí el grafo de estados".
+      Lo propio de uscha son <strong>dos cosas</strong> que el diagrama insinúa pero no dice:
+    </p>
+
+    <ol class="twists">
+      <li>
+        <strong>Quién contesta las compuertas.</strong> En el loop abierto, "¿resuelto?" lo contesta
+        el agente. En uscha, cada compuerta — <code>¿pasan?</code>, <code>¿aprobado?</code> — la
+        contesta <strong>evidencia medida</strong>: el ledger, los gates, la cobertura, el golden.
+        Se saca el juicio de la cabeza del modelo y se lo pone en un artefacto determinista y
+        auditable.
+      </li>
+      <li>
+        <strong>El loop no desaparece: se enjaula.</strong> Sigue existiendo, pero adentro de un
+        nodo del grafo (el de convergencia de QA), y es <strong>acotado</strong>: converge, o
+        <strong>escala a un humano</strong> cuando se estanca (plateau / stop-signal). Nunca es el
+        "decide qué intentar" que gira para siempre.
+      </li>
+    </ol>
+
+    <h2>Una honestidad</h2>
+    <p>
+      uscha no es "dibujá cualquier grafo que quieras". Es un <strong>pipeline fijo de fases +
+      loops acotados adentro + compuertas medidas</strong>. Lo que VOS definís no es la topología,
+      son las <strong>guardas</strong>: <code>SPEC.md</code>, <code>ACCEPTANCE.md</code>,
+      <code>CONSTITUTION.md</code>, los invariantes. Esos son los límites que el agente no puede
+      cruzar; el grafo macro ya viene dado.
+    </p>
+
+    <h2>La frase que lo cierra</h2>
+    <div class="pullquote">
+      El loop abierto te da un agente que <span class="no">cree</span> que terminó.
+      uscha te da un agente que <span class="yes">no puede terminar</span> hasta que la evidencia
+      lo habilite y un humano lo apruebe.
+    </div>
+
+    <div class="backlinks">
+      <a href="../../docs/paper/uscha-paper.html">Leer el paper (inglés) →</a>
+      <a href="../../docs/uscha-playbook.html">Abrir el playbook →</a>
+      <a href="../index.html">← Volver al inicio</a>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="foot-motto">El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</p>
+    <div class="foot-links">
+      <a href="https://github.com/andresmassello/uscha">github.com/andresmassello/uscha</a>
+      <a href="https://www.npmjs.com/package/@andresmassello/uscha">npm · @andresmassello/uscha</a>
+      <a href="../../why/index.html">English version</a>
+    </div>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.50.0</p>
+  </div>
+</footer>
+
+</body>
+</html>
