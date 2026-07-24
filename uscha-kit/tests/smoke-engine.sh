@@ -3179,6 +3179,31 @@ if [ "$T96_RES" = "OK" ]; then
   PASS=$((PASS+1)); echo "  ok   AC receipt cites testcase+report · narrated says so · build cites coverage path · ADR carries file · no-facts phase has no key"; \
 else FAIL=$((FAIL+1)); echo "  FAIL $T96_RES"; fi
 
+echo "== T97 (1.50.x): doctor reads a .py-registered INV-GOLDEN hook as OK, no powershell needed =="
+# The doctor used to check ONLY for block-approved-writes.ps1 and require powershell/pwsh, so
+# a healthy .py install (what `uscha install` actually wires) read as broken on every OS --
+# worst on mac/Linux, where it ALSO false-warned about a missing pwsh the .py never uses. On
+# the CI Linux/macOS runners (no powershell present) a green here PROVES the .py path needs
+# none: the runner IS the negative control.
+T97="$(mktemp -d)"
+( cd "$T97" && mkdir -p .claude/hooks
+  cp "$KIT/hooks/block-approved-writes.py" .claude/hooks/
+  printf '{ "hooks": { "PreToolUse": [ { "matcher": "*", "hooks": [ { "type": "command", "command": "python .claude/hooks/block-approved-writes.py" } ] } ] } }\n' > .claude/settings.json
+  # isolate expanduser('~') on BOTH platforms: POSIX honors HOME, Windows honors USERPROFILE.
+  HOME="$T97" USERPROFILE="$T97" run doctor --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+hk = [c for c in d['checks'] if 'INV-GOLDEN' in c['title']]
+# exactly one hook check, level ok, and it names the .py variant (not the .ps1)
+ok = (len(hk) == 1 and hk[0]['level'] == 'ok'
+      and 'block-approved-writes.py' in hk[0].get('detail', ''))
+print('OK' if ok else 'BAD ' + json.dumps(hk))" > result.txt )
+T97_RES="$(cat "$T97/result.txt")"
+rm -rf "$T97"
+if [ "$T97_RES" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   .py hook registered -> INV-GOLDEN reads OK without powershell (portable doctor)"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T97_RES"; fi
+
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
 cd / && rm -rf "$SB"

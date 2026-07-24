@@ -6004,21 +6004,25 @@ DOCTOR_FIX = {
     "gradle": "https://gradle.org/install/  (o usa el gradlew del repo)",
     "swift": "https://www.swift.org/install/",
 }
-HOOK_NAME = "block-approved-writes.ps1"
+# Two valid hooks: the installer wires the portable .py; the plugin flow ships the .ps1.
+# The doctor must recognize EITHER -- checking only the .ps1 (as it did < 1.50.x) reported a
+# healthy .py install as broken on every OS, worst on mac/Linux where it ALSO false-warned
+# about a powershell the .py never needs. .py is listed first: it is the canonical one.
+HOOK_NAMES = ("block-approved-writes.py", "block-approved-writes.ps1")
 
 
 def _doctor_hook_registered(settings_path):
-    """True si el hook aparece bajo PreToolUse en ese settings.json.
-    Match por substring del filename dentro de la rama PreToolUse - limite
-    disclosed: otro comando que MENCIONE el filename daria falso positivo
-    (rebuscado, y la direccion de fallo es solo un [OK] de mas en un aviso)."""
+    """The registered hook basename (.py or .ps1) if the golden-write guard appears under
+    PreToolUse, else None. Match by filename substring within the PreToolUse branch -
+    disclosed limit: another command that MENTIONS the filename would false-positive
+    (contrived, and the failure direction is only an extra [OK] on an advisory)."""
     try:
         with open(settings_path, "r", encoding="utf-8") as fh:
             cfg = json.load(fh)
     except (OSError, json.JSONDecodeError):
-        return False
-    hooks = cfg.get("hooks", {})
-    return HOOK_NAME in json.dumps(hooks.get("PreToolUse", []))
+        return None
+    blob = json.dumps(cfg.get("hooks", {}).get("PreToolUse", []))
+    return next((n for n in HOOK_NAMES if n in blob), None)
 
 
 def cmd_doctor(args):
@@ -6092,32 +6096,38 @@ def cmd_doctor(args):
 
     # --- hook INV-GOLDEN-01 -------------------------------------------------
     kit_root = os.path.abspath(os.path.join(engine_dir, "..", "..", ".."))
-    hook_paths = [os.path.join(os.path.expanduser("~"), ".claude", "hooks", HOOK_NAME),
-                  os.path.join(kit_root, "hooks", HOOK_NAME)]
-    hook_file = next((p for p in hook_paths if os.path.isfile(p)), None)
+    hook_dirs = [os.path.join(os.path.expanduser("~"), ".claude", "hooks"),
+                 os.path.join(kit_root, "hooks")]
+    hook_file = next((os.path.join(d, n) for d in hook_dirs for n in HOOK_NAMES
+                      if os.path.isfile(os.path.join(d, n))), None)
     settings_paths = [os.path.join(os.path.expanduser("~"), ".claude", "settings.json"),
                       os.path.join(".claude", "settings.json"),
                       os.path.join(".claude", "settings.local.json")]
-    registered = any(_doctor_hook_registered(p) for p in settings_paths
-                     if os.path.isfile(p))
+    registered = next((r for p in settings_paths if os.path.isfile(p)
+                       for r in [_doctor_hook_registered(p)] if r), None)
     if is_plugin and os.path.isfile(os.path.join(kit_root, "hooks", "hooks.json")):
-        # los hooks del plugin se auto-registran via hooks/hooks.json (1.24.0)
-        registered = True
-    ps = shutil.which("powershell") or shutil.which("pwsh")
-    if hook_file and registered and ps:
+        # los hooks del plugin se auto-registran via hooks/hooks.json (1.24.0) -> el .ps1
+        registered = registered or "block-approved-writes.ps1"
+    # interpretabilidad atada al hook REAL: el .py corre con el mismo Python que este engine
+    # (siempre disponible aca); solo el .ps1 necesita powershell/pwsh. Exigirlo para el .py
+    # era el bug -- un install .py sano se reportaba roto, peor en mac/Linux sin pwsh.
+    needs_ps = bool(registered and registered.endswith(".ps1"))
+    ps_ok = (not needs_ps) or bool(shutil.which("powershell") or shutil.which("pwsh"))
+    if hook_file and registered and ps_ok:
         ok("hook INV-GOLDEN-01: presente, registrado (PreToolUse) e interpretable",
-           hook_file)
+           f"{hook_file} ({registered})")
     elif not hook_file:
-        warn(f"hook {HOOK_NAME} no encontrado (~/.claude/hooks ni <kit>/hooks)",
-             f"instalar: copia uscha-kit/hooks/{HOOK_NAME} a ~/.claude/hooks/ y "
-             f"registra el snippet de su header en ~/.claude/settings.json - sin el, "
-             f"el agente PUEDE escribir .approved (obligatorio para migraciones, perfil E)")
+        warn("hook INV-GOLDEN-01 no encontrado (~/.claude/hooks ni <kit>/hooks)",
+             f"instalar: `uscha install` copia {HOOK_NAMES[0]} a ~/.claude/hooks/ y lo "
+             f"registra en settings.json - sin el, el agente PUEDE escribir .approved "
+             f"(obligatorio para migraciones, perfil E)")
     elif not registered:
         warn("hook presente pero NO registrado en settings.json (PreToolUse)",
-             "snippet de registro en el header del .ps1")
+             "re-corre `uscha install` para escribir el snippet de PreToolUse")
     else:
-        warn("hook registrado pero sin powershell/pwsh en PATH",
-             "instalar pwsh: https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-linux")
+        warn(f"hook .ps1 registrado pero sin powershell/pwsh en PATH",
+             "instala pwsh, o usa el hook .py (portable) via `uscha install`: "
+             "https://learn.microsoft.com/powershell/scripting/install/installing-powershell")
 
     # --- proyecto (si hay config aca) ---------------------------------------
     qa_order = ["code-review", "judgment-day", "improve"]   # default del kit

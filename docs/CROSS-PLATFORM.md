@@ -73,9 +73,13 @@ mechanism and make both paths agree.
 
 1. **CI matrix** (`smoke.yml`) — land it, read the first three-OS run. *This is the roadmap's
    own measurement step; everything below is scoped by what it turns red.* ← this change.
-2. **Doctor honesty (#2)** — accept `.py` OR `.ps1` as a registered hook; tie the
-   `powershell`/`pwsh` probe to the hook actually installed instead of firing always. Cheap,
-   high-visibility: today a healthy install reports broken.
+2. ~~**Doctor honesty (#2)**~~ — **DONE.** `qa_ledger.py` now recognizes `.py` OR `.ps1`
+   (`HOOK_NAMES`, `.py` canonical), and ties interpretability to the hook actually registered:
+   the `.py` runs on the engine's own Python (always present), only the `.ps1` needs
+   `powershell`/`pwsh`. A healthy `.py` install now reads OK on every OS; a plugin `.ps1`
+   install on Linux without pwsh now warns *honestly* (that gap is finding #1). Regression:
+   smoke **T97** — a `.py`-registered hook reads OK, and the CI Linux/macOS runners (no
+   powershell) are the negative control proving it needs none.
 3. **Statusline `python` → per-OS resolution (#3)** — resolve `python3`-first on non-Windows,
    matching `bin/uscha.js` and `workbench-doctor.sh`. Restores the feature on stock macOS/Linux.
 4. **Portable hook — ADR (#1)** — decide one canonical hook mechanism that works on all three
