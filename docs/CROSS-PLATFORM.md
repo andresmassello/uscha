@@ -65,10 +65,17 @@ intact and one click away when minutes return.
 | Platform | How it is verified now | Status |
 |---|---|---|
 | Windows | native run of `smoke-engine.sh` | **measured** |
-| Linux | real Ubuntu 22.04 via WSL, Python 3.10 — `wsl -e bash -lc "cd /mnt/c/... && bash uscha-kit/tests/smoke-engine.sh"` | **measured**, minus the 4 npm-router checks (no native `node` in that WSL; `npm` there resolves to the Windows one, and shimming `node.exe` would make `bin/uscha.js` see win32 and produce a FALSE green — left unmeasured on purpose) |
+| Linux | real Ubuntu 22.04 via WSL, Python 3.10, Node 24 LTS — `wsl -e bash -lc "cd /mnt/c/... && bash uscha-kit/tests/smoke-engine.sh"` | **measured, 390/390** — the full suite, npm router included |
 | macOS | nothing local | **UNMEASURED** |
 
-Per the kit's own rule, that gap is stated, not papered over: *absence is not success*. macOS's one
+The Linux row needs Node on the WSL side (Ubuntu 22.04's `apt` ships Node 12, below the kit's
+declared `">=18"`, so it is the wrong tool for the job). Node's official prebuilt tarball
+extracted under `~/.local/node` — no `sudo`, no system package, reversible by deleting the
+folder — gives the four npm-router checks a real POSIX `node`. Shimming Windows `node.exe`
+through WSL interop was rejected deliberately: `bin/uscha.js` would see `win32` and hand back a
+FALSE green on the very test whose point is POSIX interpreter selection.
+
+Per the kit's own rule, the remaining gap is stated, not papered over: *absence is not success*. macOS's one
 difference from Linux — case-insensitive-by-default — is still guarded on every run by smoke
 **T102** (fails on any two tracked paths that collide when lowercased), which is platform-independent.
 Also still out of reach: the plugin-marketplace hook execution (P0-3) and pi's `tool_call` block
