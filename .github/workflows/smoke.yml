@@ -5,10 +5,13 @@ name: smoke
 # doctrine, "cross-platform" is a claim until it is MEASURED on all three OSes. This is
 # that measurement. A red cell here is a real finding, not a flake.
 
+# MANUAL ONLY (2026-07-25). The account ran out of Actions minutes: every push produced a run
+# that died in 6s with "The job was not started because recent account payments have failed",
+# i.e. six red cells that measured NOTHING -- worse than no signal, because a red grid reads
+# like a real failure. The matrix is kept intact and one `workflow_dispatch` away; until it can
+# run again, verification is local (see docs/CROSS-PLATFORM.md: Windows native + real Linux via
+# WSL). macOS is UNMEASURED in the meantime, and the docs say so rather than implying coverage.
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 jobs:

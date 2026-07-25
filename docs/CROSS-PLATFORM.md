@@ -52,13 +52,27 @@ hook present + registered, on both targets. It also found what a static read cou
 BLOCKER this audit missed (P0-4 below) — and measured the T75/router bug that the CI matrix had
 already turned red. Findings folded in below.
 
-**macOS is measured (1.51.x):** the CI matrix runs the suite on real `macos-latest` runners,
-and a CI step now runs the REAL installer end-to-end there (`install --target all` →
-`doctor --target all`, asserting `ok: true` + per-target `golden_guard`). Its one difference
-from Linux — case-insensitive-by-default — is guarded by smoke **T102** (fails on any two
-tracked paths that collide when lowercased). What is STILL out of CI reach: the
-plugin-marketplace hook execution (P0-3) and pi's `tool_call` block (the `advisory`
-golden_guard), both needing a real Claude-Code-plugin / real-pi run — not a macOS gap.
+**macOS was measured through 1.51.3, and is UNMEASURED from 1.52.0 on.** The CI matrix ran the
+suite on real `macos-latest` runners plus the REAL installer end-to-end (`install --target all`
+→ `doctor --target all`, asserting `ok: true` + per-target `golden_guard`). On 2026-07-25 the
+account ran out of Actions minutes — every push produced a run that died in 6 seconds with
+*"The job was not started because recent account payments have failed"*, six red cells that
+measured nothing. The workflow is now **manual only** (`workflow_dispatch`); the matrix is
+intact and one click away when minutes return.
+
+**What replaced it, locally and honestly:**
+
+| Platform | How it is verified now | Status |
+|---|---|---|
+| Windows | native run of `smoke-engine.sh` | **measured** |
+| Linux | real Ubuntu 22.04 via WSL, Python 3.10 — `wsl -e bash -lc "cd /mnt/c/... && bash uscha-kit/tests/smoke-engine.sh"` | **measured**, minus the 4 npm-router checks (no native `node` in that WSL; `npm` there resolves to the Windows one, and shimming `node.exe` would make `bin/uscha.js` see win32 and produce a FALSE green — left unmeasured on purpose) |
+| macOS | nothing local | **UNMEASURED** |
+
+Per the kit's own rule, that gap is stated, not papered over: *absence is not success*. macOS's one
+difference from Linux — case-insensitive-by-default — is still guarded on every run by smoke
+**T102** (fails on any two tracked paths that collide when lowercased), which is platform-independent.
+Also still out of reach: the plugin-marketplace hook execution (P0-3) and pi's `tool_call` block
+(the `advisory` golden_guard), both needing a real Claude-Code-plugin / real-pi run.
 
 ### BLOCKERS — a documented install path fails, or the guard silently blocks everything
 
