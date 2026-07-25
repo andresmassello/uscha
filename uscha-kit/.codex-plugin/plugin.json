@@ -1,6 +1,6 @@
 {
   "name": "uscha",
-  "version": "1.51.3",
+  "version": "1.52.0",
   "description": "Uscha spec-driven development methodology for coding agents. Includes npm/npx router.",
   "author": {
     "name": "Andres Massello",

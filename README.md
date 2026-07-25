@@ -11,12 +11,15 @@ never what was claimed.
 (essay, 2-day dev course, reference, paper).
 
 ```bash
-npx --yes @andresmassello/uscha@latest install --target claude
-npx --yes @andresmassello/uscha@latest doctor  --target claude
+npx --yes @andresmassello/uscha@latest install --target claude   # Claude Code
+npx --yes @andresmassello/uscha@latest install --target codex    # Codex
+npx --yes @andresmassello/uscha@latest install --target pi       # pi (Earendil)
+npx --yes @andresmassello/uscha@latest install --target all      # all three at once
+
+npx --yes @andresmassello/uscha@latest doctor --target all
 ```
 
-`--target codex` for Codex, `--target pi` for pi (Earendil), `--target all` for all three
-(`both` stays a legacy alias for codex+claude). Then, in your project:
+(`both` stays a legacy alias for codex+claude.) Then, in your project:
 
 ```bash
 npx --yes @andresmassello/uscha@latest init
@@ -26,8 +29,8 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.51.3** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
-[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.51.3.md)
+**Kit v1.52.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.52.0.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
 ---

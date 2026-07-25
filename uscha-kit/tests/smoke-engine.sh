@@ -1447,11 +1447,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.51.3.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.52.0.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.51.3.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.51.3.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.52.0.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.52.0.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1881,7 +1881,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.3' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.52.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1905,7 +1905,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.51.3' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.52.0' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1913,7 +1913,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.3' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.52.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1927,7 +1927,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.3' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.52.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1939,7 +1939,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.51.3'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.52.0'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files)
@@ -3384,6 +3384,61 @@ T102_DUPS="$(find "$ROOT" -type f \
 if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
+
+echo "== T105 (1.52.0): every skill declares the orientation markers (breadcrumb + close block) =="
+# Field feedback: the operator got lost -- no in-flow signal of WHERE they were, and a phase
+# that converged and then went silent instead of saying what came next. The markers are a
+# CONVENTION, so they only work if all nine skills carry them identically; a skill that quietly
+# drops one is exactly the drift T57 mechanized for skill counts. Checked on BOTH twin trees.
+T105=$("$PY" - "$KIT" <<'PY'
+import io, os, sys
+kit = sys.argv[1]
+# Two variants on purpose: mirador/status are one-shot read-only readouts whose own contract is
+# "this block IS the answer, never pad it", so the conversational close block would contradict
+# the skill it was added to. They carry the routing pair only.
+READOUT = {"mirador", "status"}
+bad = []
+for tree in (os.path.join(".claude", "skills"), "skills"):
+    root = os.path.join(kit, tree)
+    skills = sorted(d for d in os.listdir(root) if d.startswith("uscha-"))
+    if len(skills) != 9:
+        bad.append("%s: %d skills (esperaba 9)" % (tree, len(skills))); continue
+    for d in skills:
+        short = d[len("uscha-"):]
+        txt = io.open(os.path.join(root, d, "SKILL.md"), encoding="utf-8").read()
+        where = "%s/%s" % (tree, d)
+        if "Orientation markers" not in txt:
+            bad.append(where + ": sin seccion de marcadores"); continue
+        # the breadcrumb must name THIS skill -- a copy-paste from a sibling is drift
+        if ("[uscha · %s ·" % short) not in txt:
+            bad.append(where + ": breadcrumb no nombra '%s'" % short)
+        for label in ("Next:", "Run:"):
+            if label not in txt:
+                bad.append(where + ": falta label " + label)
+        if short in READOUT:
+            # the readout variant must NOT carry the conversational block that its own
+            # "nothing else" contract forbids
+            if "CLOSED]" in txt or "Produced:" in txt:
+                bad.append(where + ": readout no debe llevar el bloque conversacional")
+        else:
+            # assert the CLOSED HEADER itself, not just the bare word: a header naming another
+            # skill used to slip through while the breadcrumb line stayed correct
+            if ("[uscha · %s · CLOSED]" % short) not in txt:
+                bad.append(where + ": header CLOSED ausente o nombra otra skill")
+            for label in ("Produced:", "Blocks:"):
+                if label not in txt:
+                    bad.append(where + ": falta label " + label)
+            # the anti-narration rules must survive future edits of this block
+            if "Never write a denominator" not in txt:
+                bad.append(where + ": perdio la regla anti-denominador")
+            if "loop_count" not in txt:
+                bad.append(where + ": perdio la regla de usar el conteo MEDIDO")
+print("OK" if not bad else "BAD " + " | ".join(bad[:6]))
+PY
+)
+if [ "$T105" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   las 9 skills (x2 gemelos) declaran breadcrumb propio + bloque de cierre con sus 5 labels"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T105"; fi
 
 echo "== T104 (1.51.3): every published manifest points at the public site (no homepage drift) =="
 # The kit is published on FOUR surfaces (npm, the Claude plugin, the Codex plugin, the

@@ -18,6 +18,46 @@ disable-model-invocation: false
 opposite. The system already runs; its observable behavior is the ground truth. **You do
 not invent anything — you characterize what is already there, as facts.**
 
+## Orientation markers (non-negotiable)
+
+The operator must never have to ask "where am I?" or "what happens now?". Two markers, always.
+They are navigation, not ceremony: one line per turn, one block at the end.
+
+**Open every turn with a breadcrumb**, then the content:
+
+`[uscha · reverse-discovery · <step> → <target>]`
+
+- `<step>` — `Q<n>` for a question, `pass <n>` for a loop iteration, `step <n>` otherwise.
+  Count what has actually happened. **Never write a denominator** (`Q4/12`): this phase
+  converges, its length is not known in advance, and an invented total is exactly the kind of
+  narrated number the method forbids. **When the ledger already measures the count** (the QA
+  loop's `loop_count`), use the measured number — never keep a parallel tally of your own.
+- `<target>` — the artifact this turn feeds (`SPEC`, `ADR-003`, `ACCEPTANCE`, `LEDGER`,
+  `RECEIVED`, ...). Drop `→ <target>` only when the turn genuinely feeds none.
+
+**Close with the close block ONCE, when the skill finishes** — not on every turn. Ending
+without it is a defect, even when the phase converged cleanly:
+
+```
+[uscha · reverse-discovery · CLOSED]
+Produced: <files actually written, or "nothing">
+Blocks:   <what stands between here and the next phase, or "nothing">
+Next:     <the next action, and why it is that one>
+Run:      <the exact command or skill to invoke>
+```
+
+This is **not** the implementation handoff some skills also emit: that one is a prompt for
+whoever implements next, this one is navigation for the human operator, and both can appear.
+
+`Blocks` and `Next` are **derived from the state you just produced** — never copied from a
+fixed route, **including any `Flow:` line in this file**. Those lines are the nominal path;
+open ADR experiments, an unclosed spike, an unapproved golden or a red gate all change what
+genuinely comes next, and the derived answer wins. If the next phase cannot start yet, name it
+and say exactly what unblocks it.
+
+Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, `Produced`,
+`Blocks`, `Next`, `Run`) verbatim — they are the method's vocabulary and the smoke checks them.
+
 ## The one non-negotiable: produce ONLY facts
 
 A system map (from static analysis) and a golden suite (byte-captured) are FACTS —
@@ -93,6 +133,8 @@ what is covered vs PARTIAL. State plainly that the facts are ready, then hand of
 Flow (migration): `uscha-reverse-discovery` (facts) → human writes SPEC + `/uscha-adr-refine` (forward
 module decisions) → `/uscha-devloop` (restructure; `golden-diff` + `ApplicationModules.verify()`
 stay green the whole way) → readiness + human gate.
+
+That route is the **nominal** one, not the answer: the `Next:`/`Run:` you emit in the close block are DERIVED from the state you actually produced, and override it whenever an open experiment, an unclosed spike, an unapproved golden or a red gate stands in between.
 
 ## Relationship to the other skills
 
