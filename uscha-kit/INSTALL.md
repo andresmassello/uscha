@@ -3,6 +3,9 @@
 Uscha installs as a machine-level helper for coding agents. The recommended path
 is npm/npx because it works the same on a fresh Codex or Claude Code machine.
 
+The method itself — the paradigm, the five rules, the skills and the library — lives at
+**[uscha.dev](https://uscha.dev)**.
+
 ## Quick path
 
 ### Codex Desktop

@@ -1,6 +1,6 @@
 {
   "name": "@andresmassello/uscha",
-  "version": "1.51.2",
+  "version": "1.51.3",
   "description": "Spec-driven development for LLM coding agents: 9 skills + a stdlib evidence engine. Facts block, guesses advise; the human approves.",
   "bin": {
     "uscha": "bin/uscha.js",
@@ -13,6 +13,7 @@
     "!uscha-kit/**/__pycache__/",
     "!uscha-kit/**/*.pyc",
     "!uscha-kit/**/*.pyo",
+    "!uscha-kit/CHANGELOG-*.md",
     "README.md",
     "LICENSE"
   ],
@@ -20,7 +21,7 @@
     "type": "git",
     "url": "git+https://github.com/andresmassello/uscha.git"
   },
-  "homepage": "https://github.com/andresmassello/uscha#readme",
+  "homepage": "https://uscha.dev",
   "bugs": {
     "url": "https://github.com/andresmassello/uscha/issues"
   },

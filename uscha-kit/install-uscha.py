@@ -791,7 +791,8 @@ def next_steps(target):
     if "codex" in picked: steps.append("Codex: restart or open a new thread, then install/use uscha from the Personal marketplace if needed.")
     if "claude" in picked: steps.append("Claude: restart Claude Code so global skills/hooks are reloaded.")
     if "pi" in picked: steps.append("pi: restart pi; the 9 uscha-* skills load from ~/.agents/skills. INV-GOLDEN-01 is advisory until the tool_call extension is installed (doctor reports golden_guard).")
-    return steps + ["Run: python install-uscha.py doctor --target %s" % target]
+    return steps + ["Run: python install-uscha.py doctor --target %s" % target,
+                    "Learn the method: https://uscha.dev"]
 
 
 def emit(data, as_json):

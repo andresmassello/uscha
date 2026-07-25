@@ -1447,11 +1447,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.51.2.md')
+changelog = os.path.join(kit, 'CHANGELOG-1.51.3.md')
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.51.2.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.51.2.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.51.3.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.51.3.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1881,7 +1881,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.51.3' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1905,7 +1905,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.51.2' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '1.51.3' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1913,7 +1913,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.2' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '1.51.3' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1927,7 +1927,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.51.2' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '1.51.3' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1939,12 +1939,25 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.51.2'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.51.3'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
-      and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files))
+      and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files)
+      # 1.51.3: the 70 historical per-release changelogs are repo archive, not payload --
+      # they were 55% of the tarball's FILES and nothing in an install reads them.
+      # anchored to the same shape the package.json glob excludes, so a future file that merely
+      # CONTAINS the substring elsewhere in the kit cannot false-fail this check
+      and not any(f.startswith('uscha-kit/CHANGELOG-') for f in files)
+      # positive controls, so trimming can never quietly gut the actual payload: the skills
+      # (what the agent reads) and the templates (what 'uscha init' emits) must still ship.
+      # NOTE: no backticks in this block -- it lives inside a double-quoted shell string,
+      # where a backtick would run command substitution and silently truncate the code.
+      and 'uscha-kit/.claude/skills/uscha-devloop/SKILL.md' in files
+      and 'uscha-kit/skills/uscha-devloop/SKILL.md' in files
+      and 'uscha-kit/templates/CONSTITUTION.md' in files
+      and 'uscha-kit/README.md' in files)
 sys.exit(0 if ok else 1)" \
-    && { PASS=$((PASS+1)); echo "  ok   npm pack dry-run incluye router/kit y excluye artefactos locales"; } \
+    && { PASS=$((PASS+1)); echo "  ok   npm pack: router/kit/skills/templates si, changelogs y artefactos locales no"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm pack dry-run no tiene el contenido esperado"; }
 else
   FAIL=$((FAIL+1)); echo "  FAIL npm no esta disponible para probar package dry-run"
@@ -3371,6 +3384,39 @@ T102_DUPS="$(find "$ROOT" -type f \
 if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
+
+echo "== T104 (1.51.3): every published manifest points at the public site (no homepage drift) =="
+# The kit is published on FOUR surfaces (npm, the Claude plugin, the Codex plugin, the
+# marketplace) and each carries its own homepage. They drifted apart before (T57 mechanized the
+# same class of drift for skill counts), so the site link is asserted, not trusted.
+T104=$("$PY" - "$ROOT" <<'PY'
+import io, json, os, sys
+root = sys.argv[1]
+SITE = "https://uscha.dev"
+manifests = {
+    "package.json": ("homepage",),
+    os.path.join("uscha-kit", ".claude-plugin", "plugin.json"): ("homepage",),
+    os.path.join("uscha-kit", ".codex-plugin", "plugin.json"): ("homepage",),
+}
+bad = []
+for rel, keys in manifests.items():
+    d = json.load(io.open(os.path.join(root, rel), encoding="utf-8"))
+    for k in keys:
+        if d.get(k) != SITE:
+            bad.append("%s:%s=%r" % (rel, k, d.get(k)))
+mk = json.load(io.open(os.path.join(root, ".claude-plugin", "marketplace.json"), encoding="utf-8"))
+if mk["plugins"][0].get("homepage") != SITE:
+    bad.append("marketplace.json:homepage=%r" % mk["plugins"][0].get("homepage"))
+# the READMEs a human actually lands on must name the site too
+for rel in ("README.md", os.path.join("uscha-kit", "README.md")):
+    if SITE not in io.open(os.path.join(root, rel), encoding="utf-8").read():
+        bad.append("%s: no menciona %s" % (rel, SITE))
+print("OK" if not bad else "BAD " + "; ".join(bad))
+PY
+)
+if [ "$T104" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   npm + ambos plugins + marketplace + los READMEs apuntan a uscha.dev"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T104"; fi
 
 echo "== T103 (1.51.x): doctor recognizes the hook across an interpreter change (install vs doctor) =="
 # install-uscha.py's doctor used to EXACT-match the hook command, which embeds sys.executable
