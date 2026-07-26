@@ -40,8 +40,8 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.55.1** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
-[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.55.1.md)
+**Kit v1.55.2** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.55.2.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
 ---
@@ -135,7 +135,11 @@ audits/                 # adversarial audit outputs
 
 The rules are in [`CLAUDE.md`](CLAUDE.md). The short version: no doc may claim what the
 engine does not do; the ES and EN twins travel together; every engine change carries a
-smoke test; and the agent never writes a `.approved` file — that one is enforced by a hook.
+smoke test; and a PreToolUse hook stops the agent from writing a `.approved` golden.
+**Scoped honestly**: that hook is a *best-effort* guard and it is registered on the Claude
+target only — it inspects a tool call as TEXT, so an indirect write (a script that assembles
+the filename, a symlink) gets through, and every other target reports `golden_guard:
+advisory`. The MEASURED control is `golden-diff`, which compares bytes.
 
 ## History
 

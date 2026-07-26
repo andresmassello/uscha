@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.55.1 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.55.2 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -18,7 +18,7 @@ uscha-kit/
 ?? install-uscha.py             # canonical installer used by npm/npx
 ├─ uscha.config.json            # config: repos, thresholds, commands
 ├─ hooks/
-│  └─ block-approved-writes.py     # PreToolUse: the agent CANNOT write .approved (INV-GOLDEN-01)
+│  └─ block-approved-writes.py     # PreToolUse: best-effort block on writing a golden (Claude only)
 ├─ templates/
 │  ├─ CLAUDE.md                    # permanent repo protocol
 │  ├─ CONSTITUTION.md              # inviolable invariants (fill in the domain)
@@ -60,7 +60,7 @@ BEFORE touching anything.
 /uscha-reverse-discovery   # FACTS map of the old system (endpoints, contracts, dependencies)
    ↓
 /uscha-characterize        # runs the ORIGINAL code with a real corpus → .received → STOPS:
-   ↓                 #   a HUMAN approves the .approved (the agent never writes them — hook)
+   ↓                 #   a HUMAN approves the golden (a best-effort hook discourages the agent; golden-diff measures)
 /uscha-devloop            # migrates; golden-diff byte-compares against the .approved on each pass
 ```
 

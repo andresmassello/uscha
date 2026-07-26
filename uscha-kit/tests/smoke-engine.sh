@@ -3394,6 +3394,75 @@ if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
 
+echo "== T110 (1.55.2): the INV-GOLDEN hook, adversarially -- fail-closed, case, read vs write =="
+# An external review showed the previous hook was fail-OPEN on a malformed payload,
+# case-SENSITIVE (so a capitalised golden slipped past on case-insensitive filesystems),
+# blocked harmless READS, and only inspected five tool names. Each of those is a case here.
+# The honest limit stays: this matches TEXT, so an indirect write cannot be caught -- that
+# case is asserted too, so nobody mistakes the guard for a sandbox.
+T110=$("$PY" - "$KIT/hooks/block-approved-writes.py" <<'PY'
+import importlib.util, io, json, subprocess, sys
+hook = sys.argv[1]
+G = "." + "approved"
+
+def run(payload):
+    p = subprocess.run([sys.executable, hook], input=json.dumps(payload),
+                       capture_output=True, text=True)
+    return p.returncode          # 2 = blocked, 0 = allowed
+
+def raw(text):
+    p = subprocess.run([sys.executable, hook], input=text, capture_output=True, text=True)
+    return p.returncode
+
+def bash(cmd):  return run({"tool_name": "Bash", "tool_input": {"command": cmd}})
+def write(path): return run({"tool_name": "Write", "tool_input": {"file_path": path}})
+
+cases = []
+def expect(label, got, want):
+    cases.append((label, got, want))
+
+# writes must BLOCK
+expect("Write to a golden",            write("tests/golden/x" + G + ".json"), 2)
+expect("Write, UPPERCASE extension",   write("tests/golden/x" + G.upper() + ".json"), 2)
+expect("Write, MixedCase",             write("tests/golden/x.Approved.json"), 2)
+expect("bash redirect",                bash("echo hi > x" + G), 2)
+expect("bash append",                  bash("echo hi >> x" + G), 2)
+expect("bash mv",                      bash("mv a.received x" + G), 2)
+expect("bash cp",                      bash("cp a b" + G), 2)
+expect("bash rm",                      bash("rm x" + G), 2)
+expect("bash tee",                     bash("echo x | tee y" + G), 2)
+expect("reader THEN redirect",         bash("cat a" + G + " > b" + G), 2)
+expect("sed in-place",                 bash("sed -i s/a/b/ x" + G), 2)
+expect("unknown write-capable tool",   run({"tool_name": "SomeFutureEditor",
+                                            "tool_input": {"target": "x" + G}}), 2)
+expect("nested arg in unknown tool",   run({"tool_name": "Weird",
+                                            "tool_input": {"edits": [{"path": "x" + G}]}}), 2)
+# fail-CLOSED
+expect("malformed payload",            raw("{not json"), 2)
+expect("non-dict payload",             raw("[1,2,3]"), 2)
+
+# legitimate reads must PASS -- golden-diff has to read the file it compares
+expect("cat a golden",                 bash("cat x" + G), 0)
+expect("diff two goldens",             bash("diff a" + G + " b.received"), 0)
+expect("grep inside a golden",         bash("grep -n foo x" + G), 0)
+expect("Read tool",                    run({"tool_name": "Read",
+                                            "tool_input": {"file_path": "x" + G}}), 0)
+expect("unrelated command",            bash("echo hello world"), 0)
+expect("unrelated Write",              write("src/main.py"), 0)
+
+# the documented BLIND SPOT: text matching cannot see an indirect write. Asserted so the
+# limit is measured, not merely written in a docstring.
+indirect = "python -c " + chr(34) + "open('x'+'.appro'+'ved','w')" + chr(34)
+expect("indirect write (KNOWN blind spot)", bash(indirect), 0)
+
+bad = ["%s: got %s want %s" % (l, g, w) for l, g, w in cases if g != w]
+print("OK" if not bad else "BAD " + " | ".join(bad[:5]))
+PY
+)
+if [ "$T110" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   hook: bloquea escrituras (todo case), fail-closed, deja pasar lecturas; blind spot indirecto asertado"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T110"; fi
+
 echo "== T109 (1.54.0): first contact -- the 7 conversational skills orient a newcomer, ONCE =="
 # Field feedback: a newcomer typing /uscha-discovery gets interrogated with no idea what it
 # costs, what comes out, or that they can stop. The banner closes that. It is gated on the

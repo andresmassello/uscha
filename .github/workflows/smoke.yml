@@ -16,6 +16,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: this workflow only reads the repo. It also runs on pull_request,
+# i.e. on arbitrary code from forks -- it must therefore NEVER see a publishing secret.
+permissions:
+  contents: read
+
 jobs:
   smoke:
     name: smoke (${{ matrix.os }}, py${{ matrix.python }})
@@ -25,6 +30,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.8", "3.13"]   # the declared floor and a current release
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 

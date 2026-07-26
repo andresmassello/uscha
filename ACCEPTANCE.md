@@ -41,7 +41,9 @@ written by the run itself, never by hand.
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
-  outside this file: the first by review, the second mechanically by the `PreToolUse` hook.
+  outside this file: the first by review, the second by a best-effort `PreToolUse` hook on the
+  Claude target (text-matching, so an indirect write is NOT caught) plus `golden-diff`, which
+  is the measured control because it compares bytes.
   They are invariants, not acceptance criteria — nothing here should pretend to measure them.
 - **Coverage** of the engine is **instrumented** (the fork this file used to leave open was
   resolved by measuring, not by declaring an exemption). `USCHA_COVERAGE=1` wraps the one

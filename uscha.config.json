@@ -1,5 +1,5 @@
 {
-  "version": "1.55.1",
+  "version": "1.55.2",
   "project": "uscha (self-applied)",
   "defaults": {
     "acceptance_file": "ACCEPTANCE.md",
