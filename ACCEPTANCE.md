@@ -19,7 +19,13 @@ written by the run itself, never by hand.
   `marketplace.json`, `package.json`) all agree, and a `CHANGELOG-<version>.md` exists for the
   declared version. A release that disagrees with itself cannot be trusted about anything else.
 
-- [x] AC-03 — The kit and its docs contain zero references to client or private project names.
+- [ ] AC-03 — The kit and its docs contain zero references to client or private project names.
+      <!-- UNTICKED 2026-07-26: this was a hand-ticked green while the criterion was FALSE
+           (4 tracked files carried private names) and the gate itself read UNMEASURED,
+           because .uscha-private-names is untracked and its list was incomplete. The tree
+           is scrubbed now, but the box stays open until AC-03 is MEASURED in CI against a
+           reviewable (hashed, committed) list. A checkbox is not evidence -- that is the
+           whole point of this method. -->
   What ships is generic, or it leaks.
 
 - [x] AC-04 — The engine stays model-agnostic: `qa_ledger.py` never reads tokens, model names,
