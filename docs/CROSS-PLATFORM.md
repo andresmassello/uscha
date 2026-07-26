@@ -66,7 +66,7 @@ intact and one click away when minutes return.
 |---|---|---|
 | Windows | native run of `smoke-engine.sh` | **measured** |
 | Linux | real Ubuntu 22.04 via WSL, Python 3.10, Node 24 LTS — `wsl -e bash -lc "cd /mnt/c/... && bash uscha-kit/tests/smoke-engine.sh"` | **measured, 390/390** — the full suite, npm router included |
-| macOS | nothing local | **UNMEASURED** |
+| macOS | no machine available | **UNMEASURED** — but see below: the kit's only macOS-specific code is now executed on every run, from any OS |
 
 The Linux row needs Node on the WSL side (Ubuntu 22.04's `apt` ships Node 12, below the kit's
 declared `">=18"`, so it is the wrong tool for the job). Node's official prebuilt tarball
@@ -74,6 +74,33 @@ extracted under `~/.local/node` — no `sudo`, no system package, reversible by 
 folder — gives the four npm-router checks a real POSIX `node`. Shimming Windows `node.exe`
 through WSL interop was rejected deliberately: `bin/uscha.js` would see `win32` and hand back a
 FALSE green on the very test whose point is POSIX interpreter selection.
+
+### How big is the macOS gap, actually? (measured, 1.53.1)
+
+Grepping the kit for platform branches gives a precise answer rather than a worry: **every OS
+branch in the kit is `win32` vs POSIX — and POSIX is measured on Linux — except for exactly one
+instruction, duplicated:**
+
+```python
+elif sys.platform == "darwin":
+    subprocess.Popen(["open", path])
+```
+
+That is the whole macOS-specific surface: the `open` arm of `_open_best_effort` in
+`install-uscha.py` and in `mirador-render.py` (plus its twin). Nothing else in the engine, the
+installer, the router or the skills says `darwin`.
+
+That arm does not need a Mac to be *run* — only to be run *natively*. Smoke **T108** patches
+`sys.platform`, stubs the syscall and **executes it**: it asserts darwin shells out to `open`,
+that Linux still gets `xdg-open` (so the mac command cannot leak across), and that a Mac where
+`open` is unreachable **fails silently** instead of taking the process down. Verified by
+mutation: swapping `open` for `xdg-open`, or removing the `except`, both fail the suite.
+
+**This is not a macOS run and does not claim to be.** The status above stays UNMEASURED: a real
+Mac could still differ in path semantics, permissions or interpreter resolution. What changed is
+that the one divergence a Linux+Windows suite structurally could never reach is now exercised on
+every run, on every OS — the residual risk is a native filesystem/interpreter difference, not
+untested mac code.
 
 Per the kit's own rule, the remaining gap is stated, not papered over: *absence is not success*. macOS's one
 difference from Linux — case-insensitive-by-default — is still guarded on every run by smoke

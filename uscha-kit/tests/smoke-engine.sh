@@ -3394,6 +3394,58 @@ if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
 
+echo "== T108 (1.53.1): the macOS branch is EXECUTED from any OS (the kit's only darwin code) =="
+# The whole kit branches win32-vs-POSIX except for exactly one thing, duplicated: the darwin
+# arm of _open_best_effort. Since the CI matrix went manual, macOS is UNMEASURED -- but this
+# arm does not need a Mac to be exercised: patch sys.platform, stub the syscall, and RUN it.
+# That turns the kit's only mac-specific line from "never executed" into "executed every run",
+# on every OS. It is NOT a substitute for a real macOS run (the doc still says UNMEASURED);
+# it removes the one divergence that a Linux+Windows suite structurally could not reach.
+T108=$("$PY" - "$KIT" <<'PY'
+import importlib.util, subprocess, sys, os
+kit = sys.argv[1]
+targets = [os.path.join(kit, "install-uscha.py"),
+           os.path.join(kit, ".claude", "skills", "uscha-mirador", "mirador-render.py"),
+           os.path.join(kit, "skills", "uscha-mirador", "mirador-render.py")]
+bad = []
+for path in targets:
+    name = os.path.relpath(path, kit).replace("\\", "/")
+    spec = importlib.util.spec_from_file_location("m_" + str(abs(hash(path))), path)
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    if not hasattr(mod, "_open_best_effort"):
+        bad.append(name + ": sin _open_best_effort"); continue
+    real_platform, real_popen, real_startfile = sys.platform, subprocess.Popen, getattr(os, "startfile", None)
+    calls = []
+    try:
+        mod.subprocess.Popen = lambda argv, *a, **k: calls.append(list(argv))
+        # 1) darwin must shell out to `open` -- the kit's ONLY mac-specific instruction
+        sys.platform = "darwin"
+        calls[:] = []; mod._open_best_effort("/tmp/x.html")
+        if calls != [["open", "/tmp/x.html"]]:
+            bad.append("%s: darwin no llamo a open (%r)" % (name, calls))
+        # 2) other POSIX must NOT get the mac command
+        sys.platform = "linux"
+        calls[:] = []; mod._open_best_effort("/tmp/x.html")
+        if calls != [["xdg-open", "/tmp/x.html"]]:
+            bad.append("%s: linux no llamo a xdg-open (%r)" % (name, calls))
+        # 3) a mac WITHOUT `open` reachable must not take the process down (headless/CI)
+        sys.platform = "darwin"
+        def boom(*a, **k): raise OSError("no such file: open")
+        mod.subprocess.Popen = boom
+        try:
+            mod._open_best_effort("/tmp/x.html")
+        except Exception as exc:
+            bad.append("%s: darwin propago la excepcion (%s)" % (name, exc))
+    finally:
+        sys.platform = real_platform
+        mod.subprocess.Popen = real_popen
+print("OK" if not bad else "BAD " + " | ".join(bad[:4]))
+PY
+)
+if [ "$T108" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   rama darwin ejecutada en los 3 archivos: llama a 'open', no pisa xdg-open, y falla en silencio"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T108"; fi
+
 echo "== T107 (1.53.0): every Agent-Skills target installs + measures from ONE table row =="
 # cursor/copilot/gemini/cline joined pi as skills-only targets. They share one transactional
 # installer and one doctor branch, so the risk is not the code -- it is the TABLE: a row whose
