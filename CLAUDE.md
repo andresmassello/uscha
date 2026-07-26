@@ -35,6 +35,14 @@ itself.
 
 ## Known gotchas
 
+- **The smoke suite must parse under bash 3.2** — the one macOS still ships (2007, GPLv3).
+  Inside a `VAR=$(... <<'PY' ... PY )` block, a **literal `'` or `"` in a Python character
+  class** (e.g. `['"]`) makes bash 3.2 hunt for a matching quote to the end of the file and die
+  with `unexpected EOF while looking for matching`. Bash 4/5 (Linux, git-bash) parse it fine, so
+  it is invisible locally — only the macOS CI cell catches it. Write the quotes as `\x27` /
+  `\x22`. Same family: **no backticks in comments inside those heredocs** — the shell runs them
+  as command substitution and silently truncates the code.
+
 - The PNGs in `docs/` are regenerated from `docs/diagram-sources/*.html` with headless Edge
   (`--force-device-scale-factor=2`) + PIL autocrop (the render clips ~70px at the bottom if the
   window is too short).

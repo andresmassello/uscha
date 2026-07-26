@@ -3504,7 +3504,12 @@ version = io.open(kit + "/VERSION", encoding="utf-8").readline().split()[-1]
 bad = []
 # a version-shaped literal compared against a version / source_version key = a pin.
 # EITHER quote style: a re-pin written with double quotes used to slip through this check.
-for m in re.finditer(r"""\[['"](?:source_)?version['"]\]\s*==\s*['"](\d+\.\d+\.\d+)['"]""", src):
+# The quote chars are written as \x27 / \x22 ON PURPOSE: a LITERAL ' or " inside this
+# heredoc-in-$() makes bash 3.2 -- the one macOS still ships -- hunt for a matching quote
+# to the end of the file and die with "unexpected EOF". Linux/git-bash (4/5) parse it fine,
+# which is exactly why only the macOS cell caught it.
+Q = "[\x27\x22]"
+for m in re.finditer(r"\[" + Q + r"(?:source_)?version" + Q + r"\]\s*==\s*" + Q + r"(\d+\.\d+\.\d+)" + Q, src):
     bad.append("version fijada en linea %d: %s" % (src[:m.start()].count("\n") + 1, m.group(1)))
 # the changelog filename must be derived too
 if re.search(r"CHANGELOG-\d+\.\d+\.\d+\.md", src):
