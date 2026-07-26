@@ -29,8 +29,8 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.52.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
-[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.52.0.md)
+**Kit v1.52.1** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.52.1.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
 ---

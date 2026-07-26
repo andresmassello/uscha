@@ -40,6 +40,13 @@ exec < /dev/null
 KIT="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT="$(cd "$KIT/.." && pwd)"
 QL="$KIT/.claude/skills/uscha-devloop/qa_ledger.py"
+# The version the suite asserts against is READ, never hardcoded (1.52.1). Pinning literals
+# made every release edit six places in this file -- pure toll, zero safety: the real drift
+# gate is T44 (the six surfaces must agree AND ship a CHANGELOG for that version), and it stays.
+# Deriving does not weaken the version assertions either: install-uscha.py's source_version()
+# reads this same file, so a literal was never proving the number -- only that someone
+# remembered to retype it.
+KIT_VERSION="$(awk 'NR==1{print $NF}' "$KIT/VERSION")"
 # probe FUNCIONAL: en Windows 'python3' puede ser un stub de Store que está en
 # PATH pero no ejecuta — hay que probar --version, no solo command -v.
 PY="${PYTHON:-}"
@@ -1447,11 +1454,11 @@ v_pkg = json.load(io.open(os.path.join(repo, 'package.json'), encoding='utf-8'))
 mk = json.load(io.open(os.path.join(repo, '.claude-plugin', 'marketplace.json'), encoding='utf-8'))
 v_mkt = mk['plugins'][0]['version']
 versions = [v_file, v_cfg, v_claude, v_mkt, v_pkg, v_codex]
-changelog = os.path.join(kit, 'CHANGELOG-1.52.0.md')
+changelog = os.path.join(kit, 'CHANGELOG-%s.md' % v_file)   # derived from VERSION, never pinned
 print('  versiones:', *versions)
 sys.exit(0 if len(set(versions)) == 1 and os.path.isfile(changelog) else 1)" "$(dirname "$QL")" \
-  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-1.52.0.md"; } \
-  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-1.52.0.md"; }
+  && { PASS=$((PASS+1)); echo "  ok   las seis fuentes coinciden y existe CHANGELOG-$KIT_VERSION.md"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL drift de version o falta CHANGELOG-$KIT_VERSION.md"; }
 echo "== T51 freshness (1.31.0): reporte JUnit mas viejo que el codigo = STALE -> AC UNMEASURED =="
 mkdir -p repo-fresh/reports
 printf 'def alta():\n    return True\n' > repo-fresh/alta.py
@@ -1881,7 +1888,7 @@ mkdir -p "$INST_HOME"
 "$PY" "$KIT/install-uscha.py" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.52.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '$KIT_VERSION' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install-uscha version expone version fuente y targets"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL install-uscha version no expone targets/version"; }
@@ -1905,7 +1912,7 @@ market = h/'.agents/plugins/marketplace.json'
 engine = h/'plugins/uscha/skills/uscha-devloop/qa_ledger.py'
 marker = h/'plugins/uscha/uscha-install.json'
 ok = (manifest.exists() and market.exists() and engine.exists() and
-      json.load(open(manifest, encoding='utf-8'))['version'] == '1.52.0' and
+      json.load(open(manifest, encoding='utf-8'))['version'] == '$KIT_VERSION' and
       json.load(open(marker, encoding='utf-8'))['target'] == 'codex')
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   install codex crea plugin personal, marketplace y marker"; } \
@@ -1913,7 +1920,7 @@ sys.exit(0 if ok else 1)" \
 "$PY" "$KIT/install-uscha.py" doctor --target codex --home "$INST_HOME" --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.52.0' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
+ok = (d['source_version'] == '$KIT_VERSION' and d['targets']['codex']['installed'] is True and d['targets']['codex']['version_match'] is True)
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor detecta Codex instalado y version match"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor no detecta install Codex"; }
@@ -1927,7 +1934,7 @@ if command -v node >/dev/null 2>&1; then
   node "$ROOT/bin/uscha.js" version --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
-ok = (d['source_version'] == '1.52.0' and 'codex' in d['targets'] and 'claude' in d['targets'])
+ok = (d['source_version'] == '$KIT_VERSION' and 'codex' in d['targets'] and 'claude' in d['targets'])
 sys.exit(0 if ok else 1)" \
     && { PASS=$((PASS+1)); echo "  ok   npm router expone version/targets desde install-uscha.py"; } \
     || { FAIL=$((FAIL+1)); echo "  FAIL npm router no delega correctamente al installer"; }
@@ -1939,7 +1946,7 @@ if command -v npm >/dev/null 2>&1; then
 import json, sys
 d = json.load(sys.stdin)[0]
 files = {f['path'] for f in d['files']}
-ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '1.52.0'
+ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '$KIT_VERSION'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
       and '.atl/skill-registry.md' not in files and 'handoff.md' not in files and 'mirador.html' not in files
       and not any('__pycache__' in f or f.endswith(('.pyc', '.pyo')) for f in files)
@@ -3384,6 +3391,37 @@ T102_DUPS="$(find "$ROOT" -type f \
 if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
+
+echo "== T106 (1.52.1): the suite reads the version, it never pins it (no release toll) =="
+# Every release used to edit six version literals in THIS file. That was pure toll: it proved
+# nothing (install-uscha.py's source_version() reads the same VERSION file) and it broke the
+# suite on each bump until someone retyped them. The version now flows from $KIT_VERSION.
+# This check keeps a future edit from quietly pinning one again.
+T106=$("$PY" - "$KIT/tests/smoke-engine.sh" "$KIT" "$KIT_VERSION" <<'PY'
+import io, re, sys
+smoke, kit, kit_version = sys.argv[1], sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "")
+src = io.open(smoke, encoding="utf-8").read()
+version = io.open(kit + "/VERSION", encoding="utf-8").readline().split()[-1]
+bad = []
+# a version-shaped literal compared against a version / source_version key = a pin.
+# EITHER quote style: a re-pin written with double quotes used to slip through this check.
+for m in re.finditer(r"""\[['"](?:source_)?version['"]\]\s*==\s*['"](\d+\.\d+\.\d+)['"]""", src):
+    bad.append("version fijada en linea %d: %s" % (src[:m.start()].count("\n") + 1, m.group(1)))
+# the changelog filename must be derived too
+if re.search(r"CHANGELOG-\d+\.\d+\.\d+\.md", src):
+    bad.append("nombre de CHANGELOG fijado (debe derivarse de VERSION)")
+# the derivation must exist AND have produced the right value: kit_version is the REAL
+# runtime value the shell computed, not a re-derivation of it (that would be circular).
+if not re.search(r"^KIT_VERSION=", src, flags=re.M):
+    bad.append("falta KIT_VERSION derivado de VERSION")
+elif kit_version != version:
+    bad.append("KIT_VERSION=%r no coincide con VERSION=%r" % (kit_version, version))
+print("OK" if not bad else "BAD " + " | ".join(bad[:4]))
+PY
+)
+if [ "$T106" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   cero versiones fijadas: la suite las lee de VERSION ($KIT_VERSION)"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T106"; fi
 
 echo "== T105 (1.52.0): every skill declares the orientation markers (breadcrumb + close block) =="
 # Field feedback: the operator got lost -- no in-flow signal of WHERE they were, and a phase
