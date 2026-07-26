@@ -65,6 +65,38 @@ It does not protect against:
   determined attacker: entity expansion *under* the ceiling still expands.
 - **Supply chain upstream of us** — a compromised npm registry, GitHub Action, or agent runtime.
 
+## Security notes (for whoever runs a scanner here)
+
+A static scanner will flag the following. Each is a deliberate decision with its reasoning, not
+an oversight — so you can judge it instead of filing it.
+
+**`sha1` — 4 call sites, and none of them is security.** It fingerprints findings so the engine
+can detect *oscillation* (the same finding disappearing and returning across QA cycles), and it
+hashes line windows for duplicate detection in `waste-check`. Collisions there produce a wrong
+*advisory count*, never an authorization or integrity decision. Ledger integrity uses **sha256**
+(`_integrity_hash`). Flagged by ruff as `S324`.
+
+**`ET.parse` on report files.** Flagged as `S314`. ruff prescribes `defusedxml`, which is a new
+runtime dependency — and *stdlib-only* is the constraint that lets this engine run anywhere
+Python does, with no `pip install`. Since 1.56.1 every parse goes through a 64 MB ceiling
+(above). The residual risk is stated, not hidden: entity expansion under the ceiling still
+expands.
+
+**ruff's `S` (bandit) rule set is deliberately NOT enabled.** `ruff.toml` selects
+`["E4", "E7", "E9", "F", "B"]`. Enabling `S` yields 61 findings that the engine would map to
+HIGH, of which the ones that matter are the two above — both already analysed and decided. A
+gate that fires 61 times for two real items trains the reader to ignore the gate, which is
+worse than not having it. The full analysis lives in
+[`ISSUES-DEFERRED.md`](ISSUES-DEFERRED.md), with severity and evidence per finding.
+
+**The coverage number is scoped to the engine.** `uscha.config.json` declares exactly one repo
+(`uscha`) with a threshold of 60. It is not a claim about anything else, and the ledger records
+which repo produced which report.
+
+**No model telemetry reaches the engine.** `qa_ledger.py` never reads tokens, model names or
+vendor data — smoke **AC-04** asserts it. Vendor-reported numbers can only enter through an
+adapter (the mirador's telemetry strip), never through the measurement path.
+
 ## What is measured
 
 Claims in this repository are backed by the smoke suite (`uscha-kit/tests/smoke-engine.sh`),
