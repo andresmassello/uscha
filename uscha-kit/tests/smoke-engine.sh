@@ -3368,7 +3368,9 @@ spec = importlib.util.spec_from_file_location("iu", os.path.join(kit, "install-u
 iu = importlib.util.module_from_spec(spec); spec.loader.exec_module(iu)
 ok = (present == 9 and marker and healthy is True and unhealthy is False
       and pi_guard == "advisory" and cl_guard == "enforced" and ext
-      and iu.selected_targets("all") == ["codex", "claude", "pi"]
+      # scoped to pi: `all` must INCLUDE it, `both` must not. Pinning the whole list here made
+      # this test break every time a target was added -- that roster is T107's subject (1.53.0).
+      and "pi" in iu.selected_targets("all")
       and iu.selected_targets("both") == ["codex", "claude"])
 print("OK" if ok else "BAD present=%s marker=%s healthy=%s unhealthy=%s pi_guard=%s cl_guard=%s ext=%s"
       % (present, marker, healthy, unhealthy, pi_guard, cl_guard, ext))
@@ -3391,6 +3393,51 @@ T102_DUPS="$(find "$ROOT" -type f \
 if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
+
+echo "== T107 (1.53.0): every Agent-Skills target installs + measures from ONE table row =="
+# cursor/copilot/gemini/cline joined pi as skills-only targets. They share one transactional
+# installer and one doctor branch, so the risk is not the code -- it is the TABLE: a row whose
+# root is wrong, or a target that silently never installs. This walks every row for real.
+T107H="$(mktemp -d)"
+python "$KIT/install-uscha.py" install --target all --home "$T107H" >/dev/null 2>&1
+T107=$("$PY" - "$KIT" "$T107H" <<'PY'
+import importlib.util, json, os, subprocess, sys
+kit, home = sys.argv[1], sys.argv[2]
+spec = importlib.util.spec_from_file_location("iu", os.path.join(kit, "install-uscha.py"))
+iu = importlib.util.module_from_spec(spec); spec.loader.exec_module(iu)
+bad = []
+# the table must cover the newcomers and stay in TARGETS
+for name in ("pi", "cursor", "copilot", "gemini", "cline"):
+    if name not in iu.SKILL_ROOTS: bad.append("falta la fila %s" % name)
+    elif name not in iu.TARGETS:   bad.append("%s no esta en TARGETS" % name)
+# every row must have landed its 9 skills + marker at ITS OWN root
+for name, parts in iu.SKILL_ROOTS.items():
+    root = os.path.join(home, *parts)
+    missing = [s for s in iu.SKILLS if not os.path.isfile(os.path.join(root, s, "SKILL.md"))]
+    if missing: bad.append("%s: faltan %d skills en %s" % (name, len(missing), os.path.join(*parts)))
+    if not os.path.isfile(os.path.join(root, "uscha-install.json")):
+        bad.append("%s: sin marker" % name)
+# no two rows may share a root -- a copy-paste typo would make one target clobber another
+roots = ["/".join(p) for p in iu.SKILL_ROOTS.values()]
+if len(set(roots)) != len(roots): bad.append("dos targets comparten root: %s" % roots)
+out = subprocess.check_output([sys.executable, os.path.join(kit, "install-uscha.py"),
+                               "doctor", "--target", "all", "--home", home, "--json"], text=True)
+d = json.loads(out)
+for name in iu.SKILL_ROOTS:
+    st = d["targets"].get(name) or {}
+    if not st.get("healthy"):        bad.append("doctor: %s no healthy" % name)
+    if st.get("golden_guard") != "advisory":
+        bad.append("%s: golden_guard=%r (debe ser advisory: no hay hook bloqueante)" % (name, st.get("golden_guard")))
+# `both` must NOT grow as targets are added -- it is a legacy alias, that is the whole point
+if iu.selected_targets("both") != ["codex", "claude"]: bad.append("'both' dejo de ser codex+claude")
+if set(iu.selected_targets("all")) != set(iu.TARGETS): bad.append("'all' no cubre TARGETS")
+print("OK" if not bad else "BAD " + " | ".join(bad[:5]))
+PY
+)
+rm -rf "$T107H"
+if [ "$T107" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   5 targets Agent-Skills instalan en su root, doctor healthy, guard advisory, 'both' intacto"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T107"; fi
 
 echo "== T106 (1.52.1): the suite reads the version, it never pins it (no release toll) =="
 # Every release used to edit six version literals in THIS file. That was pure toll: it proved
@@ -3482,9 +3529,9 @@ echo "== T104 (1.51.3): every published manifest points at the public site (no h
 # The kit is published on FOUR surfaces (npm, the Claude plugin, the Codex plugin, the
 # marketplace) and each carries its own homepage. They drifted apart before (T57 mechanized the
 # same class of drift for skill counts), so the site link is asserted, not trusted.
-T104=$("$PY" - "$ROOT" <<'PY'
-import io, json, os, sys
-root = sys.argv[1]
+T104=$("$PY" - "$ROOT" "$KIT" <<'PY'
+import importlib.util, io, json, os, sys
+root, kit = sys.argv[1], sys.argv[2]
 SITE = "https://uscha.dev"
 manifests = {
     "package.json": ("homepage",),
@@ -3504,6 +3551,13 @@ if mk["plugins"][0].get("homepage") != SITE:
 for rel in ("README.md", os.path.join("uscha-kit", "README.md")):
     if SITE not in io.open(os.path.join(root, rel), encoding="utf-8").read():
         bad.append("%s: no menciona %s" % (rel, SITE))
+# The Codex manifest that actually lands on disk is GENERATED, not copied -- checking only the
+# repo file let the installed one keep pointing at GitHub for a whole release (kit 1.53.0).
+# Assert the generator too, or this check measures the wrong artifact.
+spec = importlib.util.spec_from_file_location("iu", os.path.join(kit, "install-uscha.py"))
+iu = importlib.util.module_from_spec(spec); spec.loader.exec_module(iu)
+if iu.plugin_manifest().get("homepage") != SITE:
+    bad.append("plugin_manifest() GENERADO: homepage=%r" % iu.plugin_manifest().get("homepage"))
 print("OK" if not bad else "BAD " + "; ".join(bad))
 PY
 )

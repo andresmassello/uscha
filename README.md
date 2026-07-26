@@ -13,12 +13,23 @@ never what was claimed.
 ```bash
 npx --yes @andresmassello/uscha@latest install --target claude   # Claude Code
 npx --yes @andresmassello/uscha@latest install --target codex    # Codex
+npx --yes @andresmassello/uscha@latest install --target cursor   # Cursor
+npx --yes @andresmassello/uscha@latest install --target copilot  # VS Code / GitHub Copilot
+npx --yes @andresmassello/uscha@latest install --target gemini   # Gemini CLI
+npx --yes @andresmassello/uscha@latest install --target cline    # Cline
 npx --yes @andresmassello/uscha@latest install --target pi       # pi (Earendil)
-npx --yes @andresmassello/uscha@latest install --target all      # all three at once
+npx --yes @andresmassello/uscha@latest install --target all      # every target at once
 
 npx --yes @andresmassello/uscha@latest doctor --target all
 ```
 
+The nine skills implement the **Agent Skills** standard, so the last five targets are the same
+skills placed under each agent's own documented root. Honest scope: only Claude Code and Codex
+have been exercised against a real agent — for the rest, that they load is a *documented
+expectation, not a measurement*. What is measured is that the files land where each agent
+documents reading them and that `doctor` reads them back. INV-GOLDEN-01 is mechanically
+enforced only on Claude Code (a blocking PreToolUse hook); everywhere else `doctor` reports it
+as `advisory` rather than implying a guard it cannot see.
 (`both` stays a legacy alias for codex+claude.) Then, in your project:
 
 ```bash
@@ -29,8 +40,8 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.52.1** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
-[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.52.1.md)
+**Kit v1.53.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.53.0.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
 ---
