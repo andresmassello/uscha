@@ -52,21 +52,41 @@ hook present + registered, on both targets. It also found what a static read cou
 BLOCKER this audit missed (P0-4 below) — and measured the T75/router bug that the CI matrix had
 already turned red. Findings folded in below.
 
-**macOS was measured through 1.51.3, and is UNMEASURED from 1.52.0 on.** The CI matrix ran the
-suite on real `macos-latest` runners plus the REAL installer end-to-end (`install --target all`
-→ `doctor --target all`, asserting `ok: true` + per-target `golden_guard`). On 2026-07-25 the
-account ran out of Actions minutes — every push produced a run that died in 6 seconds with
-*"The job was not started because recent account payments have failed"*, six red cells that
-measured nothing. The workflow is now **manual only** (`workflow_dispatch`); the matrix is
-intact and one click away when minutes return.
+**macOS is MEASURED again (2026-07-26).** It went UNMEASURED for one day: on 2026-07-25 the
+account ran out of Actions minutes and every push produced a run that died in 6 seconds with
+*"The job was not started because recent account payments have failed"* — six red cells that
+measured nothing, so the workflow was set to `workflow_dispatch` only rather than leave a red
+grid that reads like a real failure. Making the repo **public** restored free standard runners,
+and the matrix is back on every push: `ubuntu` / `macos` / `windows` × Python 3.8/3.13, plus the
+REAL installer end-to-end (`install --target all` → `doctor --target all`, asserting `ok: true`
+and per-target `golden_guard`).
 
-**What replaced it, locally and honestly:**
+**The first macOS run after the gap failed — and that is the whole argument for the cell.**
+Both macOS cells died *before a single assertion*:
 
-| Platform | How it is verified now | Status |
+```
+line 4162: unexpected EOF while looking for matching `"'
+```
+
+A parse failure, not a test failure. macOS still ships **bash 3.2** (2007, for GPLv3 reasons),
+and a smoke check written that week used a literal `['"]` character class inside a
+`VAR=$(... <<'PY' ... PY )` block; bash 3.2 hunts for the matching quote to the end of the file
+and gives up. Bash 4/5 — Linux and git-bash — parse it fine, so **393/393 locally said nothing
+was wrong**. Fixed by writing the quotes as `\x27`/`\x22`, and recorded in `CLAUDE.md` next to
+its sibling trap (backticks in comments inside those same heredocs, which the shell executes as
+command substitution). Neither is reachable from the dev machine. That is the case for keeping
+a real macOS runner rather than reasoning about macOS.
+
+| Platform | How it is verified | Status |
 |---|---|---|
-| Windows | native run of `smoke-engine.sh` | **measured** |
-| Linux | real Ubuntu 22.04 via WSL, Python 3.10, Node 24 LTS — `wsl -e bash -lc "cd /mnt/c/... && bash uscha-kit/tests/smoke-engine.sh"` | **measured, 390/390** — the full suite, npm router included |
-| macOS | no machine available | **UNMEASURED** — but see below: the kit's only macOS-specific code is now executed on every run, from any OS |
+| Windows | CI matrix (py3.8 + py3.13) + native local runs | **measured, 393/393** |
+| Linux | CI matrix (py3.8 + py3.13) + real Ubuntu 22.04 via WSL (Python 3.10, Node 24) | **measured, 393/393** |
+| macOS | CI matrix (py3.8 + py3.13) on real `macos-latest` runners | **measured, 393/393** |
+
+**Local verification still works and is still worth running** — it is faster than a push and it
+caught real defects while CI was down: `bash uscha-kit/tests/smoke-engine.sh` natively, and
+`wsl -e bash -lc "cd /mnt/c/... && bash uscha-kit/tests/smoke-engine.sh"` for real Linux. What
+it structurally cannot reach is exactly what bit above: an old-bash parse difference.
 
 The Linux row needs Node on the WSL side (Ubuntu 22.04's `apt` ships Node 12, below the kit's
 declared `">=18"`, so it is the wrong tool for the job). Node's official prebuilt tarball
@@ -96,7 +116,7 @@ that Linux still gets `xdg-open` (so the mac command cannot leak across), and th
 `open` is unreachable **fails silently** instead of taking the process down. Verified by
 mutation: swapping `open` for `xdg-open`, or removing the `except`, both fail the suite.
 
-**This is not a macOS run and does not claim to be.** The status above stays UNMEASURED: a real
+**T108 is still worth keeping even now that macOS runs in CI:** it executes that arm on EVERY run and on every OS, so a Linux-only or Windows-only local run cannot silently break it between pushes. A real
 Mac could still differ in path semantics, permissions or interpreter resolution. What changed is
 that the one divergence a Linux+Windows suite structurally could never reach is now exercised on
 every run, on every OS — the residual risk is a native filesystem/interpreter difference, not
