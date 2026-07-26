@@ -1,7 +1,9 @@
 # Cross-platform support — audit and roadmap
 
-Status: **planning**. The kit is developed and released on Windows; this document tracks
-what it takes to support macOS and Linux honestly.
+Status: **done — cross-platform is measured, not narrated.** Windows, macOS and Linux each run
+the full smoke suite (393/393) on the CI matrix (`ubuntu`/`macos`/`windows` × Python 3.8/3.13)
+on every push. This document is the audit trail of getting there — kept as the record of what
+was found and fixed, not an open roadmap.
 
 ## Verdict up front
 
@@ -13,9 +15,9 @@ installer's junction-vs-symlink logic and browser opening (`_open_best_effort`),
 skill-dir resolution (`Path.home()`, dot-dirs), `workbench-doctor.sh`'s `windows_shell()`
 split, and the smoke suite's platform-gated fixtures.
 
-The real work is **three narrow seams and one missing measurement**. And the measurement comes
-first, because — by the kit's own rule — *until the suite runs green on Linux and macOS,
-"cross-platform" is narrated, not measured.*
+The real work was **three narrow seams and one missing measurement** — all now closed. The
+measurement came first, because — by the kit's own rule — *cross-platform stays narrated until
+the suite runs green on Linux and macOS.* It now does, on every push.
 
 ## The measurement (do this first)
 
