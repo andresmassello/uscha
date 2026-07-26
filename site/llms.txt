@@ -15,9 +15,11 @@ lives in versioned files, not in the chat; (3) the human always approves the
 merge; (4) tests must assert — the gate is never weakened; (5) migrations are
 anchored with a mechanically captured golden suite the agent must never author.
 
-The kit (v1.50.1, MIT license) ships 9 skills for Claude Code and Codex plus a
-pure-Python engine (qa_ledger.py, 29 subcommands, zero runtime dependencies)
-that ingests evidence from 11 language stacks. Install:
+The kit (v1.53.1, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil) —
+plus a pure-Python engine (qa_ledger.py, 29 subcommands, zero runtime dependencies)
+that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux
+(Python 3.8+). Install for one agent, or `--target all`:
 `npx --yes @andresmassello/uscha@latest install --target claude`
 
 ## Docs
@@ -31,6 +33,6 @@ that ingests evidence from 11 language stacks. Install:
 ## Optional
 
 - [Versión en español](https://uscha.dev/es/index.html): Spanish twin of the site — every English page has one
-- [GitHub](https://github.com/andresmassello/uscha): source repository (public soon)
+- [GitHub](https://github.com/andresmassello/uscha): source repository (public, MIT)
 - [npm](https://www.npmjs.com/package/@andresmassello/uscha): @andresmassello/uscha — the installable kit
 - [Contact](mailto:info@uscha.dev): info@uscha.dev
