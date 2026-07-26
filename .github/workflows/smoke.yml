@@ -5,13 +5,15 @@ name: smoke
 # doctrine, "cross-platform" is a claim until it is MEASURED on all three OSes. This is
 # that measurement. A red cell here is a real finding, not a flake.
 
-# MANUAL ONLY (2026-07-25). The account ran out of Actions minutes: every push produced a run
-# that died in 6s with "The job was not started because recent account payments have failed",
-# i.e. six red cells that measured NOTHING -- worse than no signal, because a red grid reads
-# like a real failure. The matrix is kept intact and one `workflow_dispatch` away; until it can
-# run again, verification is local (see docs/CROSS-PLATFORM.md: Windows native + real Linux via
-# WSL). macOS is UNMEASURED in the meantime, and the docs say so rather than implying coverage.
+# Was MANUAL-ONLY for a day (2026-07-25): the account ran out of Actions minutes and every push
+# produced a run that died in 6s with "recent account payments have failed" -- six red cells that
+# measured NOTHING, which is worse than no signal because a red grid reads like a real failure.
+# The repo is PUBLIC as of 2026-07-26, so standard runners are free again and the matrix is back
+# on every push. macOS stops being UNMEASURED the moment this grid goes green (docs/CROSS-PLATFORM.md).
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -24,17 +26,17 @@ jobs:
         python: ["3.8", "3.13"]   # the declared floor and a current release
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
 
       # Node is only needed by the npm-router tests (T74/T75); they degrade to a skip
       # if a compiler/shim is unavailable, so this is belt-and-suspenders, not required.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
 
