@@ -2419,9 +2419,9 @@ def cmd_flag_blocker(args):
         raise SystemExit("[qa_ledger] flag-blocker requires --note describing the breach.")
     if args.resolve and not args.escape_analysis:
         raise SystemExit(
-            "[qa_ledger] resolver un BLOCKER exige --escape-analysis: ¿que gate/test "
-            "debio atraparlo y que se hizo al respecto (test nuevo / gate nuevo / "
-            "busqueda de hermanos)? Encontrar cada bug UNA sola vez es la regla.")
+            "[qa_ledger] resolving a BLOCKER requires --escape-analysis: which gate/test "
+            "should have caught it, and what was done about it (new test / new gate / "
+            "sibling hunt)? Finding each bug ONCE is the rule.")
     rec = _append_gate_record(ledger, node, args.repo, tool, args.iteration,
                               failing, 1, args.note)
     if args.resolve:
@@ -2432,7 +2432,7 @@ def cmd_flag_blocker(args):
               f"(readiness capped <=65, convergence blocked until --resolve)")
     else:
         print(f"[qa_ledger] {args.repo}/{tool}: resolved — gate cleared "
-              f"(step #{rec['n']}, escape analysis registrada)")
+              f"(step #{rec['n']}, escape analysis recorded)")
 
 
 def _converged(node, k, qa_order=None):
@@ -2595,16 +2595,16 @@ def cmd_phase(args):
                           "spike_branch": spike, "satisfied": ok},
                          indent=2, ensure_ascii=False))
         sys.exit(0 if ok else 1)
-    print(f"PHASE {args.repo}: {state}  (derivado del ledger — no declarado)")
+    print(f"PHASE {args.repo}: {state}  (derived from the ledger — not declared)")
     for e in evidence:
         print(f"  · {e}")
     if spike:
-        print(f"  ! rama '{spike}': codigo de SPIKE, descartable por contrato "
-              f"(Tip 21) — el output legitimo es un ADR con las lecciones, "
-              f"jamas un PR. Escribi el ADR y arranca limpio en una rama normal.")
+        print(f"  ! branch '{spike}': SPIKE code, disposable by contract "
+              f"(Tip 21) — its legitimate output is an ADR with the lessons, "
+              f"never a PR. Write the ADR and start clean on a normal branch.")
     elif args.require and not ok:
-        print(f"  ! se requiere '{args.require}' y los HECHOS dicen '{state}' — "
-              f"el estado no se negocia, se construye")
+        print(f"  ! '{args.require}' is required and the FACTS say '{state}' — "
+              f"state is not negotiated, it is built")
     sys.exit(0 if ok else 1)
 
 
@@ -4003,34 +4003,34 @@ def cmd_readiness(args):
     # sin ella no hay % honesto que mostrar. Informativo: jamas gatea (kit 1.28.0).
     if acc_traceable and total:
         print(f"  acceptance medido: {out['acceptance']['measured_pct']}% "
-              f"({len(measured_closed)}/{total} criterios cerrados por test verde "
-              f"— medido, no gatea)")
+              f"({len(measured_closed)}/{total} criteria closed by a green test "
+              f"— measured, does not gate)")
     if not acc_found:
         print(f"  ! acceptance file not found: {acc_path or '(unset)'} — ADR dimension = 0")
     if acc_found and not total:
-        print(f"  ! acceptance encontrado pero 0 criterios en scope "
-              f"(--section {args.section!r} sin match en el archivo?) — "
-              f"dimensiones adr/acceptance en 0")
+        print(f"  ! acceptance found but 0 criteria in scope "
+              f"(--section {args.section!r} matched nothing in the file?) — "
+              f"adr/acceptance dimensions at 0")
     if acc_found and total and not acc_traceable:
-        print("  ! acceptance sin IDs trazables ('- [ ] AC-01 — ...') — la "
-              "dimension acceptance cae al ratio de checkboxes (RELATO, no medido)")
+        print("  ! acceptance has no traceable IDs ('- [ ] AC-01 — ...') — the "
+              "acceptance dimension falls back to the checkbox ratio (NARRATED, not measured)")
     if dupe_ids:
-        print(f"  ! IDs duplicados en acceptance (normalizados): {', '.join(dupe_ids)} "
-              f"— cada ID cuenta UNA sola vez en la dimension acceptance")
+        print(f"  ! duplicate IDs in acceptance (normalized): {', '.join(dupe_ids)} "
+              f"— each ID counts ONCE in the acceptance dimension")
     if legacy_weights_cfg and not acc_traceable:
-        print("  ! config con readiness_weights explicitos de kit <=1.9.0 sin "
-              "'acceptance' — dimension excluida (peso 0) hasta agregar AC-IDs "
-              "o el peso explicito en config.defaults.readiness_weights")
+        print("  ! config carries explicit readiness_weights from kit <=1.9.0 without "
+              "'acceptance' — dimension excluded (weight 0) until you add AC-IDs "
+              "or the explicit weight in config.defaults.readiness_weights")
     if narrated_only:
-        print(f"  ! narrated-only: {', '.join(narrated_only)} — checkbox marcado "
-              f"SIN testcase verde 'AC-n' en los reportes (measured beats "
-              f"narrated: NO cierra)")
+        print(f"  ! narrated-only: {', '.join(narrated_only)} — checkbox ticked "
+              f"WITHOUT a green 'AC-n' testcase in the reports (measured beats "
+              f"narrated: does NOT close)")
     if measured_unchecked:
-        print(f"  · medido sin marcar: {', '.join(measured_unchecked)} — hay "
-              f"testcase verde; marca el checkbox si el criterio esta completo")
+        print(f"  · measured but unticked: {', '.join(measured_unchecked)} — there is "
+              f"a green testcase; tick the checkbox if the criterion is done")
     if acc_traceable and ac_untagged:
-        print(f"  · {ac_untagged} criterio(s) sin AC-ID — no pueden cerrar "
-              f"MEDIDO (cuentan como abiertos en la dimension acceptance)")
+        print(f"  · {ac_untagged} criterion(s) without an AC-ID — cannot close "
+              f"MEASURED (they count as open in the acceptance dimension)")
     if unmeasured_repos:
         print(f"  ! static gate NEVER ran in: {', '.join(unmeasured_repos)} — "
               f"dimension scored UNMEASURED (0.0), silence is not success")
@@ -4045,42 +4045,42 @@ def cmd_readiness(args):
               f"measured 0%. Instrument it, or DECLARE the exemption with "
               f"defaults.readiness_weights.coverage = 0 (config = requirement)")
     if stale_reports:
-        print(f"  ! {len(stale_reports)} reporte(s) JUnit STALE descartados "
-              f"(codigo mas nuevo que la evidencia) — los AC que dependian solo "
-              f"de ellos quedan UNMEASURED; re-corre los tests")
+        print(f"  ! {len(stale_reports)} STALE JUnit report(s) discarded "
+              f"(code newer than the evidence) — the ACs that relied only "
+              f"on them go UNMEASURED; re-run the tests")
     if production_open:
         labels = ", ".join(f"{p.get('id')}({p.get('severity')})" for p in production_open[:3])
-        more = "" if len(production_open) <= 3 else f" +{len(production_open)-3} mas"
-        print(f"  ! production findings open: {labels}{more} -- feedback real de "
-              f"produccion; reabrir discovery/SPEC en el proximo ciclo")
+        more = "" if len(production_open) <= 3 else f" +{len(production_open)-3} more"
+        print(f"  ! production findings open: {labels}{more} -- real field "
+              f"feedback; reopen discovery/SPEC in the next cycle")
     if spec_doubts_open:
         labels = ", ".join(f"{s.get('id')}({s.get('kind')}/{s.get('severity')})"
                            for s in spec_doubts_open[:3])
-        more = "" if len(spec_doubts_open) <= 3 else f" +{len(spec_doubts_open)-3} mas"
-        print(f"  ! spec-doubt open: {labels}{more} -- no codifiques alrededor "
-              f"de una SPEC dudosa; requiere revision humana")
+        more = "" if len(spec_doubts_open) <= 3 else f" +{len(spec_doubts_open)-3} more"
+        print(f"  ! spec-doubt open: {labels}{more} -- do not code around a "
+              f"doubtful SPEC; this needs human review")
     if spec_change_requests_open:
         labels = ", ".join(f"{r.get('id')}({r.get('source')})"
                            for r in spec_change_requests_open[:3])
-        more = "" if len(spec_change_requests_open) <= 3 else f" +{len(spec_change_requests_open)-3} mas"
-        print(f"  ! spec-change-request open: {labels}{more} -- el contrato "
-              f"requiere decision humana y SPEC/ADR amended")
+        more = "" if len(spec_change_requests_open) <= 3 else f" +{len(spec_change_requests_open)-3} more"
+        print(f"  ! spec-change-request open: {labels}{more} -- the contract "
+              f"needs a human decision and an amended SPEC/ADR")
     if stalled_repos:
-        print(f"  ! stall: {', '.join(stalled_repos)} — findings gateados planos o "
-              f"subiendo {STALL_WINDOW} ciclos: iterar mas no esta acercando la "
-              f"solucion. Probable problema de diseño/SPEC — volver a ADR / "
-              f"re-planear con el humano (advisory)")
+        print(f"  ! stall: {', '.join(stalled_repos)} — gated findings flat or "
+              f"rising for {STALL_WINDOW} cycles: iterating more is not getting "
+              f"closer. Likely a design/SPEC problem — go back to the ADR / "
+              f"re-plan with the human (advisory)")
     # rubrica (1.23.0): el ultimo grade por repo, siempre visible — guess
     # estructurado que aconseja; si esta gateado ya bloqueo por el ledger
     for rname, rnode in ledger["repos"].items():
         rub = _latest_static_by_tool(rnode).get("rubric:grade")
         if rub:
             m_ = "!" if rub.get("gated_reported") else "·"
-            print(f"  {m_} rubrica {rname}: {rub.get('note', 's/d')}")
+            print(f"  {m_} rubric {rname}: {rub.get('note', 'n/a')}")
     if stop_signal:
-        print("  · stop-signal: todos los repos convergieron y no queda ningun "
-              "fact bloqueante — lo que falta es deuda medible (coverage/"
-              "acceptance), no findings: candidato a cortar e ir a PR (advisory)")
+        print("  · stop-signal: every repo converged and no blocking fact "
+              "remains — what is left is measurable debt (coverage/"
+              "acceptance), not findings: a candidate to stop and go to PR (advisory)")
     # veredicto unico (1.25.0, anti-ceremonia): los gates persistidos se colapsan a
     # UNA linea bajo el KPI. El detalle (dimensiones, acceptance, churn, by-repo) es
     # ruido de auditoria en el caso normal -> detras de --verbose. Las lineas de
@@ -4089,12 +4089,12 @@ def cmd_readiness(args):
     if gate_roll:
         blocking = [g for g in gate_roll if g["blocking"]]
         n_ok = len(gate_roll) - len(blocking)
-        hint = "" if args.verbose else "   (readiness --verbose para el detalle)"
+        hint = "" if args.verbose else "   (readiness --verbose for the detail)"
         if blocking:
             names = ", ".join(f"{g['repo']}/{g['tool']}" for g in blocking)
-            print(f"--- gates: {n_ok} ok · {len(blocking)} bloqueando ({names}){hint}")
+            print(f"--- gates: {n_ok} ok · {len(blocking)} blocking ({names}){hint}")
         else:
-            print(f"--- gates: {n_ok} ok, ninguno bloqueando{hint}")
+            print(f"--- gates: {n_ok} ok, none blocking{hint}")
     if not args.verbose:
         return
     print("--- dimensions (weight | raw | contribution) ---")
@@ -4643,7 +4643,7 @@ def cmd_simplicity_check(args):
         sys.exit(0 if verdict != "OVERBUILT" else 1)
 
     print(f"SIMPLICITY: {score}/100 — {verdict}")
-    print("--- métricas (valor / presupuesto · * = declarado por el humano) ---")
+    print("--- metrics (value / budget · * = declared by the human) ---")
     rows = [
         ("lines_added", m["lines_added"], b["max_lines_added"], "max_lines_added"),
         ("net_lines", m["net_lines"], b["max_net_lines"], "max_net_lines"),
@@ -4657,21 +4657,21 @@ def cmd_simplicity_check(args):
         mark = "*" if key in declared else ""
         print(f"  {name:17s} {str(val):>7s} / {bud}{mark}")
     if not declared:
-        print("  (todos los presupuestos son defaults del kit — opinion, no "
-              "requerimiento: declara los tuyos en config.defaults.simplicity)")
-    print(f"  (new_functions: {m['new_functions']} — informativo, no gateado)")
+        print("  (every budget is a kit default — an opinion, not a "
+              "requirement: declare yours in config.defaults.simplicity)")
+    print(f"  (new_functions: {m['new_functions']} — informational, not gated)")
     if m.get("test_files_changed"):
-        print(f"  (tests FUERA del presupuesto: +{m['test_lines_added']} lineas "
-              f"en {m['test_files_changed']} archivo(s) de test — escribir tests "
-              f"nunca penaliza este gate)")
+        print(f"  (tests OUTSIDE the budget: +{m['test_lines_added']} lines "
+              f"in {m['test_files_changed']} test file(s) — writing tests "
+              f"never penalizes this gate)")
     if m.get("files_skipped"):
-        print(f"  ({m['files_skipped']} archivo(s) no-código salteados: docs/config/resources)")
+        print(f"  ({m['files_skipped']} non-code file(s) skipped: docs/config/resources)")
     if flags:
-        print("--- flags (Reduce: qué recortar) ---")
+        print("--- flags (Reduce: what to cut) ---")
         for fl in flags:
             print(f"  ! {fl}")
     else:
-        print("  dentro de presupuesto — nada que recortar")
+        print("  within budget — nothing to cut")
     sys.exit(0 if verdict != "OVERBUILT" else 1)
 
 
@@ -4955,23 +4955,23 @@ def cmd_waste_check(args):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         sys.exit(exit_code)
 
-    mode = "gate declarado" if gate else "advisory (declara defaults.waste.gate para gatear)"
+    mode = "declared gate" if gate else "advisory (declare defaults.waste.gate to make it block)"
     print(f"WASTE: {score}/100 — {verdict}  ({mode})")
-    print(f"--- ventanas de {b['window_size']} lineas normalizadas sobre {m['sig_lines_added']} "
-          f"lineas agregadas ({m['added_windows']} ventana(s), {m['files_added_to']} archivo(s)) ---")
+    print(f"--- windows of {b['window_size']} normalized lines over {m['sig_lines_added']} "
+          f"added lines ({m['added_windows']} window(s), {m['files_added_to']} file(s)) ---")
     print(f"  dup_vs_repo:      {m['dup_windows_vs_repo']} (budget {b['max_dup_windows_vs_repo']}"
           f"{'*' if 'max_dup_windows_vs_repo' in declared else ''})   "
-          f"dup_interno: {m['dup_windows_internal']}   dup_ratio: {m['dup_ratio']}")
-    print(f"  (call_density: {m['call_density']}/100 — informativo, no puntua ni gatea)")
+          f"dup_internal: {m['dup_windows_internal']}   dup_ratio: {m['dup_ratio']}")
+    print(f"  (call_density: {m['call_density']}/100 — informational, neither scored nor gated)")
     if not declared:
-        print("  (todos los presupuestos son defaults del kit — opinion, no "
-              "requerimiento: declara los tuyos en config.defaults.waste)")
+        print("  (every budget is a kit default — an opinion, not a "
+              "requirement: declare yours in config.defaults.waste)")
     if flags:
-        print("--- flags (REUSE-FIRST: que reusar en vez de clonar) ---")
+        print("--- flags (REUSE-FIRST: what to reuse instead of cloning) ---")
         for fl in flags:
             print(f"  ! {fl}")
-    print("--- honesto: proxy Type-1/Type-2 sobre lineas normalizadas, NO clones "
-          "semanticos (Type-3/4) ni CC por AST ---")
+    print("--- honest: a Type-1/Type-2 proxy over normalized lines, NOT semantic "
+          "clones (Type-3/4) nor AST-based CC ---")
     sys.exit(exit_code)
 
 
@@ -5003,17 +5003,17 @@ def cmd_pit_check(args):
 
     print(f"MUTATION: {m['mutation_score']}/100 — {verdict} "
           f"(gate {args.min_score}, test-strength {m['test_strength']})")
-    print("--- efectividad (NO es coverage: mide que los tests ASERTEN) ---")
-    print(f"  mutantes {m['total']} · matados {m['killed']} · "
-          f"sobreviven {m['survived']} · sin cobertura {m['no_coverage']}")
+    print("--- effectiveness (NOT coverage: it measures that the tests ASSERT) ---")
+    print(f"  mutants {m['total']} · killed {m['killed']} · "
+          f"survived {m['survived']} · uncovered {m['no_coverage']}")
     if m.get("excluded"):
         print(f"  ({m['excluded']} excluidos NON_VIABLE/RUN_ERROR — fuera del score, como PIT)")
     if hotspots:
-        print("--- hotspots (más mutantes vivos = tests débiles ahí) ---")
+        print("--- hotspots (more surviving mutants = weaker tests there) ---")
         for f, c in hotspots:
             print(f"  ! {f}: {c['survived']} sobreviven, {c['no_coverage']} sin cubrir")
     else:
-        print("  sin sobrevivientes — los tests atrapan las mutaciones")
+        print("  no survivors — the tests catch the mutations")
     if m["no_coverage"]:
         print(f"  nota: {m['no_coverage']} mutante(s) sin NINGÚN test "
               f"(coverage-gap, distinto de assertion-gap)")
@@ -5261,26 +5261,26 @@ def cmd_gate_check(args):
         if items:
             uniq = sorted(set(items))
             tail = " ..." if len(uniq) > 5 else ""
-            print(f"  ! {label}: {len(items)} en {', '.join(uniq[:5])}{tail}")
+            print(f"  ! {label}: {len(items)} in {', '.join(uniq[:5])}{tail}")
 
-    _show("tests borrados (BLOCKER)", removed_tests)
-    _show("tests deshabilitados (BLOCKER)", disabled_tests)
+    _show("tests deleted (BLOCKER)", removed_tests)
+    _show("tests disabled (BLOCKER)", disabled_tests)
     if thresholds:
-        print(f"  ! thresholds bajados/borrados (BLOCKER): {'; '.join(thresholds)}")
+        print(f"  ! thresholds lowered/removed (BLOCKER): {'; '.join(thresholds)}")
     if secrets:
-        print(f"  ! secretos agregados (BLOCKER): {'; '.join(sorted(set(secrets)))}")
-    _show("literales tipo password/token agregados (revisar)", secret_literals)
-    _show("reglas de scrub del golden editadas (revisar: pueden enmascarar divergencia)", scrub_edits)
-    _show("supresiones de lint agregadas (revisar)", suppressions)
-    _show("dependencias nuevas (revisar: 0 deps nuevas sin aprobacion)", new_deps)
+        print(f"  ! secrets added (BLOCKER): {'; '.join(sorted(set(secrets)))}")
+    _show("password/token-shaped literals added (review)", secret_literals)
+    _show("golden scrub rules edited (review: they can mask divergence)", scrub_edits)
+    _show("lint suppressions added (review)", suppressions)
+    _show("new dependencies (review: 0 new deps without approval)", new_deps)
     if assertions_removed:
-        print(f"  ~ asserts removidos en tests: {assertions_removed} (revisar)")
+        print(f"  ~ asserts removed from tests: {assertions_removed} (review)")
     if test_count_drop:
-        print(f"  ~ conteo de tests ejecutados cayó: {test_count_drop} (medido en snapshots — revisar)")
+        print(f"  ~ executed-test count dropped: {test_count_drop} (measured in snapshots — review)")
     if verdict == "CLEAN":
-        print("  el cambio no debilita el aparato de medición")
+        print("  the change does not weaken the measuring apparatus")
     elif not blocker:
-        print("  señales blandas: requieren justificación (--strict para gatear)")
+        print("  soft signals: they require justification (--strict to gate)")
     sys.exit(1 if blocker else 0)
 
 
@@ -5359,20 +5359,20 @@ def cmd_regression_check(args):
                           "has_assertion": has_assert},
                          indent=2, ensure_ascii=False))
         sys.exit(1 if fail else 0)
-    print(f"REGRESSION-CAPTURE: {verdict}  ({fixed} finding(s) cerrados · "
-          f"+{test_added} lineas de test en {len(test_files)} archivo(s))")
+    print(f"REGRESSION-CAPTURE: {verdict}  ({fixed} finding(s) closed · "
+          f"+{test_added} test lines in {len(test_files)} file(s))")
     if verdict == "NARRATED":
-        print("  ! cierre NARRADO: desaparecieron findings sin tocar un solo test — "
-              "¿que test reproduce el bug que decis haber arreglado? (Tip 31: el "
-              "test que falla va ANTES del fix; Tip 94: cada bug se encuentra UNA vez)")
+        print("  ! NARRATED close: findings vanished without touching a single test — "
+              "which test reproduces the bug you say you fixed? (Tip 31: the "
+              "failing test comes BEFORE the fix; Tip 94: each bug is found ONCE)")
     elif verdict == "MEASURED":
-        print("  cierre con evidencia: el diff que arregla trae tests")
+        print("  close with evidence: the fixing diff brings tests")
         if not (has_testdef or has_assert):
-            print("  · evidencia DEBIL: las lineas de test agregadas no traen ni "
-                  "definicion de test ni assert — el tripwire no juzga calidad "
-                  "(eso es pit-check), pero esto merece un ojo humano")
+            print("  · WEAK evidence: the added test lines carry neither a test "
+                  "definition nor an assert — this tripwire does not judge quality "
+                  "(that is pit-check), but it deserves a human eye")
     else:
-        print("  nada cerrado en la ultima iteracion — nada que exigir")
+        print("  nothing closed in the last iteration — nothing to demand")
     sys.exit(1 if fail else 0)
 
 
@@ -5592,7 +5592,7 @@ def cmd_rubric_ingest(args):
     blockers = _rubric_structure(rubric_path)
     if blockers:
         for b in blockers:
-            print(f"[qa_ledger] rubrica invalida: {b}", file=sys.stderr)
+            print(f"[qa_ledger] invalid rubric: {b}", file=sys.stderr)
         sys.exit(2)
     items, threshold, _found = _parse_rubric(rubric_path)
     by_id = {i["id"]: i for i in items}
@@ -5673,15 +5673,15 @@ def cmd_rubric_ingest(args):
         sys.exit(1 if failing else 0)
     print(f"RUBRIC: {'PASS' if passed else 'BELOW'}  {note}")
     if failed_pos:
-        print(f"  ! criterios sin cerrar: {', '.join(sorted(failed_pos))}")
+        print(f"  ! criteria not closed: {', '.join(sorted(failed_pos))}")
     if unsupported:
-        print(f"  ! veredictos SIN evidencia (no puntuan): {', '.join(sorted(unsupported))} "
-              f"— evidence-or-nothing, el juicio sin cita no cuenta")
+        print(f"  ! verdicts WITHOUT evidence (they do not score): {', '.join(sorted(unsupported))} "
+              f"— evidence-or-nothing, a judgement without a citation does not count")
     if failing:
-        print("  el gate esta DECLARADO (config/--gate): bloquea convergencia y "
-              "capea readiness <=65 hasta un grade limpio")
+        print("  the gate is DECLARED (config/--gate): it blocks convergence and "
+              "caps readiness <=65 until a clean grade")
     elif not passed:
-        print("  advisory: no gatea — declaralo en defaults.rubric.gate para que bloquee")
+        print("  advisory: it does not gate — declare it in defaults.rubric.gate to make it block")
     sys.exit(1 if failing else 0)
 
 
@@ -5740,13 +5740,13 @@ def cmd_spec_check(args):
             print(f"      · {c[:80]}")
     if m["stack_hits"]:
         terms = sorted({t for _, t in m["stack_hits"]})
-        print(f"  ~ stack nombrado en criterios ({len(m['stack_hits'])}): {', '.join(terms[:6])} — el 'cómo' va al ADR, no al SPEC")
+        print(f"  ~ stack named in criteria ({len(m['stack_hits'])}): {', '.join(terms[:6])} — the 'how' belongs in the ADR, not the SPEC")
     if m["non_ears"] and m["n_criteria"]:
-        print(f"  · advisory: {m['non_ears']}/{m['n_criteria']} criterios no siguen patrón EARS (When/If/While … shall)")
-    print("  i consistencia: INFERENCIAL (checker no-correlacionado), no este lint · "
-          "estructura = FACT (bloquea) · prosa = advisory (--strict para gatear)")
+        print(f"  · advisory: {m['non_ears']}/{m['n_criteria']} criteria do not follow the EARS pattern (When/If/While … shall)")
+    print("  i consistency: INFERENTIAL (an uncorrelated checker), not this lint · "
+          "structure = FACT (blocks) · prose = advisory (--strict to gate)")
     if verdict == "OK":
-        print("  estructura completa y criterios testables")
+        print("  structure complete and criteria testable")
     sys.exit(1 if fail else 0)
 
 
@@ -5796,8 +5796,8 @@ def _load_scrub_rules(root):
             rules.append((re.compile(r["pattern"]), r["replace"], r["pattern"]))
         return rules
     except (json.JSONDecodeError, re.error, KeyError, TypeError) as exc:
-        print(f"[qa_ledger] {path} invalido ({exc}) — el scrub no se saltea en "
-              f"silencio: arregla el archivo o borralo.", file=sys.stderr)
+        print(f"[qa_ledger] {path} invalid ({exc}) — the scrub is not skipped in "
+              f"silence: fix the file or delete it.", file=sys.stderr)
         sys.exit(2)
 
 
@@ -5829,7 +5829,7 @@ def _load_golden_labels(path):
         with open(path, "r", encoding="utf-8") as fh:
             raw = json.load(fh)
     except (OSError, json.JSONDecodeError) as exc:
-        print(f"[qa_ledger] golden labels invalidos ({exc})", file=sys.stderr)
+        print(f"[qa_ledger] invalid golden labels ({exc})", file=sys.stderr)
         sys.exit(2)
     fixtures = raw.get("fixtures", raw) if isinstance(raw, dict) else None
     if not isinstance(fixtures, dict):
@@ -5914,7 +5914,7 @@ def cmd_golden_diff(args):
                 ab = fa.read()
         except OSError as exc:
             fixture["result"] = "read_error"
-            diverged.append((rec, f"no se pudo leer: {exc}"))
+            diverged.append((rec, f"could not read: {exc}"))
             continue
         if rb == ab:
             fixture["result"] = "matched"
@@ -5941,8 +5941,8 @@ def cmd_golden_diff(args):
                               "note": "no .received fixtures found — run the capture first"},
                              indent=2, ensure_ascii=False))
         else:
-            print("GOLDEN-DIFF: NOT-RUN — sin fixtures .received, nada que comparar "
-                  "(corré la captura primero; ausencia NO es verde)")
+            print("GOLDEN-DIFF: NOT-RUN — no .received fixtures, nothing to compare "
+                  "(run the capture first; absence is NOT green)")
         sys.exit(2)
     verdict = "CLEAN" if passed else "DIVERGE"
     if args.json:
@@ -5957,20 +5957,20 @@ def cmd_golden_diff(args):
         }, indent=2, ensure_ascii=False))
         sys.exit(0 if passed else 1)
     scrub_str = f" · {matched_scrubbed} via scrub" if matched_scrubbed else ""
-    print(f"GOLDEN-DIFF: {verdict}  ({matched} matchean{scrub_str} · {len(diverged)} divergen)")
+    print(f"GOLDEN-DIFF: {verdict}  ({matched} match{scrub_str} · {len(diverged)} diverge)")
     if rules:
         subs = sum(scrub_counts.values())
-        print(f"  · scrub activo: {len(rules)} regla(s) de {GOLDEN_SCRUB_FILE}, "
-              f"{subs} sustitucion(es) — el masking es visible, no magia")
+        print(f"  · scrub active: {len(rules)} rule(s) from {GOLDEN_SCRUB_FILE}, "
+              f"{subs} substitution(s) — the masking is visible, not magic")
     for f, r in diverged[:12]:
         print(f"  ! {f}: {r}")
     if len(diverged) > 12:
-        print(f"  ... y {len(diverged) - 12} más")
+        print(f"  ... and {len(diverged) - 12} more")
     if passed:
-        print("  el comportamiento matchea el golden aprobado byte a byte"
+        print("  behaviour matches the approved golden byte for byte"
               + (" (volatiles declarados enmascarados)" if matched_scrubbed else ""))
     else:
-        print("  el .approved es verdad de campo: si el diff es correcto, lo aprueba un HUMANO — el agente no lo toca")
+        print("  the .approved is field truth: if the diff is right a HUMAN approves it — the agent never touches it")
     sys.exit(0 if passed else 1)
 
 
@@ -6000,8 +6000,8 @@ DOCTOR_FIX = {
     "go": "https://go.dev/dl/",
     "cargo": "https://rustup.rs",
     "dotnet": "https://dotnet.microsoft.com/download",
-    "ctest": "https://cmake.org/download/  (ctest viene con CMake)",
-    "gradle": "https://gradle.org/install/  (o usa el gradlew del repo)",
+    "ctest": "https://cmake.org/download/  (ctest ships with CMake)",
+    "gradle": "https://gradle.org/install/  (or use the repo gradlew)",
     "swift": "https://www.swift.org/install/",
 }
 # Two valid hooks: the installer wires the portable .py; the plugin flow ships the .ps1.
@@ -6042,13 +6042,13 @@ def cmd_doctor(args):
     if py >= (3, 8):
         ok(f"Python {py.major}.{py.minor}.{py.micro} (>= 3.8)")
     else:
-        err(f"Python {py.major}.{py.minor} - el kit requiere 3.8+",
-            "instalar: https://www.python.org/downloads/")
+        err(f"Python {py.major}.{py.minor} - the kit requires 3.8+",
+            "install: https://www.python.org/downloads/")
     if shutil.which("git"):
-        ok("git en PATH")
+        ok("git on PATH")
     else:
-        err("git no esta en PATH - gate-check/simplicity/regression lo usan (--from-git)",
-            "instalar: https://git-scm.com/downloads")
+        err("git is not on PATH - gate-check/simplicity/regression use it (--from-git)",
+            "install: https://git-scm.com/downloads")
 
     engine_dir = os.path.dirname(os.path.abspath(__file__))
     home_skills = os.path.join(os.path.expanduser("~"), ".claude", "skills")
@@ -6064,7 +6064,7 @@ def cmd_doctor(args):
     is_global = (not is_plugin) and _under(engine_dir, home_skills)
     mode = ("instalacion como PLUGIN (~/.claude/plugins, 1.24.0)" if is_plugin
             else "instalacion global (~/.claude/skills)" if is_global
-            else "instalacion por proyecto")
+            else "per-project installation")
     ok(f"engine: {os.path.abspath(__file__)}", mode)
 
     # --- skills: hermanas del engine ---------------------------------------
@@ -6083,14 +6083,14 @@ def cmd_doctor(args):
         except OSError:
             missing.append(s)
     if not missing and not mismatched:
-        ok(f"skills {len(USCHA_SKILLS)}/{len(USCHA_SKILLS)} junto al engine",
+        ok(f"skills {len(USCHA_SKILLS)}/{len(USCHA_SKILLS)} next to the engine",
            ", ".join(USCHA_SKILLS))
     else:
         if missing:
             err(f"skills faltantes en {skills_root}: {', '.join(missing)}",
-                "instalar: copia uscha-kit/.claude/skills/* a ~/.claude/skills/ "
-                "(README del kit > Instalacion, opcion B) - del zip uscha-kit-X.Y.Z "
-                "o de tu checkout del repo uscha")
+                "install: copy uscha-kit/.claude/skills/* to ~/.claude/skills/ "
+                "(kit README > Installation, option B) - from the uscha-kit-X.Y.Z zip "
+                "or from your checkout of the uscha repo")
         if mismatched:
             err(f"SKILL.md con frontmatter name distinto al directorio: {', '.join(mismatched)}")
 
@@ -6115,18 +6115,18 @@ def cmd_doctor(args):
     needs_ps = bool(registered and registered.endswith(".ps1"))
     ps_ok = (not needs_ps) or bool(shutil.which("powershell") or shutil.which("pwsh"))
     if hook_file and registered and ps_ok:
-        ok("hook INV-GOLDEN-01: presente, registrado (PreToolUse) e interpretable",
+        ok("hook INV-GOLDEN-01: present, registered (PreToolUse) and interpretable",
            f"{hook_file} ({registered})")
     elif not hook_file:
-        warn("hook INV-GOLDEN-01 no encontrado (~/.claude/hooks ni <kit>/hooks)",
-             f"instalar: `uscha install` copia {HOOK_NAMES[0]} a ~/.claude/hooks/ y lo "
-             f"registra en settings.json - sin el, el agente PUEDE escribir .approved "
-             f"(obligatorio para migraciones, perfil E)")
+        warn("INV-GOLDEN-01 hook not found (neither ~/.claude/hooks nor <kit>/hooks)",
+             f"install: `uscha install` copies {HOOK_NAMES[0]} to ~/.claude/hooks/ and "
+             f"registers it in settings.json - without it the agent CAN write a .approved "
+             f"(mandatory for migrations, profile E)")
     elif not registered:
-        warn("hook presente pero NO registrado en settings.json (PreToolUse)",
-             "re-corre `uscha install` para escribir el snippet de PreToolUse")
+        warn("hook present but NOT registered in settings.json (PreToolUse)",
+             "re-run `uscha install` to write the PreToolUse snippet")
     else:
-        warn(f"hook .ps1 registrado pero sin powershell/pwsh en PATH",
+        warn(f"hook .ps1 registered but no powershell/pwsh on PATH",
              "instala pwsh, o usa el hook .py (portable) via `uscha install`: "
              "https://learn.microsoft.com/powershell/scripting/install/installing-powershell")
 
@@ -6138,22 +6138,22 @@ def cmd_doctor(args):
             cfg = _load(cfg_path)
             defaults = cfg.get("defaults", {})
             repos = cfg.get("repos", [])
-            ok(f"proyecto: {cfg_path} v{cfg.get('version', '?')} ({len(repos)} repo(s))")
+            ok(f"project: {cfg_path} v{cfg.get('version', '?')} ({len(repos)} repo(s))")
             acc = defaults.get("acceptance_file")
             if acc and os.path.isfile(acc):
                 items, _found = _parse_acceptance_items(acc)
                 ids = sum(1 for i in items if i["id"])
                 if items and ids:
-                    ok(f"ACCEPTANCE: {len(items)} criterio(s), {ids} con AC-ID trazable")
+                    ok(f"ACCEPTANCE: {len(items)} criterion(s), {ids} with a traceable AC-ID")
                 elif items:
-                    warn(f"ACCEPTANCE sin AC-IDs trazables ({len(items)} criterio(s))",
-                         "generala con /uscha-discovery o /uscha-adr-refine "
-                         "(formato '- [ ] AC-01 - ...') - sin IDs la dimension dominante "
-                         "del readiness cae al ratio de checkboxes")
+                    warn(f"ACCEPTANCE without traceable AC-IDs ({len(items)} criterion(s))",
+                         "generate it with /uscha-discovery or /uscha-adr-refine "
+                         "(format '- [ ] AC-01 - ...') - without IDs the dominant readiness "
+                         "dimension falls back to the checkbox ratio")
                 else:
-                    warn(f"ACCEPTANCE {acc} sin criterios (cero checkboxes)")
+                    warn(f"ACCEPTANCE {acc} has no criteria (zero checkboxes)")
             elif acc:
-                warn(f"acceptance_file declarado pero ausente: {acc}")
+                warn(f"acceptance_file declared but missing: {acc}")
             qa_order = defaults.get("qa_tools_order", qa_order)
             for r in repos:
                 tool = DOCTOR_TOOLS.get(r.get("type", ""))
@@ -6164,11 +6164,11 @@ def cmd_doctor(args):
                         or os.path.isfile(os.path.join(r.get("path", "."), "gradlew.bat"))):
                     ok(f"toolchain {r['name']} (gradle): gradlew del repo")
                 elif shutil.which(tool):
-                    ok(f"toolchain {r['name']} ({r.get('type')}): {tool} en PATH")
+                    ok(f"toolchain {r['name']} ({r.get('type')}): {tool} on PATH")
                 else:
-                    warn(f"toolchain {r['name']} ({r.get('type')}): {tool} NO esta en PATH",
-                         f"instalar: {DOCTOR_FIX.get(tool, 'ver docs del toolchain')} "
-                         f"(o puede vivir solo en CI)")
+                    warn(f"toolchain {r['name']} ({r.get('type')}): {tool} NO esta on PATH",
+                         f"install: {DOCTOR_FIX.get(tool, 'see the toolchain docs')} "
+                         f"(or it may live only in CI)")
             rub_cfg = defaults.get("rubric", {}) if isinstance(defaults.get("rubric"), dict) else {}
             if rub_cfg.get("file"):
                 if os.path.isfile(rub_cfg["file"]):
@@ -6178,24 +6178,24 @@ def cmd_doctor(args):
                              "; ".join(rb_block) + " - ver templates/RUBRIC.md")
                     else:
                         ok(f"rubrica declarada: {rub_cfg['file']}"
-                           + (" (GATE declarado)" if rub_cfg.get("gate") is True else " (advisory)"))
+                           + (" (GATE declared)" if rub_cfg.get("gate") is True else " (advisory)"))
                 else:
                     warn(f"rubrica declarada pero ausente: {rub_cfg['file']}",
-                         "instalar: crea desde templates/RUBRIC.md (criterios RB-nn "
-                         "ponderados + threshold)")
+                         "install: create it from templates/RUBRIC.md (weighted RB-nn "
+                         "criteria + threshold)")
             ledger_path = args.ledger
             if os.path.isfile(ledger_path):
                 try:
                     _load(ledger_path)
-                    ok(f"ledger {ledger_path}: carga e integridad OK")
+                    ok(f"ledger {ledger_path}: loads, integrity OK")
                 except SystemExit as exc:
-                    err(f"ledger {ledger_path} corrupto o mutado", str(exc))
+                    err(f"ledger {ledger_path} corrupt or mutated", str(exc))
         except SystemExit as exc:
-            err(f"{cfg_path} invalido", str(exc))
+            err(f"{cfg_path} invalid", str(exc))
     else:
-        warn(f"sin {cfg_path} en este directorio",
-             "instalar: copia uscha.config.json del kit a la raiz del repo y declara "
-             "tus repos/types y tu quality bar - necesario solo para CORRER el loop aca")
+        warn(f"no {cfg_path} in this directory",
+             "install: copy the kit uscha.config.json to the repo root and declare "
+             "your repos/types and your quality bar - only needed to RUN the loop here")
 
     # --- skills de QA del loop (externas al kit, se orquestan sin traerlas) --
     # sin ellas la fase 3 (QA loop) no corre; chequeables con o sin config.
@@ -6206,9 +6206,9 @@ def cmd_doctor(args):
         ok(f"skills de QA del loop instaladas: {', '.join(qa_order)}")
     else:
         warn(f"skills de QA no encontradas como archivo: {', '.join(missing_qa)}",
-             "instalar tus skills de QA en ~/.claude/skills/ o declarar otras en "
-             "config.defaults.qa_tools_order; si es una built-in del harness "
-             "(p.ej. code-review), ignora este aviso")
+             "install your QA skills in ~/.claude/skills/ or declare others in "
+             "config.defaults.qa_tools_order; if it is a harness built-in "
+             "(e.g. code-review), ignore this notice")
 
     # --- veredicto ----------------------------------------------------------
     n_ok = sum(1 for lv, _, _ in checks if lv == "ok")
@@ -6223,14 +6223,14 @@ def cmd_doctor(args):
                                      for lv, t, d in checks]},
                          indent=2, ensure_ascii=True))
         sys.exit(1 if n_err else 0)
-    print("USCHA DOCTOR - diagnostico de la instalacion")
+    print("USCHA DOCTOR - installation diagnosis")
     mark = {"ok": "[OK]", "warn": "[ !]", "error": "[ X]"}
     for lv, t, d in checks:
         print(f"  {mark[lv]} {t}")
         if d:
             print(f"       {d}")
-    print(f"RESULTADO: {n_ok} ok - {n_warn} aviso(s) - {n_err} error(es)"
-          + ("  -> instalacion sana" if not n_err else "  -> hay errores que corregir"))
+    print(f"RESULT: {n_ok} ok - {n_warn} warning(s) - {n_err} error(s)"
+          + ("  -> installation healthy" if not n_err else "  -> errors to fix"))
     sys.exit(1 if n_err else 0)
 
 

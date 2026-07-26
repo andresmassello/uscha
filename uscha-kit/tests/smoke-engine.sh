@@ -962,7 +962,7 @@ chk "linea en blanco en test file NO es evidencia -> NARRATED --strict exit 1" 1
   run regression-check --repo repo-a --fixed 2 --diff fix-blank.diff --strict
 # evidencia debil (linea de test sin testdef ni assert) -> MEASURED pero avisa
 printf -- "diff --git a/src/test/java/AppTest.java b/src/test/java/AppTest.java\n--- a/src/test/java/AppTest.java\n+++ b/src/test/java/AppTest.java\n@@ -0,0 +1,1 @@\n+// nota\n" > fix-weak.diff
-run regression-check --repo repo-a --fixed 2 --diff fix-weak.diff 2>/dev/null | grep -q "DEBIL" \
+run regression-check --repo repo-a --fixed 2 --diff fix-weak.diff 2>/dev/null | grep -q "WEAK evidence" \
   && { PASS=$((PASS+1)); echo "  ok   evidencia debil (sin testdef/assert) marcada para el ojo humano"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL evidencia debil invisible"; }
 
@@ -994,7 +994,7 @@ sys.exit(0 if d['thresholds_declared']['readiness_caps'] == [] else 1)" \
   || { FAIL=$((FAIL+1)); echo "  FAIL thresholds_declared del sandbox principal"; }
 # simplicity: sin config -> todos default (aviso); con presupuesto CLI -> declarado
 printf -- "diff --git a/src/A.java b/src/A.java\n--- a/src/A.java\n+++ b/src/A.java\n@@ -0,0 +1,1 @@\n+int x = 1;\n" > simp-tiny.diff
-run simplicity-check --diff simp-tiny.diff 2>/dev/null | grep -q "defaults del kit" \
+run simplicity-check --diff simp-tiny.diff 2>/dev/null | grep -q "kit default" \
   && { PASS=$((PASS+1)); echo "  ok   simplicity avisa: presupuestos = opinion del kit"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL sin aviso de presupuestos default"; }
 run simplicity-check --diff simp-tiny.diff --max-lines-added 100 --json 2>/dev/null | "$PY" -c "
@@ -1034,7 +1034,7 @@ git init -q repo-x 2>/dev/null
 git -C repo-x symbolic-ref HEAD refs/heads/spike/idea-loca
 chk "pr-ready por hechos PERO rama spike/* -> exit 1" 1 \
   run phase --ledger L-fsm.json --repo fsm --require pr-ready
-run phase --ledger L-fsm.json --repo fsm --require pr-ready 2>/dev/null | grep -q "ADR con las lecciones" \
+run phase --ledger L-fsm.json --repo fsm --require pr-ready 2>/dev/null | grep -q "ADR with the lessons" \
   && { PASS=$((PASS+1)); echo "  ok   mensaje del contrato de spike visible (ADR, no PR)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL sin mensaje de contrato de spike"; }
 # misma rama consultada SIN --require: informa, no bloquea
@@ -1061,11 +1061,11 @@ d = json.load(sys.stdin)
 sk = next(c for c in d['checks'] if c['title'].startswith('skills'))
 ok = (d['errors'] == 0 and d['global_install'] is False
       and sk['level'] == 'ok'
-      and any(c['title'].startswith('proyecto:') for c in d['checks'])
+      and any(c['title'].startswith('project:') for c in d['checks'])
       and any(c['title'].startswith('ACCEPTANCE') and c['level'] == 'ok'
               for c in d['checks']))
 sys.exit(0 if ok else 1)" \
-  && { PASS=$((PASS+1)); echo "  ok   doctor: full skill roster, install por proyecto, config y ACCEPTANCE leidos"; } \
+  && { PASS=$((PASS+1)); echo "  ok   doctor: full skill roster, per-project install, config and ACCEPTANCE read"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor json"; }
 # ledger corrupto = ERROR (no aviso): el doctor debe salir 1
 "$PY" -c "open('QA-LEDGER.json','a',encoding='utf-8').write('{trunc')"
@@ -1105,7 +1105,7 @@ ok = (d['verdict'] == 'BELOW' and abs(d['score'] - 0.75) < 0.001
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   evidence-or-nothing: pass sin cita no puntua (0.75 < 0.80)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL contrato del grader"; }
-run readiness 2>/dev/null | grep -q "rubrica repo-a" \
+run readiness 2>/dev/null | grep -q "rubric repo-a" \
   && { PASS=$((PASS+1)); echo "  ok   readiness muestra el grade como advisory (no dimension)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL rubrica invisible en readiness"; }
 # gate DECLARADO: below-threshold bloquea convergencia via ledger.
@@ -1181,7 +1181,7 @@ run readiness --ledger L-ac.json 2>/dev/null | grep -- "--- gates:" | grep -q "s
   || { FAIL=$((FAIL+1)); echo "  FAIL gate bloqueante no nombrado en la linea de gates"; }
 # gate limpio (latest-wins) -> la linea reporta ninguno bloqueando
 run log-gate --repo solo --iteration 2 --kind simplicity --verdict pass --ledger L-ac.json >/dev/null 2>&1
-run readiness --ledger L-ac.json 2>/dev/null | grep -- "--- gates:" | grep -q "ninguno bloqueando" \
+run readiness --ledger L-ac.json 2>/dev/null | grep -- "--- gates:" | grep -q "none blocking" \
   && { PASS=$((PASS+1)); echo "  ok   gate limpio libera la linea de gates (latest-wins)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL gate limpio no libera la linea de gates"; }
 # --json expone gates[] (aditivo: presentacion sobre hechos, no recomputa el KPI)
@@ -1488,7 +1488,7 @@ a = json.load(sys.stdin)['acceptance']
 sys.exit(0 if a['measured_closed'] == [] and len(a['stale_reports']) == 1 else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   codigo mas nuevo: reporte STALE descartado, AC-1 UNMEASURED"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL stale no descartado (falso-verde por evidencia vieja)"; }
-run readiness --ledger L-fresh.json 2>/dev/null | grep -q "STALE descartados" \
+run readiness --ledger L-fresh.json 2>/dev/null | grep -q "STALE JUnit report" \
   && { PASS=$((PASS+1)); echo "  ok   advisory de reportes STALE visible en la vista default"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL sin advisory de STALE"; }
 
