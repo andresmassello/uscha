@@ -58,8 +58,11 @@ It does not protect against:
   `golden_guard: advisory`.
 - **Forged evidence.** The ledger measures reports produced by the same environment being
   evaluated. Freshness checks catch stale reports, not a determined forger.
-- **Hostile evidence files.** XML/JSON parsing uses the Python standard library. A deliberately
-  malformed or enormous report is a plausible denial-of-service against your own machine.
+- **Hostile evidence files.** XML parsing uses the Python standard library (`defusedxml` is
+  unavailable: stdlib-only is a hard contract). Since 1.56.1 every parse goes through a **64 MB
+  ceiling** (`MAX_REPORT_BYTES`, asserted by smoke T112), which stops the realistic failure --
+  a runaway or oversized report exhausting memory. It is **not** protection against a
+  determined attacker: entity expansion *under* the ceiling still expands.
 - **Supply chain upstream of us** — a compromised npm registry, GitHub Action, or agent runtime.
 
 ## What is measured

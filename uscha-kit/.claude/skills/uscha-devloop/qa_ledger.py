@@ -96,6 +96,36 @@ SOURCE_EXT = {
 # --------------------------------------------------------------------------- #
 # ledger io
 # --------------------------------------------------------------------------- #
+# Reports come from the user's build, not from us, and the engine is stdlib-only by contract --
+# `defusedxml` is not available. A byte ceiling is the honest mitigation for the realistic
+# failure (a runaway or hostile report exhausting memory on the operator's own machine). It is
+# NOT protection against a determined attacker: entity expansion inside the ceiling still
+# expands. SECURITY.md says so rather than implying the parser is hardened.
+MAX_REPORT_BYTES = 64 * 1024 * 1024      # 64 MB: orders of magnitude above any real JUnit run
+
+
+class ReportTooLarge(Exception):
+    pass
+
+
+def _parse_xml(source):
+    """ET.parse with a size ceiling. Accepts a path or an open binary/text file object."""
+    if hasattr(source, "read"):
+        head = source.read(MAX_REPORT_BYTES + 1)
+        if len(head) > MAX_REPORT_BYTES:
+            raise ReportTooLarge("report exceeds %d bytes" % MAX_REPORT_BYTES)
+        if isinstance(head, bytes):
+            return ET.ElementTree(ET.fromstring(head))
+        return ET.ElementTree(ET.fromstring(head))
+    try:
+        size = os.path.getsize(str(source))
+    except OSError:
+        size = 0
+    if size > MAX_REPORT_BYTES:
+        raise ReportTooLarge("%s exceeds %d bytes" % (source, MAX_REPORT_BYTES))
+    return ET.parse(str(source))
+
+
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -168,7 +198,7 @@ def _repo_cfg(ledger, name):
 def _jacoco_line_counter(xml_path):
     """Return (missed, covered) for the report-level LINE counter."""
     try:
-        root = ET.parse(xml_path).getroot()
+        root = _parse_xml(xml_path).getroot()
     except ET.ParseError:
         return 0, 0
     for c in root.findall("counter"):
@@ -237,7 +267,7 @@ def cobertura_coverage(repo_path):
     if not path:
         return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
     try:
-        root = ET.parse(path).getroot()
+        root = _parse_xml(path).getroot()
     except (ET.ParseError, OSError):
         return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False}
     lc, lv = root.get("lines-covered"), root.get("lines-valid")
@@ -358,7 +388,7 @@ def _invalid_junit(path, detail):
 
 def _parse_junit_xml(path):
     try:
-        root = ET.parse(path).getroot()
+        root = _parse_xml(path).getroot()
     except (ET.ParseError, OSError) as exc:
         _invalid_junit(path, exc)
     root_kind = _local(root.tag)
@@ -464,7 +494,7 @@ def _perclass_xml_count(patterns, skip_root=None, tolerant=False):
                 # simply not be ours. Skip it instead of aborting the whole run -- but
                 # NEVER silently: every drop is returned so the ledger can surface it.
                 try:
-                    root = ET.parse(f).getroot()
+                    root = _parse_xml(f).getroot()
                 except (ET.ParseError, OSError) as exc:
                     dropped.append({"path": f, "reason": f"unreadable XML: {exc}"})
                     continue
@@ -751,7 +781,7 @@ def _ac_tags(repo_path, repo_type):
             except OSError:
                 pass
         try:
-            root = ET.parse(f).getroot()
+            root = _parse_xml(f).getroot()
         except (ET.ParseError, OSError):
             continue
         for tc in root.iter():
@@ -1046,7 +1076,7 @@ def _invalid_static_report(path, label, detail):
 
 def _parse_static_xml(path, label, root_name):
     try:
-        root = ET.parse(path).getroot()
+        root = _parse_xml(path).getroot()
     except (ET.ParseError, OSError) as exc:
         _invalid_static_report(path, label, exc)
     if _local(root.tag) != root_name:
@@ -4699,7 +4729,7 @@ def _find_pit_report(path_arg):
 
 
 def _pit_metrics(xml_path):
-    root = ET.parse(xml_path).getroot()
+    root = _parse_xml(xml_path).getroot()
     total = killed = survived = no_cov = excluded = 0
     by_file = {}
     for mut in root.iter("mutation"):

@@ -3394,6 +3394,52 @@ if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
 
+echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
+# The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
+# defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
+# the operator\'s own machine. A byte ceiling is the honest mitigation; the honest LIMIT is that
+# entity expansion under the ceiling still expands, which SECURITY.md states rather than
+# implying the parser is hardened.
+T112=$("$PY" - "$KIT/.claude/skills/uscha-devloop/qa_ledger.py" <<'PY'
+import importlib.util, io, os, sys, tempfile
+spec = importlib.util.spec_from_file_location("ql", sys.argv[1])
+ql = importlib.util.module_from_spec(spec); spec.loader.exec_module(ql)
+bad = []
+if not hasattr(ql, "_parse_xml"):   bad.append("sin _parse_xml")
+if getattr(ql, "MAX_REPORT_BYTES", 0) <= 0: bad.append("sin MAX_REPORT_BYTES")
+# every parse site must go through the guard
+src = io.open(sys.argv[1], encoding="utf-8").read()
+direct = src.count("ET.parse(")
+if direct != 1:   # exactly one: the helper's own call
+    bad.append("quedan %d ET.parse directos (deben ir por _parse_xml)" % (direct - 1))
+d = tempfile.mkdtemp()
+small = os.path.join(d, "ok.xml")
+io.open(small, "w", encoding="utf-8").write("<testsuite name=\'x\'><testcase name=\'a\'/></testsuite>")
+try:
+    ql._parse_xml(small).getroot()
+except Exception as exc:
+    bad.append("un reporte normal fallo: %s" % exc)
+# an oversized report must raise, not be parsed
+big = os.path.join(d, "big.xml")
+with io.open(big, "wb") as fh:
+    fh.write(b"<testsuite>")
+    fh.write(b" " * (ql.MAX_REPORT_BYTES + 16))
+    fh.write(b"</testsuite>")
+try:
+    ql._parse_xml(big)
+    bad.append("un reporte sobre el techo se parseo igual")
+except ql.ReportTooLarge:
+    pass
+except Exception as exc:
+    bad.append("techo: excepcion inesperada %s" % type(exc).__name__)
+import shutil; shutil.rmtree(d, ignore_errors=True)
+print("OK" if not bad else "BAD " + " | ".join(bad[:4]))
+PY
+)
+if [ "$T112" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   techo de tamano activo, todos los parse pasan por el guard, un reporte normal sigue funcionando"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T112"; fi
+
 echo "== T111 (1.56.0): uninstall removes ONLY what the kit wrote =="
 # The installer writes into someone else uscha home: skill dirs, a settings.json entry and a
 # blocking hook. Shipping that without an uninstall put the burden of a clean removal on the
