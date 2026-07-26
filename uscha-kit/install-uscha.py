@@ -807,6 +807,141 @@ def cmd_mirador(args):
         print("\n[uscha mirador] stopped")
 
 
+def settings_without_hook(path):
+    """Return (new_settings, removed_count): the user's settings with OUR PreToolUse entries
+    dropped and nothing else touched. A foreign hook -- including one in the same group -- is
+    preserved; an emptied group disappears rather than being left as an empty shell."""
+    if not path.exists():
+        return None, 0
+    data = load_json(path, "Claude settings.json")
+    if not isinstance(data, dict):
+        raise InstallError("[install-uscha] Claude settings.json must be an object: %s" % path)
+    hooks_data = data.get("hooks")
+    if not isinstance(hooks_data, dict):
+        return None, 0
+    groups = hooks_data.get("PreToolUse")
+    if not isinstance(groups, list):
+        return None, 0
+    removed = 0
+    new_groups = []
+    for group in groups:
+        if not isinstance(group, dict):
+            new_groups.append(group); continue
+        items = group.get("hooks")
+        if not isinstance(items, list):
+            new_groups.append(group); continue
+        keep = []
+        for item in items:
+            c = item.get("command") if isinstance(item, dict) else None
+            if isinstance(c, str) and HOOK_NAME in c:
+                removed += 1
+            else:
+                keep.append(item)
+        if keep:
+            g = dict(group); g["hooks"] = keep; new_groups.append(g)
+        elif not items:
+            new_groups.append(group)          # was already empty; not ours to prune
+    if not removed:
+        return None, 0
+    result = dict(data)
+    hooks = dict(hooks_data)
+    if new_groups:
+        hooks["PreToolUse"] = new_groups
+    else:
+        hooks.pop("PreToolUse", None)
+    if hooks:
+        result["hooks"] = hooks
+    else:
+        result.pop("hooks", None)
+    return result, removed
+
+
+def uninstall_target(target, home, dry_run, operations, force):
+    """Remove one target. Refuses on ambiguity instead of guessing: without OUR marker there is
+    no proof the files at that root are ours, and deleting a stranger's skills would be a far
+    worse bug than leaving ours behind. --force overrides, and says what it assumed."""
+    removed, kept = [], []
+    if target == "codex":
+        root = home / "plugins" / PLUGIN_NAME
+        marker_path = root / "uscha-install.json"
+        market_path = home / ".agents" / "plugins" / "marketplace.json"
+    elif target in SKILL_ROOTS:
+        root = home.joinpath(*SKILL_ROOTS[target])
+        marker_path = root / "uscha-install.json"
+        market_path = None
+    else:
+        root = home / ".claude"
+        marker_path = root / "uscha-install.json"
+        market_path = None
+
+    valid, _ = marker_ok(marker_path, target)
+    if not valid and not force:
+        raise InstallError(
+            "[install-uscha] %s: no uscha install marker at %s -- refusing to delete files this "
+            "kit cannot prove it wrote. Re-run with --force if you are sure." % (target, marker_path))
+
+    def drop(p, why):
+        operations.append({"action": "remove", "path": str(p), "reason": why})
+        if p.exists() or p.is_symlink():
+            if not dry_run:
+                remove_path(p)
+            removed.append(str(p))
+
+    if target == "codex":
+        drop(root, "codex plugin tree (ours: marker verified)")
+        if market_path and market_path.is_file():
+            try:
+                data = load_json(market_path, "marketplace.json")
+                plugins = [p for p in data.get("plugins", []) if p != marketplace_entry()]
+                if len(plugins) != len(data.get("plugins", [])):
+                    data = dict(data); data["plugins"] = plugins
+                    operations.append({"action": "edit", "path": str(market_path),
+                                       "reason": "drop the uscha marketplace entry, keep the rest"})
+                    if not dry_run:
+                        atomic_json(market_path, data)
+                    removed.append(str(market_path) + " (entry)")
+                else:
+                    kept.append(str(market_path) + " (no uscha entry)")
+            except InstallError:
+                kept.append(str(market_path) + " (unreadable, left untouched)")
+    elif target in SKILL_ROOTS:
+        for skill in SKILLS:
+            drop(root / skill, "uscha skill")
+        drop(marker_path, "install marker")
+    else:
+        skills_root = root / "skills"
+        for skill in SKILLS:
+            drop(skills_root / skill, "uscha skill")
+        drop(root / "hooks" / HOOK_NAME, "INV-GOLDEN-01 hook")
+        drop(marker_path, "install marker")
+        settings_path = root / "settings.json"
+        try:
+            new_settings, n = settings_without_hook(settings_path)
+        except InstallError:
+            new_settings, n = None, 0
+            kept.append(str(settings_path) + " (unreadable, left untouched)")
+        if n:
+            operations.append({"action": "edit", "path": str(settings_path),
+                               "reason": "drop %d uscha PreToolUse entry(ies), keep foreign hooks" % n})
+            if not dry_run:
+                atomic_json(settings_path, new_settings)
+            removed.append(str(settings_path) + " (%d hook entry)" % n)
+        else:
+            kept.append(str(settings_path) + " (no uscha hook entry)")
+    return {"removed": removed, "kept": kept}
+
+
+def cmd_uninstall(args):
+    home, operations, result = home_path(args), [], {}
+    for target in selected_targets(args.target):
+        result[target] = uninstall_target(target, home, args.dry_run, operations, args.force)
+    emit({"status": "planned" if args.dry_run else "uninstalled", "dry_run": args.dry_run,
+          "home": str(home), "targets": result, "operations": operations,
+          "next": ["Run: python install-uscha.py doctor --target %s" % args.target,
+                   "Your own files were left alone: only paths this kit wrote are removed."]},
+         args.json)
+
+
 def next_steps(target):
     picked = selected_targets(target)   # resolves both/all so each installed target speaks
     steps = []
@@ -826,7 +961,16 @@ def next_steps(target):
 def emit(data, as_json):
     if as_json:
         print(json.dumps(data, indent=2, ensure_ascii=False)); return
-    if "targets" in data and isinstance(data["targets"], dict):
+    # uninstall also reports per-target, but with removed/kept instead of health -- match on
+    # the SHAPE, not just the key name, or a payload that merely has "targets" crashes here.
+    if data.get("status") in ("uninstalled", "planned") and isinstance(data.get("targets"), dict):
+        print("Uscha uninstall%s" % ("  (dry-run: nothing was touched)" if data.get("dry_run") else ""))
+        for name, res in data["targets"].items():
+            print("  %-8s removed %d, left alone %d" % (name, len(res.get("removed", [])), len(res.get("kept", []))))
+        for k in res.get("kept", []) if data["targets"] else []:
+            print("     kept: %s" % k)
+    elif ("targets" in data and isinstance(data["targets"], dict)
+            and all(isinstance(v, dict) and "healthy" in v for v in data["targets"].values())):
         print("Uscha %s" % data.get("source_version"))
         for name, status in data["targets"].items(): print("  %s %s" % ("OK" if status["healthy"] else "WARN", name))
     elif "operations" in data:
@@ -846,6 +990,13 @@ def build_parser():
     doctor.add_argument("--target", choices=list(TARGETS) + ["both", "all"], default="both"); doctor.add_argument("--home"); doctor.add_argument("--json", action="store_true"); doctor.set_defaults(func=cmd_doctor)
     init = sub.add_parser("init", help="prepare a repo with Uscha config/templates")
     init.add_argument("--repo", default="."); init.add_argument("--force", action="store_true", help="replace differing init files deliberately"); init.add_argument("--dry-run", action="store_true"); init.add_argument("--json", action="store_true"); init.set_defaults(func=cmd_init)
+    uninstall = sub.add_parser("uninstall", help="remove what this kit installed, and nothing else")
+    uninstall.add_argument("--target", choices=list(TARGETS) + ["both", "all"], default="both")
+    uninstall.add_argument("--home"); uninstall.add_argument("--dry-run", action="store_true")
+    uninstall.add_argument("--json", action="store_true")
+    uninstall.add_argument("--force", action="store_true",
+                           help="remove even without an install marker (you assert the files are ours)")
+    uninstall.set_defaults(func=cmd_uninstall)
     mirador = sub.add_parser("mirador", help="render + open the project's mirador dashboard from QA-LEDGER.json")
     mirador.add_argument("--ledger", default="QA-LEDGER.json", help="ledger to read (default: the QA-LEDGER.json convention)")
     mirador.add_argument("--out", default="mirador.html")

@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose something the kit should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem, not the solution
+      description: What goes wrong today, in a real run. Concrete beats abstract.
+    validations:
+      required: true
+  - type: textarea
+    id: measured
+    attributes:
+      label: How would it be MEASURED?
+      description: "This kit does not add behaviour it cannot check. What report, file or exit code would prove it works? If the answer is 'the agent says so', it will not be built."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Existing subcommands, config, or a manual workaround.
+  - type: checkboxes
+    id: ceremony
+    attributes:
+      label: Anti-ceremony check
+      options:
+        - label: "This adds a gate or an output the operator will actually read, not one more thing to scroll past."
+          required: true

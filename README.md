@@ -40,8 +40,8 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.55.2** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
-[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.55.2.md)
+**Kit v1.56.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+[changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG-1.56.0.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
 ---
@@ -79,6 +79,32 @@ and see which file, which test, and when.
 **A measurement engine** (`qa_ledger.py`, 29 subcommands, Python stdlib) that ingests
 evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
 cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
+
+## Compatibility matrix
+
+Generated from `TARGETS`/`SKILL_ROOTS` in the installer, so it cannot drift from the code.
+
+| target | agent | installs to | INV-GOLDEN-01 | exercised against a real agent |
+|---|---|---|---|---|
+| `codex` | Codex | `~/plugins/uscha` | advisory | **yes** |
+| `claude` | Claude Code | `~/.claude/skills` | **enforced** (PreToolUse hook, best-effort) | **yes** |
+| `pi` | pi (Earendil) | `~/.agents/skills` | advisory | no — placement + read-back only |
+| `cursor` | Cursor | `~/.cursor/skills` | advisory | no — placement + read-back only |
+| `copilot` | VS Code / Copilot | `~/.copilot/skills` | advisory | no — placement + read-back only |
+| `gemini` | Gemini CLI | `~/.gemini/skills` | advisory | no — placement + read-back only |
+| `cline` | Cline | `~/.cline/skills` | advisory | no — placement + read-back only |
+
+**"Exercised" is the column that matters.** For every target but Claude Code and Codex, what
+is measured is that the nine skills land where that agent documents reading them and that
+`doctor` reads them back — *that they load is a documented expectation, not a measurement.*
+INV-GOLDEN-01 is mechanically attempted only where a blocking pre-tool hook exists; everywhere
+else `doctor` reports `advisory` rather than implying a guard it cannot see.
+
+| OS | how it is verified | status |
+|---|---|---|
+| Linux | CI matrix (py3.8 + py3.13) + local WSL | **measured** |
+| Windows | CI matrix (py3.8 + py3.13) + native local | **measured** |
+| macOS | CI matrix (py3.8 + py3.13), real runners | **measured** |
 
 ## The loop, in short
 

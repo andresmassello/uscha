@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/andresmassello/uscha/security/advisories/new
+    about: Report privately. Never in a public issue - the installer writes to your agent config and registers a hook.
+  - name: The method itself (docs, essay, course, paper)
+    url: https://uscha.dev
+    about: Read the method before filing a question about how it is supposed to behave.

@@ -18,6 +18,10 @@ on:
 
 # Least privilege: this workflow only reads the repo. It also runs on pull_request,
 # i.e. on arbitrary code from forks -- it must therefore NEVER see a publishing secret.
+# Actions are pinned to full commit SHAs, not moving tags: a tag can be repointed at new
+# code by whoever controls the action, and this workflow runs on every push. The trailing
+# comment records which version each SHA was, so an upgrade stays reviewable.
+
 permissions:
   contents: read
 
@@ -32,17 +36,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ matrix.python }}
 
       # Node is only needed by the npm-router tests (T74/T75); they degrade to a skip
       # if a compiler/shim is unavailable, so this is belt-and-suspenders, not required.
       - name: Set up Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "20"
 

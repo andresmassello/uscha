@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in the kit does not behave as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security issue?** Do not file it here — see [SECURITY.md](../blob/main/SECURITY.md)
+        and use private vulnerability reporting.
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: doctor output
+      description: "Run `npx --yes @andresmassello/uscha@latest doctor --target all` and paste it. It carries the kit version, OS, Python, and what is installed where."
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and where it says so
+      description: "Quote the doc, README line or check that led you to expect it. If the docs are wrong rather than the code, that is a valid bug too — this project treats an unbacked claim as a defect."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Paste the exact output. Redact paths or project names if you need to.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest reproduction
+      description: "Commands, and the smallest fixture that triggers it. A failing smoke check is the ideal report."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: Agent target
+      options:
+        - claude (Claude Code)
+        - codex
+        - cursor
+        - copilot (VS Code)
+        - gemini
+        - cline
+        - pi (Earendil)
+        - not agent-specific
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        Only **Claude Code** and **Codex** have been exercised against a real agent. For the
+        other targets the kit measures that files land where each agent documents reading them —
+        that they load is a documented expectation, not a measurement. Reports from those
+        targets are especially useful.

@@ -3394,6 +3394,68 @@ if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
 
+echo "== T111 (1.56.0): uninstall removes ONLY what the kit wrote =="
+# The installer writes into someone else uscha home: skill dirs, a settings.json entry and a
+# blocking hook. Shipping that without an uninstall put the burden of a clean removal on the
+# user, by hand, in files they did not write. The risk here is not failing to delete OURS --
+# it is deleting THEIRS, so the test plants a foreign hook, a foreign setting and a foreign
+# skill and asserts all three survive.
+T111H="$(mktemp -d)"
+T111=$("$PY" - "$KIT" "$T111H" <<'PY'
+import json, os, subprocess, sys
+kit, home = sys.argv[1], sys.argv[2]
+INST = os.path.join(kit, "install-uscha.py")
+def run(*a):
+    return subprocess.run([sys.executable, INST] + list(a), capture_output=True, text=True)
+
+bad = []
+run("install", "--target", "all", "--home", home)
+sp = os.path.join(home, ".claude", "settings.json")
+s = json.load(open(sp, encoding="utf-8"))
+s["hooks"]["PreToolUse"].append({"matcher": "*", "hooks": [{"type": "command", "command": "my-own-linter"}]})
+s["mySetting"] = "keep me"
+json.dump(s, open(sp, "w", encoding="utf-8"), indent=2)
+mine = os.path.join(home, ".claude", "skills", "my-own-skill")
+os.makedirs(mine, exist_ok=True)
+open(os.path.join(mine, "SKILL.md"), "w").write("mine\n")
+
+# --dry-run must plan without touching anything
+r = run("uninstall", "--target", "all", "--home", home, "--dry-run", "--json")
+if r.returncode: bad.append("dry-run exit %d" % r.returncode)
+if not os.path.exists(os.path.join(home, ".claude", "skills", "uscha-devloop")):
+    bad.append("dry-run BORRO archivos")
+
+r = run("uninstall", "--target", "all", "--home", home, "--json")
+if r.returncode: bad.append("uninstall exit %d" % r.returncode)
+
+s2 = json.load(open(sp, encoding="utf-8"))
+cmds = [h.get("command") for g in s2.get("hooks", {}).get("PreToolUse", []) for h in g.get("hooks", [])]
+if "my-own-linter" not in cmds:      bad.append("borro un hook AJENO")
+if any("block-approved" in str(c) for c in cmds): bad.append("dejo el hook nuestro")
+if s2.get("mySetting") != "keep me": bad.append("perdio un setting ajeno")
+if not os.path.isfile(os.path.join(mine, "SKILL.md")): bad.append("borro una skill AJENA")
+for t_ in ("claude", "codex", "cursor", "pi"):
+    leftover = {"claude": os.path.join(home, ".claude", "skills", "uscha-devloop"),
+                "codex": os.path.join(home, "plugins", "uscha"),
+                "cursor": os.path.join(home, ".cursor", "skills", "uscha-devloop"),
+                "pi": os.path.join(home, ".agents", "skills", "uscha-devloop")}[t_]
+    if os.path.exists(leftover): bad.append("%s: quedaron archivos nuestros" % t_)
+
+# without a marker it must REFUSE rather than guess -- deleting a stranger tree is the worse bug
+empty = os.path.join(home, "empty"); os.makedirs(empty, exist_ok=True)
+os.makedirs(os.path.join(empty, ".cursor", "skills"), exist_ok=True)
+r = run("uninstall", "--target", "cursor", "--home", empty)
+if r.returncode == 0: bad.append("sin marker NO se nego")
+r = run("uninstall", "--target", "cursor", "--home", empty, "--force")
+if r.returncode != 0: bad.append("--force no pudo forzar")
+print("OK" if not bad else "BAD " + " | ".join(bad[:5]))
+PY
+)
+rm -rf "$T111H"
+if [ "$T111" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   uninstall: saca lo nuestro en los 7 targets, preserva hook/setting/skill ajenos, dry-run no toca, sin marker se niega"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T111"; fi
+
 echo "== T110 (1.55.2): the INV-GOLDEN hook, adversarially -- fail-closed, case, read vs write =="
 # An external review showed the previous hook was fail-OPEN on a malformed payload,
 # case-SENSITIVE (so a capitalised golden slipped past on case-insensitive filesystems),
