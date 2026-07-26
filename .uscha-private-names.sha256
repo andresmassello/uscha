@@ -1,0 +1,16 @@
+# Hashed private-name list -- COMMITTED ON PURPOSE, generated, do not hand-edit.
+# Regenerate: python uscha-kit/tests/private-names-hash.py
+#
+# One sha256(lowercased token) per line. This lets AC-03 run in CI without
+# publishing the names. It matches WHOLE TOKENS ONLY (a hash cannot match a
+# prefix or a regex) and it is not secret against someone who already suspects a
+# specific name -- see the script's docstring for the full limits.
+500ea796fe82dcaa40978468ae20651e583cbbf200aac2561cca5959aa955893
+59efa5200404e5a945af1c31e8c63e8d387d12ba1cfab6f409fccc87236c3ac5
+5bd4178ad8f78c6ca89025160e64c379dde101765a0cf0b168e050a941756fcf
+6b992c9730eded0fb6c9c3cfb4c1a762663e840a966256a0a07ac30568e75e69
+7a9b696a7f518914fe6ed2e21d438ed898ffe4133972024c152896bb3e1a12b5
+b0c3975373b766c2f4cc75b0c23dc4266b8e41ee4a63d1746bb8206f5888129b
+cb0817f12ec2cf2045e83b313c403f4d2ac657edee62dd2ba5ddaab6b54b0464
+d65d3669a492af1d9aa5e8588fef9bcce3bf82f7af7f68eeb1af5e8615976e42
+ddbc152447820a3f6259ceeb4530afd7ce40d3db5b0fc2717e66af2ba9161ef9

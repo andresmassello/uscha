@@ -19,13 +19,14 @@ written by the run itself, never by hand.
   `marketplace.json`, `package.json`) all agree, and a `CHANGELOG-<version>.md` exists for the
   declared version. A release that disagrees with itself cannot be trusted about anything else.
 
-- [ ] AC-03 — The kit and its docs contain zero references to client or private project names.
-      <!-- UNTICKED 2026-07-26: this was a hand-ticked green while the criterion was FALSE
-           (4 tracked files carried private names) and the gate itself read UNMEASURED,
-           because .uscha-private-names is untracked and its list was incomplete. The tree
-           is scrubbed now, but the box stays open until AC-03 is MEASURED in CI against a
-           reviewable (hashed, committed) list. A checkbox is not evidence -- that is the
-           whole point of this method. -->
+- [x] AC-03 — The kit and its docs contain zero references to client or private project names.
+      <!-- Re-ticked 2026-07-26, and this time it is MEASURED, not declared. It was a
+           hand-ticked green over a FALSE criterion (4 tracked files carried names) while the
+           gate itself read UNMEASURED. Two holes, both closed: the list is now committed as
+           SHA-256 hashes (.uscha-private-names.sha256), so CI runs the criterion instead of
+           emitting <skipped/>; and the scan covers every TRACKED file in the repo, not just
+           uscha-kit/ + README.md -- which is why it never saw audits/ or formats/. Proven by
+           mutation: planting a listed name in a tracked file turns AC-03 red. -->
   What ships is generic, or it leaks.
 
 - [x] AC-04 — The engine stays model-agnostic: `qa_ledger.py` never reads tokens, model names,

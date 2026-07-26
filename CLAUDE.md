@@ -16,12 +16,16 @@ itself.
    equivalent edit in the other.
 4. **Zero references to projects/clients**: the kit and the docs are generic
    (example repos: `backend-api`/`mobile-app`). Verify with grep before committing
-   (note: `rg` needs `--hidden` to see `.claude/`). AC-03 automates this, reading the
-   names to hunt for from **`.uscha-private-names`** at the repo root — UNTRACKED on
-   purpose: hardcoding that list would publish, in a public repo and inside the npm
-   tarball, exactly what the criterion exists to keep out. Without the file AC-03 is
-   emitted as `<skipped/>` → **UNMEASURED**, never a silent pass. Keep the file on the
-   machines that release; it is one name (or regex) per line.
+   (note: `rg` needs `--hidden` to see `.claude/`). AC-03 automates this. The list ships as
+   **SHA-256 hashes** in `.uscha-private-names.sha256` (COMMITTED — regenerate with
+   `python uscha-kit/tests/private-names-hash.py`), so CI measures the criterion without
+   publishing the names it exists to keep out. The plaintext **`.uscha-private-names`** stays
+   UNTRACKED as the release machine's stricter superset: it can carry prefixes/regexes, which a
+   hash cannot express. With neither list AC-03 emits `<skipped/>` → **UNMEASURED**, never a
+   silent pass. Two lessons paid for in production (2026-07-26): the scan must cover **every
+   tracked file**, not just `uscha-kit/` + README — that blind spot let names sit in `audits/`
+   and `formats/` for weeks — and a gate whose list nobody can see is a gate nobody can verify
+   is complete.
 5. **Changes to the engine carry a smoke test**: `bash uscha-kit/tests/smoke-engine.sh`
    must exit 0 BEFORE committing any change to `qa_ledger.py`. If the change
    adds behavior, its check is added to the suite in the same commit.

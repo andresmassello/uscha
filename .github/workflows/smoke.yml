@@ -70,10 +70,11 @@ jobs:
                 [print(t, s['golden_guard'], s['healthy']) for t, s in d['targets'].items()]"
           rm -rf ci-install-home
 
-      # AC-03 (the private-name scan) goes UNMEASURED in CI on purpose: .uscha-private-names
-      # is untracked and never checked in, so the acceptance block emits it as <skipped/>.
-      # That is the honest state -- the criterion cannot be measured without the release
-      # machine's private list -- and it does not change the suite's exit code.
+      # AC-03 (the private-name scan) IS measured in CI since 1.55.x: the list ships as
+      # SHA-256 hashes (.uscha-private-names.sha256), so the criterion runs anywhere without
+      # publishing the names it exists to keep out. It used to emit <skipped/> here, which hid
+      # a real miss for weeks. The untracked plaintext list remains the release machine's
+      # stricter superset (it can carry prefixes/regexes, which a hash cannot express).
       - name: Show the self-application acceptance emission
         if: always()
         shell: bash

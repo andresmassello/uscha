@@ -4034,7 +4034,7 @@ fi
 USCHA_ACC_OUT="$ROOT/reports/junit"   # raiz: NO entra al paquete npm (files: uscha-kit/)
 mkdir -p "$USCHA_ACC_OUT"
 ROOT="$ROOT" KIT="$KIT" ACC_OUT="$USCHA_ACC_OUT" SMOKE_FAIL="$FAIL" "$PY" <<'PYACC' || true
-import filecmp, json, os, re, sys
+import filecmp, json, os, re, subprocess, sys
 root, kit, out = os.environ["ROOT"], os.environ["KIT"], os.environ["ACC_OUT"]
 results = []  # (id, name, failure_message_or_None)
 
@@ -4084,41 +4084,79 @@ def versions():
 
 
 def anonymous():
-    # The names to hunt for are PRIVATE: hardcoding them here would publish, in a public
-    # repo and inside the npm tarball, the very list this criterion exists to keep out.
-    # They live in an untracked file instead (one name or regex per line, '#' comments).
-    # No list -> the criterion is UNMEASURED, never a silent pass: absence is not success.
-    names_file = os.path.join(root, ".uscha-private-names")
+    # AC-03 used to be UNMEASURED in CI: the name list lived only in an untracked
+    # .uscha-private-names, so every public run emitted <skipped/>. That hid a real miss --
+    # names sat in four TRACKED files for weeks, in audits/ and formats/, which this check
+    # did not even walk (it only looked at uscha-kit/ and README.md). Two holes, both fixed:
+    #   1. a COMMITTED hash list (.uscha-private-names.sha256) makes the criterion runnable
+    #      anywhere without publishing the names -> no more <skipped/> in CI;
+    #   2. the walk now covers the WHOLE repo, not the kit alone.
+    # The untracked plaintext list is still read when present: it is the stricter superset
+    # (it may carry prefixes/regexes, which a hash cannot express).
+    import hashlib
+    hashed_file = os.path.join(root, ".uscha-private-names.sha256")
+    plain_file = os.path.join(root, ".uscha-private-names")
+    hashes = set()
+    try:
+        with open(hashed_file, encoding="utf-8") as fh:
+            for ln in fh:
+                s = ln.strip()
+                if s and not s.startswith("#"):
+                    hashes.add(s.lower())
+    except OSError:
+        pass
     names = []
     try:
-        with open(names_file, encoding="utf-8") as fh:
+        with open(plain_file, encoding="utf-8") as fh:
             names = [ln.strip() for ln in fh
                      if ln.strip() and not ln.lstrip().startswith("#")]
     except OSError:
         pass
-    if not names:
-        return SKIP  # sentinel: emitted as <skipped/>, closes nothing
-    pat = re.compile("|".join(names), re.I)
-    # The list file is itself the one place the names legitimately live.
-    self_file = os.path.abspath(__file__) if "__file__" in dir() else ""
-    skip_files = {".uscha-private-names", os.path.basename(self_file)}
+    if not hashes and not names:
+        return SKIP  # sentinel: emitted as <skipped/>, closes nothing -- absence is not success
+    pat = re.compile("|".join(names), re.I) if names else None
+    token_re = re.compile(r"[A-Za-z][A-Za-z0-9_]{2,}")
+
+    def token_hit(text):
+        if not hashes:
+            return False
+        for tok in token_re.findall(text):
+            low = tok.lower()
+            if hashlib.sha256(low.encode("utf-8")).hexdigest() in hashes:
+                return True
+            if "_" in low:   # a listed term may be one part of a compound token
+                for part in low.split("_"):
+                    if len(part) > 2 and hashlib.sha256(part.encode("utf-8")).hexdigest() in hashes:
+                        return True
+        return False
+
+    skip_files = {".uscha-private-names", ".uscha-private-names.sha256",
+                  "private-names-hash.py"}
+    exts = (".md", ".py", ".sh", ".json", ".html", ".ps1", ".txt", ".yml", ".yaml", ".tex", ".js")
+    # TRACKED files only. The criterion is about what the kit and its docs CONTAIN -- i.e. what
+    # is published -- not about whatever sits in someone's working tree. Scanning the filesystem
+    # flagged an untracked local transcript and handoff, which can never leak; keeping untracked
+    # noise here would train the operator to ignore a red AC-03, which is worse than not having
+    # it. Untracked local artifacts are .gitignore's job (and it covers them).
+    try:
+        listing = subprocess.run(["git", "-C", root, "ls-files"], capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace")
+        files = [f for f in listing.stdout.splitlines() if f.strip()]
+    except Exception:
+        files = []
+    if not files:      # no git available -> cannot establish what is published
+        return SKIP
     hits = []
-    for base in (kit, os.path.join(root, "README.md")):
-        walk = [(os.path.dirname(base), [], [os.path.basename(base)])] if os.path.isfile(base) \
-            else os.walk(base)
-        for dp, dns, fns in walk:
-            dns[:] = [d for d in dns if d not in ("__pycache__", ".git", "node_modules")]
-            for fn in fns:
-                if not fn.endswith((".md", ".py", ".sh", ".json", ".html", ".ps1")):
-                    continue
-                if fn in skip_files:
-                    continue
-                p = os.path.join(dp, fn)
-                try:
-                    if pat.search(open(p, encoding="utf-8", errors="ignore").read()):
-                        hits.append(os.path.relpath(p, root).replace("\\", "/"))
-                except OSError:
-                    continue
+    for rel in files:
+        if not rel.endswith(exts) or os.path.basename(rel) in skip_files:
+            continue
+        p = os.path.join(root, rel)
+        try:
+            body = open(p, encoding="utf-8", errors="ignore").read()
+        except OSError:
+            continue
+        if (pat and pat.search(body)) or token_hit(body):
+            hits.append(rel)
     return ("client/private references in: " + ", ".join(sorted(hits)[:5])) if hits else None
 
 
