@@ -18,6 +18,36 @@ disable-model-invocation: false
 opposite. The system already runs; its observable behavior is the ground truth. **You do
 not invent anything — you characterize what is already there, as facts.**
 
+## First contact (show ONCE, then never again)
+
+**Only when this project has no uscha artifacts yet** -- no `QA-LEDGER.json`, no `SPEC.md` or
+`ACCEPTANCE.md`, no `docs/adr/` -- open with this block, then start working. If any of those
+exist, the operator already knows the method: skip it entirely and go straight to the
+breadcrumb. Repeating it every run would be exactly the ceremony the method forbids.
+
+```
+[uscha · reverse-discovery · START]
+Method: you bring the idea, the method builds the rest. Facts block, guesses advise;
+        nothing closes on a checkbox, and the human approves the merge.
+Here:   I EXTRACT facts from the system that already exists. I never invent its spec -- you write that reading my facts.
+Output: SYSTEM-MAP.md · DISCOVERY-SUMMARY.md -- endpoints, contracts, dependency graph,
+        module candidates. Facts only: the SPEC and the ADRs are yours to write.
+Next:   `/uscha-characterize` freezes current behavior and a HUMAN approves the golden;
+        only then do you write the migration SPEC, reading these facts + that golden.
+Stop:   say so at any point -- whatever is already written stays.
+```
+
+**Bilingual by construction.** The labels (`START`, `Method`, `Here`, `Output`, `Next`,
+`Stop`) stay VERBATIM in English -- they are the method's vocabulary and the smoke suite checks
+for them mechanically, which is only possible if they never move. The wording after each label
+is the canonical English; **render it in the operator's language**. If they are writing to you
+in Spanish, the whole block reads in Spanish under English labels. Do not translate the labels,
+do not leave the content in English when they are not writing in English.
+
+Unlike the close block, `Next` here MAY name the nominal route: on a first run there is no
+measured state to derive from yet, so the nominal path is the honest answer. From the close
+block onward, derived state wins.
+
 ## Orientation markers (non-negotiable)
 
 The operator must never have to ask "where am I?" or "what happens now?". Two markers, always.

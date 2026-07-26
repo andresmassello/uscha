@@ -26,6 +26,34 @@ two tiers: **measured** records (snapshots, ingest-gate, log-gate — parsed fro
 artifacts; these can block) and **self-reported** agent counts (log-step — narration
 recorded for the retrospective; a measured red always overrides a narrated green).
 
+## First contact (show ONCE, then never again)
+
+**Only when this project has no uscha artifacts yet** -- no `QA-LEDGER.json`, no `SPEC.md` or
+`ACCEPTANCE.md`, no `docs/adr/` -- open with this block, then start working. If any of those
+exist, the operator already knows the method: skip it entirely and go straight to the
+breadcrumb. Repeating it every run would be exactly the ceremony the method forbids.
+
+```
+[uscha · devloop · START]
+Method: you bring the idea, the method builds the rest. Facts block, guesses advise;
+        nothing closes on a checkbox, and the human approves the merge.
+Here:   plan → build → a severity-gated QA loop that converges instead of chasing zero → PR.
+Output: code, tests, and QA-LEDGER.json (every gate recorded with its evidence)
+Next:   the human gate: review the PR and decide the merge. I stop there.
+Stop:   say so at any point -- whatever is already written stays.
+```
+
+**Bilingual by construction.** The labels (`START`, `Method`, `Here`, `Output`, `Next`,
+`Stop`) stay VERBATIM in English -- they are the method's vocabulary and the smoke suite checks
+for them mechanically, which is only possible if they never move. The wording after each label
+is the canonical English; **render it in the operator's language**. If they are writing to you
+in Spanish, the whole block reads in Spanish under English labels. Do not translate the labels,
+do not leave the content in English when they are not writing in English.
+
+Unlike the close block, `Next` here MAY name the nominal route: on a first run there is no
+measured state to derive from yet, so the nominal path is the honest answer. From the close
+block onward, derived state wins.
+
 ## Orientation markers (non-negotiable)
 
 The operator must never have to ask "where am I?" or "what happens now?". Two markers, always.

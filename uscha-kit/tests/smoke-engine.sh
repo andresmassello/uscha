@@ -3394,6 +3394,50 @@ if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
 
+echo "== T109 (1.54.0): first contact -- the 7 conversational skills orient a newcomer, ONCE =="
+# Field feedback: a newcomer typing /uscha-discovery gets interrogated with no idea what it
+# costs, what comes out, or that they can stop. The banner closes that. It is gated on the
+# project having NO uscha artifacts yet, because a banner on every run is the ceremony the
+# method forbids -- and the readouts (mirador/status) are excluded on purpose: their own
+# contract is "one compact block, nothing else".
+T109=$("$PY" - "$KIT" <<'PY'
+import io, os, sys
+kit = sys.argv[1]
+READOUT = {"mirador", "status"}
+LABELS = ("START]", "Method:", "Here:", "Output:", "Next:", "Stop:")
+bad = []
+for tree in (os.path.join(".claude", "skills"), "skills"):
+    root = os.path.join(kit, tree)
+    for d in sorted(x for x in os.listdir(root) if x.startswith("uscha-")):
+        short = d[len("uscha-"):]
+        txt = io.open(os.path.join(root, d, "SKILL.md"), encoding="utf-8").read()
+        where = "%s/%s" % (tree, d)
+        if short in READOUT:
+            if "First contact" in txt:
+                bad.append(where + ": readout NO debe llevar banner (contradice su contrato)")
+            continue
+        if "First contact" not in txt:
+            bad.append(where + ": sin banner de primer contacto"); continue
+        # scope the label check to the BANNER section: 'Next:' also lives in the close block,
+        # so scanning the whole file made that one label unfalsifiable.
+        i = txt.find("## First contact")
+        j = txt.find("\n## ", i + 1)
+        banner = txt[i:j if j != -1 else len(txt)]
+        if ("[uscha · %s · START]" % short) not in banner:
+            bad.append(where + ": el banner no nombra '%s'" % short)
+        missing = [l for l in LABELS if l not in banner]
+        if missing:
+            bad.append(where + ": faltan labels " + ",".join(missing))
+        # the ONCE gate must survive future edits, or the banner becomes ceremony
+        if "QA-LEDGER.json" not in txt or "no uscha artifacts yet" not in txt:
+            bad.append(where + ": perdio la condicion de primera-vez")
+print("OK" if not bad else "BAD " + " | ".join(bad[:5]))
+PY
+)
+if [ "$T109" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   7 skills con banner propio + gate de primera-vez; los 2 readouts sin banner"; \
+else FAIL=$((FAIL+1)); echo "  FAIL $T109"; fi
+
 echo "== T108 (1.53.1): the macOS branch is EXECUTED from any OS (the kit's only darwin code) =="
 # The whole kit branches win32-vs-POSIX except for exactly one thing, duplicated: the darwin
 # arm of _open_best_effort. Since the CI matrix went manual, macOS is UNMEASURED -- but this
