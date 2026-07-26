@@ -31,3 +31,10 @@ detalle.md
 
 # private name list for AC-03 (never published -- see CLAUDE.md)
 .uscha-private-names
+
+# Session transcripts dumped at the repo root: they carry local paths, the author's
+# email and (historically) the private names AC-03 exists to keep out. Untracked is not
+# enough -- one `git add -A` is how those names reached the history the first time.
+chat-*.md
+*-transcript.md
+.claude/launch.json
