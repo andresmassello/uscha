@@ -15,7 +15,7 @@ lives in versioned files, not in the chat; (3) the human always approves the
 merge; (4) tests must assert — the gate is never weakened; (5) migrations are
 anchored with a mechanically captured golden suite the agent must never author.
 
-The kit (v1.53.1, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+The kit (v1.54.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil) —
 plus a pure-Python engine (qa_ledger.py, 29 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux
