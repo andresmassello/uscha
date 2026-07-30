@@ -38,6 +38,29 @@ written by the run itself, never by hand.
 - [x] AC-06 — The smoke suite finishes with zero failures. It is the gate every engine change
   must pass before a commit exists.
 
+## Fast-path (Phase 1) — feature acceptance, closes on green `AC-FP-nn` tests in ingested evidence
+
+Numbering follows the originating handoff for traceability; **AC-FP-04 is deliberately absent**
+(the golden-touched veto is deferred — ADR-004 records why; the direct fixture case is covered
+by `**/*.approved` in `protected_paths`, exercised by AC-FP-03).
+
+- [ ] AC-FP-01 — diff within all thresholds, no protected paths → `fastpath-eval` verdict `ALLOW`.
+- [ ] AC-FP-02 — diff exceeding `max_loc_delta` by 1 → `DENY`, breakdown names `max_loc_delta`.
+- [ ] AC-FP-03 — diff touching one file matching `protected_paths` → `DENY` regardless of size.
+- [ ] AC-FP-05 — fast-path run whose diff later grows past a threshold → state `ESCALATED`,
+  PR step blocked, both ledger records present.
+- [ ] AC-FP-06 — fast-path run with no asserting test in evidence → criterion open, readiness
+  capped (via the existing cap mechanics).
+- [ ] AC-FP-07 — the ledger entry for a fast-path verdict carries: mode, verdict, and every
+  signal with value + threshold + source + timestamp.
+- [ ] AC-FP-08 — `fast_path` block absent from config → behavior identical to the previous
+  release (golden-anchored BEFORE implementation, via `/uscha-characterize`).
+- [ ] AC-FP-09 — human override to full path works; no mechanism can force `ALLOW` over `DENY`.
+- [ ] AC-FP-10 — no git repo, or unresolvable merge-base → `DENY` with the reason named
+  (fail-closed: "could not measure" never grants the shortcut).
+- [ ] AC-FP-11 — `fastpath-eval` without `--intent` is a dry-run: verdict reported, no
+  fast-path mode entry recorded in the ledger.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
@@ -60,6 +83,8 @@ written by the run itself, never by hand.
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".
+- ADR-003 — Fast-path entry is granted by measured signals, never by opinion.
+- ADR-004 — The golden-touched veto is deferred until a golden↔source mapping exists.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

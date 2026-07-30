@@ -46,3 +46,9 @@ readiness until a human `--resolve`s it.
   loud on an unknown value. A declared risk level that changes nothing is a broken methodology —
   a convention masquerading as a method. *(This invariant is the lesson of the field
   retrospective that motivated ADR-001 and ADR-002.)*
+
+- **INV-RIGOR-02 — Rigor is a one-way ratchet.** The human may always force MORE rigor (full
+  path over fast-path); no human, agent or flag may ever force LESS (an `ALLOW` over a measured
+  `DENY`, a skipped gate, a lowered cap at run time). Anything that weakens a control is a
+  config change reviewed like code — never a runtime override. *(Introduced with ADR-003:
+  without this asymmetry, a fast path is a backdoor with paperwork.)*
