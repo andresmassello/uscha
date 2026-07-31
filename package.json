@@ -18,6 +18,7 @@
     "!uscha-kit/**/*.pyc",
     "!uscha-kit/**/*.pyo",
     "!uscha-kit/CHANGELOG-*.md",
+    "!uscha-kit/CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],

@@ -243,7 +243,7 @@ static   ← checkstyle · pmd · spotbugs · findsecbugs</pre>
         <li><strong>The agent has senior tools</strong> — logs, a repro environment, the ability to run what it writes.</li>
       </ul>
       <p>The outer loop is a heartbeat — <code>/loop</code> sets cadence, <code>/goal</code> continues until a <em>separate</em> model verifies the condition true — wrapping the inner <code>/dev-loop</code>, with the human still owning merge. And an unattended loop is an unattended attack surface, so autonomy arrives with an operational tax: secret-scan and dependency-audit before any PR, an origin check on every skill (520 of 17,022 audited leaked credentials), non-verbose logs, permissions re-audited on a schedule, sessions rotated before they bloat.</p>
-      <div class="aside"><div class="tag">the honest verdict</div><p>Fiscal/ARCA, payments, critical retail all sit on the "do not autonomize" side the playbook itself marks. Gated-by-design isn't a gap — it's the decision. The metric once you do automate is <em>cost per accepted change</em>; below 50% accept, the loop is handing back the review it came to remove.</p></div>
+      <div class="aside"><div class="tag">the honest verdict</div><p>Fiscal/e-invoicing, payments, critical retail all sit on the "do not autonomize" side the playbook itself marks. Gated-by-design isn't a gap — it's the decision. The metric once you do automate is <em>cost per accepted change</em>; below 50% accept, the loop is handing back the review it came to remove.</p></div>
     </div>
   </section>
 
@@ -274,7 +274,7 @@ claude --version &amp;&amp; claude doctor</pre>
   <section class="qa" id="q14">
     <div class="qhead"><div class="qmark">Q<span class="qn">14</span></div><h2>What does one full run actually look like?</h2></div>
     <div class="ans"><span class="amark">Answer</span>
-      <p>A CAE gateway for ARCA — Java 21, Spring Boot, React, MSSQL — from idea to PR in a single session:</p>
+      <p>An e-invoicing gateway for a national tax authority — Java 21, Spring Boot, React, MSSQL — from idea to PR in a single session:</p>
       <pre>&gt; /discovery
   <span class="g">✓</span> CONTEXT · DOMAIN-MODEL · SPEC-001 · ADR-001/2/3
   <span class="g">✓</span> ACCEPTANCE · RISKS · HANDOFF

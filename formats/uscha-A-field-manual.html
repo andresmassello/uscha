@@ -362,7 +362,7 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
       </ul>
       <div class="box"><h3>The design — heartbeat wrapping /dev-loop</h3><p><code>/loop</code> sets the cadence; <code>/goal</code> continues until a condition is verified true by a <em>separate</em> model (maker ≠ checker in the stop condition); scheduled routines survive a restart. Uscha is the ideal payload — it already brings the gate, the state, the skills, and the checker separation. Only the trigger is missing.</p></div>
       <div class="box note-b"><h3>The security tax</h3><p>An unattended loop is an unattended attack surface. It enters as an <em>operational</em> layer of the constitution: SAST + secret-scan + dependency-audit before any PR; audit each skill's origin before install (520 of 17,022 audited skills leaked credentials); non-verbose logging; re-audit permissions every 30 days, loop starts read-only; rotate the session before it bloats and hangs. <strong>Session hygiene is part of the tax.</strong></p></div>
-      <div class="box good"><p><strong>Verdict.</strong> The playbook and Uscha are different layers, not competitors — outer heartbeat vs rigorous inner loop. Your domain — fiscal/ARCA, payments, critical retail — sits squarely on the "do not autonomize" side, which is exactly the gated-by-design stance. The metric when you do autonomize: <em>cost per accepted change</em>. Below a 50% accept rate the loop is handing back the review work it came to remove.</p></div>
+      <div class="box good"><p><strong>Verdict.</strong> The playbook and Uscha are different layers, not competitors — outer heartbeat vs rigorous inner loop. Domains like fiscal/e-invoicing, payments, or critical retail sit squarely on the "do not autonomize" side, which is exactly the gated-by-design stance. The metric when you do autonomize: <em>cost per accepted change</em>. Below a 50% accept rate the loop is handing back the review work it came to remove.</p></div>
     </div>
     <div class="note"><span class="lbl">Convergence</span>"Loop engineering" (Jun 2026) reached these same principles independently. Uscha only differs in that a person, not a cron, pulls the trigger — a decision, not a gap.</div>
   </section>
@@ -437,7 +437,7 @@ claude --version &amp;&amp; claude doctor                  <span class="c"># ver
     <div class="head">
       <div class="cnum">§15 · Worked session</div>
       <h2>Idea to PR, without leaving one session.</h2>
-      <p>A CAE gateway for ARCA (Java 21, Spring Boot, React, MSSQL), from idea to PR:</p>
+      <p>An e-invoicing gateway for a national tax authority (Java 21, Spring Boot, React, MSSQL), from idea to PR:</p>
       <pre>$ claude
 &gt; /discovery
   <span class="c">1×1 grill, proposes entities/endpoints, you decide 3 things</span>
