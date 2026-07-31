@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="20" failures="0" errors="0" skipped="1">
+<testsuite name="uscha-acceptance" tests="20" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -25,7 +25,6 @@
   <testcase classname="uscha.acceptance" name="AC-FP-07_fastpath">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FP-08_fastpath">
-    <skipped message="no source configured for this criterion"/>
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FP-09_fastpath">
   </testcase>

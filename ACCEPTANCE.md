@@ -44,32 +44,32 @@ Numbering follows the originating handoff for traceability; **AC-FP-04 is delibe
 (the golden-touched veto is deferred — ADR-004 records why; the direct fixture case is covered
 by `**/*.approved` in `protected_paths`, exercised by AC-FP-03).
 
-- [ ] AC-FP-01 — diff within all thresholds, no protected paths → `fastpath-eval` verdict `ALLOW`.
-- [ ] AC-FP-02 — diff exceeding `max_loc_delta` by 1 → `DENY`, breakdown names `max_loc_delta`.
-- [ ] AC-FP-03 — diff touching one file matching `protected_paths` → `DENY` regardless of size.
-- [ ] AC-FP-05 — fast-path run whose diff later grows past a threshold → state `ESCALATED`,
+- [x] AC-FP-01 — diff within all thresholds, no protected paths → `fastpath-eval` verdict `ALLOW`.
+- [x] AC-FP-02 — diff exceeding `max_loc_delta` by 1 → `DENY`, breakdown names `max_loc_delta`.
+- [x] AC-FP-03 — diff touching one file matching `protected_paths` → `DENY` regardless of size.
+- [x] AC-FP-05 — fast-path run whose diff later grows past a threshold → state `ESCALATED`,
   PR step blocked, both ledger records present.
-- [ ] AC-FP-06 — fast-path run with no asserting test in evidence → criterion open, readiness
+- [x] AC-FP-06 — fast-path run with no asserting test in evidence → criterion open, readiness
   capped (via the existing cap mechanics).
-- [ ] AC-FP-07 — the ledger entry for a fast-path verdict carries: mode, verdict, and every
+- [x] AC-FP-07 — the ledger entry for a fast-path verdict carries: mode, verdict, and every
   signal with value + threshold + source + timestamp.
-- [ ] AC-FP-08 — `fast_path` block absent from config → behavior identical to the previous
+- [x] AC-FP-08 — `fast_path` block absent from config → behavior identical to the previous
   release (golden-anchored BEFORE implementation, via `/uscha-characterize`).
-- [ ] AC-FP-09 — human override to full path works; no mechanism can force `ALLOW` over `DENY`.
-- [ ] AC-FP-10 — no git repo, or unresolvable merge-base → `DENY` with the reason named
+- [x] AC-FP-09 — human override to full path works; no mechanism can force `ALLOW` over `DENY`.
+- [x] AC-FP-10 — no git repo, or unresolvable merge-base → `DENY` with the reason named
   (fail-closed: "could not measure" never grants the shortcut).
-- [ ] AC-FP-11 — `fastpath-eval` without `--intent` is a dry-run: verdict reported, no
+- [x] AC-FP-11 — `fastpath-eval` without `--intent` is a dry-run: verdict reported, no
   fast-path mode entry recorded in the ledger.
 
 ## Spec-drift (Phase 2) — feature acceptance, closes on green `AC-SD-nn` tests in ingested evidence
 
 Advisory by design (ADR-005): drift detection is a heuristic, and a guess advises, never gates.
 
-- [ ] AC-SD-01 — governed file newer than its spec beyond `max_lag_days` → `SPEC_STALE`
+- [x] AC-SD-01 — governed file newer than its spec beyond `max_lag_days` → `SPEC_STALE`
   advisory listing the newer files.
-- [ ] AC-SD-02 — spec newer than all governed files → no advisory.
-- [ ] AC-SD-03 — spec without `governs:` frontmatter → `UNMAPPED`, distinct from clean.
-- [ ] AC-SD-04 — advisory present → readiness score numerically unchanged.
+- [x] AC-SD-02 — spec newer than all governed files → no advisory.
+- [x] AC-SD-03 — spec without `governs:` frontmatter → `UNMAPPED`, distinct from clean.
+- [x] AC-SD-04 — advisory present → readiness score numerically unchanged.
 
 ## Out of scope for measurement here
 
