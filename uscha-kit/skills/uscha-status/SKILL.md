@@ -90,6 +90,10 @@ Line guide:
 block with the latest verdict per repo (`fast-path: ALLOW (intent...)` / `ESCALATED`). Absent
 entries → no line at all: silence is honest when no mode was requested.
 
+**Spec-drift (ADR-005):** if the ledger carries a `spec_drift` run, add ONE line:
+`spec-drift: N stale / M docs (advisory)` — or `spec-drift: no drift measured` when zero are
+stale. Always label it advisory; it never explains a blocked phase. Absent key → no line.
+
 ## Degradation (honest, specific)
 
 - `measured` missing entirely → print: *"No measurement recorded yet — the trail

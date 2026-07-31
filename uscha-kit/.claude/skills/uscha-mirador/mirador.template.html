@@ -278,6 +278,11 @@ svg{display:block;width:100%;height:auto}
         The verdict above is all you need to look at. These roll up into it; they're here if you want to dig.
       </p>
     </div>
+
+    <div class="card col6" id="card-modes" hidden>
+      <h2>Fast-path &middot; Spec-drift <span class="n" id="modes-n">&mdash;</span></h2>
+      <div class="speclist" id="modes"></div>
+    </div>
   </section>
 
   <section class="telemetry" id="telemetry" hidden>
@@ -654,6 +659,39 @@ function renderTelemetry(){
   if(sec)sec.hidden=false;
 }
 
+function renderModes(){
+  /* fast_path: latest measured verdict per repo (ADR-003). spec_drift: latest advisory
+     run (ADR-005) -- advisory means it never feeds readiness; this card only makes the
+     ledger fact visible. BOTH keys are conditional in dashboard --json, so a project
+     that never used either sees no card at all (absent block = identical view). */
+  const card=$("#card-modes");if(!card)return;
+  const fp=DATA.fast_path,sd=DATA.spec_drift;
+  if(!fp&&!sd){card.hidden=true;return;}
+  const host=$("#modes");host.replaceChildren();
+  const parts=[];
+  if(fp){
+    const cls={ALLOW:"st-done",ESCALATED:"st-prog",DENY:"st-block"};
+    Object.keys(fp).forEach(r=>{const e=fp[r]||{};
+      append(host,append(node("div","spec"),node("span","id","fast-path"),
+        node("span","t",r+(e.intent?(" — "+e.intent):"")),
+        node("span","chip "+(cls[e.verdict]||"st-todo"),String(e.verdict||"?"))));});
+    parts.push(Object.keys(fp).length+" repo"+(Object.keys(fp).length>1?"s":""));
+  }
+  if(sd){
+    const cls={SPEC_STALE:"st-block",CLEAN:"st-done",UNMAPPED:"st-todo",UNTRACKED:"st-todo"};
+    const res=sd.results||[];
+    res.forEach(d=>{const extra=d.verdict==="SPEC_STALE"
+        ?(" — "+(d.newer_files_total||0)+" file(s) newer than the spec"):"";
+      append(host,append(node("div","spec"),node("span","id","spec-drift"),
+        node("span","t",String(d.file||"")+extra),
+        node("span","chip "+(cls[d.verdict]||"st-todo"),String(d.verdict||"?"))));});
+    const stale=res.filter(d=>d.verdict==="SPEC_STALE").length;
+    parts.push(stale?stale+" stale spec"+(stale>1?"s":""):"no drift measured");
+    host.appendChild(emptyHint("spec-drift is ADVISORY (ADR-005): it prompts a human look, it never gates."));
+  }
+  $("#modes-n").textContent=parts.join(" · ");
+  card.hidden=false;
+}
 /* ==== status story: cómo viene / qué lo traba / qué sigue — all from measured DATA ==== */
 function renderStatus(){
   const sec=$("#status");if(!sec)return;
@@ -741,7 +779,7 @@ function applySnapshot(i){
 scrub.addEventListener("input",()=>applySnapshot(+scrub.value));
 
 /* ==== init ==== */
-renderStatus();renderAcceptance();renderAdrs();renderInv();renderHeat();renderLoops();renderSubs();renderExecutionPolicy();renderTelemetry();
+renderStatus();renderModes();renderAcceptance();renderAdrs();renderInv();renderHeat();renderLoops();renderSubs();renderExecutionPolicy();renderTelemetry();
 $("#asof").textContent=snaps.length?snaps[snaps.length-1].date:"no history yet (readiness --record)";
 renderTrail(null);
 </script>

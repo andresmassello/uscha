@@ -73,8 +73,11 @@ than inventing a step. Keep the CONTENT in the conversation's language and the l
 - **Spec-drift (ADR-005):** `dashboard --json` carries `spec_drift` — the latest advisory
   run (per-document verdicts: SPEC_STALE / CLEAN / UNMAPPED / UNTRACKED) — only when a run
   exists in the ledger; a virgin ledger keeps the exact prior schema. Advisory visibility of
-  the spec-maintenance tax, never readiness input. The shipped template does not yet draw a
-  dedicated panel for it (`proposal` — the data contract ships first).
+  the spec-maintenance tax, never readiness input.
+- **Modes card:** the template draws one card for both modes — fast-path verdict chips per
+  repo (ALLOW green / ESCALATED amber / DENY red) and spec-drift rows per document, labeled
+  advisory. The card is hidden entirely when neither key exists (absent block = identical
+  view, same rule as the JSON).
 - **Session telemetry (optional, vendor-reported):** if `.uscha/telemetry.jsonl` exists,
   the skill aggregates it and MERGES a `telemetry` object into `DATA`. This is the ONE
   panel that is **narrated by the vendor (Claude Code), not measured by the engine** —

@@ -3574,6 +3574,38 @@ case "$T114" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T114";;
 esac
 
+echo "== T115 (1.59.0): mirador template draws the modes card (fast-path + spec-drift) =="
+# Structural regression guard: the card, its renderer, the init call, the conditional
+# hidden state and the advisory label must all survive template edits. Behavior was
+# verified in a real browser at authoring time; CI has no DOM, so structure is the
+# honest cheap proxy (a missing piece here IS a dropped panel).
+T115=$("$PY" - "$KIT/.claude/skills/uscha-mirador/mirador.template.html" <<'PY'
+import io, sys
+t = io.open(sys.argv[1], encoding="utf-8").read()
+bad = []
+if "id=\x22card-modes\x22 hidden" not in t: bad.append("card-modes markup (hidden by default)")
+if "function renderModes()" not in t: bad.append("renderModes definition")
+if "renderModes();" not in t.split("/* ==== init ==== */")[-1]: bad.append("renderModes init call")
+if "if(!fp&&!sd){card.hidden=true;return;}" not in t: bad.append("conditional degradation")
+# extract the renderModes body FIRST; no quotes may sit inside bracket expressions here
+# (the documented bash 3.2 heredoc-in-substitution trap), hence chr() and two-step slicing.
+start = t.index("function renderModes()")
+js = t[start:]
+cut = js.find(chr(10) + chr(125))
+js = js[:cut] if cut > 0 else js
+# verdict map checked INSIDE the renderer body, so a whole-file match cannot false-pass it
+for v in ("SPEC_STALE", "UNMAPPED", "UNTRACKED", "ESCALATED"):
+    if v not in js: bad.append("verdict class map: " + v)
+if "ADVISORY (ADR-005)" not in js: bad.append("advisory label")
+if "innerHTML" in js or "insertAdjacentHTML" in js: bad.append("HTML sink in renderModes")
+print("OK modes card wired" if not bad else "BAD " + "; ".join(bad))
+PY
+)
+case "$T115" in
+  OK*) PASS=$((PASS+1)); echo "  ok   mirador modes card: $T115";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T115";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
