@@ -3401,6 +3401,7 @@ echo "== T113 (1.57.0): fastpath-eval -- measured ALLOW/DENY, escalation, fail-c
 # captured BEFORE this feature existed; without a human-approved anchor it reports null ->
 # emitted as skipped, never as a silent pass.
 rm -f "$KIT/reports/junit/.fastpath-cases.json"   # a stale green sidecar must never survive a crashed T113
+rm -f "$KIT/reports/junit/.specdrift-cases.json"  # same rule for T114
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -3493,6 +3494,84 @@ PY
 case "$T113" in
   OK*) PASS=$((PASS+1)); echo "  ok   fastpath-eval: $T113";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T113";;
+esac
+
+echo "== T114 (1.58.0): spec-drift -- advisory drift from commit dates, never a gate (ADR-005) =="
+# Each sub-case maps 1:1 to an AC-SD criterion. Fixture commit dates are pinned via
+# GIT_AUTHOR_DATE/GIT_COMMITTER_DATE so the lag math is deterministic on every runner.
+T114=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
+os.makedirs(os.path.join(repo, "src")); os.makedirs(os.path.join(repo, "docs", "adr"))
+
+def sh(args, when=None, cwd=repo):
+    env = dict(os.environ)
+    if when:
+        env["GIT_AUTHOR_DATE"] = when; env["GIT_COMMITTER_DATE"] = when
+    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, env=env)
+
+sh(["git", "init", "-b", "main"]); sh(["git", "config", "user.email", "t@t"])
+sh(["git", "config", "user.name", "t"])
+io.open(os.path.join(repo, "SPEC.md"), "w").write("---\ngoverns:\n  - src/**\n---\n# spec\n")
+io.open(os.path.join(repo, "docs", "adr", "ADR-001-a.md"), "w").write("no frontmatter\n")
+io.open(os.path.join(repo, "src", "a.py"), "w").write("x=1\n")
+sh(["git", "add", "-A"]); sh(["git", "commit", "-m", "one"], when="2026-01-01T00:00:00Z")
+io.open(os.path.join(repo, "src", "a.py"), "w").write("x=2\n")
+sh(["git", "add", "-A"]); sh(["git", "commit", "-m", "two"], when="2026-03-01T00:00:00Z")
+
+cfg = {"defaults": {"acceptance_file": "ACCEPTANCE.md"},
+       "repos": [{"name": "r", "path": "r", "type": "python"}], "integration": {"enabled": False}}
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps(cfg))
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True, text=True)
+eng("init", "--config", "c.json", "--out", "L.json")
+
+# readiness BEFORE any drift run -- AC-SD-04 compares numerically after.
+r = eng("readiness", "--ledger", "L.json", "--json"); before = json.loads(r.stdout).get("score")
+
+# AC-SD-01: src/a.py moved 59 days after the spec, default lag 30 -> SPEC_STALE, file listed,
+# and the command still exits 0 (advisory NEVER gates).
+r = eng("spec-drift", "--ledger", "L.json", "--repo", "r", "--json"); d = json.loads(r.stdout)
+rows = {x["file"]: x for x in d["results"]}
+spec = rows.get("SPEC.md", {})
+res["AC-SD-01"] = (r.returncode == 0 and spec.get("verdict") == "SPEC_STALE"
+                   and "src/a.py" in spec.get("newer_files", []))
+
+# AC-SD-03: the ADR without frontmatter is UNMAPPED -- visibly distinct from clean.
+adr = rows.get("docs/adr/ADR-001-a.md", {})
+res["AC-SD-03"] = adr.get("verdict") == "UNMAPPED" and adr.get("verdict") != "CLEAN"
+
+# AC-SD-02: commit the spec AFTER the governed change -> no advisory.
+io.open(os.path.join(repo, "SPEC.md"), "a").write("updated\n")
+sh(["git", "add", "-A"]); sh(["git", "commit", "-m", "spec refresh"], when="2026-04-01T00:00:00Z")
+r = eng("spec-drift", "--ledger", "L.json", "--repo", "r", "--json"); d = json.loads(r.stdout)
+rows = {x["file"]: x for x in d["results"]}
+res["AC-SD-02"] = r.returncode == 0 and rows.get("SPEC.md", {}).get("verdict") == "CLEAN"
+
+# AC-SD-04: the advisory is in the ledger AND the readiness score is numerically unchanged.
+L = json.load(open(os.path.join(w, "L.json")))
+r = eng("readiness", "--ledger", "L.json", "--json"); after = json.loads(r.stdout).get("score")
+res["AC-SD-04"] = bool(L.get("spec_drift")) and before == after
+
+# dashboard passthrough: key present now, absent on a virgin ledger (schema stability).
+r = eng("dashboard", "--ledger", "L.json", "--json"); has = "spec_drift" in json.loads(r.stdout)
+eng("init", "--config", "c.json", "--out", "L2.json")
+r = eng("dashboard", "--ledger", "L2.json", "--json"); virgin = "spec_drift" in json.loads(r.stdout)
+dash_ok = has and not virgin
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".specdrift-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v] + ([] if dash_ok else ["dashboard-passthrough"])
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(bad))
+PY
+)
+case "$T114" in
+  OK*) PASS=$((PASS+1)); echo "  ok   spec-drift: $T114";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T114";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -4484,6 +4563,23 @@ for _fid in ("AC-FP-01", "AC-FP-02", "AC-FP-03", "AC-FP-05", "AC-FP-06",
         results.append((_fid, "fastpath", None))
     else:
         results.append((_fid, "fastpath", "T113 case failed or missing"))
+
+# Spec-drift criteria (ADR-005): measured by T114, same sidecar contract as T113.
+def _specdrift_cases():
+    p = os.path.join(kit, "reports", "junit", ".specdrift-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_sdc = _specdrift_cases()
+for _sid in ("AC-SD-01", "AC-SD-02", "AC-SD-03", "AC-SD-04"):
+    if _sdc is None or _sdc.get(_sid) is None:
+        results.append((_sid, "specdrift", SKIP))
+    elif _sdc.get(_sid) is True:
+        results.append((_sid, "specdrift", None))
+    else:
+        results.append((_sid, "specdrift", "T114 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

@@ -1,5 +1,5 @@
 {
-  "version": "1.57.0",
+  "version": "1.58.0",
   "project": null,
   "defaults": {
     "coverage_threshold": 60,
@@ -50,6 +50,9 @@
         "db/**"
       ],
       "require_asserting_test": true
+    },
+    "spec_drift": {
+      "max_lag_days": 30
     },
     "static_gate_zero_at": 10,
     "constitution_file": "CONSTITUTION.md",

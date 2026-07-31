@@ -61,6 +61,16 @@ by `**/*.approved` in `protected_paths`, exercised by AC-FP-03).
 - [ ] AC-FP-11 — `fastpath-eval` without `--intent` is a dry-run: verdict reported, no
   fast-path mode entry recorded in the ledger.
 
+## Spec-drift (Phase 2) — feature acceptance, closes on green `AC-SD-nn` tests in ingested evidence
+
+Advisory by design (ADR-005): drift detection is a heuristic, and a guess advises, never gates.
+
+- [ ] AC-SD-01 — governed file newer than its spec beyond `max_lag_days` → `SPEC_STALE`
+  advisory listing the newer files.
+- [ ] AC-SD-02 — spec newer than all governed files → no advisory.
+- [ ] AC-SD-03 — spec without `governs:` frontmatter → `UNMAPPED`, distinct from clean.
+- [ ] AC-SD-04 — advisory present → readiness score numerically unchanged.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
@@ -85,6 +95,7 @@ by `**/*.approved` in `protected_paths`, exercised by AC-FP-03).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".
 - ADR-003 — Fast-path entry is granted by measured signals, never by opinion.
 - ADR-004 — The golden-touched veto is deferred until a golden↔source mapping exists.
+- ADR-005 — Spec drift is detected mechanically and reported as advisory — never gated.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

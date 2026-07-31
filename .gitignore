@@ -39,3 +39,4 @@ chat-*.md
 *-transcript.md
 .claude/launch.json
 .fastpath-cases.json
+.specdrift-cases.json

@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.57.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.58.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -61,6 +61,35 @@ mid-run (the devloop does, before the PR step) with thresholds now exceeded flip
 and readiness is capped until a human runs `resolve-escalation`, after producing the ADR +
 ACCEPTANCE the change turned out to deserve. **The override is asymmetric (INV-RIGOR-02):**
 you can always force the full path; nothing can force `ALLOW` over a measured `DENY`.
+
+## Spec-drift (ADR-005) — the spec maintenance tax, made visible
+
+Specs rot silently: the code moves and `SPEC.md` stays where it was. `spec-drift` detects
+that lag **mechanically** — and reports it as **advisory, never a gate**, because whether an
+older spec still covers newer code is a relevance judgment, and a guess advises.
+
+```bash
+python qa_ledger.py spec-drift --repo <name> --json   # advisory report; exit 0 always
+```
+
+Map specs to code with a `governs:` glob list in the frontmatter of `SPEC.md` and each
+`docs/adr/*.md`:
+
+```markdown
+---
+governs:
+  - src/payments/**
+  - db/**
+---
+```
+
+Per document: **`SPEC_STALE`** when governed code outran the spec by more than
+`defaults.spec_drift.max_lag_days` (default 30), listing the newer files; **`CLEAN`** when it
+did not; **`UNMAPPED`** when there is no `governs:` frontmatter *or its globs match nothing*
+— absence of a mapping is absence of measurement, not "no drift"; **`UNTRACKED`** when the
+spec has no commit date to compare. The latest run lands in the ledger (`spec_drift`) so the
+mirador can surface it. No readiness impact, no exit-code gate: a stale spec is a prompt for
+a human conversation, not a blocked pipeline.
 
 ## End-to-end flow
 

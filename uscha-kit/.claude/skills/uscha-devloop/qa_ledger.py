@@ -2898,6 +2898,180 @@ def cmd_fastpath_eval(args):
     sys.exit(0 if verdict == "ALLOW" else 1)
 
 
+# --------------------------------------------------------------------------- #
+# spec-drift  (ADR-005: mechanical drift detection, advisory -- NEVER a gate)
+# --------------------------------------------------------------------------- #
+
+def _sd_governs(path):
+    """Parse the `governs:` glob list from a `---` frontmatter block at the top of a
+    markdown file. Returns None when there is no frontmatter or no `governs:` key
+    (UNMAPPED -- absence of a mapping is absence of measurement, not "no drift")."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return None
+    if not lines or lines[0].strip() != "---":
+        return None
+    globs, in_governs = None, False
+    # scan runs to the CLOSING fence, not an arbitrary window -- a governs: key late in a
+    # long frontmatter block must not silently read as UNMAPPED (fresh-review finding).
+    for ln in lines[1:]:
+        s = ln.strip()
+        if s == "---":
+            break
+        if s.startswith("governs:"):
+            rest = s[len("governs:"):].strip()
+            if rest.startswith("[") and rest.endswith("]"):
+                globs = [x.strip().strip("\x27\x22")
+                         for x in rest[1:-1].split(",") if x.strip()]
+                in_governs = False
+            elif rest:
+                # bare scalar (`governs: src/**`) -- a plausible authoring shorthand;
+                # dropping it silently would report a misleading "globs match nothing".
+                globs, in_governs = [rest.strip("\x27\x22")], False
+            else:
+                globs, in_governs = [], True
+            continue
+        if in_governs:
+            if s.startswith("- "):
+                globs.append(s[2:].strip().strip("\x27\x22"))
+            elif s and not ln.startswith((" ", "\t")):
+                in_governs = False
+    return globs
+
+
+def _sd_iso(ct):
+    import datetime as _dt
+    return _dt.datetime.fromtimestamp(ct, _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _sd_last_commit_ct(repo_path, paths):
+    """Newest commit epoch touching any of `paths` (chunked: command lines have limits).
+    None when no commit touches them (untracked)."""
+    newest = None
+    for i in range(0, len(paths), 200):
+        r = subprocess.run(["git", "log", "-1", "--format=%ct", "--"] + paths[i:i + 200],
+                           cwd=repo_path, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+        out = r.stdout.strip().splitlines()
+        if r.returncode == 0 and out and out[0].strip().isdigit():
+            ct = int(out[0].strip())
+            newest = ct if newest is None else max(newest, ct)
+    return newest
+
+
+def cmd_spec_drift(args):
+    """Advisory drift report (ADR-005): last commit date of each spec doc vs. the newest
+    commit touching the files its `governs:` globs map to. SPEC_STALE when governed code
+    outran the spec by more than max_lag_days; UNMAPPED when there is no (effective)
+    mapping; UNTRACKED when the spec has no commit date to compare. This command NEVER
+    gates: a stale spec is a prompt for a human conversation, not a blocked pipeline.
+    Exit code 0 always."""
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    cfg = ledger["config"].get("defaults", {}).get("spec_drift") or {}
+    lag_days = int(args.max_lag_days if args.max_lag_days is not None
+                   else cfg.get("max_lag_days", 30))
+    repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+
+    # The spec surface is fixed by ADR-005: the repo SPEC.md plus every ADR.
+    spec_files = []
+    if os.path.isfile(os.path.join(repo_path, "SPEC.md")):
+        spec_files.append("SPEC.md")
+    adr_dir = os.path.join(repo_path, "docs", "adr")
+    if os.path.isdir(adr_dir):
+        spec_files += sorted("docs/adr/" + f for f in os.listdir(adr_dir)
+                             if f.lower().endswith(".md"))
+
+    tracked = []
+    ls = subprocess.run(["git", "ls-files"], cwd=repo_path, capture_output=True,
+                        text=True, encoding="utf-8", errors="replace")
+    if ls.returncode == 0:
+        tracked = [l.strip().replace("\\", "/") for l in ls.stdout.splitlines() if l.strip()]
+
+    results = []
+    for spec in spec_files:
+        governs = _sd_governs(os.path.join(repo_path, spec))
+        row = {"file": spec, "governs": governs, "max_lag_days": lag_days}
+        if governs is None:
+            row.update({"verdict": "UNMAPPED", "reason": "no governs: frontmatter"})
+            results.append(row)
+            continue
+        matched = []
+        pats = [_fp_glob_re(g) for g in governs]
+        for f in tracked:
+            if f == spec:
+                continue  # a spec governing itself would always read fresh -- excluded
+            if any(p.match(f) for p in pats):
+                matched.append(f)
+        if not matched:
+            # A mapping that matches nothing measures nothing -- same absence, named.
+            row.update({"verdict": "UNMAPPED", "reason": "globs match no tracked files"})
+            results.append(row)
+            continue
+        spec_ct = _sd_last_commit_ct(repo_path, [spec])
+        if spec_ct is None:
+            row.update({"verdict": "UNTRACKED",
+                        "reason": "spec has no commit date to compare"})
+            results.append(row)
+            continue
+        newest = _sd_last_commit_ct(repo_path, matched)
+        lag_s = lag_days * 86400
+        row.update({"governed_files": len(matched),
+                    "spec_committed_at": _sd_iso(spec_ct),
+                    "newest_governed_at": _sd_iso(newest) if newest is not None else None})
+        if newest is not None and newest - spec_ct > lag_s:
+            import datetime as _dt
+            cutoff = _dt.datetime.fromtimestamp(
+                spec_ct + lag_s, _dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+0000")
+            newer = set()
+            for i in range(0, len(matched), 200):
+                r = subprocess.run(["git", "log", "--since", cutoff, "--name-only",
+                                    "--format=", "--"] + matched[i:i + 200],
+                                   cwd=repo_path, capture_output=True, text=True,
+                                   encoding="utf-8", errors="replace")
+                if r.returncode == 0:
+                    newer |= {l.strip().replace("\\", "/")
+                              for l in r.stdout.splitlines() if l.strip()}
+            newer &= set(matched)
+            row.update({"verdict": "SPEC_STALE",
+                        "lag_days_actual": round((newest - spec_ct) / 86400.0, 1),
+                        "newer_files": sorted(newer)[:20],
+                        "newer_files_total": len(newer)})
+        else:
+            row["verdict"] = "CLEAN"
+        results.append(row)
+
+    out = {"repo": args.repo, "max_lag_days": lag_days, "results": results,
+           "advisory": True}
+
+    # Latest-state record so the mirador can surface an advisory row. Advisory data,
+    # not a step in the loop: no step_counter, no gate record, no readiness input.
+    ledger["spec_drift"] = {"repo": args.repo, "at": _now(), "max_lag_days": lag_days,
+                            "results": results}
+    _save(args.ledger, ledger)
+
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print("SPEC-DRIFT %s (advisory, lag > %dd):" % (args.repo, lag_days))
+        if not results:
+            print("  no spec documents found (SPEC.md / docs/adr/*.md)")
+        mark = {"SPEC_STALE": "!!", "CLEAN": "ok", "UNMAPPED": "--", "UNTRACKED": "--"}
+        for r_ in results:
+            line = "  %s %s: %s" % (mark.get(r_["verdict"], "??"), r_["file"],
+                                    r_["verdict"])
+            if r_["verdict"] == "SPEC_STALE":
+                line += " -- %d governed file(s) newer, e.g. %s" % (
+                    r_["newer_files_total"], ", ".join(r_["newer_files"][:3]))
+            elif "reason" in r_:
+                line += " (%s)" % r_["reason"]
+            print(line)
+    sys.exit(0)
+
+
+
 def cmd_escalate(args):
     ledger = _load(args.ledger)
     _repo_node(ledger, args.repo)
@@ -3932,6 +4106,8 @@ def cmd_dashboard(args):
     if ledger.get("fast_path"):
         out["fast_path"] = {r: [e for e in ledger["fast_path"] if e.get("repo") == r][-1]
                             for r in {e.get("repo") for e in ledger["fast_path"]}}
+    if ledger.get("spec_drift"):
+        out["spec_drift"] = ledger["spec_drift"]
     if getattr(args, "json", False):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
@@ -6635,6 +6811,15 @@ def build_parser():
     pfp.add_argument("--intent", help="one sentence, what and why; without it the call is a dry-run")
     pfp.add_argument("--json", action="store_true")
     pfp.set_defaults(func=cmd_fastpath_eval)
+
+    psd = sub.add_parser("spec-drift",
+                         help="advisory spec-vs-code drift from git commit dates (ADR-005); never gates, exit 0 always")
+    psd.add_argument("--ledger", default="QA-LEDGER.json")
+    psd.add_argument("--repo", required=True)
+    psd.add_argument("--max-lag-days", type=int, default=None,
+                     help="override defaults.spec_drift.max_lag_days (default 30)")
+    psd.add_argument("--json", action="store_true")
+    psd.set_defaults(func=cmd_spec_drift)
     pre = sub.add_parser("resolve-escalation",
                          help="close open escalations for a repo (recorded event; "
                               "lifts the readiness cap)")
