@@ -1,5 +1,5 @@
 {
-  "version": "1.56.1",
+  "version": "1.57.0",
   "project": null,
   "defaults": {
     "coverage_threshold": 60,
@@ -39,6 +39,17 @@
       "tests_red": 35,
       "blocker_critical": 65,
       "escalation": 75
+    },
+    "fast_path": {
+      "enabled": true,
+      "max_files_changed": 3,
+      "max_loc_delta": 80,
+      "protected_paths": [
+        "**/migrations/**",
+        "**/*.approved",
+        "db/**"
+      ],
+      "require_asserting_test": true
     },
     "static_gate_zero_at": 10,
     "constitution_file": "CONSTITUTION.md",

@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.56.1 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.57.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -37,6 +37,30 @@ uscha-kit/
    ├─ uscha-sysdoc/                     # (optional) two-view HTML deck from the ledger
    └─ uscha-rubric/                      # (optional) rubric grading — thin adapter; the core is agnostic
 ```
+
+## Fast-path (ADR-003) — measured entry for trivial changes
+
+A one-line fix should not pay the ceremony of a schema migration. `fastpath-eval` grants the
+shortcut from **measured signals**, never from anyone's opinion of "small":
+
+```bash
+python qa_ledger.py fastpath-eval --repo <name> --json            # dry-run: verdict only
+python qa_ledger.py fastpath-eval --repo <name> --intent "fix: x" # records it in the ledger
+```
+
+Config (`defaults.fast_path`; absent block = feature off, behavior identical to earlier
+releases): `max_files_changed` (3) and `max_loc_delta` (80) measured from
+`git diff --numstat` against the merge-base with `origin/main` (fallback `main`) **plus
+untracked files** — a new file is still a change; `protected_paths` globs deny regardless of
+size; `require_asserting_test` caps readiness while a fast-path run has no measured test.
+
+**Fail-closed:** no git, no resolvable base, no config → `DENY` with the reason named.
+"Could not measure" never grants the shortcut. **Escalation:** re-running `fastpath-eval`
+mid-run (the devloop does, before the PR step) with thresholds now exceeded flips the run to
+`ESCALATED` through the standard escalation machinery — the derived phase blocks `pr-ready`
+and readiness is capped until a human runs `resolve-escalation`, after producing the ADR +
+ACCEPTANCE the change turned out to deserve. **The override is asymmetric (INV-RIGOR-02):**
+you can always force the full path; nothing can force `ALLOW` over a measured `DENY`.
 
 ## End-to-end flow
 

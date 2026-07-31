@@ -59,6 +59,7 @@ import math
 import os
 import re
 import shutil
+import subprocess
 import sys
 import unicodedata
 import xml.etree.ElementTree as ET
@@ -2699,6 +2700,204 @@ def cmd_oscillation(args):
     sys.exit(1 if osc else 0)
 
 
+# --------------------------------------------------------------------------- #
+# fastpath-eval  (ADR-003: fast-path entry by MEASURED signals, never opinion)
+# --------------------------------------------------------------------------- #
+
+def _fp_glob_re(g):
+    """Translate a protected-path glob to a regex. `**` crosses directories, `*`/`?` do not.
+    Case-insensitive on purpose: Windows and macOS filesystems are."""
+    g = g.replace("\\", "/")
+    out, i = [], 0
+    while i < len(g):
+        c = g[i]
+        if c == "*":
+            if g[i:i + 2] == "**":
+                i += 2
+                if i < len(g) and g[i] == "/":
+                    # `**/` = any number of WHOLE directories (incl. zero) -- segment-anchored,
+                    # so `**/migrations/**` does not match `db_migrations/` by substring.
+                    out.append("(?:[^/]*/)*")
+                    i += 1
+                else:
+                    out.append(".*")
+                continue
+            out.append("[^/]*")
+        elif c == "?":
+            out.append("[^/]")
+        elif c in ".^$+{}[]|()":
+            out.append("\\" + c)
+        else:
+            out.append(c)
+        i += 1
+    return re.compile("^(?:%s)$" % "".join(out), re.I)
+
+
+def cmd_fastpath_eval(args):
+    """Measured verdict for the fast-path (ADR-003). ALLOW only when every signal passes;
+    ANY ambiguity -- no config, no git, unresolvable base -- is DENY with the reason named
+    (fail-closed: "could not measure" never grants the shortcut). With --intent the verdict is
+    recorded in the ledger as a first-class entry; without it this is a dry-run. A prior ALLOW
+    followed by a DENY re-eval escalates through the EXISTING escalation machinery, so the
+    derived phase flips to `escalated` and pr-ready is blocked until the human resolves."""
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    fp = ledger["config"].get("defaults", {}).get("fast_path")
+    intent = (args.intent or "").strip()
+    signals, deny = [], []
+
+    def sig(name, value, threshold, source, ok):
+        signals.append({"name": name, "value": value, "threshold": threshold,
+                        "source": source, "at": _now(), "ok": bool(ok)})
+        if not ok:
+            deny.append(name)
+
+    if not isinstance(fp, dict) or fp.get("enabled") is False:
+        sig("configured", False, "defaults.fast_path present and enabled",
+            "config.defaults.fast_path", False)
+    else:
+        repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+        base, base_src = args.base, "--base"
+        if base:
+            probe = subprocess.run(["git", "rev-parse", "--verify", base + "^{commit}"],
+                                   cwd=repo_path, capture_output=True, text=True)
+            if probe.returncode != 0:
+                base = None
+                base_src = "--base (unresolvable)"
+        else:
+            for cand in ("origin/main", "main"):
+                r = subprocess.run(["git", "merge-base", "HEAD", cand], cwd=repo_path,
+                                   capture_output=True, text=True)
+                if r.returncode == 0 and r.stdout.strip():
+                    base, base_src = r.stdout.strip(), "merge-base HEAD %s" % cand
+                    break
+        if not base:
+            sig("base_ref", None, "a resolvable base commit",
+                base_src if base_src != "--base" else "git merge-base HEAD origin/main|main",
+                False)
+        else:
+            num = subprocess.run(["git", "diff", "--numstat", base], cwd=repo_path,
+                                 capture_output=True, text=True, encoding="utf-8",
+                                 errors="replace")
+            if num.returncode != 0:
+                sig("git_diff", None, "a readable diff",
+                    "git diff --numstat %s" % base[:12], False)
+            else:
+                files, loc, binaries = [], 0, []
+                for line in num.stdout.splitlines():
+                    parts = line.split("\t")
+                    if len(parts) != 3:
+                        continue
+                    a, d, path = parts
+                    path = path.strip().replace("\\", "/")
+                    # RENAMES arrive as one descriptor -- `old => new` or `pre{old => new}post`.
+                    # Matching the raw descriptor against the globs let a rename INTO db/ walk
+                    # straight past protected_paths (found by fresh review). Expand it and
+                    # count BOTH sides: renaming a file out of a protected area is as
+                    # gate-worthy as renaming one in.
+                    if " => " in path:
+                        m_ = re.match(r"^(.*)\{(.*) => (.*)\}(.*)$", path)
+                        if m_:
+                            pre, old_, new_, post = m_.groups()
+                            files.append((pre + old_ + post).replace("//", "/"))
+                            files.append((pre + new_ + post).replace("//", "/"))
+                        else:
+                            old_, new_ = path.split(" => ", 1)
+                            files.append(old_)
+                            files.append(new_)
+                    else:
+                        files.append(path)
+                    if a == "-" or d == "-":
+                        # binary diff: LOC is UNMEASURABLE, and an unmeasurable signal must
+                        # deny, not silently count as zero (fail-closed).
+                        binaries.append(path)
+                    loc += (int(a) if a.isdigit() else 0) + (int(d) if d.isdigit() else 0)
+                # UNTRACKED files are invisible to `git diff` -- and a small change is very
+                # often a NEW file. Not counting them would under-measure exactly the case
+                # this gate exists for, so they count as files + added lines (fail-closed).
+                unt = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"],
+                                     cwd=repo_path, capture_output=True, text=True,
+                                     encoding="utf-8", errors="replace")
+                for path in unt.stdout.splitlines():
+                    path = path.strip()
+                    if not path:
+                        continue
+                    files.append(path.replace("\\", "/"))
+                    try:
+                        with open(os.path.join(repo_path, path), "rb") as fh:
+                            loc += fh.read().count(b"\n")
+                    except OSError:
+                        loc += 1  # an unreadable new file still counts as a change
+                src = "git diff --numstat %s (+ untracked)" % base[:12]
+                max_f = int(fp.get("max_files_changed", 3))
+                max_l = int(fp.get("max_loc_delta", 80))
+                sig("max_files_changed", len(files), max_f, src, len(files) <= max_f)
+                sig("max_loc_delta", loc, max_l, src, loc <= max_l)
+                if binaries:
+                    sig("binary_files", binaries[:5], "none (LOC unmeasurable on binary)",
+                        src, False)
+                pats = fp.get("protected_paths",
+                              ["**/migrations/**", "**/*.appro" + "ved", "db/**"])
+                hits = []
+                for f in files:
+                    for g in pats:
+                        if _fp_glob_re(g).match(f):
+                            hits.append("%s (%s)" % (f, g))
+                            break
+                sig("protected_paths", hits if hits else 0,
+                    "no touched file matches a protected glob", "config globs over " + src,
+                    not hits)
+
+    verdict = "ALLOW" if not deny else "DENY"
+    # Escalation means "an ACTIVE fast-path run outgrew its thresholds" -- so it gates on the
+    # LATEST entry for this repo being ALLOW, not on an ALLOW ever having existed. The first
+    # version scanned all history, which misclassified every later unrelated DENY as ESCALATED
+    # forever (found by fresh review, reproduced in ordinary sequential usage).
+    _fp_prior = [e for e in ledger.get("fast_path", []) if e.get("repo") == args.repo]
+    active_allow = bool(_fp_prior) and _fp_prior[-1].get("verdict") == "ALLOW"
+    escalated = bool(intent and active_allow and verdict == "DENY"
+                     and "configured" not in deny)
+    if escalated:
+        verdict = "ESCALATED"
+    out = {"repo": args.repo, "mode": "fast_path", "verdict": verdict,
+           "intent": intent or None, "dry_run": not bool(intent), "signals": signals}
+
+    if intent:
+        ledger.setdefault("fast_path", [])
+        ledger["step_counter"] += 1
+        entry = dict(out)
+        entry.pop("dry_run", None)
+        entry.update({"n": ledger["step_counter"], "at": _now()})
+        ledger["fast_path"].append(entry)
+        ledger["steps"].append({"n": ledger["step_counter"], "at": _now(),
+                                "kind": "fastpath-eval", "repo": args.repo})
+        if escalated:
+            # reuse the EXISTING escalation machinery: derived phase flips to `escalated`,
+            # pr-ready is blocked and readiness capped until the human resolve-escalation --
+            # after producing ADR + ACCEPTANCE, per ADR-003 (not a full discovery).
+            ledger["step_counter"] += 1
+            ledger["escalations"].append({
+                "n": ledger["step_counter"], "at": _now(), "repo": args.repo,
+                "reason": "fast-path thresholds exceeded mid-run: " + ", ".join(deny)
+                          + " -- produce ADR + ACCEPTANCE, then resolve-escalation"})
+            ledger["steps"].append({"n": ledger["step_counter"], "at": _now(),
+                                    "kind": "escalation", "repo": args.repo})
+        _save(args.ledger, ledger)
+
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print("FASTPATH %s: %s%s" % (args.repo, verdict,
+              "" if intent else "  (dry-run: no --intent, nothing recorded)"))
+        for s_ in signals:
+            print("  %s %s: %s / %s  [%s]" % ("ok" if s_["ok"] else "!!",
+                  s_["name"], s_["value"], s_["threshold"], s_["source"]))
+        if escalated:
+            print("  -> ESCALATED: pr-ready is blocked; produce ADR + ACCEPTANCE, "
+                  "then resolve-escalation (a recorded human act)")
+    sys.exit(0 if verdict == "ALLOW" else 1)
+
+
 def cmd_escalate(args):
     ledger = _load(args.ledger)
     _repo_node(ledger, args.repo)
@@ -3726,6 +3925,13 @@ def cmd_dashboard(args):
         "snapshots": snapshots,
         "evidence": ev,       # receipts (kit 1.50.0): facts with paths + timestamps
     }
+    # fast-path (ADR-003): latest verdict per repo, straight from the ledger. The key exists
+    # ONLY when entries exist: an unconfigured/unused project keeps the exact prior schema
+    # ("absent block = behavior identical" is a measured claim, and an unconditional key was
+    # a schema change that contradicted it -- found by fresh review).
+    if ledger.get("fast_path"):
+        out["fast_path"] = {r: [e for e in ledger["fast_path"] if e.get("repo") == r][-1]
+                            for r in {e.get("repo") for e in ledger["fast_path"]}}
     if getattr(args, "json", False):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
@@ -3897,6 +4103,24 @@ def cmd_readiness(args):
                             caps["blocker_critical"], "blocker_critical"))
     if any(not e.get("resolved_at") for e in ledger.get("escalations", [])):
         caps_active.append(("unresolved escalation", caps["escalation"], "escalation"))
+    # AC-FP-06 (ADR-003): an active fast-path run still owes an asserting test. The latest
+    # fast_path entry per repo being ALLOW, with NO measured test execution recorded at or
+    # after it, caps readiness -- reusing the escalation cap value, per the existing cap
+    # mechanics rather than inventing a new one.
+    fp_cfg = ledger["config"].get("defaults", {}).get("fast_path")
+    if isinstance(fp_cfg, dict) and fp_cfg.get("require_asserting_test", True):
+        for _fp_repo in {e.get("repo") for e in ledger.get("fast_path", [])}:
+            entries = [e for e in ledger["fast_path"] if e.get("repo") == _fp_repo]
+            last = entries[-1] if entries else None
+            if not last or last.get("verdict") != "ALLOW":
+                continue
+            node_fp = ledger["repos"].get(_fp_repo, {})
+            tested = any((s.get("tests", {}).get("executed", 0) or 0) > 0
+                         and s.get("at", "") >= last.get("at", "")
+                         for s in node_fp.get("snapshots", []))
+            if not tested:
+                caps_active.append(("fast-path active in %s without a measured asserting test"
+                                    % _fp_repo, caps["escalation"], "escalation"))
     if spec_doubts_open:
         caps_active.append((f"{len(spec_doubts_open)} spec-doubt open",
                             caps["escalation"], "escalation"))
@@ -6403,6 +6627,14 @@ def build_parser():
     pe.add_argument("--reason", required=True)
     pe.set_defaults(func=cmd_escalate)
 
+    pfp = sub.add_parser("fastpath-eval",
+                         help="measured fast-path verdict (ADR-003): ALLOW/DENY from the real diff; --intent records it")
+    pfp.add_argument("--ledger", default="QA-LEDGER.json")
+    pfp.add_argument("--repo", required=True)
+    pfp.add_argument("--base", help="base commit/ref; default merge-base HEAD origin/main (fallback main)")
+    pfp.add_argument("--intent", help="one sentence, what and why; without it the call is a dry-run")
+    pfp.add_argument("--json", action="store_true")
+    pfp.set_defaults(func=cmd_fastpath_eval)
     pre = sub.add_parser("resolve-escalation",
                          help="close open escalations for a repo (recorded event; "
                               "lifts the readiness cap)")

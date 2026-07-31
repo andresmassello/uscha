@@ -86,6 +86,10 @@ Line guide:
   WHEN the evidence was captured — facts do not move without new evidence. If the
   field is absent (nothing recorded yet), omit the line; never guess a timestamp.
 
+**Fast-path mode (ADR-003):** if the ledger carries `fast_path` entries, add ONE line to the
+block with the latest verdict per repo (`fast-path: ALLOW (intent...)` / `ESCALATED`). Absent
+entries → no line at all: silence is honest when no mode was requested.
+
 ## Degradation (honest, specific)
 
 - `measured` missing entirely → print: *"No measurement recorded yet — the trail

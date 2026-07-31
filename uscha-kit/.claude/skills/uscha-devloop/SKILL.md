@@ -169,6 +169,27 @@ install `hooks/block-approved-writes.py` as a `PreToolUse` hook in
 `settings.json`, and add `*.approved.* binary` to `.gitattributes` (ships in
 `templates/.gitattributes`) so line endings can't lie in the byte-compare.
 
+## Phase 0a — Fast-path check (ADR-003; run FIRST, before planning ceremony)
+
+If `defaults.fast_path` exists in config, run the measured classifier before demanding a
+full spec package:
+
+```bash
+python qa_ledger.py fastpath-eval --repo <name> --json          # dry-run first
+```
+
+- **ALLOW** and the operator wants the shortcut: re-run with
+  `--intent "<one sentence: what and why>"` to record it, then skip Phase 0's full-package
+  demand. The micro-contract replaces it: the recorded INTENT plus at least one new/modified
+  asserting test (readiness stays capped until that test shows up in measured evidence).
+- **DENY**: state WHICH measured signal denied it — echo the engine's breakdown verbatim.
+  The skill wires; it never computes and never argues with the verdict. Proceed with the
+  normal full path. The operator may always choose the full path over an ALLOW; nothing —
+  operator, agent or flag — can force ALLOW over a DENY (INV-RIGOR-02).
+- **Re-evaluate before the PR step** (same command, same intent): thresholds exceeded mid-run
+  flip the run to `ESCALATED` — the derived phase blocks pr-ready and readiness is capped.
+  Produce the ADR + ACCEPTANCE the change turned out to deserve, then `resolve-escalation`.
+
 ## Phase 0 — Plan (ADR-first)
 
 - **Read `CONSTITUTION.md` first (if present).** It lists the project invariants no SPEC

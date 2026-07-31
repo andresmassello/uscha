@@ -67,6 +67,9 @@ than inventing a step. Keep the CONTENT in the conversation's language and the l
   `review_trigger`, `experiment_valid`, `experiment_missing`, and `expired`; top-level
   `adr_experiments` summarizes open/malformed/expired experiments. This is advisory
   visibility for measured hypotheses, not readiness scoring.
+- **Fast-path (ADR-003):** `dashboard --json` carries `fast_path` — the latest verdict per
+  repo straight from the ledger, or null when none was requested. The template degrades when
+  absent, like every other field.
 - **Session telemetry (optional, vendor-reported):** if `.uscha/telemetry.jsonl` exists,
   the skill aggregates it and MERGES a `telemetry` object into `DATA`. This is the ONE
   panel that is **narrated by the vendor (Claude Code), not measured by the engine** —

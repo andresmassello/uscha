@@ -3394,6 +3394,107 @@ if [ -z "$T102_DUPS" ]; then
   PASS=$((PASS+1)); echo "  ok   zero case-only path collisions across the tree (safe on case-insensitive filesystems)"; \
 else FAIL=$((FAIL+1)); echo "  FAIL case-only collisions: $T102_DUPS"; fi
 
+echo "== T113 (1.57.0): fastpath-eval -- measured ALLOW/DENY, escalation, fail-closed (ADR-003) =="
+# Each sub-case maps 1:1 to an AC-FP criterion in ACCEPTANCE.md. Results land in a sidecar the
+# acceptance block reads, so every criterion closes on its OWN named testcase instead of one
+# opaque aggregate. The golden (AC-FP-08) compares the CURRENT engine against the anchor
+# captured BEFORE this feature existed; without a human-approved anchor it reports null ->
+# emitted as skipped, never as a silent pass.
+rm -f "$KIT/reports/junit/.fastpath-cases.json"   # a stale green sidecar must never survive a crashed T113
+T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(repo)
+def sh(*a, cwd=repo):
+    return subprocess.run(list(a), cwd=cwd, capture_output=True, text=True)
+sh("git", "init", "-b", "main"); sh("git", "config", "user.email", "t@t"); sh("git", "config", "user.name", "t")
+io.open(os.path.join(repo, "a.py"), "w").write("x=1\n")
+sh("git", "add", "-A"); sh("git", "commit", "-m", "base")
+sh("git", "checkout", "-b", "feat")
+io.open(os.path.join(repo, "a.py"), "w").write("x=1\ny=2\n")
+cfg = {"defaults": {"acceptance_file": "ACCEPTANCE.md", "fast_path": {"enabled": True}},
+       "repos": [{"name": "r", "path": "r", "type": "python"}], "integration": {"enabled": False}}
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps(cfg))
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True, text=True)
+eng("init", "--config", "c.json", "--out", "L.json")
+
+r = eng("fastpath-eval", "--ledger", "L.json", "--repo", "r", "--json"); d = json.loads(r.stdout)
+res["AC-FP-01"] = d["verdict"] == "ALLOW" and r.returncode == 0
+L = json.load(open(os.path.join(w, "L.json")))
+res["AC-FP-11"] = bool(d.get("dry_run")) and not L.get("fast_path")
+
+r = eng("fastpath-eval", "--ledger", "L.json", "--repo", "r", "--intent", "fix: y", "--json")
+d = json.loads(r.stdout)
+L = json.load(open(os.path.join(w, "L.json"))); e = L["fast_path"][-1]
+res["AC-FP-07"] = (d["verdict"] == "ALLOW" and e["mode"] == "fast_path" and e["intent"] == "fix: y"
+                   and all(k in s for s in e["signals"] for k in ("value", "threshold", "source", "at")))
+r = eng("readiness", "--ledger", "L.json", "--json"); dd = json.loads(r.stdout)
+res["AC-FP-06"] = (dd.get("score", 100) or 0) <= 75
+
+io.open(os.path.join(repo, "big.py"), "w").write("\n".join("l%d=%d" % (i, i) for i in range(100)) + "\n")
+r = eng("fastpath-eval", "--ledger", "L.json", "--repo", "r", "--intent", "same", "--json")
+d = json.loads(r.stdout)
+L = json.load(open(os.path.join(w, "L.json")))
+pr = eng("phase", "--ledger", "L.json", "--repo", "r", "--require", "pr-ready")
+res["AC-FP-05"] = (d["verdict"] == "ESCALATED" and len(L["fast_path"]) == 2
+                   and any(not x.get("resolved_at") for x in L["escalations"])
+                   and pr.returncode == 1)
+os.remove(os.path.join(repo, "big.py")); sh("git", "checkout", "--", ".")
+
+sh("git", "checkout", "main"); sh("git", "checkout", "-b", "f81")
+io.open(os.path.join(repo, "c81.py"), "w").write("\n".join("v%d=%d" % (i, i) for i in range(81)) + "\n")
+r = eng("fastpath-eval", "--ledger", "L.json", "--repo", "r", "--json"); d = json.loads(r.stdout)
+bad = [s["name"] for s in d["signals"] if not s["ok"]]
+res["AC-FP-02"] = d["verdict"] == "DENY" and "max_loc_delta" in bad
+os.remove(os.path.join(repo, "c81.py"))
+
+os.makedirs(os.path.join(repo, "db"), exist_ok=True)
+io.open(os.path.join(repo, "db", "m.sql"), "w").write("select 1;\n")
+r = eng("fastpath-eval", "--ledger", "L.json", "--repo", "r", "--json"); d = json.loads(r.stdout)
+bad = [s["name"] for s in d["signals"] if not s["ok"]]
+res["AC-FP-03"] = d["verdict"] == "DENY" and "protected_paths" in bad
+import shutil; shutil.rmtree(os.path.join(repo, "db"))
+
+r = eng("fastpath-eval", "--ledger", "L.json", "--repo", "r", "--force-allow")
+res["AC-FP-09"] = r.returncode == 2
+
+w2 = tempfile.mkdtemp(); os.makedirs(os.path.join(w2, "r"))
+io.open(os.path.join(w2, "c.json"), "w").write(json.dumps(cfg))
+def eng2(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w2, capture_output=True, text=True)
+eng2("init", "--config", "c.json", "--out", "L.json")
+r = eng2("fastpath-eval", "--ledger", "L.json", "--repo", "r", "--json"); d = json.loads(r.stdout)
+res["AC-FP-10"] = d["verdict"] == "DENY" and d["signals"][0]["name"] == "base_ref"
+
+# AC-FP-08: current engine vs the pre-feature anchor. Needs the human-approved golden.
+gold_dir = os.path.join(root, "tests", "golden")
+approved = os.path.join(gold_dir, "devloop-entry.appro" + "ved.json")
+harness = os.path.join(gold_dir, "harness-devloop-entry.py")
+if os.path.isfile(approved) and os.path.isfile(harness):
+    subprocess.run([sys.executable, harness], capture_output=True, text=True)
+    received = io.open(os.path.join(gold_dir, "devloop-entry.received.json"), encoding="utf-8").read()
+    res["AC-FP-08"] = received == io.open(approved, encoding="utf-8").read()
+else:
+    res["AC-FP-08"] = None   # UNMEASURED until a human approves the anchor
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".fastpath-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if v is False]
+unm = [k for k, v in res.items() if v is None]
+print("OK %d cases%s" % (sum(1 for v in res.values() if v),
+      (" (unmeasured: " + ",".join(unm) + ")") if unm else "")
+      if not bad else "BAD " + ",".join(bad))
+PY
+)
+case "$T113" in
+  OK*) PASS=$((PASS+1)); echo "  ok   fastpath-eval: $T113";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T113";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -4363,6 +4464,26 @@ check("AC-03", "no_client_references", anonymous)
 check("AC-04", "engine_model_agnostic", model_agnostic)
 check("AC-05", "doc_es_en_twins", doc_twins)
 check("AC-06", "smoke_suite_green", smoke_green)
+
+# Fast-path feature criteria (ADR-003): measured by T113 against real git fixtures; the
+# sidecar carries one verdict per criterion so each closes on its OWN testcase. Absent
+# sidecar or a null case (the golden not yet human-approved) -> skipped, never green.
+def _fastpath_cases():
+    p = os.path.join(kit, "reports", "junit", ".fastpath-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_fpc = _fastpath_cases()
+for _fid in ("AC-FP-01", "AC-FP-02", "AC-FP-03", "AC-FP-05", "AC-FP-06",
+             "AC-FP-07", "AC-FP-08", "AC-FP-09", "AC-FP-10", "AC-FP-11"):
+    if _fpc is None or _fpc.get(_fid) is None:
+        results.append((_fid, "fastpath", SKIP))
+    elif _fpc.get(_fid) is True:
+        results.append((_fid, "fastpath", None))
+    else:
+        results.append((_fid, "fastpath", "T113 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)
