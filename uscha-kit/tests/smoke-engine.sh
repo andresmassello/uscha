@@ -3606,6 +3606,53 @@ case "$T115" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T115";;
 esac
 
+echo "== T116 (repo infra): the publish workflow stays tokenless, pinned and gated =="
+# This is the most dangerous file in the repo: it can push bytes to everyone who installs
+# the package. Trusted publishing removes the token, but nothing stops a later edit from
+# adding one back, unpinning an action, or moving the publish step ABOVE the test step.
+# Structure is checkable, so it gets checked.
+T116=$("$PY" - "$ROOT/.github/workflows/publish.yml" <<'PY'
+import io, os, re, sys
+p = sys.argv[1]
+if not os.path.isfile(p):
+    print("BAD publish workflow missing")
+    raise SystemExit
+t = io.open(p, encoding="utf-8").read()
+bad = []
+# Check the EXECUTABLE content, never the prose: this workflow explains in comments what it
+# refuses to do (NODE_AUTH_TOKEN, the old npm publish by hand), and a raw-text scan reads
+# those explanations as the thing itself. First version of this test did exactly that and
+# failed a correct file -- the same false-match class a fresh review caught in T115.
+lines = []
+for ln in t.splitlines():
+    if ln.lstrip().startswith("#"):
+        continue
+    lines.append(ln.split(" #")[0].rstrip() if " #" in ln else ln)
+code = "\n".join(lines)
+# a token would defeat the entire point -- and would be a real credential in a public repo
+if "${{ secrets." in code: bad.append("references a secret (trusted publishing needs none)")
+if "NODE_AUTH_TOKEN" in code: bad.append("sets NODE_AUTH_TOKEN")
+# OIDC needs id-token: write; anything more is privilege this job has no use for
+if "id-token: write" not in code: bad.append("no id-token: write (OIDC cannot mint)")
+if re.search(r"contents:\s*write", code): bad.append("contents: write (only read is needed)")
+# a moving tag can be repointed at new code by whoever controls the action
+for ref in re.findall(r"uses:\s*(\S+)", code):
+    if not re.search(r"@[0-9a-f]{40}$", ref): bad.append("unpinned action: " + ref)
+# fail-closed: an undeclared or disagreeing version must never publish
+if "REFUSING TO PUBLISH" not in code: bad.append("no tag-vs-version guard")
+# and the bytes must be measured BEFORE they leave, not after
+i_smoke, i_pub = code.find("smoke-engine.sh"), code.find("npm publish")
+if i_smoke < 0: bad.append("does not run the smoke suite")
+elif i_pub < 0: bad.append("no publish step")
+elif i_smoke > i_pub: bad.append("publishes BEFORE running the suite")
+print("OK publish workflow tokenless + pinned + gated" if not bad else "BAD " + "; ".join(bad))
+PY
+)
+case "$T116" in
+  OK*) PASS=$((PASS+1)); echo "  ok   publish workflow: $T116";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T116";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against

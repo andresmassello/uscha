@@ -1,0 +1,87 @@
+name: publish
+
+# Publishes @andresmassello/uscha to npm via TRUSTED PUBLISHING (OIDC) -- no npm token
+# exists anywhere: not in this repo's secrets, not on the release machine. GitHub mints a
+# short-lived OIDC token for this exact workflow in this exact repo, and npm verifies it
+# against the trusted-publisher configuration on npmjs.com. A credential that does not
+# exist cannot leak, be rotated late, or be stolen from a compromised laptop.
+#
+# The human act does not disappear -- it MOVES. Before: someone typed `npm publish`.
+# Now: someone creates and pushes the tag, which is already the release ritual. Everything
+# after the tag is measured, and nothing publishes until every gate below is green.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:   # re-run against a TAG ref if a publish fails transiently;
+                       # dispatched against a branch, the version guard below fails closed.
+
+# id-token: write is what lets GitHub mint the OIDC token. contents: read is all the rest
+# of the job needs. No secrets are referenced anywhere in this file -- by design.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+
+      # Trusted publishing needs npm >= 11.5.1. Node 24 ships npm 11.x, but "ships with"
+      # is an assumption about a runner image; this MEASURES it and upgrades if short.
+      - name: Ensure an npm that can publish via OIDC
+        run: |
+          set -e
+          npm install -g npm@latest
+          NPMV="$(npm --version)"; MIN="11.5.1"
+          echo "npm ${NPMV} (minimum for trusted publishing: ${MIN})"
+          test "$(printf '%s\n%s\n' "$MIN" "$NPMV" | sort -V | head -1)" = "$MIN" || {
+            echo "npm ${NPMV} cannot publish via OIDC."; exit 1; }
+
+      # FAIL-CLOSED: the tag IS the release declaration. If the tag and package.json
+      # disagree, we cannot know which one is the truth -- so we publish neither.
+      # A workflow_dispatch against a branch lands here too (ref_name won't parse as
+      # v<version>) and is rejected for the same reason: no declared version, no publish.
+      - name: The tag must equal the declared version
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          PKG="$(node -p "require('./package.json').version")"
+          echo "tag=${TAG}  package.json=${PKG}"
+          test "${TAG}" = "v${PKG}" || {
+            echo "REFUSING TO PUBLISH: tag '${TAG}' does not declare version '${PKG}'."
+            echo "Either the tag is wrong or the bump is incomplete. Fix, then re-tag."
+            exit 1
+          }
+
+      # The full 6-cell matrix already ran on the COMMIT this tag points at. Trusting that
+      # it did would be narrating. Publishing is irreversible (npm unpublish is a 72h
+      # courtesy, not an undo), so the bytes about to ship are measured HERE, once more,
+      # in the job that ships them. T44 inside this suite also re-checks that all version
+      # surfaces agree -- the guard above only compares one of them to the tag.
+      - name: Smoke suite (the bytes being published must be green in THIS job)
+        run: bash uscha-kit/tests/smoke-engine.sh
+
+      # What actually leaves the machine. The suite's packaging tests assert the tarball's
+      # shape; this prints its real contents so the run log is the receipt of what shipped.
+      - name: Show the tarball contents
+        run: npm pack --dry-run
+
+      # No NODE_AUTH_TOKEN. No secrets. npm reads the OIDC token from the Actions runtime
+      # and verifies it against the trusted publisher configured on npmjs.com. Provenance
+      # attestation (which commit produced these bytes) is generated automatically.
+      - name: Publish to npm (OIDC, tokenless)
+        run: npm publish --access public
