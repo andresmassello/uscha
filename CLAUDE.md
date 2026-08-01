@@ -45,7 +45,17 @@ itself.
   with `unexpected EOF while looking for matching`. Bash 4/5 (Linux, git-bash) parse it fine, so
   it is invisible locally — only the macOS CI cell catches it. Write the quotes as `\x27` /
   `\x22`. Same family: **no backticks in comments inside those heredocs** — the shell runs them
-  as command substitution and silently truncates the code.
+  as command substitution and silently truncates the code. Also same family, paid for on
+  2026-08-01: **a literal `${` inside those heredocs** (e.g. matching the GitHub Actions
+  `${{ secrets.` syntax) makes bash 3.2 open a parameter expansion while hunting for the closing
+  paren, lose track of where the heredoc ends, and parse the following Python line as a shell
+  command — `syntax error near unexpected token '('`, reported on a line that is not the cause.
+  Build it as `chr(36) + "{..."`. Note what is NOT the trap: a bare `$"` is fine (a `$` regex
+  anchor before a closing quote has shipped green for many releases) — the opener `${` is.
+  General rule for these heredocs: the shell must never see `${` or a backtick, and a bracket
+  expression must never contain a quote. A text scanner for this is NOT worth writing — the
+  obvious one flags every `d["key"]` subscript in the suite (211 false positives when tried);
+  the macOS cell is the measurement.
 
 - The PNGs in `docs/` are regenerated from `docs/diagram-sources/*.html` with headless Edge
   (`--force-device-scale-factor=2`) + PIL autocrop (the render clips ~70px at the bottom if the

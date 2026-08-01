@@ -3630,7 +3630,12 @@ for ln in t.splitlines():
     lines.append(ln.split(" #")[0].rstrip() if " #" in ln else ln)
 code = "\n".join(lines)
 # a token would defeat the entire point -- and would be a real credential in a public repo
-if "${{ secrets." in code: bad.append("references a secret (trusted publishing needs none)")
+# chr(36) instead of a literal: an unescaped ${ inside a heredoc-in-$() makes bash 3.2 (macOS)
+# start a parameter expansion while hunting for the closing paren, lose track of where the
+# heredoc ends, and parse the next Python line as a command. Caught by the macOS CI cell --
+# bash 4/5 (Linux, git-bash) parse it fine, so it is invisible locally. Same family as the
+# quote-in-character-class trap CLAUDE.md already records.
+if chr(36) + "{{ secrets." in code: bad.append("references a secret (trusted publishing needs none)")
 if "NODE_AUTH_TOKEN" in code: bad.append("sets NODE_AUTH_TOKEN")
 # OIDC needs id-token: write; anything more is privilege this job has no use for
 if "id-token: write" not in code: bad.append("no id-token: write (OIDC cannot mint)")
