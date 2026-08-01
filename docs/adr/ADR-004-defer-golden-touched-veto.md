@@ -1,6 +1,10 @@
 # ADR-004: The golden-touched veto is deferred until a golden↔source mapping exists
 
 ## Status: Accepted
+<!-- Still accurate: Phase 1 did ship without the veto. The condition this ADR
+     named -- "deferred until characterize records a coverage mapping" -- is now planned
+     in ADR-006 (the mapping is DERIVED BY MEASUREMENT, the veto is opt-in). Not superseded
+     until that ships and its AC-GM criteria close green. -->
 
 ## Context
 The fast-path handoff proposed `forbid_when_golden_touched`: deny the shortcut when the diff

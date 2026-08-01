@@ -71,6 +71,25 @@ Advisory by design (ADR-005): drift detection is a heuristic, and a guess advise
 - [x] AC-SD-03 — spec without `governs:` frontmatter → `UNMAPPED`, distinct from clean.
 - [x] AC-SD-04 — advisory present → readiness score numerically unchanged.
 
+## Golden coverage (Phase 1.5) — feature acceptance, closes on green `AC-GM-nn` tests
+
+Unblocks the veto ADR-004 deferred, with the mapping DERIVED BY MEASUREMENT (ADR-006).
+Opt-in via `defaults.fast_path.forbid_when_golden_touched`; fail-closed once declared.
+
+- [ ] AC-GM-01 - veto undeclared -> no `golden_touched` signal, and the verdict for a given
+  diff is identical to the pre-feature behavior.
+- [ ] AC-GM-02 - veto declared + manifest absent (or a golden with no entry) -> `DENY`
+  naming `golden_touched`.
+- [ ] AC-GM-03 - veto declared + diff touches a file the manifest maps to a golden -> `DENY`,
+  breakdown naming the golden and the file.
+- [ ] AC-GM-04 - veto declared + diff touches only unmapped files -> the signal passes; the
+  other signals decide the verdict.
+- [ ] AC-GM-05 - the signal's `source` carries the capture commit and the coverage tool
+  version recorded in the manifest.
+- [ ] AC-GM-06 - malformed manifest -> exit 2 (config error), never a silent "no mapping".
+- [ ] AC-GM-07 - capture with `coverage.py` unavailable -> no map is written; an empty map
+  that would read as "covers nothing" is never produced.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
@@ -96,6 +115,7 @@ Advisory by design (ADR-005): drift detection is a heuristic, and a guess advise
 - ADR-003 — Fast-path entry is granted by measured signals, never by opinion.
 - ADR-004 — The golden-touched veto is deferred until a golden↔source mapping exists.
 - ADR-005 — Spec drift is detected mechanically and reported as advisory — never gated.
+- ADR-006 — The golden↔source mapping is derived by measurement; the veto it unblocks is opt-in.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change
