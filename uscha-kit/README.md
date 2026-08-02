@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.59.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.60.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -61,6 +61,42 @@ mid-run (the devloop does, before the PR step) with thresholds now exceeded flip
 and readiness is capped until a human runs `resolve-escalation`, after producing the ADR +
 ACCEPTANCE the change turned out to deserve. **The override is asymmetric (INV-RIGOR-02):**
 you can always force the full path; nothing can force `ALLOW` over a measured `DENY`.
+
+## Golden coverage (ADR-006) — the veto knows what a golden actually covers
+
+A golden freezes behavior. Changing code a golden exercises is never a trivial change — but
+until the engine knew WHICH source files a golden covers, that veto could not be measured, so
+ADR-004 deferred it rather than ship a gate that pretended. `golden-coverage` builds the
+mapping **by measurement**:
+
+```bash
+python qa_ledger.py golden-coverage --harness tests/golden/harness-x.py --golden tests/golden/x.approved.json
+```
+
+It runs the harness under `coverage.py` and records the source files that actually executed
+into `golden.coverage.json` at the repo root (same convention as `golden.scrub.json`). The
+harnesses drive their subject through a **subprocess**, so instrumentation is injected into
+every python they spawn — measuring only the parent would record nothing and produce an empty
+map, which would read as "this golden covers nothing".
+
+Then, **opt-in**, the fast-path grows a `golden_touched` signal:
+
+```json
+"fast_path": { "forbid_when_golden_touched": true }
+```
+
+Absent or `false` → the veto does not exist and behavior is identical to earlier releases.
+Declared → **fail-closed**: touching a mapped file denies (naming the golden and the file), and
+so does a missing manifest, because "could not measure" never grants the shortcut. A malformed
+manifest exits 2 rather than degrading into a silent "no mapping". Every verdict carries the
+capture commit and tool version in the signal's `source` — provenance, not a freshness gate:
+an aged map's real risk is a false negative, which cannot be detected without re-capturing.
+
+Two honest limits (ADR-006): `coverage.py` is Python-only, so a harness in another language
+cannot produce a map — declaring the veto there yields a permanent `DENY`, and the remedy is
+not to declare it. And **file** granularity over-fires on monolithic files: in a repo whose
+engine is one large module, the veto fires on nearly every change to it. When it errs, it errs
+toward more ceremony, never less.
 
 ## Spec-drift (ADR-005) — the spec maintenance tax, made visible
 

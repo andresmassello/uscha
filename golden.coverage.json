@@ -1,0 +1,13 @@
+{
+  "goldens": {
+    "tests/golden/devloop-entry.approved.json": {
+      "captured_at": "2026-08-02T13:35:17+00:00",
+      "captured_at_commit": "d366720a9beaa1b809878aa9d0a32a1e7b3b49ec",
+      "files": [
+        "uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"
+      ],
+      "harness": "tests/golden/harness-devloop-entry.py",
+      "tool": "coverage.py 7.15.0"
+    }
+  }
+}

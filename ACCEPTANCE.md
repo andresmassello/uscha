@@ -89,6 +89,12 @@ Opt-in via `defaults.fast_path.forbid_when_golden_touched`; fail-closed once dec
 - [ ] AC-GM-06 - malformed manifest -> exit 2 (config error), never a silent "no mapping".
 - [ ] AC-GM-07 - capture with `coverage.py` unavailable -> no map is written; an empty map
   that would read as "covers nothing" is never produced.
+- [ ] AC-GM-08 - `golden-coverage` under a real `coverage.py` records a MEASURED map that
+  includes a file the harness reaches only through a **subprocess** (the boundary a
+  parent-only instrumentation cannot see) and excludes one it never executes, with the
+  capture commit and tool version recorded. Added after the first seven were written: they
+  all measured the veto's CONSUMPTION and left its PRODUCTION -- the actual measurement --
+  unmeasured.
 
 ## Out of scope for measurement here
 

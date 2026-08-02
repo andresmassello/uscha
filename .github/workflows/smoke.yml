@@ -50,6 +50,15 @@ jobs:
         with:
           node-version: "20"
 
+      # coverage.py is a CAPTURE-time dependency of golden-coverage (ADR-006), never a
+      # runtime one -- the engine stays stdlib-only and the suite runs fine without it
+      # (AC-GM-08 then reports UNMEASURED rather than passing). CI is where we measure, so
+      # CI installs it: leaving the one criterion that proves the mapping is real permanently
+      # skipped would be exactly the silent-absence the method refuses.
+      - name: Install coverage.py (so AC-GM-08 is measured, not skipped)
+        shell: bash
+        run: python -m pip install --quiet coverage
+
       - name: Report the interpreter the suite will use
         shell: bash
         run: |

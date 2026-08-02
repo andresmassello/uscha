@@ -1,5 +1,5 @@
 {
-  "version": "1.59.0",
+  "version": "1.60.0",
   "project": null,
   "defaults": {
     "coverage_threshold": 60,
@@ -49,7 +49,8 @@
         "**/*.approved",
         "db/**"
       ],
-      "require_asserting_test": true
+      "require_asserting_test": true,
+      "forbid_when_golden_touched": false
     },
     "spec_drift": {
       "max_lag_days": 30

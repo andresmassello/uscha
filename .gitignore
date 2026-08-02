@@ -40,3 +40,4 @@ chat-*.md
 .claude/launch.json
 .fastpath-cases.json
 .specdrift-cases.json
+.goldencov-cases.json

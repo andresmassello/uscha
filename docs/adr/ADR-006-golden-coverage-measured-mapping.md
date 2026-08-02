@@ -52,11 +52,17 @@ which encode judgment. The coverage manifest is derived measurement; the agent m
 |---|---|
 | Diff touches a file the manifest maps to a golden | `DENY`, naming the golden and the file |
 | Diff touches only unmapped files | signal passes; other signals decide |
-| Manifest absent, or a golden has no entry | `DENY` — "could not measure" never grants the shortcut |
+| A golden in the tree has no entry (manifest absent, or incomplete) | `DENY` naming it — "could not measure" never grants the shortcut |
+| No golden exists in the tree | the signal passes: nothing can be covered. This is a measurement, not an absence of one |
 | Manifest malformed | exit 2, a config error — same posture as `golden.scrub.json`, which refuses to degrade into "no rules" in silence |
 | `coverage.py` unavailable at CAPTURE time | characterize refuses to write a map; an empty map would read as "covers nothing" |
 
 With the veto **not** declared, the signal is absent from the output entirely.
+
+<!-- Refined during implementation: the first table said only "manifest absent". A fresh
+     review reproduced the gap that wording left open -- a manifest knowing SOME goldens made
+     the signal assert "nothing is covered" about one it had never measured, and ALLOW. The
+     rule is per-golden, and a repo with no goldens is measured, not denied. -->
 
 ## Reasons
 - A measured mapping cannot rot into a comfortable lie; a declared one can, and a veto that

@@ -190,3 +190,21 @@ covered.
 
 Never overwrite an existing approved golden. If a `.received` already exists, regenerate it;
 if a `.approved` exists, it is the human's — leave it untouched and surface the diff.
+
+## Record the coverage map (ADR-006)
+
+After the `.received` is produced and while the harness is still the thing that just ran,
+record WHICH source files it exercised — the mapping that lets the fast-path veto a change
+touching code a golden froze:
+
+```bash
+python qa_ledger.py golden-coverage --harness <harness> --golden <the .approved sibling>
+```
+
+This is **derived measurement, not judgment**: the agent may write `golden.coverage.json`.
+INV-GOLDEN-01 governs the `.approved` bytes, which encode judgment, and nothing here changes
+that — the human still approves the golden itself.
+
+`coverage.py` is a capture-time dependency. Without it the command writes **nothing** and exits
+2: an empty map would read as "this golden covers nothing", which is exactly the lie that would
+let the veto pass. Skipping the map is honest; recording an empty one is not.

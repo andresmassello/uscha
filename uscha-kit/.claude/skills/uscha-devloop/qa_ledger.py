@@ -61,6 +61,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import unicodedata
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -2847,6 +2848,64 @@ def cmd_fastpath_eval(args):
                 sig("protected_paths", hits if hits else 0,
                     "no touched file matches a protected glob", "config globs over " + src,
                     not hits)
+                # ADR-006: the golden-touched veto. OPT-IN -- absent flag, no signal at all
+                # and behavior identical to 1.57.0+. DECLARED -- fail-closed: a missing or
+                # empty mapping DENIES, because "could not measure" never grants a shortcut.
+                if fp.get("forbid_when_golden_touched"):
+                    gcm = _load_golden_coverage(repo_path)   # malformed -> exit 2, never silent
+                    gmap = (gcm or {}).get("goldens") or {}
+                    # Enumerate the goldens that actually EXIST. A manifest knowing only SOME
+                    # of them would otherwise assert "no touched file is covered by a golden"
+                    # about goldens it has never measured -- an ALLOW built on ignorance, which
+                    # is precisely the silent bypass this veto exists to prevent. Found by
+                    # fresh review and reproduced: 2 goldens in the tree, 1 in the map, a diff
+                    # touching the unmapped one's source -> ALLOW. Same glob shape cmd_golden_diff
+                    # already uses to locate goldens; no new mechanism.
+                    _sfx = ".appro" + "ved"
+                    _hits = set(glob.glob(os.path.join(repo_path, "**", "*" + _sfx),
+                                          recursive=True))
+                    _hits |= set(glob.glob(os.path.join(repo_path, "**", "*" + _sfx + ".*"),
+                                           recursive=True))
+                    _tree = set()
+                    for _p in _hits:
+                        if os.path.isfile(_p):
+                            _r = _gc_rel(os.path.abspath(_p), os.path.abspath(repo_path))
+                            if _r:
+                                _tree.add(_r)
+                    _unmapped = sorted(_tree - set(gmap))
+                    if _unmapped:
+                        # covers the manifest-absent case too: with goldens present and no
+                        # manifest, every one of them is unmapped.
+                        sig("golden_touched", _unmapped[:5],
+                            "every golden in the tree carries a measured map",
+                            GOLDEN_COVERAGE_FILE + " (missing or incomplete -- run "
+                            "golden-coverage for each golden)", False)
+                    elif not _tree:
+                        # No golden exists, so none can be touched. This is a MEASUREMENT
+                        # ("nothing to cover"), not an absence of one -- denying forever a
+                        # repo that has no goldens would be ceremony, not rigor.
+                        sig("golden_touched", 0, "no golden in the tree to be covered",
+                            "glob over " + repo_path, True)
+                    else:
+                        covered = {}
+                        _commits, _tools = set(), set()
+                        for _g, _e in gcm["goldens"].items():
+                            for _f in _e.get("files", []):
+                                covered.setdefault(_f, []).append(_g)
+                            if _e.get("captured_at_commit"):
+                                _commits.add(_e["captured_at_commit"][:8])
+                            if _e.get("tool"):
+                                _tools.add(_e["tool"])
+                        ghits = ["%s (golden: %s)" % (f, ", ".join(covered[f]))
+                                 for f in files if f in covered]
+                        # provenance travels with the verdict (ADR-006: no freshness gate,
+                        # but every verdict says which capture it trusted)
+                        prov = "%s @ %s (%s)" % (
+                            GOLDEN_COVERAGE_FILE,
+                            ",".join(sorted(_commits)) if _commits else "no commit recorded",
+                            ", ".join(sorted(_tools)) if _tools else "no tool recorded")
+                        sig("golden_touched", ghits if ghits else 0,
+                            "no touched file is covered by a golden", prov, not ghits)
 
     verdict = "ALLOW" if not deny else "DENY"
     # Escalation means "an ACTIVE fast-path run outgrew its thresholds" -- so it gates on the
@@ -3069,6 +3128,153 @@ def cmd_spec_drift(args):
                 line += " (%s)" % r_["reason"]
             print(line)
     sys.exit(0)
+
+
+
+# --------------------------------------------------------------------------- #
+# golden-coverage  (ADR-006: the golden<->source mapping, DERIVED BY MEASUREMENT)
+# --------------------------------------------------------------------------- #
+
+GOLDEN_COVERAGE_FILE = "golden.coverage.json"
+
+
+def _load_golden_coverage(root):
+    """Read the measured golden<->source manifest. Strict shape, mirroring
+    _load_scrub_rules: a typo must NOT degrade into "no mapping" in silence, because
+    under a declared veto that silence would GRANT the shortcut it exists to deny.
+    Absent file -> None (the caller decides; with the veto declared, absent is DENY)."""
+    path = os.path.join(root, GOLDEN_COVERAGE_FILE)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            spec = json.load(fh)
+        if not isinstance(spec, dict) or not isinstance(spec.get("goldens"), dict):
+            raise TypeError('expected {"goldens": {"<golden path>": {"files": [...]}}}')
+        for g, entry in spec["goldens"].items():
+            if not isinstance(entry, dict) or not isinstance(entry.get("files"), list):
+                raise TypeError("golden %r has no files list" % g)
+            for f in entry["files"]:
+                if not isinstance(f, str):
+                    raise TypeError("golden %r maps a non-string file" % g)
+        return spec
+    except (json.JSONDecodeError, TypeError, KeyError) as exc:
+        print("[qa_ledger] %s invalid (%s) - the golden mapping is not skipped in "
+              "silence: fix the file or delete it." % (path, exc), file=sys.stderr)
+        sys.exit(2)
+
+
+def _gc_rel(path, root):
+    try:
+        rel = os.path.relpath(path, root)
+    except ValueError:      # different drive on Windows -- outside the repo either way
+        return None
+    rel = rel.replace("\\", "/")
+    return None if rel.startswith("../") else rel
+
+
+def cmd_golden_coverage(args):
+    """Record the MEASURED source files a golden's harness exercises (ADR-006).
+
+    The harnesses drive their subject through subprocess, so instrumenting only the parent
+    measures nothing: coverage is injected into EVERY python the harness spawns via a
+    sitecustomize on PYTHONPATH plus COVERAGE_PROCESS_START -- the documented multiprocess
+    technique, and the same PYTHONPATH-injection shape this repo's fault tests already use.
+
+    coverage.py is an optional CAPTURE-time dependency (the engine stays stdlib-only at
+    runtime). Absent, this writes NOTHING and exits 2: an empty map would read as
+    "this golden covers nothing", which is the one lie that would let the veto pass."""
+    try:
+        import coverage
+    except ImportError:
+        print("[qa_ledger] coverage.py is not installed - refusing to write a map that was "
+              "not measured (an empty map reads as 'covers nothing'). pip install coverage",
+              file=sys.stderr)
+        sys.exit(2)
+
+    root = os.path.abspath(args.dir or ".")
+    harness = os.path.abspath(args.harness)
+    if not os.path.isfile(harness):
+        print("[qa_ledger] harness not found: %s" % harness, file=sys.stderr)
+        sys.exit(2)
+
+    tmp = tempfile.mkdtemp(prefix="uscha-gc-")
+    try:
+        data_file = os.path.join(tmp, ".coverage")
+        rc = os.path.join(tmp, "cov.rc")
+        with open(rc, "w", encoding="utf-8") as fh:
+            fh.write("[run]\nparallel = True\ndata_file = %s\n"
+                     % data_file.replace("\\", "/"))
+        with open(os.path.join(tmp, "sitecustomize.py"), "w", encoding="utf-8") as fh:
+            fh.write("import coverage\ncoverage.process_startup()\n")
+
+        env = dict(os.environ)
+        env["COVERAGE_PROCESS_START"] = rc
+        env["PYTHONPATH"] = tmp + os.pathsep + env.get("PYTHONPATH", "")
+        env["PYTHONIOENCODING"] = "utf-8"
+        r = subprocess.run([sys.executable, harness], cwd=root, env=env,
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace")
+        if r.returncode != 0:
+            print("[qa_ledger] the harness failed (exit %d) - no map recorded from a run "
+                  "that did not complete:\n%s" % (r.returncode, (r.stderr or "")[-1500:]),
+                  file=sys.stderr)
+            sys.exit(2)
+
+        cov = coverage.Coverage(data_file=data_file)
+        try:
+            cov.combine()
+            cov.save()
+        except Exception as exc:
+            # Never silent: a PARTIAL combine yields an incomplete-but-non-empty file list,
+            # which slips past the empty-map guard below and records a map that under-reports
+            # what the golden covers. The empty case still exits 2; this one is announced so a
+            # human sees the map may be short (fresh-review finding).
+            print("[qa_ledger] coverage combine reported: %s - the map below may be "
+                  "incomplete; re-run before trusting it." % exc, file=sys.stderr)
+        measured = sorted(cov.get_data().measured_files())
+        harness_rel = _gc_rel(harness, root)
+        files = []
+        for m in measured:
+            rel = _gc_rel(os.path.abspath(m), root)
+            # the harness measures the SUBJECT, not itself; sitecustomize is our scaffolding
+            if not rel or rel == harness_rel or rel.endswith("/sitecustomize.py"):
+                continue
+            files.append(rel)
+        files = sorted(set(files))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    if not files:
+        print("[qa_ledger] the run measured no source file inside %s - refusing to record "
+              "an empty map (it would read as 'covers nothing')." % root, file=sys.stderr)
+        sys.exit(2)
+
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
+                          capture_output=True, text=True)
+    commit = head.stdout.strip() if head.returncode == 0 else None
+    golden_rel = _gc_rel(os.path.abspath(args.golden), root) or args.golden
+
+    path = os.path.join(root, GOLDEN_COVERAGE_FILE)
+    manifest = _load_golden_coverage(root) or {"goldens": {}}
+    manifest["goldens"][golden_rel] = {
+        "harness": harness_rel,
+        "files": files,
+        "captured_at": _now(),
+        "captured_at_commit": commit,
+        "tool": "coverage.py " + coverage.__version__,
+    }
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(manifest, fh, indent=2, ensure_ascii=False, sort_keys=True)
+        fh.write("\n")
+
+    if args.json:
+        print(json.dumps(manifest["goldens"][golden_rel], indent=2, ensure_ascii=False))
+    else:
+        print("GOLDEN-COVERAGE %s: %d source file(s) measured -> %s"
+              % (golden_rel, len(files), GOLDEN_COVERAGE_FILE))
+        for f in files[:20]:
+            print("  " + f)
 
 
 
@@ -6811,6 +7017,14 @@ def build_parser():
     pfp.add_argument("--intent", help="one sentence, what and why; without it the call is a dry-run")
     pfp.add_argument("--json", action="store_true")
     pfp.set_defaults(func=cmd_fastpath_eval)
+
+    pgc = sub.add_parser("golden-coverage",
+                         help="record the MEASURED source files a golden's harness exercises (ADR-006)")
+    pgc.add_argument("--harness", required=True, help="script that drives the subject")
+    pgc.add_argument("--golden", required=True, help="the golden this map belongs to")
+    pgc.add_argument("--dir", default=".", help="repo root holding " + GOLDEN_COVERAGE_FILE)
+    pgc.add_argument("--json", action="store_true")
+    pgc.set_defaults(func=cmd_golden_coverage)
 
     psd = sub.add_parser("spec-drift",
                          help="advisory spec-vs-code drift from git commit dates (ADR-005); never gates, exit 0 always")

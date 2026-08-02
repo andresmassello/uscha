@@ -3402,6 +3402,7 @@ echo "== T113 (1.57.0): fastpath-eval -- measured ALLOW/DENY, escalation, fail-c
 # emitted as skipped, never as a silent pass.
 rm -f "$KIT/reports/junit/.fastpath-cases.json"   # a stale green sidecar must never survive a crashed T113
 rm -f "$KIT/reports/junit/.specdrift-cases.json"  # same rule for T114
+rm -f "$KIT/reports/junit/.goldencov-cases.json"  # same rule for T117
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -3656,6 +3657,179 @@ PY
 case "$T116" in
   OK*) PASS=$((PASS+1)); echo "  ok   publish workflow: $T116";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T116";;
+esac
+
+echo "== T117 (1.60.0): golden-coverage -- measured mapping + the opt-in veto (ADR-006) =="
+# Consumption (the veto signal) needs only a manifest, so most criteria run everywhere with a
+# hand-written one -- which is also the strict loader's real input. PRODUCTION needs a real
+# coverage.py; without it AC-GM-08 reports null and is emitted as skipped, never as a pass.
+T117=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(repo)
+
+def sh(args, cwd=repo, env=None):
+    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, env=env)
+
+sh(["git", "init", "-b", "main"]); sh(["git", "config", "user.email", "t@t"])
+sh(["git", "config", "user.name", "t"])
+io.open(os.path.join(repo, "lib.py"), "w").write("VALUE = 1\nprint(VALUE)\n")
+io.open(os.path.join(repo, "other.py"), "w").write("UNTOUCHED = 2\n")
+# the harness drives its subject through a SUBPROCESS -- the boundary a parent-only
+# instrumentation cannot see, which is the whole reason the sitecustomize injection exists
+io.open(os.path.join(repo, "h.py"), "w").write(
+    "import os, subprocess, sys\n"
+    "here = os.path.dirname(os.path.abspath(__file__))\n"
+    "subprocess.run([sys.executable, os.path.join(here, 'lib.py')], check=True)\n")
+GOLD = "g.appro" + "ved.json"
+GOLD2 = "g2.appro" + "ved.json"
+# the goldens must EXIST: the veto enumerates the tree, so a manifest that knows only some
+# of them must deny rather than assert "nothing is covered" about one it never measured
+io.open(os.path.join(repo, GOLD), "w").write("{}")
+io.open(os.path.join(repo, GOLD2), "w").write("{}")
+sh(["git", "add", "-A"]); sh(["git", "commit", "-m", "base"])
+sh(["git", "checkout", "-b", "feat"])
+def cfg(veto):
+    fp = {"enabled": True}
+    if veto:
+        fp["forbid_when_golden_touched"] = True
+    return {"defaults": {"acceptance_file": "ACCEPTANCE.md", "fast_path": fp},
+            "repos": [{"name": "r", "path": "r", "type": "python"}],
+            "integration": {"enabled": False}}
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w,
+                          capture_output=True, text=True)
+
+def evaluate(veto, ledger):
+    io.open(os.path.join(w, "c.json"), "w").write(json.dumps(cfg(veto)))
+    eng("init", "--config", "c.json", "--out", ledger)
+    r = eng("fastpath-eval", "--ledger", ledger, "--repo", "r", "--json")
+    return json.loads(r.stdout), r.returncode
+
+def manifest(files, commit="abc12345deadbeef", tool="coverage.py 7.9.9",
+             only_first=False):
+    entry = {"harness": "h.py", "files": files, "captured_at": "2026-08-02T00:00:00Z",
+             "captured_at_commit": commit, "tool": tool}
+    goldens = {GOLD: entry}
+    if not only_first:
+        goldens[GOLD2] = {"harness": "h.py", "files": [], "captured_at": entry["captured_at"],
+                          "captured_at_commit": commit, "tool": tool}
+    io.open(os.path.join(repo, "golden.coverage.json"), "w").write(
+        json.dumps({"goldens": goldens}))
+
+def drop_manifest():
+    p = os.path.join(repo, "golden.coverage.json")
+    if os.path.isfile(p):
+        os.remove(p)
+
+def names(d):
+    return [s["name"] for s in d["signals"]]
+
+def vals(s):
+    # a PASSING signal carries 0, a denying one a list. Assertions must read both without
+    # exploding: a crash here loses the sidecar, and a criterion that vanishes into
+    # UNMEASURED diagnoses far worse than one that goes cleanly red.
+    v = s.get("value")
+    return v if isinstance(v, list) else []
+
+# --- AC-GM-01: veto undeclared -> no signal at all, and the verdict is unchanged
+io.open(os.path.join(repo, "lib.py"), "w").write("VALUE = 2\nprint(VALUE)\n")
+manifest(["lib.py"])                       # present but must be ignored: nobody declared it
+d_off, rc_off = evaluate(False, "L1.json")
+res["AC-GM-01"] = "golden_touched" not in names(d_off) and d_off["verdict"] == "ALLOW"
+
+# --- AC-GM-03: veto declared + the diff touches a MAPPED file -> DENY naming golden and file
+d_on, rc_on = evaluate(True, "L2.json")
+gt = [s for s in d_on["signals"] if s["name"] == "golden_touched"]
+res["AC-GM-03"] = (d_on["verdict"] == "DENY" and rc_on == 1 and gt
+                   and gt[0]["ok"] is False
+                   and any("lib.py" in v and GOLD in v for v in vals(gt[0])))
+
+# --- AC-GM-05: provenance -- the capture commit and tool version travel in the signal source
+res["AC-GM-05"] = bool(gt) and "abc12345" in gt[0]["source"] and "7.9.9" in gt[0]["source"]
+
+# --- AC-GM-04: veto declared + only UNMAPPED files touched -> the signal passes
+sh(["git", "checkout", "--", "lib.py"])
+io.open(os.path.join(repo, "other.py"), "w").write("UNTOUCHED = 3\n")
+d4, _ = evaluate(True, "L3.json")
+gt4 = [s for s in d4["signals"] if s["name"] == "golden_touched"]
+res["AC-GM-04"] = bool(gt4) and gt4[0]["ok"] is True and d4["verdict"] == "ALLOW"
+
+# --- AC-GM-02: "could not measure" -> DENY, in BOTH its shapes. The incomplete half was
+# missing here while the engine silently ALLOWed it: a manifest knowing only some goldens
+# asserted "nothing is covered" about one it had never measured (fresh-review CRITICAL).
+drop_manifest()
+d2, rc2 = evaluate(True, "L4.json")
+gt2 = [s for s in d2["signals"] if s["name"] == "golden_touched"]
+absent_denies = (d2["verdict"] == "DENY" and rc2 == 1 and gt2 and gt2[0]["ok"] is False
+                 and GOLD in " ".join(vals(gt2[0])))
+manifest(["lib.py"], only_first=True)          # GOLD2 exists in the tree, absent from the map
+d2b, rc2b = evaluate(True, "L4b.json")
+gt2b = [s for s in d2b["signals"] if s["name"] == "golden_touched"]
+partial_denies = (d2b["verdict"] == "DENY" and rc2b == 1 and gt2b
+                  and gt2b[0]["ok"] is False and GOLD2 in " ".join(vals(gt2b[0])))
+res["AC-GM-02"] = bool(absent_denies and partial_denies)
+
+# --- AC-GM-06: malformed manifest -> exit 2 config error, never a silent "no mapping"
+io.open(os.path.join(repo, "golden.coverage.json"), "w").write('{"goldenz": []}')
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps(cfg(True)))
+eng("init", "--config", "c.json", "--out", "L5.json")
+r6 = eng("fastpath-eval", "--ledger", "L5.json", "--repo", "r", "--json")
+res["AC-GM-06"] = r6.returncode == 2 and "invalid" in (r6.stderr or "").lower()
+drop_manifest()
+sh(["git", "checkout", "--", "."])
+
+# --- AC-GM-07: capture with coverage.py unavailable -> nothing written, exit 2
+stub = tempfile.mkdtemp()
+io.open(os.path.join(stub, "coverage.py"), "w").write(
+    "raise ImportError('no coverage in this environment')\n")
+env = dict(os.environ)
+env["PYTHONPATH"] = stub + os.pathsep + env.get("PYTHONPATH", "")
+r7 = subprocess.run([sys.executable, ENG, "golden-coverage", "--harness", "h.py",
+                     "--golden", GOLD, "--dir", "."], cwd=repo, env=env,
+                    capture_output=True, text=True)
+res["AC-GM-07"] = (r7.returncode == 2
+                   and not os.path.isfile(os.path.join(repo, "golden.coverage.json")))
+
+# --- AC-GM-08: PRODUCTION under a real coverage.py measures ACROSS the subprocess boundary
+try:
+    import coverage as _cov_probe            # noqa: F401
+    have_cov = True
+except ImportError:
+    have_cov = False
+if have_cov:
+    r8 = subprocess.run([sys.executable, ENG, "golden-coverage", "--harness", "h.py",
+                         "--golden", GOLD, "--dir", "."], cwd=repo,
+                        capture_output=True, text=True)
+    m = {}
+    p8 = os.path.join(repo, "golden.coverage.json")
+    if os.path.isfile(p8):
+        m = json.load(io.open(p8, encoding="utf-8"))
+    entry = (m.get("goldens") or {}).get(GOLD) or {}
+    res["AC-GM-08"] = (r8.returncode == 0 and "lib.py" in entry.get("files", [])
+                       and "other.py" not in entry.get("files", [])
+                       and bool(entry.get("captured_at_commit"))
+                       and entry.get("tool", "").startswith("coverage.py"))
+else:
+    res["AC-GM-08"] = None       # UNMEASURED without the capture-time dependency
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".goldencov-cases.json"), "w", encoding="utf-8").write(
+    json.dumps(res))
+bad = [k for k, v in res.items() if v is False]
+unm = [k for k, v in res.items() if v is None]
+print("OK %d cases%s" % (sum(1 for v in res.values() if v),
+      (" (unmeasured: " + ",".join(unm) + ")") if unm else "")
+      if not bad else "BAD " + ",".join(bad))
+PY
+)
+case "$T117" in
+  OK*) PASS=$((PASS+1)); echo "  ok   golden-coverage: $T117";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T117";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -4664,6 +4838,24 @@ for _sid in ("AC-SD-01", "AC-SD-02", "AC-SD-03", "AC-SD-04"):
         results.append((_sid, "specdrift", None))
     else:
         results.append((_sid, "specdrift", "T114 case failed or missing"))
+
+# Golden-coverage criteria (ADR-006): measured by T117, same sidecar contract.
+def _goldencov_cases():
+    p = os.path.join(kit, "reports", "junit", ".goldencov-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_gcc = _goldencov_cases()
+for _gid in ("AC-GM-01", "AC-GM-02", "AC-GM-03", "AC-GM-04",
+             "AC-GM-05", "AC-GM-06", "AC-GM-07", "AC-GM-08"):
+    if _gcc is None or _gcc.get(_gid) is None:
+        results.append((_gid, "goldencov", SKIP))
+    elif _gcc.get(_gid) is True:
+        results.append((_gid, "goldencov", None))
+    else:
+        results.append((_gid, "goldencov", "T117 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)
