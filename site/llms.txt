@@ -15,7 +15,14 @@ lives in versioned files, not in the chat; (3) the human always approves the
 merge; (4) tests must assert — the gate is never weakened; (5) migrations are
 anchored with a mechanically captured golden suite the agent must never author.
 
-The kit (v1.56.1, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+The ceremony floor is not flat. Fast-path (kit 1.57+, ADR-003) lets a provably
+small change skip the up-front ceremony — the engine measures the real diff
+(files, lines, protected paths) and decides; the agent's word is never taken for
+it, and rigor is a one-way ratchet (a human may force more, never less). Spec-drift
+(ADR-005) flags specs gone stale relative to their code from git dates — advisory,
+it never gates. Neither skips human approval or asserting tests.
+
+The kit (v1.60.1, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil) —
 plus a pure-Python engine (qa_ledger.py, 32 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux
