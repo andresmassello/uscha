@@ -1944,7 +1944,19 @@ fi
 if command -v npm >/dev/null 2>&1; then
   (cd "$ROOT" && npm_config_cache="$SB/npm-cache" npm pack --dry-run --json 2>/dev/null) | "$PY" -c "
 import json, sys
-d = json.load(sys.stdin)[0]
+# npm's --json shape is not a stable contract across majors: a list under npm 11, and
+# something else under npm@latest in the publish job (which upgrades npm because trusted
+# publishing requires >= 11.5.1). Accept both, and NAME an unknown shape instead of dying
+# with a KeyError that says nothing -- npm also emits an error OBJECT here on failure.
+raw = json.load(sys.stdin)
+if isinstance(raw, list) and raw:
+    d = raw[0]
+elif isinstance(raw, dict) and 'files' in raw:
+    d = raw
+else:
+    keys = sorted(raw)[:6] if isinstance(raw, dict) else type(raw).__name__
+    print('npm pack --json returned an unexpected shape: %s' % (keys,), file=sys.stderr)
+    sys.exit(1)
 files = {f['path'] for f in d['files']}
 ok = (d['name'] == '@andresmassello/uscha' and d['version'] == '$KIT_VERSION'
       and 'bin/uscha.js' in files and 'uscha-kit/install-uscha.py' in files
