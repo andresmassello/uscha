@@ -57,6 +57,15 @@ itself.
   obvious one flags every `d["key"]` subscript in the suite (211 false positives when tried);
   the macOS cell is the measurement.
 
+- **Windows 8.3 short paths break path comparison in CI, not locally** (paid for on
+  2026-08-02). A temp dir under a username longer than 8 chars is reported in short form
+  (`RUNNER~1`) by one API and long form by another; `os.path.relpath` between the two yields
+  `..\..` and a file INSIDE the tree is judged outside it. The GitHub runner user is
+  `runneradmin` (mangles); a typical local user like `Usuario` does not — so the Windows CI
+  cells went red while local Windows stayed green, the mirror image of the bash 3.2 trap.
+  **Always `os.path.realpath` BOTH sides before comparing paths.** Same lesson, different
+  platform: the matrix cell is the instrument, not the dev box.
+
 - The PNGs in `docs/` are regenerated from `docs/diagram-sources/*.html` with headless Edge
   (`--force-device-scale-factor=2`) + PIL autocrop (the render clips ~70px at the bottom if the
   window is too short).

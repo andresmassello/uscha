@@ -3165,8 +3165,13 @@ def _load_golden_coverage(root):
 
 
 def _gc_rel(path, root):
+    # realpath BOTH sides before comparing. On Windows a temp dir under a username longer
+    # than 8 chars is reported in 8.3 short form (RUNNER~1) by one side and long form by the
+    # other; relpath then yields "../.." and a file INSIDE the repo is filtered out as
+    # outside it -- silently shrinking the map. Invisible on a machine whose username does
+    # not mangle (which is why local Windows was green and Windows CI was not).
     try:
-        rel = os.path.relpath(path, root)
+        rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root))
     except ValueError:      # different drive on Windows -- outside the repo either way
         return None
     rel = rel.replace("\\", "/")
