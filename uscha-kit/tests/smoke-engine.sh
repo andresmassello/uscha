@@ -1953,6 +1953,8 @@ if isinstance(raw, list) and raw:
     d = raw[0]
 elif isinstance(raw, dict) and 'files' in raw:
     d = raw
+elif isinstance(raw, dict) and len(raw) == 1 and isinstance(list(raw.values())[0], dict):
+    d = list(raw.values())[0]   # npm 12: an object KEYED BY PACKAGE NAME
 else:
     keys = sorted(raw)[:6] if isinstance(raw, dict) else type(raw).__name__
     print('npm pack --json returned an unexpected shape: %s' % (keys,), file=sys.stderr)
