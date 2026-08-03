@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.62.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.63.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -148,6 +148,35 @@ line when the latest evidence was dirty. Readiness, phase and convergence are un
 knowing a tree was dirty does not tell you the evidence is wrong, only that it was not
 produced from a commit alone. The git-worktree clean-room that would answer the stronger
 question is deliberately deferred; ADR-007 records why.
+
+## Clean-room (ADR-008) - verify the commit, not your tree
+
+A suite can pass in your working tree *because of uncommitted state* and fail against the
+commit alone. The ledger records that as measured, with provenance true of the TREE and not of
+the COMMIT that will merge.
+
+```bash
+python qa_ledger.py cleanroom --repo <name> --run "<your test command>" [--setup "npm ci"]
+```
+
+It creates a detached `git worktree` of the commit, verifies it is clean by construction, runs
+what you gave it, records `ref` / `worktree_sha` / `status` / wall-clock, and removes the
+worktree unconditionally (a zombie worktree is a defect). Status is specific:
+`GREEN`, `RED`, `SETUP_FAILED` (a bootstrap failure is not a failing suite),
+`WORKTREE_FAILED`, `WORKTREE_DIRTY`.
+
+**The engine never decides what to run.** The command arrives via `--run`, the same contract
+`golden-coverage` uses for `--harness`: the engine owns isolation, the SHA binding and
+cleanup, and never turns a config file into a code-execution surface. That is also why it
+works for any stack - it never had to know the stack.
+
+**Opt-in gate:** `defaults.clean_room.mode` absent or `"off"` and nothing changes. `"final"`
+makes `pr-ready` require a GREEN run pinned to the current HEAD; a new commit makes the
+previous run stale for the gate.
+
+Honest limit: this is **not** a substitute for CI. A local worktree runs on your machine, your
+OS, your shell - environment variance is invisible to it. Different failure class, different
+instrument.
 
 ## End-to-end flow
 

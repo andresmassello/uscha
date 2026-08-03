@@ -1,5 +1,5 @@
 {
-  "version": "1.62.0",
+  "version": "1.63.0",
   "project": null,
   "defaults": {
     "coverage_threshold": 60,
@@ -54,6 +54,10 @@
     },
     "spec_drift": {
       "max_lag_days": 30
+    },
+    "clean_room": {
+      "mode": "off",
+      "keep_worktree_on_failure": false
     },
     "static_gate_zero_at": 10,
     "constitution_file": "CONSTITUTION.md",

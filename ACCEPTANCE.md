@@ -115,6 +115,28 @@ blocks. The worktree clean-room the handoff proposed is deferred, with reasons, 
   subdirectory of a larger working tree does not inherit the outer repo's dirtiness.
 - [x] AC-EP-04 - the readiness score is numerically identical with and without the field.
 
+## Clean-room (ADR-008) - feature acceptance, closes on green `AC-CR-nn` tests
+
+Opt-in: `defaults.clean_room` absent or `mode: "off"` and the gate does not exist. Declared
+`final`, `pr-ready` requires a GREEN clean-room run pinned to the current HEAD.
+
+- [x] AC-CR-01 - suite green in the maker's tree but red at the candidate SHA -> clean-room
+  RED and `pr-ready` blocked.
+- [x] AC-CR-02 - a green run records `ok`, `status`, `ref` and a wall-clock.
+- [x] AC-CR-03 - a new commit after a green run -> the previous evidence is stale for the
+  gate; `pr-ready` blocked until it is re-run.
+- [x] AC-CR-04 - `worktree_sha` recorded equals the candidate SHA.
+- [x] AC-CR-05 - no leftover uscha worktree after a run.
+- [x] AC-CR-06 - block absent -> `pr-ready` unchanged, AND the gate's effect is
+  ATTRIBUTABLE: the same ledger returns pr-ready with the gate off, is blocked with it
+  declared, and opens again once a green clean-room exists for HEAD.
+- [x] AC-CR-07 - a failing `--setup` -> `SETUP_FAILED`, distinct from a red suite.
+- [x] AC-CR-08 - with the gate declared, `phase --repo integration` returns a phase verdict,
+  not a config-error crash. `integration` is a synthetic scope never present in
+  `config["repos"]`; the gate resolved its path without the guard every other call site uses.
+  Added after a fresh review reproduced the crash -- the criteria measured the feature and
+  left the scope it runs in unmeasured.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
@@ -141,7 +163,8 @@ blocks. The worktree clean-room the handoff proposed is deferred, with reasons, 
 - ADR-004 — The golden-touched veto is deferred until a golden↔source mapping exists.
 - ADR-005 — Spec drift is detected mechanically and reported as advisory — never gated.
 - ADR-006 — The golden↔source mapping is derived by measurement; the veto it unblocks is opt-in.
-- ADR-007 — Evidence records the commit and tree state it was measured at; the worktree clean-room is deferred.
+- ADR-007 — Evidence records the commit and tree state it was measured at.
+- ADR-008 — The clean-room verifies the COMMIT; the engine never decides what to run.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

@@ -2629,6 +2629,35 @@ def _derive_phase(ledger, name, node, k, qa_order):
         reasons.append("la evidencia medida no contiene tests ejecutados")
     _go, sev = _gate_open_and_sev(node)
     blk = sev.get("BLOCKER", 0) + sev.get("CRITICAL", 0)
+    # clean-room gate (ADR-008). OPT-IN: no clean_room block, or mode "off", and this does not
+    # exist -- behavior identical to earlier releases. Declared "final": pr-ready additionally
+    # requires clean-room evidence that is GREEN and pinned to the CURRENT HEAD. A new commit
+    # makes the previous run stale for the gate, the same staleness posture the rest of the
+    # engine takes: evidence certifies the thing it was measured against, nothing later.
+    _cr = _cr_cfg(ledger)
+    if _cr and _cr.get("mode") == "final":
+        _head = None
+        _hr = None
+        _crcfg = (_repo_cfg(ledger, name) if name != "integration"
+                  else {"path": "."})          # synthetic scope: never in config["repos"]
+        try:
+            _hr = subprocess.run(["git", "rev-parse", "HEAD"],
+                                 cwd=_crcfg.get("path", "."),
+                                 capture_output=True, text=True, encoding="utf-8",
+                                 errors="replace")
+        except OSError:
+            _hr = None
+        if _hr is not None and _hr.returncode == 0:
+            _head = _hr.stdout.strip()
+        _run = _cr_latest(ledger, name, _head) if _head else None
+        if not _head:
+            reasons.append("clean-room declarado pero no se pudo resolver HEAD "
+                           "(no se mide, no se aprueba)")
+            conv = False
+        elif not _run or not _run.get("ok"):
+            reasons.append("falta clean-room verde para %s (evidencia del arbol no "
+                           "certifica el commit)" % _head[:8])
+            conv = False
     if conv and tests_measured_green and not tests_red and blk == 0:
         evidence = ["ciclo de agente limpio", "tests verdes (medidos)",
                     "0 BLOCKER/CRITICAL abiertos"]
@@ -3352,6 +3381,132 @@ def cmd_golden_coverage(args):
               % (golden_rel, len(files), GOLDEN_COVERAGE_FILE))
         for f in files[:20]:
             print("  " + f)
+
+
+
+# --------------------------------------------------------------------------- #
+# cleanroom  (ADR-008: verify the COMMIT, not the tree -- opt-in, human-supplied command)
+# --------------------------------------------------------------------------- #
+
+CLEAN_ROOM_KEY = "clean_room"
+
+
+def _cr_cfg(ledger):
+    cfg = ledger["config"].get("defaults", {}).get(CLEAN_ROOM_KEY)
+    return cfg if isinstance(cfg, dict) else None
+
+
+def _cr_latest(ledger, repo, ref=None):
+    """Latest clean-room record for a repo, optionally pinned to one ref."""
+    runs = [e for e in ledger.get(CLEAN_ROOM_KEY, [])
+            if e.get("repo") == repo and (ref is None or e.get("ref") == ref)]
+    return runs[-1] if runs else None
+
+
+def cmd_cleanroom(args):
+    """Run a command against a CLEAN CHECKOUT of one commit, in a throwaway worktree.
+
+    Evidence produced in the maker's tree is true of the TREE; this produces evidence true
+    of the COMMIT. As a side effect maker != checker becomes physical: the worktree cannot
+    see uncommitted state.
+
+    The engine does NOT decide what to run. The command arrives explicitly via --run, the
+    same contract golden-coverage uses for --harness: the engine owns what it can guarantee
+    (isolation, the SHA binding, cleanup) and never guesses what a project's suite is.
+    Reading test_command_* from config and executing it would make the engine an executor
+    of config-supplied shell, which it is not (ADR-008)."""
+    import time
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+
+    def git(*a, **kw):
+        cwd = kw.pop("cwd", repo_path)
+        try:
+            return subprocess.run(["git"] + list(a), cwd=cwd, capture_output=True,
+                                  text=True, encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+
+    rev = git("rev-parse", "--verify", (args.ref or "HEAD") + "^{commit}")
+    if rev is None or rev.returncode != 0 or not rev.stdout.strip():
+        print("[qa_ledger] cannot resolve ref %r in %s - nothing to verify."
+              % (args.ref or "HEAD", repo_path), file=sys.stderr)
+        sys.exit(2)
+    sha = rev.stdout.strip()
+
+    wt = tempfile.mkdtemp(prefix="uscha-cleanroom-")
+    target = os.path.join(wt, "tree")
+    started = time.time()
+    record = {"repo": args.repo, "ref": sha, "at": _now(), "ok": False,
+              "status": None, "wall_ms": None, "worktree_sha": None}
+    keep = bool((_cr_cfg(ledger) or {}).get("keep_worktree_on_failure"))
+    try:
+        add = git("worktree", "add", "--detach", target, sha)
+        if add is None or add.returncode != 0:
+            record["status"] = "WORKTREE_FAILED"
+            print("[qa_ledger] git worktree add failed:\n%s"
+                  % ((add.stderr if add else "git unavailable") or "")[-800:], file=sys.stderr)
+        else:
+            # a worktree of a commit must be clean by construction; if it is not, something
+            # (a smudge filter, a hook, a stale index) intervened and the isolation claim is
+            # already false. Say so rather than measure in it.
+            st = git("status", "--porcelain", cwd=target)
+            if st is None or st.returncode != 0 or st.stdout.strip():
+                record["status"] = "WORKTREE_DIRTY"
+            else:
+                record["worktree_sha"] = sha
+                if args.setup:
+                    r = subprocess.run(args.setup, cwd=target, shell=True,
+                                       capture_output=True, text=True,
+                                       encoding="utf-8", errors="replace")
+                    if r.returncode != 0:
+                        record["status"] = "SETUP_FAILED"
+                        print((r.stderr or "")[-800:], file=sys.stderr)
+                if record["status"] is None:
+                    r = subprocess.run(args.run, cwd=target, shell=True,
+                                       capture_output=True, text=True,
+                                       encoding="utf-8", errors="replace")
+                    record["exit_code"] = r.returncode
+                    record["status"] = "GREEN" if r.returncode == 0 else "RED"
+                    record["ok"] = r.returncode == 0
+                    if r.returncode != 0:
+                        print((r.stdout or "")[-1500:], file=sys.stderr)
+    finally:
+        record["wall_ms"] = int((time.time() - started) * 1000)
+        # Cleanup is unconditional unless the human asked to inspect a FAILURE: a zombie
+        # worktree is a defect, and `git worktree remove` alone leaves the admin entry behind.
+        if record["ok"] or not keep:
+            git("worktree", "remove", "--force", target)
+            git("worktree", "prune")
+            shutil.rmtree(wt, ignore_errors=True)
+            # VERIFY the removal instead of assuming it. rmtree(ignore_errors=True) and a
+            # discarded git return code can both fail in silence -- typically on Windows,
+            # where a handle the caller's command left open blocks removal.
+            if os.path.exists(target):
+                record["cleanup_failed"] = True
+                record["worktree_kept_at"] = target
+                print("[qa_ledger] WARNING: the clean-room worktree could not be removed and "
+                      "is still at %s (a process may still hold a handle). Remove it with: "
+                      "git worktree remove --force %s && git worktree prune"
+                      % (target, target), file=sys.stderr)
+        else:
+            record["worktree_kept_at"] = target
+
+    ledger.setdefault(CLEAN_ROOM_KEY, []).append(record)
+    ledger["step_counter"] += 1
+    ledger["steps"].append({"n": ledger["step_counter"], "at": _now(),
+                            "kind": "cleanroom", "repo": args.repo})
+    _save(args.ledger, ledger)
+
+    if args.json:
+        print(json.dumps(record, indent=2, ensure_ascii=False))
+    else:
+        print("CLEANROOM %s @ %s: %s (%.1fs)"
+              % (args.repo, sha[:8], record["status"], (record["wall_ms"] or 0) / 1000.0))
+        if record.get("worktree_kept_at"):
+            print("  worktree kept for inspection: " + record["worktree_kept_at"])
+    sys.exit(0 if record["ok"] else 1)
 
 
 
@@ -4401,6 +4556,9 @@ def cmd_dashboard(args):
             _org[_rn] = _snaps[-1]["origin"]
     if _org:
         out["evidence_origin"] = _org
+    if ledger.get(CLEAN_ROOM_KEY):
+        out["clean_room"] = {r: [e for e in ledger[CLEAN_ROOM_KEY] if e.get("repo") == r][-1]
+                             for r in {e.get("repo") for e in ledger[CLEAN_ROOM_KEY]}}
     if getattr(args, "json", False):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
@@ -7104,6 +7262,17 @@ def build_parser():
     pfp.add_argument("--intent", help="one sentence, what and why; without it the call is a dry-run")
     pfp.add_argument("--json", action="store_true")
     pfp.set_defaults(func=cmd_fastpath_eval)
+
+    pcr = sub.add_parser("cleanroom",
+                         help="run a command against a CLEAN checkout of one commit in a throwaway worktree (ADR-008)")
+    pcr.add_argument("--ledger", default="QA-LEDGER.json")
+    pcr.add_argument("--repo", required=True)
+    pcr.add_argument("--ref", default=None, help="commit to verify; default HEAD")
+    pcr.add_argument("--run", required=True,
+                     help="the command to run inside the worktree; the engine never guesses it")
+    pcr.add_argument("--setup", default=None, help="optional bootstrap before --run (e.g. npm ci)")
+    pcr.add_argument("--json", action="store_true")
+    pcr.set_defaults(func=cmd_cleanroom)
 
     pgc = sub.add_parser("golden-coverage",
                          help="record the MEASURED source files a golden's harness exercises (ADR-006)")

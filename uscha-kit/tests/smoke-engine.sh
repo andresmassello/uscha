@@ -3418,6 +3418,7 @@ rm -f "$KIT/reports/junit/.fastpath-cases.json"   # a stale green sidecar must n
 rm -f "$KIT/reports/junit/.specdrift-cases.json"  # same rule for T114
 rm -f "$KIT/reports/junit/.goldencov-cases.json"  # same rule for T117
 rm -f "$KIT/reports/junit/.origin-cases.json"     # same rule for T118
+rm -f "$KIT/reports/junit/.cleanroom-cases.json"  # same rule for T119
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -3983,6 +3984,120 @@ PY
 case "$T118" in
   OK*) PASS=$((PASS+1)); echo "  ok   evidence origin: $T118";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T118";;
+esac
+
+echo "== T119 (1.63.0): cleanroom -- verify the COMMIT, not the tree (ADR-008) =="
+# The gate assertion is ATTRIBUTABLE by construction: the same ledger is asked for pr-ready
+# twice, once with the clean-room off and once declared. If it only ever returned 1 we would
+# be measuring "something blocks", not "THIS blocks".
+T119=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(os.path.join(repo, "reports"))
+
+def sh(*a, **kw):
+    return subprocess.run(list(a), cwd=kw.get("cwd", repo), capture_output=True, text=True)
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+def cfg(mode):
+    d = {"defaults": {"acceptance_file": "ACCEPTANCE.md",
+                      "qa_tools_order": ["code-review", "judgment-day", "improve"]},
+         "repos": [{"name": "r", "path": "r", "type": "go"}],
+         "integration": {"enabled": False}}
+    if mode is not None:
+        d["defaults"]["clean_room"] = {"mode": mode}
+    io.open(os.path.join(w, "c.json"), "w").write(json.dumps(d))
+
+sh("git", "init", "-b", "main"); sh("git", "config", "user.email", "t@t")
+sh("git", "config", "user.name", "t")
+io.open(os.path.join(repo, "helper.go"), "w").write("package main\n")
+io.open(os.path.join(repo, "check.py"), "w").write(
+    "import os, sys\nsys.exit(0 if os.path.isfile('helper.go') else 1)\n")
+sh("git", "add", "-A"); sh("git", "commit", "-m", "base")
+io.open(os.path.join(repo, "reports", "junit.xml"), "w").write(
+    '<testsuite tests="1" failures="0" errors="0" skipped="0"/>')
+
+RUN = '"%s" check.py' % sys.executable
+
+def make_ledger(name, mode):
+    cfg(mode)
+    eng("init", "--config", "c.json", "--out", name)
+    eng("snapshot", "--ledger", name, "--repo", "r")
+    for it, tool in ((1, "code-review"), (1, "judgment-day"), (1, "improve")):
+        eng("log-step", "--ledger", name, "--repo", "r", "--tool", tool,
+            "--iteration", str(it), "--gated-reported", "0", "--files-changed", "0",
+            "--tests-passed", "true")
+    return name
+
+def pr_ready(name):
+    return eng("phase", "--ledger", name, "--repo", "r", "--require", "pr-ready").returncode
+
+# --- AC-CR-06: block absent -> identical behavior, and the fixture DOES reach pr-ready
+make_ledger("L-off.json", None)
+off_rc = pr_ready("L-off.json")
+# --- the gate is attributable: same facts, clean-room declared -> blocked
+make_ledger("L-on.json", "final")
+on_rc = pr_ready("L-on.json")
+res["AC-CR-06"] = (off_rc == 0 and on_rc == 1)
+
+# --- AC-CR-02 + AC-CR-04: a green run records ref, worktree_sha and wall clock
+head = sh("git", "rev-parse", "HEAD").stdout.strip()
+r = eng("cleanroom", "--ledger", "L-on.json", "--repo", "r", "--run", RUN, "--json")
+rec = json.loads(r.stdout) if r.stdout.strip().startswith("{") else {}
+res["AC-CR-02"] = (r.returncode == 0 and rec.get("ok") is True
+                   and rec.get("status") == "GREEN" and isinstance(rec.get("wall_ms"), int))
+res["AC-CR-04"] = rec.get("worktree_sha") == head and rec.get("ref") == head
+# and with green clean-room evidence for HEAD, the gate opens
+res["AC-CR-06"] = bool(res["AC-CR-06"] and pr_ready("L-on.json") == 0)
+
+# --- AC-CR-05: no leftover worktree
+wl = sh("git", "worktree", "list").stdout
+res["AC-CR-05"] = "uscha-cleanroom" not in wl
+
+# --- AC-CR-03: a NEW commit makes the previous clean-room evidence stale for the gate
+io.open(os.path.join(repo, "other.go"), "w").write("package main\n")
+sh("git", "add", "-A"); sh("git", "commit", "-m", "second")
+res["AC-CR-03"] = pr_ready("L-on.json") == 1
+
+# --- AC-CR-01: green in the maker's tree, RED against the commit alone
+sh("git", "rm", "-q", "--cached", "helper.go")
+sh("git", "commit", "-q", "-m", "drop helper")
+local = subprocess.run([sys.executable, "check.py"], cwd=repo, capture_output=True)
+r = eng("cleanroom", "--ledger", "L-on.json", "--repo", "r", "--run", RUN, "--json")
+rec = json.loads(r.stdout) if r.stdout.strip().startswith("{") else {}
+res["AC-CR-01"] = (local.returncode == 0 and r.returncode == 1
+                   and rec.get("status") == "RED" and pr_ready("L-on.json") == 1)
+
+# --- AC-CR-07: a failing setup is SETUP_FAILED, distinct from a red suite
+r = eng("cleanroom", "--ledger", "L-on.json", "--repo", "r", "--run", RUN,
+        "--setup", '"%s" -c "import sys; sys.exit(3)"' % sys.executable, "--json")
+rec = json.loads(r.stdout) if r.stdout.strip().startswith("{") else {}
+res["AC-CR-07"] = rec.get("status") == "SETUP_FAILED" and rec.get("ok") is False
+
+# --- AC-CR-08: `integration` is a SYNTHETIC scope, never present in config["repos"], and
+# _repo_cfg exits on an unknown name. The gate resolved the repo path without the guard every
+# other call site uses, so declaring the clean-room turned the integration merge gate into a
+# config-error crash instead of a phase verdict. It must degrade like any other repo.
+_ip = eng("phase", "--ledger", "L-on.json", "--repo", "integration", "--require", "pr-ready")
+res["AC-CR-08"] = (_ip.returncode == 1
+                   and "no config entry" not in (_ip.stdout + _ip.stderr)
+                   and "PHASE integration" in _ip.stdout)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".cleanroom-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T119" in
+  OK*) PASS=$((PASS+1)); echo "  ok   cleanroom: $T119";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T119";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -5026,6 +5141,24 @@ for _oid in ("AC-EP-01", "AC-EP-02", "AC-EP-03", "AC-EP-04", "AC-EP-05"):
         results.append((_oid, "evidence-origin", None))
     else:
         results.append((_oid, "evidence-origin", "T118 case failed or missing"))
+
+# Clean-room criteria (ADR-008): measured by T119, same sidecar contract.
+def _cleanroom_cases():
+    p = os.path.join(kit, "reports", "junit", ".cleanroom-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_crc = _cleanroom_cases()
+for _cid in ("AC-CR-01", "AC-CR-02", "AC-CR-03", "AC-CR-04",
+             "AC-CR-05", "AC-CR-06", "AC-CR-07", "AC-CR-08"):
+    if _crc is None or _crc.get(_cid) is None:
+        results.append((_cid, "cleanroom", SKIP))
+    elif _crc.get(_cid) is True:
+        results.append((_cid, "cleanroom", None))
+    else:
+        results.append((_cid, "cleanroom", "T119 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

@@ -42,3 +42,4 @@ chat-*.md
 .specdrift-cases.json
 .goldencov-cases.json
 .origin-cases.json
+.cleanroom-cases.json
