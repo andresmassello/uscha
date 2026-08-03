@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.61.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.62.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -123,7 +123,8 @@ Per document: **`SPEC_STALE`** when governed code outran the spec by more than
 `defaults.spec_drift.max_lag_days` (default 30), listing the newer files; **`CLEAN`** when it
 did not; **`UNMAPPED`** when there is no `governs:` frontmatter *or its globs match nothing*
 — absence of a mapping is absence of measurement, not "no drift"; **`UNTRACKED`** when the
-spec has no commit date to compare. The latest run lands in the ledger (`spec_drift`) so the
+spec has no commit date to compare; **`NO-CODE`** when it declares `governs: []`, i.e. a
+decision that governs no source (negative ADRs) — a declaration, not an omission. The latest run lands in the ledger (`spec_drift`) so the
 mirador can surface it. No readiness impact, no exit-code gate: a stale spec is a prompt for
 a human conversation, not a blocked pipeline.
 

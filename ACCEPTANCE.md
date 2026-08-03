@@ -70,26 +70,29 @@ Advisory by design (ADR-005): drift detection is a heuristic, and a guess advise
 - [x] AC-SD-02 — spec newer than all governed files → no advisory.
 - [x] AC-SD-03 — spec without `governs:` frontmatter → `UNMAPPED`, distinct from clean.
 - [x] AC-SD-04 — advisory present → readiness score numerically unchanged.
+- [x] AC-SD-05 — a spec declaring `governs: []` reports **`NO-CODE`**, distinct from both
+  `UNMAPPED` and `CLEAN`: a negative decision governs no code, and saying so is a declaration,
+  not an omission. Found by running `spec-drift` on this repo's own ADR-004.
 
 ## Golden coverage (Phase 1.5) — feature acceptance, closes on green `AC-GM-nn` tests
 
 Unblocks the veto ADR-004 deferred, with the mapping DERIVED BY MEASUREMENT (ADR-006).
 Opt-in via `defaults.fast_path.forbid_when_golden_touched`; fail-closed once declared.
 
-- [ ] AC-GM-01 - veto undeclared -> no `golden_touched` signal, and the verdict for a given
+- [x] AC-GM-01 - veto undeclared -> no `golden_touched` signal, and the verdict for a given
   diff is identical to the pre-feature behavior.
-- [ ] AC-GM-02 - veto declared + manifest absent (or a golden with no entry) -> `DENY`
+- [x] AC-GM-02 - veto declared + manifest absent (or a golden with no entry) -> `DENY`
   naming `golden_touched`.
-- [ ] AC-GM-03 - veto declared + diff touches a file the manifest maps to a golden -> `DENY`,
+- [x] AC-GM-03 - veto declared + diff touches a file the manifest maps to a golden -> `DENY`,
   breakdown naming the golden and the file.
-- [ ] AC-GM-04 - veto declared + diff touches only unmapped files -> the signal passes; the
+- [x] AC-GM-04 - veto declared + diff touches only unmapped files -> the signal passes; the
   other signals decide the verdict.
-- [ ] AC-GM-05 - the signal's `source` carries the capture commit and the coverage tool
+- [x] AC-GM-05 - the signal's `source` carries the capture commit and the coverage tool
   version recorded in the manifest.
-- [ ] AC-GM-06 - malformed manifest -> exit 2 (config error), never a silent "no mapping".
-- [ ] AC-GM-07 - capture with `coverage.py` unavailable -> no map is written; an empty map
+- [x] AC-GM-06 - malformed manifest -> exit 2 (config error), never a silent "no mapping".
+- [x] AC-GM-07 - capture with `coverage.py` unavailable -> no map is written; an empty map
   that would read as "covers nothing" is never produced.
-- [ ] AC-GM-08 - `golden-coverage` under a real `coverage.py` records a MEASURED map that
+- [x] AC-GM-08 - `golden-coverage` under a real `coverage.py` records a MEASURED map that
   includes a file the harness reaches only through a **subprocess** (the boundary a
   parent-only instrumentation cannot see) and excludes one it never executes, with the
   capture commit and tool version recorded. Added after the first seven were written: they
@@ -101,16 +104,16 @@ Opt-in via `defaults.fast_path.forbid_when_golden_touched`; fail-closed once dec
 Provenance, not a gate: the snapshot records WHERE it was measured. Nothing scores, nothing
 blocks. The worktree clean-room the handoff proposed is deferred, with reasons, in ADR-007.
 
-- [ ] AC-EP-01 - snapshot in a clean git repo -> `origin.commit` equals `git rev-parse HEAD`
+- [x] AC-EP-01 - snapshot in a clean git repo -> `origin.commit` equals `git rev-parse HEAD`
   and `origin.dirty` is false.
-- [ ] AC-EP-02 - snapshot with an uncommitted change -> same commit, `origin.dirty` true
+- [x] AC-EP-02 - snapshot with an uncommitted change -> same commit, `origin.dirty` true
   (untracked files count as dirty).
-- [ ] AC-EP-03 - "could not measure" -> both null, NO CRASH, and `dirty` NOT false, in all
+- [x] AC-EP-03 - "could not measure" -> both null, NO CRASH, and `dirty` NOT false, in all
   three shapes: a directory that is not a git repo, a configured repo path that does not
   exist, and git absent from PATH. An unmeasurable tree state must never read as clean.
-- [ ] AC-EP-05 - the answer is scoped to the repo path: a repo entry pointing at a
+- [x] AC-EP-05 - the answer is scoped to the repo path: a repo entry pointing at a
   subdirectory of a larger working tree does not inherit the outer repo's dirtiness.
-- [ ] AC-EP-04 - the readiness score is numerically identical with and without the field.
+- [x] AC-EP-04 - the readiness score is numerically identical with and without the field.
 
 ## Out of scope for measurement here
 

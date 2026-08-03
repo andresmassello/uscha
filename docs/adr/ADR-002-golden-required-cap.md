@@ -1,3 +1,8 @@
+---
+governs:
+  - uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py
+  - uscha-kit/uscha.config.json
+---
 # ADR-002: `golden_required` — a declarable cap for "an approved golden must exist"
 
 ## Status: Accepted

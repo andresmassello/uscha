@@ -3533,6 +3533,8 @@ sh(["git", "init", "-b", "main"]); sh(["git", "config", "user.email", "t@t"])
 sh(["git", "config", "user.name", "t"])
 io.open(os.path.join(repo, "SPEC.md"), "w").write("---\ngoverns:\n  - src/**\n---\n# spec\n")
 io.open(os.path.join(repo, "docs", "adr", "ADR-001-a.md"), "w").write("no frontmatter\n")
+io.open(os.path.join(repo, "docs", "adr", "ADR-002-b.md"), "w").write(
+    "---\ngoverns: []\n---\n# a negative decision\n")
 io.open(os.path.join(repo, "src", "a.py"), "w").write("x=1\n")
 sh(["git", "add", "-A"]); sh(["git", "commit", "-m", "one"], when="2026-01-01T00:00:00Z")
 io.open(os.path.join(repo, "src", "a.py"), "w").write("x=2\n")
@@ -3559,6 +3561,14 @@ res["AC-SD-01"] = (r.returncode == 0 and spec.get("verdict") == "SPEC_STALE"
 # AC-SD-03: the ADR without frontmatter is UNMAPPED -- visibly distinct from clean.
 adr = rows.get("docs/adr/ADR-001-a.md", {})
 res["AC-SD-03"] = adr.get("verdict") == "UNMAPPED" and adr.get("verdict") != "CLEAN"
+
+# AC-SD-05: an EXPLICIT empty governs list is a declaration, not an omission. A negative ADR
+# governs no code and never will; reporting it UNMAPPED forever is how an advisory becomes
+# noise and gets ignored. Must be distinct from BOTH other verdicts.
+neg = rows.get("docs/adr/ADR-002-b.md", {})
+res["AC-SD-05"] = (neg.get("verdict") == "NO-CODE"
+                   and neg.get("verdict") != adr.get("verdict")
+                   and neg.get("verdict") != "CLEAN")
 
 # AC-SD-02: commit the spec AFTER the governed change -> no advisory.
 io.open(os.path.join(repo, "SPEC.md"), "a").write("updated\n")
@@ -4974,7 +4984,7 @@ def _specdrift_cases():
     except (OSError, ValueError):
         return None
 _sdc = _specdrift_cases()
-for _sid in ("AC-SD-01", "AC-SD-02", "AC-SD-03", "AC-SD-04"):
+for _sid in ("AC-SD-01", "AC-SD-02", "AC-SD-03", "AC-SD-04", "AC-SD-05"):
     if _sdc is None or _sdc.get(_sid) is None:
         results.append((_sid, "specdrift", SKIP))
     elif _sdc.get(_sid) is True:

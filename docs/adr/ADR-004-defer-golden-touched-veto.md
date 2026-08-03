@@ -1,3 +1,8 @@
+---
+# a NEGATIVE decision: it defers a veto, so it governs no source. Declared
+# explicitly so spec-drift reports NO-CODE rather than 'nobody mapped this'.
+governs: []
+---
 # ADR-004: The golden-touched veto is deferred until a golden↔source mapping exists
 
 ## Status: Accepted

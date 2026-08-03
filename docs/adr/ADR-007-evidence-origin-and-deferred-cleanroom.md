@@ -1,3 +1,9 @@
+---
+governs:
+  - uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py
+  - uscha-kit/.claude/skills/uscha-status/SKILL.md
+  - uscha-kit/uscha.config.json
+---
 # ADR-007: Evidence records the commit and tree state it was measured at; the worktree clean-room is deferred
 
 ## Status: Accepted

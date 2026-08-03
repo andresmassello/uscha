@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.62.0** — [`NO-CODE`: declaring nothing is not declaring *nothing to declare* (2026-08-03)](CHANGELOG-1.62.0.md)
 - **1.61.0** — [green, but green at *what*? (2026-08-03)](CHANGELOG-1.61.0.md)
 - **1.60.1** — [the first tokenless publish, and the gate that earned it (2026-08-02)](CHANGELOG-1.60.1.md)
 - **1.60.0** — [the golden↔source mapping, derived by measurement (2026-08-02)](CHANGELOG-1.60.0.md)

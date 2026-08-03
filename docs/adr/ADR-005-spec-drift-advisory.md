@@ -1,3 +1,10 @@
+---
+governs:
+  - uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py
+  - uscha-kit/.claude/skills/uscha-mirador/SKILL.md
+  - uscha-kit/.claude/skills/uscha-status/SKILL.md
+  - uscha-kit/uscha.config.json
+---
 # ADR-005: Spec drift is detected mechanically and reported as advisory — never gated
 
 ## Status: Accepted
@@ -27,6 +34,12 @@ New subcommand `qa_ledger.py spec-drift`:
   file. Governed code newer than its spec by more than `spec_drift.max_lag_days` (config,
   default **30**) → **`SPEC_STALE`**, listing the files newer than the spec.
 - A spec not yet committed reports **`UNTRACKED`** (no date to compare — stated, not guessed).
+- A spec declaring an EXPLICIT empty list (`governs: []`) reports **`NO-CODE`**: it governs
+  no source and never will. Negative ADRs are a documented practice here, and reporting one
+  `UNMAPPED` forever turns a correct state into permanent noise — which is how an advisory
+  gets ignored. Declaring nothing and declaring *nothing to declare* are different acts.
+  <!-- Added 2026-08-03, after running spec-drift on this repo's own ADRs: 7/7 UNMAPPED,
+       and ADR-004 (a deferral) could never be anything else. Found by dogfooding. -->
 - The run is recorded in the ledger (`spec_drift`, latest state) so the mirador can surface an
   advisory row. **No readiness impact. No gate. Exit code 0 always.** A stale spec is a prompt
   for a human conversation, not a blocked pipeline.

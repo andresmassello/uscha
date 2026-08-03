@@ -1,3 +1,9 @@
+---
+governs:
+  - uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py
+  - uscha-kit/.claude/skills/uscha-devloop/SKILL.md
+  - uscha-kit/uscha.config.json
+---
 # ADR-003: Fast-path entry is granted by measured signals, never by opinion
 
 ## Status: Accepted

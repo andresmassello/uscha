@@ -71,7 +71,7 @@ than inventing a step. Keep the CONTENT in the conversation's language and the l
   repo straight from the ledger, or null when none was requested. The template degrades when
   absent, like every other field.
 - **Spec-drift (ADR-005):** `dashboard --json` carries `spec_drift` — the latest advisory
-  run (per-document verdicts: SPEC_STALE / CLEAN / UNMAPPED / UNTRACKED) — only when a run
+  run (per-document verdicts: SPEC_STALE / CLEAN / UNMAPPED / UNTRACKED / NO-CODE) — only when a run
   exists in the ledger; a virgin ledger keeps the exact prior schema. Advisory visibility of
   the spec-maintenance tax, never readiness input.
 - **Modes card:** the template draws one card for both modes — fast-path verdict chips per

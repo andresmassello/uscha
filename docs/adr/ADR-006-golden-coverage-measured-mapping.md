@@ -1,3 +1,9 @@
+---
+governs:
+  - uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py
+  - uscha-kit/.claude/skills/uscha-characterize/SKILL.md
+  - uscha-kit/uscha.config.json
+---
 # ADR-006: The golden↔source mapping is DERIVED BY MEASUREMENT, and the veto it unblocks is opt-in
 
 ## Status: Accepted

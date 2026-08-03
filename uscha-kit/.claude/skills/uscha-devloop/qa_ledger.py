@@ -3026,7 +3026,7 @@ def _sd_governs(path):
         return None
     if not lines or lines[0].strip() != "---":
         return None
-    globs, in_governs = None, False
+    globs, in_governs, explicit_empty = None, False, False
     # scan runs to the CLOSING fence, not an arbitrary window -- a governs: key late in a
     # long frontmatter block must not silently read as UNMAPPED (fresh-review finding).
     for ln in lines[1:]:
@@ -3038,6 +3038,8 @@ def _sd_governs(path):
             if rest.startswith("[") and rest.endswith("]"):
                 globs = [x.strip().strip("\x27\x22")
                          for x in rest[1:-1].split(",") if x.strip()]
+                # only an INLINE [] is a declaration of "nothing to govern"
+                explicit_empty = not globs
                 in_governs = False
             elif rest:
                 # bare scalar (`governs: src/**`) -- a plausible authoring shorthand;
@@ -3051,6 +3053,11 @@ def _sd_governs(path):
                 globs.append(s[2:].strip().strip("\x27\x22"))
             elif s and not ln.startswith((" ", "\t")):
                 in_governs = False
+    if globs == [] and not explicit_empty:
+        # a `governs:` key with nothing usable under it (a placeholder, a comment, a typo) is
+        # an UNFINISHED declaration, not a statement that this spec governs nothing. Report it
+        # as UNMAPPED, which is what it is (fresh-review finding).
+        return None
     return globs
 
 
@@ -3109,6 +3116,16 @@ def cmd_spec_drift(args):
         row = {"file": spec, "governs": governs, "max_lag_days": lag_days}
         if governs is None:
             row.update({"verdict": "UNMAPPED", "reason": "no governs: frontmatter"})
+            results.append(row)
+            continue
+        if not governs:
+            # An EXPLICIT empty list is a declaration, not an omission: this decision governs
+            # no code and never will. Negative ADRs ("we are NOT doing X, and why") are a
+            # documented practice in this kit, and reporting them UNMAPPED forever turns a
+            # correct state into permanent noise -- which is how an advisory gets ignored.
+            # Found by running spec-drift on this repo's own ADR-004.
+            row.update({"verdict": "NO-CODE",
+                        "reason": "declares governs: [] -- a decision that governs no code"})
             results.append(row)
             continue
         matched = []
@@ -3171,7 +3188,8 @@ def cmd_spec_drift(args):
         print("SPEC-DRIFT %s (advisory, lag > %dd):" % (args.repo, lag_days))
         if not results:
             print("  no spec documents found (SPEC.md / docs/adr/*.md)")
-        mark = {"SPEC_STALE": "!!", "CLEAN": "ok", "UNMAPPED": "--", "UNTRACKED": "--"}
+        mark = {"SPEC_STALE": "!!", "CLEAN": "ok", "UNMAPPED": "--", "UNTRACKED": "--",
+                "NO-CODE": "ok"}
         for r_ in results:
             line = "  %s %s: %s" % (mark.get(r_["verdict"], "??"), r_["file"],
                                     r_["verdict"])
