@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="28" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="33" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -55,5 +55,15 @@
   <testcase classname="uscha.acceptance" name="AC-GM-07_goldencov">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-GM-08_goldencov">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-EP-01_evidence-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-EP-02_evidence-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-EP-03_evidence-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-EP-04_evidence-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-EP-05_evidence-origin">
   </testcase>
 </testsuite>

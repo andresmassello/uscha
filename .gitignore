@@ -41,3 +41,4 @@ chat-*.md
 .fastpath-cases.json
 .specdrift-cases.json
 .goldencov-cases.json
+.origin-cases.json

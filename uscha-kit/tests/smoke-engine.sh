@@ -3417,6 +3417,7 @@ echo "== T113 (1.57.0): fastpath-eval -- measured ALLOW/DENY, escalation, fail-c
 rm -f "$KIT/reports/junit/.fastpath-cases.json"   # a stale green sidecar must never survive a crashed T113
 rm -f "$KIT/reports/junit/.specdrift-cases.json"  # same rule for T114
 rm -f "$KIT/reports/junit/.goldencov-cases.json"  # same rule for T117
+rm -f "$KIT/reports/junit/.origin-cases.json"     # same rule for T118
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -3844,6 +3845,134 @@ PY
 case "$T117" in
   OK*) PASS=$((PASS+1)); echo "  ok   golden-coverage: $T117";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T117";;
+esac
+
+echo "== T118 (1.61.0): evidence origin -- the commit and tree state it was measured at (ADR-007) =="
+# Provenance only: these criteria assert what is RECORDED, plus that the readiness score does
+# not move. The case that matters most is AC-EP-03: without git, dirty must be null and never
+# false, because a tree state nobody could measure must not read as clean.
+T118=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+
+def eng(w, *a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+def setup(git=True):
+    w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(repo)
+    io.open(os.path.join(repo, "a.py"), "w").write("A = 1\n")
+    if git:
+        for a in (["git", "init", "-b", "main"], ["git", "config", "user.email", "t@t"],
+                  ["git", "config", "user.name", "t"], ["git", "add", "-A"],
+                  ["git", "commit", "-m", "base"]):
+            subprocess.run(a, cwd=repo, capture_output=True, text=True)
+    io.open(os.path.join(w, "c.json"), "w").write(json.dumps(
+        {"defaults": {"acceptance_file": "ACCEPTANCE.md"},
+         "repos": [{"name": "r", "path": "r", "type": "python"}],
+         "integration": {"enabled": False}}))
+    eng(w, "init", "--config", "c.json", "--out", "L.json")
+    return w, repo
+
+def origin(w):
+    d = json.load(io.open(os.path.join(w, "L.json"), encoding="utf-8"))
+    snaps = d["repos"]["r"]["snapshots"]
+    return (snaps[-1].get("origin") or {}) if snaps else {}
+
+def head(repo):
+    r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True)
+    return r.stdout.strip()
+
+# --- AC-EP-01: clean repo -> the real HEAD, dirty false
+w, repo = setup()
+score_before = json.loads(eng(w, "readiness", "--ledger", "L.json", "--json").stdout).get("score")
+eng(w, "snapshot", "--ledger", "L.json", "--repo", "r", "--phase", "pre")
+o1 = origin(w)
+res["AC-EP-01"] = o1.get("commit") == head(repo) and o1.get("dirty") is False
+
+# --- AC-EP-02: a modified tracked file -> same commit, dirty true
+io.open(os.path.join(repo, "a.py"), "w").write("A = 2\n")
+eng(w, "snapshot", "--ledger", "L.json", "--repo", "r", "--phase", "post")
+o2 = origin(w)
+res["AC-EP-02"] = o2.get("commit") == head(repo) and o2.get("dirty") is True
+
+# an UNTRACKED file must read dirty too -- treating it as invisible is the 1.57.0 mistake
+subprocess.run(["git", "checkout", "--", "."], cwd=repo, capture_output=True)
+io.open(os.path.join(repo, "new.py"), "w").write("N = 1\n")
+eng(w, "snapshot", "--ledger", "L.json", "--repo", "r", "--phase", "post")
+res["AC-EP-02"] = bool(res["AC-EP-02"] and origin(w).get("dirty") is True)
+
+# --- AC-EP-03: "could not measure" -> null, NO CRASH, in all THREE of its shapes. The first
+# version tested only a plain directory (where both git calls return cleanly non-zero) and so
+# never touched the two that actually raised: a repo path that does not exist, and git absent
+# from PATH. That gap is exactly why a fresh review found the crash and the suite did not.
+def origin_null_no_crash(w2):
+    r = eng(w2, "snapshot", "--ledger", "L.json", "--repo", "r", "--phase", "pre")
+    o = origin(w2)
+    return (r.returncode == 0 and "Traceback" not in (r.stderr or "")
+            and o.get("commit") is None and o.get("dirty") is None
+            and o.get("dirty") is not False)
+
+w2, _ = setup(git=False)                       # a real directory that is not a git repo
+plain_ok = origin_null_no_crash(w2)
+
+w3, repo3 = setup(git=False)                   # the configured repo path does not exist
+import shutil as _sh
+_sh.rmtree(repo3)
+missing_ok = origin_null_no_crash(w3)
+
+w4, _ = setup(git=False)                       # git itself unreachable
+_env = dict(os.environ); _env["PATH"] = tempfile.mkdtemp()
+r4 = subprocess.run([sys.executable, ENG, "snapshot", "--ledger", "L.json",
+                     "--repo", "r", "--phase", "pre"], cwd=w4, env=_env,
+                    capture_output=True, text=True, encoding="utf-8", errors="replace")
+o4 = origin(w4)
+nogit_ok = (r4.returncode == 0 and "Traceback" not in (r4.stderr or "")
+            and o4.get("commit") is None and o4.get("dirty") is None)
+
+res["AC-EP-03"] = bool(plain_ok and missing_ok and nogit_ok)
+
+# --- AC-EP-05: the answer is scoped to the repo path. A repo entry pointing at a
+# SUBDIRECTORY of a larger working tree must not inherit the outer repo's dirtiness.
+w5 = tempfile.mkdtemp(); sub = os.path.join(w5, "r"); os.makedirs(sub)
+io.open(os.path.join(sub, "a.py"), "w").write("A = 1\n")
+io.open(os.path.join(w5, "outside.py"), "w").write("B = 1\n")
+for a in (["git", "init", "-b", "main"], ["git", "config", "user.email", "t@t"],
+          ["git", "config", "user.name", "t"], ["git", "add", "-A"],
+          ["git", "commit", "-m", "base"]):
+    subprocess.run(a, cwd=w5, capture_output=True, text=True)
+io.open(os.path.join(w5, "outside.py"), "w").write("B = 2\n")   # OUTSIDE the repo path only
+io.open(os.path.join(w5, "c.json"), "w").write(json.dumps(
+    {"defaults": {"acceptance_file": "ACCEPTANCE.md"},
+     "repos": [{"name": "r", "path": "r", "type": "python"}],
+     "integration": {"enabled": False}}))
+eng(w5, "init", "--config", "c.json", "--out", "L.json")
+eng(w5, "snapshot", "--ledger", "L.json", "--repo", "r", "--phase", "pre")
+o5 = origin(w5)
+res["AC-EP-05"] = o5.get("dirty") is False and o5.get("commit") is not None
+
+# --- AC-EP-04: the score does not move because provenance appeared
+score_after = json.loads(eng(w, "readiness", "--ledger", "L.json", "--json").stdout).get("score")
+res["AC-EP-04"] = score_before == score_after
+
+# dashboard passthrough: present once a snapshot has an origin, absent on a virgin ledger
+d1 = json.loads(eng(w, "dashboard", "--ledger", "L.json", "--json").stdout)
+eng(w, "init", "--config", "c.json", "--out", "L2.json")
+d2 = json.loads(eng(w, "dashboard", "--ledger", "L2.json", "--json").stdout)
+dash_ok = ("evidence_origin" in d1) and ("evidence_origin" not in d2)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".origin-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v] + ([] if dash_ok else ["dashboard-passthrough"])
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(bad))
+PY
+)
+case "$T118" in
+  OK*) PASS=$((PASS+1)); echo "  ok   evidence origin: $T118";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T118";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -4870,6 +4999,23 @@ for _gid in ("AC-GM-01", "AC-GM-02", "AC-GM-03", "AC-GM-04",
         results.append((_gid, "goldencov", None))
     else:
         results.append((_gid, "goldencov", "T117 case failed or missing"))
+
+# Evidence-origin criteria (ADR-007): measured by T118, same sidecar contract.
+def _origin_cases():
+    p = os.path.join(kit, "reports", "junit", ".origin-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_oc = _origin_cases()
+for _oid in ("AC-EP-01", "AC-EP-02", "AC-EP-03", "AC-EP-04", "AC-EP-05"):
+    if _oc is None or _oc.get(_oid) is None:
+        results.append((_oid, "evidence-origin", SKIP))
+    elif _oc.get(_oid) is True:
+        results.append((_oid, "evidence-origin", None))
+    else:
+        results.append((_oid, "evidence-origin", "T118 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

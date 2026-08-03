@@ -90,6 +90,12 @@ Line guide:
 block with the latest verdict per repo (`fast-path: ALLOW (intent...)` / `ESCALATED`). Absent
 entries → no line at all: silence is honest when no mode was requested.
 
+**Evidence origin (ADR-007):** if the latest snapshot was measured on a DIRTY tree, add ONE
+line: `evidence: measured dirty at <sha8> - not from the commit alone`. Say nothing when the
+tree was clean (the normal case needs no words) and nothing when it is `null` (unmeasurable,
+and inventing a state is worse than silence). This never explains a blocked phase: it scores
+nothing and gates nothing.
+
 **Spec-drift (ADR-005):** if the ledger carries a `spec_drift` run, add ONE line:
 `spec-drift: N stale / M docs (advisory)` — or `spec-drift: no drift measured` when zero are
 stale. Always label it advisory; it never explains a blocked phase. Absent key → no line.

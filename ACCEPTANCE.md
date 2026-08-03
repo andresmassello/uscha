@@ -96,6 +96,22 @@ Opt-in via `defaults.fast_path.forbid_when_golden_touched`; fail-closed once dec
   all measured the veto's CONSUMPTION and left its PRODUCTION -- the actual measurement --
   unmeasured.
 
+## Evidence origin (ADR-007) - feature acceptance, closes on green `AC-EP-nn` tests
+
+Provenance, not a gate: the snapshot records WHERE it was measured. Nothing scores, nothing
+blocks. The worktree clean-room the handoff proposed is deferred, with reasons, in ADR-007.
+
+- [ ] AC-EP-01 - snapshot in a clean git repo -> `origin.commit` equals `git rev-parse HEAD`
+  and `origin.dirty` is false.
+- [ ] AC-EP-02 - snapshot with an uncommitted change -> same commit, `origin.dirty` true
+  (untracked files count as dirty).
+- [ ] AC-EP-03 - "could not measure" -> both null, NO CRASH, and `dirty` NOT false, in all
+  three shapes: a directory that is not a git repo, a configured repo path that does not
+  exist, and git absent from PATH. An unmeasurable tree state must never read as clean.
+- [ ] AC-EP-05 - the answer is scoped to the repo path: a repo entry pointing at a
+  subdirectory of a larger working tree does not inherit the outer repo's dirtiness.
+- [ ] AC-EP-04 - the readiness score is numerically identical with and without the field.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
@@ -122,6 +138,7 @@ Opt-in via `defaults.fast_path.forbid_when_golden_touched`; fail-closed once dec
 - ADR-004 — The golden-touched veto is deferred until a golden↔source mapping exists.
 - ADR-005 — Spec drift is detected mechanically and reported as advisory — never gated.
 - ADR-006 — The golden↔source mapping is derived by measurement; the veto it unblocks is opt-in.
+- ADR-007 — Evidence records the commit and tree state it was measured at; the worktree clean-room is deferred.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

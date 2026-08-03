@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.60.1 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.61.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -126,6 +126,27 @@ did not; **`UNMAPPED`** when there is no `governs:` frontmatter *or its globs ma
 spec has no commit date to compare. The latest run lands in the ledger (`spec_drift`) so the
 mirador can surface it. No readiness impact, no exit-code gate: a stale spec is a prompt for
 a human conversation, not a blocked pipeline.
+
+## Evidence origin (ADR-007) - green, but green at *what*?
+
+Freshness compares file mtimes, so the ledger could say "tests green" without being able to
+say which commit that was true of. Every snapshot now stamps where it came from:
+
+```json
+"origin": { "commit": "5d17cf4...", "dirty": false }
+```
+
+Measured with `git rev-parse HEAD` and `git status --porcelain` in the repo path. **Untracked
+files count as dirty** - an untracked file the suite depends on is exactly the contamination
+worth recording. **No git, no repo -> both `null`**, and `dirty: null` never reads as clean:
+a tree state nobody could measure is not a clean one.
+
+Advisory throughout: `snapshot` prints `origin=<sha8>/<clean|dirty|unknown>`,
+`dashboard --json` carries `evidence_origin` when a snapshot has one, `/uscha-status` says one
+line when the latest evidence was dirty. Readiness, phase and convergence are untouched -
+knowing a tree was dirty does not tell you the evidence is wrong, only that it was not
+produced from a commit alone. The git-worktree clean-room that would answer the stronger
+question is deliberately deferred; ADR-007 records why.
 
 ## End-to-end flow
 

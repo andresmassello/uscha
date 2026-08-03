@@ -1858,6 +1858,58 @@ def cmd_init(args):
           f"coverage_threshold={defaults.get('coverage_threshold')})")
 
 
+def _origin_label(origin):
+    """Render an origin for humans. An unmeasurable tree state reads `unknown`, never
+    `clean` -- the whole reason the field distinguishes False from None."""
+    o = origin or {}
+    sha = (o.get("commit") or "")[:8] or "no-commit"
+    dirty = o.get("dirty")
+    state = "unknown" if dirty is None else ("dirty" if dirty else "clean")
+    return "%s/%s" % (sha, state)
+
+
+def _evidence_origin(repo_path):
+    """WHERE the evidence came from: the commit it was measured at, and whether the tree
+    was clean (ADR-007). The engine's freshness check compares file MTIMES, so until now a
+    snapshot could say "tests green" without being able to say green AT WHAT -- provenance
+    true of the tree, not of the commit that will merge.
+
+    Absence is NAMED, never guessed: no git, no repo, unreadable -> both None. `dirty is
+    None` must never read as clean; that distinction is the entire point of recording it.
+    Advisory only -- nothing here scores or blocks.
+
+    Untracked files COUNT as dirty (plain --porcelain): an untracked file the suite depends
+    on is exactly the contamination this records, and treating untracked as invisible is a
+    mistake this engine already paid for once (fast-path, 1.57.0)."""
+    origin = {"commit": None, "dirty": None}
+
+    def _git(*args):
+        # OSError covers BOTH ways this used to take the whole snapshot down: git absent
+        # from PATH (FileNotFoundError) and a repo_path that does not exist or is a file
+        # (NotADirectoryError). Every sibling measurement in _snapshot already tolerates a
+        # missing path; provenance must not be the one field that can crash the command it
+        # only annotates. Same posture as _spike_branch. (Both found by fresh review, both
+        # reproduced: an unconfigured or not-yet-cloned repo path is ordinary, not exotic.)
+        try:
+            return subprocess.run(["git"] + list(args), cwd=repo_path,
+                                  capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace")
+        except OSError:
+            return None
+
+    rev = _git("rev-parse", "HEAD")
+    if rev is not None and rev.returncode == 0 and rev.stdout.strip():
+        origin["commit"] = rev.stdout.strip()
+    # `-- .` scopes the answer to repo_path. Without it, a repo entry pointing at a
+    # SUBDIRECTORY of a larger working tree reports the whole outer repo's state, so an
+    # unrelated edit elsewhere would mark this repo's evidence dirty -- and the ADR would
+    # be claiming a per-path fact the code did not deliver.
+    st = _git("status", "--porcelain", "--", ".")
+    if st is not None and st.returncode == 0:
+        origin["dirty"] = bool(st.stdout.strip())
+    return origin
+
+
 def _snapshot(ledger, name):
     node = _repo_node(ledger, name)
     cfg = _repo_cfg(ledger, name) if name != "integration" else {"path": ".", "type": "maven"}
@@ -1868,6 +1920,7 @@ def _snapshot(ledger, name):
         "coverage": coverage(path, rtype),
         "tests": test_count(path, rtype),
         "loc": count_loc(path, rtype),
+        "origin": _evidence_origin(path),
     }
     node["snapshots"].append(snap)
     return snap
@@ -1887,6 +1940,7 @@ def cmd_snapshot(args):
           f"coverage={cov['pct']}% (found={cov['report_found']}), "
           f"tests={tests['total']} (found={tests['report_found']}), "
           f"freshness={freshness.get('status', 'unknown')}, "
+          f"origin={_origin_label(snap.get('origin'))}, "
           f"prod_loc={loc['prod_loc']}, test_loc={loc['test_loc']}")
     if freshness.get("status") == "stale":
         print(f"  test evidence stale: {freshness.get('reason')}")
@@ -4319,6 +4373,16 @@ def cmd_dashboard(args):
                             for r in {e.get("repo") for e in ledger["fast_path"]}}
     if ledger.get("spec_drift"):
         out["spec_drift"] = ledger["spec_drift"]
+    # evidence_origin: the latest snapshot's origin per repo, and ONLY when one exists --
+    # a ledger predating ADR-007 keeps the exact prior schema (same conditional-key rule
+    # fast_path and spec_drift already follow).
+    _org = {}
+    for _rn, _rnode in ledger["repos"].items():
+        _snaps = _rnode.get("snapshots") or []
+        if _snaps and _snaps[-1].get("origin"):
+            _org[_rn] = _snaps[-1]["origin"]
+    if _org:
+        out["evidence_origin"] = _org
     if getattr(args, "json", False):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
