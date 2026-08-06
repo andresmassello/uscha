@@ -22,7 +22,17 @@ it, and rigor is a one-way ratchet (a human may force more, never less). Spec-dr
 (ADR-005) flags specs gone stale relative to their code from git dates — advisory,
 it never gates. Neither skips human approval or asserting tests.
 
-The kit (v1.60.1, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+For existing systems, Reverse Discovery (kit 1.64+, ADR-009) extracts facts (a
+system map and a mechanically captured golden), then authors CANDIDATE claims about
+behavior in quarantine (discovery/*.md, each with typed evidence and confidence).
+Nothing is promoted without a recorded human verdict — preserve, fix or undefined —
+in BEHAVIOR-LEDGER.md; the curation-check gate measures this and a candidate with no
+verdict blocks the PR, naming itself (INV-CURATION-01). A fix declares its expected
+divergence, which the golden oracle then checks; an advisory roundtrip report traces
+promoted candidates back into code by id. No semantic matching, no code generation —
+both out of scope (ADR-011) until they can be measured.
+
+The kit (v1.65.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil) —
 plus a pure-Python engine (qa_ledger.py, 32 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux
@@ -33,6 +43,7 @@ that ingests evidence from 11 language stacks. It runs on Windows, macOS and Lin
 
 - [Home](https://uscha.dev/index.html): landing page — the method, the five rules, the nine skills, the engine's numbers
 - [Why uscha exists](https://uscha.dev/why/index.html): essay — open loop vs. measured graph, who answers the gates, why the loop is caged
+- [How it works](https://uscha.dev/how/index.html): three diagrams — greenfield discovery, brownfield reverse discovery, and the curation mechanism (one human verdict, everything else measured)
 - [2-day developer course](https://uscha.dev/docs/uscha-dev-course-EN.html): from zero to production — day 1 greenfield (discovery), day 2 migration (characterize, reverse-discovery)
 - [Complete documentation](https://uscha.dev/docs/uscha-claude-code-doc-EN.html): the whole method in one place — rules, phases, every skill, gates and the ledger
 - [The paper](https://uscha.dev/docs/paper/uscha-paper.html): formal treatment — a fact-gated, tool-agnostic methodology for specification-driven development with LLM coding agents ([PDF](https://uscha.dev/docs/paper/uscha-paper.pdf))

@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cómo funciona uscha — discovery, reverse discovery, curación</title>
+<meta name="description" content="Tres diagramas: discovery greenfield, reverse discovery brownfield, y el mecanismo de curación donde un único veredicto humano es el único juicio del loop.">
+<link rel="canonical" href="https://uscha.dev/es/how">
+<link rel="alternate" hreflang="en" href="https://uscha.dev/how">
+<link rel="alternate" hreflang="es" href="https://uscha.dev/es/how">
+<link rel="alternate" hreflang="x-default" href="https://uscha.dev/how">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/uscha.css">
+<style>
+  .diagrams{max-width:920px;margin:0 auto;padding:64px 24px 40px}
+  .diagrams .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--coral);margin-bottom:14px}
+  .diagrams h1{font-family:var(--disp);font-weight:900;font-size:clamp(28px,4.4vw,44px);line-height:1.1;letter-spacing:-.02em}
+  .diagrams .intro{margin-top:18px;color:var(--fg-soft);max-width:680px}
+  .dgm{margin-top:56px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px 28px}
+  .dgm h2{font-family:var(--disp);font-weight:800;font-size:clamp(20px,2.8vw,27px);letter-spacing:-.015em}
+  .dgm .tag{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+  .dgm.d1 .tag{color:var(--cyan)} .dgm.d2 .tag{color:var(--amber)} .dgm.d3 .tag{color:var(--coral)}
+  .dgm .cap{margin-top:12px;color:var(--fg-soft);font-size:14.5px;max-width:720px}
+  .dgm .cap b{color:var(--fg)}
+  .dgm svg{display:block;width:100%;height:auto;margin:24px auto 6px;max-width:640px}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+  .legend span{font-family:var(--mono);font-size:11px;color:var(--mute);display:flex;align-items:center;gap:7px}
+  .legend i{display:inline-block;width:22px;height:12px;border-radius:3px;border:1.5px solid;background:transparent}
+  .lg-gate{border-color:var(--cyan)} .lg-human{border-color:var(--coral);background:rgba(255,107,74,.12)}
+  .lg-adv{border-color:var(--amber);border-style:dashed} .lg-art{border-color:var(--mute)}
+  .backlinks{margin-top:48px;font-family:var(--mono);font-size:12.5px;display:flex;gap:22px;flex-wrap:wrap}
+  .svg-t{font-family:"Chivo",sans-serif;font-weight:700;fill:#dbe8e6}
+  .svg-s{font-family:"JetBrains Mono",monospace;fill:#9db3b0}
+  .svg-tag{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.08em}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="wordmark" href="../index.html">uscha<b>.</b>dev</a>
+    <nav>
+      <a href="../index.html#paradigma">paradigma</a>
+      <a href="../index.html#skills">skills</a>
+      <a href="../index.html#biblioteca">biblioteca</a>
+      <a href="https://github.com/andresmassello/uscha">github</a>
+      <a class="lang" href="../../how/index.html">EN</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="diagrams">
+    <div class="kicker">cómo funciona</div>
+    <h1>Tres flujos, una regla: el humano juzga, el motor mide</h1>
+    <p class="intro">
+      uscha tiene un frente para sistemas nuevos y uno para los que ya existen. Los dos terminan en
+      el mismo lugar — un veredicto humano que el motor puede chequear. Estos tres diagramas muestran
+      el flujo greenfield, el brownfield, y el mecanismo de curación (kit 1.64–1.65) donde una única
+      decisión humana es el único juicio del loop.
+    </p>
+
+    <!-- ============ DIAGRAMA 1 — DISCOVERY ============ -->
+    <section class="dgm d1">
+      <div class="tag">1 · greenfield</div>
+      <h2>Discovery — vos traés la idea, el método propone la forma</h2>
+      <p class="cap">La skill <b>explora primero</b>, después pregunta de a una — cada una con una
+        respuesta recomendada. <b>Vos confirmás o corregís</b>; nunca authoreás la forma desde una hoja
+        en blanco. El paquete se escribe al repo a medida que las decisiones cristalizan.</p>
+
+      <svg viewBox="0 0 460 640" role="img" aria-label="Flujo de discovery">
+        <defs>
+          <marker id="ar1" markerWidth="9" markerHeight="9" refX="5" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="#638079"/>
+          </marker>
+        </defs>
+        <g stroke="#638079" stroke-width="1.5" fill="none" marker-end="url(#ar1)">
+          <line x1="230" y1="72" x2="230" y2="104"/>
+          <line x1="230" y1="168" x2="230" y2="200"/>
+          <line x1="230" y1="276" x2="230" y2="308"/>
+          <line x1="230" y1="372" x2="230" y2="404"/>
+          <line x1="230" y1="480" x2="230" y2="512"/>
+        </g>
+        <path d="M355,340 C405,340 405,240 358,240" stroke="#ff6b4a" stroke-width="1.4" fill="none" stroke-dasharray="4 4" marker-end="url(#ar1)"/>
+        <text x="412" y="292" class="svg-tag" fill="#ff6b4a" text-anchor="middle" transform="rotate(90 412 292)">hasta que converge</text>
+
+        <g><rect x="105" y="20" width="250" height="52" rx="10" fill="#14282b" stroke="#638079"/>
+          <text x="230" y="42" text-anchor="middle" class="svg-t" font-size="14">Idea + material de referencia</text>
+          <text x="230" y="60" text-anchor="middle" class="svg-s" font-size="10.5">opcional: docs, URLs, código existente</text></g>
+        <g><rect x="105" y="116" width="250" height="52" rx="10" fill="#14282b" stroke="#22403f"/>
+          <text x="230" y="139" text-anchor="middle" class="svg-t" font-size="14">Explora antes de preguntar</text>
+          <text x="230" y="157" text-anchor="middle" class="svg-s" font-size="10.5">lee refs y código primero</text></g>
+        <g><rect x="90" y="212" width="280" height="64" rx="10" fill="#14282b" stroke="#22403f"/>
+          <text x="230" y="234" text-anchor="middle" class="svg-t" font-size="14">Propone la forma</text>
+          <text x="230" y="251" text-anchor="middle" class="svg-s" font-size="10.5">una pregunta a la vez,</text>
+          <text x="230" y="266" text-anchor="middle" class="svg-s" font-size="10.5">cada una con respuesta recomendada</text></g>
+        <g><rect x="105" y="316" width="250" height="56" rx="10" fill="rgba(255,107,74,.10)" stroke="#ff6b4a" stroke-width="2"/>
+          <text x="230" y="333" text-anchor="middle" class="svg-tag" fill="#ff6b4a">DECISIÓN HUMANA</text>
+          <text x="230" y="356" text-anchor="middle" class="svg-t" font-size="14">Confirmar o corregir</text></g>
+        <g><rect x="90" y="412" width="280" height="68" rx="10" fill="#14282b" stroke="#638079" stroke-dasharray="5 4"/>
+          <text x="230" y="433" text-anchor="middle" class="svg-tag" fill="#638079">ARTEFACTOS · EN EL REPO</text>
+          <text x="230" y="453" text-anchor="middle" class="svg-t" font-size="13">SPEC · ADRs · ACCEPTANCE</text>
+          <text x="230" y="470" text-anchor="middle" class="svg-s" font-size="10.5">CONTEXT · DOMAIN-MODEL · RISKS</text></g>
+        <g><rect x="105" y="520" width="250" height="52" rx="10" fill="#14282b" stroke="#22403f"/>
+          <text x="230" y="543" text-anchor="middle" class="svg-t" font-size="14">→ /uscha-devloop</text>
+          <text x="230" y="561" text-anchor="middle" class="svg-s" font-size="10.5">build + loop de QA medido</text></g>
+      </svg>
+
+      <div class="legend">
+        <span><i class="lg-art"></i>artefacto</span>
+        <span><i class="lg-human"></i>decisión humana</span>
+        <span><i style="border-color:#22403f"></i>paso de skill / motor</span>
+      </div>
+    </section>
+
+    <!-- ============ DIAGRAMA 2 — REVERSE DISCOVERY ============ -->
+    <section class="dgm d2">
+      <div class="tag">2 · brownfield</div>
+      <h2>Reverse Discovery — extraer hechos, después poner en cuarentena las afirmaciones</h2>
+      <p class="cap">El comportamiento del sistema que corre <b>es</b> la verdad. La skill extrae hechos
+        (mapa, golden), después authorea <b>candidatas en cuarentena</b> — nunca specs. La regla vieja
+        "nunca authorees un spec inferido" se renegoció en ADR-009: <b>podés authorear candidatas,
+        nunca podés promoverlas sin un veredicto.</b></p>
+
+      <svg viewBox="0 0 460 760" role="img" aria-label="Flujo de reverse discovery">
+        <defs>
+          <marker id="ar2" markerWidth="9" markerHeight="9" refX="5" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="#638079"/>
+          </marker>
+        </defs>
+        <g stroke="#638079" stroke-width="1.5" fill="none" marker-end="url(#ar2)">
+          <line x1="230" y1="66" x2="230" y2="92"/>
+          <line x1="230" y1="150" x2="230" y2="176"/>
+          <line x1="230" y1="252" x2="230" y2="278"/>
+          <line x1="230" y1="342" x2="230" y2="368"/>
+          <line x1="230" y1="440" x2="230" y2="466"/>
+          <line x1="230" y1="536" x2="230" y2="562"/>
+          <line x1="230" y1="632" x2="230" y2="658"/>
+        </g>
+        <path d="M360,494 C412,494 412,410 362,410" stroke="#4fd6c9" stroke-width="1.4" fill="none" stroke-dasharray="4 4" marker-end="url(#ar2)"/>
+        <text x="418" y="452" class="svg-tag" fill="#4fd6c9" text-anchor="middle" transform="rotate(90 418 452)">re-chequea hasta 0</text>
+
+        <g><rect x="95" y="16" width="270" height="50" rx="10" fill="#14282b" stroke="#638079"/>
+          <text x="230" y="38" text-anchor="middle" class="svg-t" font-size="14">Sistema existente</text>
+          <text x="230" y="55" text-anchor="middle" class="svg-s" font-size="10.5">comportamiento observable = verdad</text></g>
+        <g><rect x="95" y="100" width="270" height="50" rx="10" fill="#14282b" stroke="#22403f"/>
+          <text x="230" y="122" text-anchor="middle" class="svg-t" font-size="13.5">Map — hechos</text>
+          <text x="230" y="139" text-anchor="middle" class="svg-s" font-size="10.5">SYSTEM-MAP · bordes · deps</text></g>
+        <g><rect x="90" y="186" width="280" height="66" rx="10" fill="#14282b" stroke="#ff6b4a" stroke-width="2"/>
+          <text x="230" y="205" text-anchor="middle" class="svg-tag" fill="#ff6b4a">HUMANO APRUEBA · INV-GOLDEN-01</text>
+          <text x="230" y="226" text-anchor="middle" class="svg-t" font-size="13.5">Characterize → golden</text>
+          <text x="230" y="243" text-anchor="middle" class="svg-s" font-size="10.5">.received → STOP → .approved</text></g>
+        <g><rect x="90" y="286" width="280" height="56" rx="10" fill="#14282b" stroke="#638079" stroke-dasharray="5 4"/>
+          <text x="230" y="305" text-anchor="middle" class="svg-tag" fill="#638079">CANDIDATAS · CUARENTENA</text>
+          <text x="230" y="326" text-anchor="middle" class="svg-t" font-size="12.5">discovery/*.md · evidence + confidence</text></g>
+        <g><rect x="105" y="376" width="250" height="64" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="230" y="395" text-anchor="middle" class="svg-tag" fill="#4fd6c9">GATE MEDIDO · subcmd 34</text>
+          <text x="230" y="415" text-anchor="middle" class="svg-t" font-size="13.5">curation-check</text>
+          <text x="230" y="432" text-anchor="middle" class="svg-s" font-size="10">exit 2 malformado · 1 sin juzgar · 0 ok</text></g>
+        <g><rect x="105" y="470" width="250" height="66" rx="10" fill="rgba(255,107,74,.10)" stroke="#ff6b4a" stroke-width="2"/>
+          <text x="230" y="489" text-anchor="middle" class="svg-tag" fill="#ff6b4a">VEREDICTO HUMANO</text>
+          <text x="230" y="510" text-anchor="middle" class="svg-t" font-size="13.5">preserve · fix · undefined</text>
+          <text x="230" y="527" text-anchor="middle" class="svg-s" font-size="10">una candidata a la vez</text></g>
+        <g><rect x="90" y="562" width="280" height="52" rx="10" fill="#14282b" stroke="#638079" stroke-dasharray="5 4"/>
+          <text x="230" y="583" text-anchor="middle" class="svg-t" font-size="13">BEHAVIOR-LEDGER.md + ADR</text>
+          <text x="230" y="601" text-anchor="middle" class="svg-s" font-size="10.5">append-only, verificado contra git</text></g>
+        <g><rect x="90" y="658" width="280" height="56" rx="10" fill="#14282b" stroke="#22403f"/>
+          <text x="230" y="679" text-anchor="middle" class="svg-t" font-size="13">Summary → el humano escribe el SPEC</text>
+          <text x="230" y="697" text-anchor="middle" class="svg-s" font-size="10.5">solo de candidatas YA JUZGADAS</text></g>
+      </svg>
+
+      <div class="legend">
+        <span><i class="lg-art"></i>artefacto</span>
+        <span><i class="lg-gate"></i>gate medido</span>
+        <span><i class="lg-human"></i>decisión humana</span>
+        <span><i style="border-color:#22403f"></i>paso de skill</span>
+      </div>
+    </section>
+
+    <!-- ============ DIAGRAMA 3 — CURACIÓN / ORÁCULO ============ -->
+    <section class="dgm d3">
+      <div class="tag">3 · lo nuevo · 1.64–1.65</div>
+      <h2>Curación — un veredicto humano, todo lo demás medido</h2>
+      <p class="cap">Este es el diferenciador. Una candidata se valida a máquina; una candidata sin
+        veredicto <b>bloquea el PR, nombrándose a sí misma</b> (INV-CURATION-01). La <b>única decisión
+        humana</b> se abre en tres buckets. Un <code>fix</code> declara su divergencia esperada, que el
+        oráculo golden después chequea. <code>roundtrip</code> reporta trazabilidad por id — advisory,
+        nunca un gate.</p>
+
+      <svg viewBox="0 0 620 620" role="img" aria-label="Mecanismo de curación y oráculo">
+        <defs>
+          <marker id="ar3" markerWidth="9" markerHeight="9" refX="5" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="#638079"/>
+          </marker>
+        </defs>
+
+        <g stroke="#638079" stroke-width="1.5" fill="none" marker-end="url(#ar3)">
+          <line x1="310" y1="70" x2="310" y2="96"/>
+          <line x1="310" y1="156" x2="310" y2="182"/>
+          <line x1="310" y1="256" x2="310" y2="300"/>
+        </g>
+
+        <g><rect x="170" y="18" width="280" height="52" rx="10" fill="#14282b" stroke="#638079" stroke-dasharray="5 4"/>
+          <text x="310" y="38" text-anchor="middle" class="svg-tag" fill="#638079">CANDIDATA · discovery/*.md</text>
+          <text x="310" y="59" text-anchor="middle" class="svg-t" font-size="12.5">evidence.type · refs · confidence</text></g>
+        <g><rect x="170" y="96" width="280" height="60" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="115" text-anchor="middle" class="svg-tag" fill="#4fd6c9">MEDIDO</text>
+          <text x="310" y="134" text-anchor="middle" class="svg-t" font-size="12.5">valida frontmatter + refs</text>
+          <text x="310" y="150" text-anchor="middle" class="svg-s" font-size="10">refs resuelven · confinadas al repo · inference⇒low</text></g>
+        <g><rect x="185" y="182" width="250" height="74" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="201" text-anchor="middle" class="svg-tag" fill="#4fd6c9">GATE · subcmd 34</text>
+          <text x="310" y="221" text-anchor="middle" class="svg-t" font-size="14">curation-check</text>
+          <text x="310" y="239" text-anchor="middle" class="svg-s" font-size="10">sin veredicto → bloquea pr-ready,</text>
+          <text x="310" y="251" text-anchor="middle" class="svg-s" font-size="10">nombrando la candidata</text></g>
+
+        <g><rect x="120" y="300" width="380" height="78" rx="12" fill="rgba(255,107,74,.13)" stroke="#ff6b4a" stroke-width="2.5"/>
+          <text x="310" y="322" text-anchor="middle" class="svg-tag" fill="#ff6b4a" font-size="10">LA ÚNICA DECISIÓN HUMANA DEL LOOP</text>
+          <text x="310" y="346" text-anchor="middle" class="svg-t" font-size="16">VEREDICTO HUMANO</text>
+          <text x="310" y="367" text-anchor="middle" class="svg-t" font-size="12.5" fill="#9db3b0">preserve &#160;·&#160; fix &#160;·&#160; undefined</text></g>
+
+        <g stroke="#638079" stroke-width="1.5" fill="none" marker-end="url(#ar3)">
+          <line x1="200" y1="378" x2="160" y2="418"/>
+          <line x1="310" y1="378" x2="310" y2="418"/>
+          <line x1="420" y1="378" x2="460" y2="418"/>
+        </g>
+        <g><rect x="40" y="418" width="180" height="48" rx="9" fill="#14282b" stroke="#4ddb95"/>
+          <text x="130" y="438" text-anchor="middle" class="svg-t" font-size="12" fill="#4ddb95">preserve</text>
+          <text x="130" y="455" text-anchor="middle" class="svg-s" font-size="9.5">promover tal cual</text></g>
+        <g><rect x="222" y="418" width="176" height="48" rx="9" fill="#14282b" stroke="#f5b13d"/>
+          <text x="310" y="438" text-anchor="middle" class="svg-t" font-size="12" fill="#f5b13d">fix</text>
+          <text x="310" y="455" text-anchor="middle" class="svg-s" font-size="9.5">promover + divergencia declarada</text></g>
+        <g><rect x="400" y="418" width="180" height="48" rx="9" fill="#14282b" stroke="#638079"/>
+          <text x="490" y="438" text-anchor="middle" class="svg-t" font-size="12" fill="#9db3b0">undefined</text>
+          <text x="490" y="455" text-anchor="middle" class="svg-s" font-size="9.5">excluida</text></g>
+
+        <line x1="310" y1="466" x2="310" y2="502" stroke="#638079" stroke-width="1.5" fill="none" marker-end="url(#ar3)"/>
+        <g><rect x="185" y="502" width="250" height="62" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="521" text-anchor="middle" class="svg-tag" fill="#4fd6c9">ORÁCULO · golden-diff</text>
+          <text x="310" y="540" text-anchor="middle" class="svg-t" font-size="12">golden.divergences.json</text>
+          <text x="310" y="556" text-anchor="middle" class="svg-s" font-size="9.5">declarada+diverge=ok · declarada+idéntica=ROJO</text></g>
+
+        <path d="M130,466 C130,540 150,585 300,585" stroke="#f5b13d" stroke-width="1.4" fill="none" stroke-dasharray="4 4" marker-end="url(#ar3)"/>
+        <g><rect x="300" y="576" width="300" height="34" rx="9" fill="#14282b" stroke="#f5b13d" stroke-dasharray="5 4"/>
+          <text x="450" y="597" text-anchor="middle" class="svg-s" font-size="10.5" fill="#f5b13d">roundtrip (subcmd 35) · advisory · trazable por id · exit 0 siempre</text></g>
+      </svg>
+
+      <div class="legend">
+        <span><i class="lg-art"></i>candidata / artefacto</span>
+        <span><i class="lg-gate"></i>gate medido</span>
+        <span><i class="lg-human"></i>el veredicto humano</span>
+        <span><i class="lg-adv"></i>advisory</span>
+      </div>
+    </section>
+
+    <p class="cap" style="margin-top:32px;color:var(--mute);font-size:13px">
+      Cada nodo de arriba mapea a un subcomando o invariante real de <code>qa_ledger.py</code> (kit 1.65.0).
+      Lo que deliberadamente <em>no</em> está acá: matching semántico y generación de código — ambos fuera
+      de alcance (ADR-011) hasta que se puedan medir.
+    </p>
+
+    <div class="backlinks">
+      <a href="../../docs/uscha-dev-course.html">Hacer el curso →</a>
+      <a href="../../docs/paper/uscha-paper.html">Leer el paper (inglés) →</a>
+      <a href="../index.html">← Volver al inicio</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="foot-motto">El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</p>
+    <div class="foot-links">
+      <a href="https://github.com/andresmassello/uscha">github.com/andresmassello/uscha</a>
+      <a href="https://www.npmjs.com/package/@andresmassello/uscha">npm · @andresmassello/uscha</a>
+      <a href="mailto:info@uscha.dev">info@uscha.dev</a>
+      <a href="../../how/index.html">English version</a>
+    </div>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.65.0</p>
+  </div>
+</footer>
+
+</body>
+</html>
