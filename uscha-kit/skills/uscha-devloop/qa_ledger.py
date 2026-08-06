@@ -2634,6 +2634,29 @@ def _derive_phase(ledger, name, node, k, qa_order):
     # requires clean-room evidence that is GREEN and pinned to the CURRENT HEAD. A new commit
     # makes the previous run stale for the gate, the same staleness posture the rest of the
     # engine takes: evidence certifies the thing it was measured against, nothing later.
+    # curation gate (ADR-009, INV-CURATION-01). In use the moment discovery/ exists --
+    # creating candidates IS the opt-in. Fail-closed both ways: an unjudged candidate blocks,
+    # and a malformation blocks too, because "could not validate" must never read as judged.
+    _cu_cfg = (_repo_cfg(ledger, name) if name != "integration"
+               else {"path": "."})               # synthetic scope: never in config["repos"]
+    _cu = _curation_state(_cu_cfg.get("path", "."))
+    if _cu is not None:
+        if _cu["malformed"] or _cu["ledger_errors"] or _cu["append_only"] == "violation":
+            _bits = [m["candidate"] for m in _cu["malformed"][:3]]
+            if _cu["ledger_errors"]:
+                _bits.append(BEHAVIOR_LEDGER_FILE + " malformado")
+            if _cu["append_only"] == "violation":
+                _bits.append(BEHAVIOR_LEDGER_FILE + " editado (append-only)")
+            reasons.append("curation invalida: " + "; ".join(_bits)
+                           + " -- corregir antes de avanzar")
+            conv = False
+        elif _cu["unjudged"]:
+            reasons.append("candidata(s) sin veredicto humano: "
+                           + ", ".join(_cu["unjudged"][:3])
+                           + (" (+%d)" % (len(_cu["unjudged"]) - 3)
+                              if len(_cu["unjudged"]) > 3 else "")
+                           + " -- INV-CURATION-01: sin juicio no hay promocion")
+            conv = False
     _cr = _cr_cfg(ledger)
     if _cr and _cr.get("mode") == "final":
         _head = None
@@ -3507,6 +3530,264 @@ def cmd_cleanroom(args):
         if record.get("worktree_kept_at"):
             print("  worktree kept for inspection: " + record["worktree_kept_at"])
     sys.exit(0 if record["ok"] else 1)
+
+
+
+# --------------------------------------------------------------------------- #
+# curation  (ADR-009/010: candidates in quarantine, verdicts in the behavior
+# ledger, and a promotion gate the ENGINE measures -- INV-CURATION-01)
+# --------------------------------------------------------------------------- #
+
+BEHAVIOR_LEDGER_FILE = "BEHAVIOR-LEDGER.md"
+CANDIDATE_DIR = "discovery"
+_BL_VERDICTS = ("preserve", "fix", "undefined")
+
+
+def _parse_candidate(path):
+    """Parse one candidate's frontmatter. Returns (data, errors); a candidate with errors
+    is INVALID and named -- never silently skipped, because a skipped candidate would walk
+    past the promotion gate unjudged."""
+    errors = []
+    try:
+        # utf-8-sig: a BOM-adding editor must not turn a well-formed candidate into a
+        # false "no frontmatter" (fresh-review LOW)
+        with open(path, encoding="utf-8-sig", errors="replace") as fh:
+            lines = fh.read().splitlines()
+    except OSError as exc:
+        return None, ["unreadable: %s" % exc]
+    if not lines or lines[0].strip() != "---":
+        return None, ["no frontmatter (evidence/confidence are mandatory, ADR-009)"]
+    fm, i = [], 1
+    while i < len(lines) and lines[i].strip() != "---":
+        fm.append(lines[i]); i += 1
+    if i >= len(lines):
+        return None, ["frontmatter never closes"]
+    etype, refs, conf, in_refs, in_evidence = None, [], None, False, False
+    for ln in fm:
+        s = ln.strip()
+        indented = ln.startswith((" ", "\t"))
+        if s.startswith("evidence:") and not indented:
+            in_evidence = True; in_refs = False
+        elif s.startswith("type:"):
+            # scope + duplicates are MALFORMATION, not last-value-wins: a stray top-level
+            # type:/confidence: after the evidence block silently overrode the nested one
+            # and walked straight past the inference->low invariant (fresh-review HIGH).
+            if not (in_evidence and indented):
+                errors.append("type: outside the evidence block")
+            elif etype is not None:
+                errors.append("duplicate type: declaration")
+            else:
+                etype = s[len("type:"):].strip().strip("\x27\x22")
+            in_refs = False
+        elif s.startswith("refs:"):
+            if not (in_evidence and indented):
+                errors.append("refs: outside the evidence block")
+            in_refs = in_evidence and indented
+        elif s.startswith("confidence:") and not indented:
+            if conf is not None:
+                errors.append("duplicate confidence: declaration")
+            else:
+                conf = s[len("confidence:"):].strip().strip("\x27\x22")
+            in_refs = False; in_evidence = False
+        elif in_refs and s.startswith("- "):
+            refs.append(s[2:].strip().strip("\x27\x22"))
+        elif s and not indented:
+            in_refs = False; in_evidence = False
+    if etype not in ("test", "code", "inference"):
+        errors.append("evidence.type %r (expected test|code|inference)" % etype)
+    if not refs:
+        errors.append("evidence.refs is empty (a candidate without evidence is a guess)")
+    if conf not in ("high", "medium", "low"):
+        errors.append("confidence %r (expected high|medium|low)" % conf)
+    if etype == "inference" and conf != "low":
+        errors.append("inference is ALWAYS low confidence (ADR-009); %r declared" % conf)
+    return {"type": etype, "refs": refs, "confidence": conf}, errors
+
+
+def _resolve_ref(repo_path, ref):
+    """A ref must point at something REAL: `path`, `path:N`, `path:N-M` or `path#name`.
+    Returns None when it resolves, else the reason."""
+    frag = None
+    if "#" in ref:
+        ref, frag = ref.split("#", 1)
+    span = None
+    m = re.match(r"^(.*?):(\d+)(?:-(\d+))?$", ref)
+    if m:
+        ref = m.group(1)
+        span = (int(m.group(2)), int(m.group(3) or m.group(2)))
+    full = os.path.join(repo_path, ref.replace("/", os.sep))
+    if _gc_rel(full, repo_path) is None:
+        # an absolute path makes os.path.join DISCARD repo_path entirely, and ../ walks
+        # out -- either way the "evidence" would point outside the legacy tree it claims
+        # to evidence (fresh-review HIGH). Confinement is part of resolution.
+        return "ref escapes the repo tree: %s" % ref
+    if not os.path.isfile(full):
+        return "file not found: %s" % ref
+    if span or frag:
+        try:
+            with open(full, encoding="utf-8", errors="replace") as fh:
+                body = fh.read()
+        except OSError as exc:
+            return "unreadable: %s" % exc
+        if span:
+            n = body.count("\n") + 1
+            if span[0] < 1 or span[1] > n or span[0] > span[1]:
+                return "lines %d-%d out of range (file has %d)" % (span[0], span[1], n)
+        if frag and frag not in body:
+            return "fragment %r not found in %s" % (frag, ref)
+    return None
+
+
+def _load_behavior_ledger(path):
+    """Strict parse of the verdict table. Returns (rows, errors). Malformed is an ERROR,
+    never a degrade: under the promotion gate, a silent "no verdicts" would UNBLOCK exactly
+    what the gate guards (same posture as golden.scrub.json)."""
+    rows, errors = [], []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            lines = fh.read().splitlines()
+    except OSError as exc:
+        return [], ["unreadable: %s" % exc]
+    for n, ln in enumerate(lines, 1):
+        s = ln.strip()
+        if not s.startswith("|"):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if cells and all(c and set(c) <= set("-: ") for c in cells):
+            continue                                    # separator row (empty cells are NOT)
+        low = [c.lower() for c in cells]
+        if "candidate" in low and "verdict" in low:
+            continue                                    # header row
+        if len(cells) != 6:
+            errors.append("line %d: %d cells, expected 6 (# | candidate | evidence | "
+                          "confidence | verdict | adr)" % (n, len(cells)))
+            continue
+        _, cand, _ev, _conf, verdict, adr = cells
+        if verdict not in _BL_VERDICTS:
+            errors.append("line %d: verdict %r is not one of %s -- a fourth state is "
+                          "malformation, not an option" % (n, verdict, "/".join(_BL_VERDICTS)))
+        if not re.match(r"^ADR-\S+$", adr):
+            errors.append("line %d: adr ref %r -- no verdict without its why (ADR-010)"
+                          % (n, adr))
+        if not cand:
+            errors.append("line %d: empty candidate" % n)
+        rows.append({"candidate": cand, "verdict": verdict, "adr": adr, "line": n})
+    return rows, errors
+
+
+def _bl_append_only(repo_path, rel):
+    """The rows in HEAD must be a byte-identical prefix of the working file. Deliberately
+    blunt (ADR-010): an audit trail that tolerates rewriting is not an audit trail.
+    Returns "ok" | "new" | "violation" | "unmeasured"."""
+    try:
+        # probe the repo FIRST: "git failed entirely" and "file not in HEAD yet" are
+        # different answers, and conflating them turned no-git into a silent "new"
+        # (caught by T120's AC-RD-05 -- unmeasured must never be mistaken for anything).
+        probe = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_path,
+                               capture_output=True)
+        if probe.returncode != 0:
+            return "unmeasured"
+        r = subprocess.run(["git", "show", "HEAD:" + rel.replace(os.sep, "/")],
+                           cwd=repo_path, capture_output=True)
+    except OSError:
+        return "unmeasured"
+    if r.returncode != 0:
+        return "new"                                   # not in HEAD yet
+    try:
+        with open(os.path.join(repo_path, rel), "rb") as fh:
+            cur = fh.read()
+    except OSError:
+        return "violation"                             # in HEAD but gone from the tree
+    # normalize line endings on BOTH sides: with core.autocrlf, git stores LF and checks out
+    # CRLF, so a raw byte compare reads that translation as tampering on every Windows box
+    # (found by the first probe). Git itself treats line endings as non-content; so do we.
+    # A verdict edit still cannot hide in a CRLF flip.
+    cur_n = cur.replace(b"\r\n", b"\n")
+    head_n = r.stdout.replace(b"\r\n", b"\n")
+    return "ok" if cur_n.startswith(head_n) else "violation"
+
+
+def _curation_state(repo_path):
+    """Everything the gate needs, from one scan. None = feature unused (no discovery/):
+    behavior identical to a release where this code does not exist (AC-RD-07)."""
+    disc = os.path.join(repo_path, CANDIDATE_DIR)
+    if not os.path.isdir(disc):
+        return None
+    cands = sorted(f for f in os.listdir(disc) if f.lower().endswith(".md"))
+    state = {"candidates": [], "malformed": [], "ledger_errors": [],
+             "append_only": None, "unjudged": [], "promote_as_is": [],
+             "promote_with_declared_divergence": [], "excluded": []}
+    for f in cands:
+        data, errs = _parse_candidate(os.path.join(disc, f))
+        if data:
+            for ref in data["refs"]:
+                bad = _resolve_ref(repo_path, ref)
+                if bad:
+                    errs.append("ref %r: %s" % (ref, bad))
+        if errs:
+            state["malformed"].append({"candidate": f, "errors": errs})
+        else:
+            state["candidates"].append(f)
+    lpath = os.path.join(repo_path, BEHAVIOR_LEDGER_FILE)
+    verdicts = {}
+    if os.path.isfile(lpath):
+        rows, lerrs = _load_behavior_ledger(lpath)
+        state["ledger_errors"] = lerrs
+        state["append_only"] = _bl_append_only(repo_path, BEHAVIOR_LEDGER_FILE)
+        for row in rows:
+            verdicts[row["candidate"]] = row["verdict"]   # append-only: the LATEST row wins
+    for f in state["candidates"]:
+        v = verdicts.get(f)
+        if v is None:
+            state["unjudged"].append(f)
+        elif v == "preserve":
+            state["promote_as_is"].append(f)
+        elif v == "fix":
+            state["promote_with_declared_divergence"].append(f)
+        else:
+            state["excluded"].append(f)
+    return state
+
+
+def cmd_curation_check(args):
+    """The INV-CURATION-01 gate, measured. Exit 2: malformation or tampering (config-error
+    class -- candidates that cannot be validated, a ledger that cannot be trusted). Exit 1:
+    valid candidates awaiting a human verdict (the quarantine holding). Exit 0: every
+    candidate judged, or the feature unused."""
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+    st = _curation_state(repo_path)
+    if st is None:
+        if args.json:
+            print(json.dumps({"repo": args.repo, "in_use": False}))
+        else:
+            print("CURATION %s: no %s/ directory -- feature unused, nothing to gate."
+                  % (args.repo, CANDIDATE_DIR))
+        sys.exit(0)
+    out = dict(st)
+    out.update({"repo": args.repo, "in_use": True})
+    hard = bool(st["malformed"] or st["ledger_errors"]
+                or st["append_only"] == "violation")
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print("CURATION %s: %d candidate(s), %d judged, %d awaiting verdict"
+              % (args.repo, len(st["candidates"]) + len(st["malformed"]),
+                 len(st["promote_as_is"]) + len(st["promote_with_declared_divergence"])
+                 + len(st["excluded"]), len(st["unjudged"])))
+        for m in st["malformed"]:
+            print("  !! %s: %s" % (m["candidate"], "; ".join(m["errors"])))
+        for e in st["ledger_errors"]:
+            print("  !! %s: %s" % (BEHAVIOR_LEDGER_FILE, e))
+        if st["append_only"] == "violation":
+            print("  !! %s: existing rows were EDITED -- append-only violated; revert and "
+                  "add a new row + ADR instead" % BEHAVIOR_LEDGER_FILE)
+        elif st["append_only"] == "unmeasured":
+            print("  -- append-only: UNMEASURED (no git) -- reported, never claimed as pass")
+        for f in st["unjudged"]:
+            print("  .. %s: awaiting human verdict (blocks forward)" % f)
+    sys.exit(2 if hard else (1 if st["unjudged"] else 0))
 
 
 
@@ -7262,6 +7543,13 @@ def build_parser():
     pfp.add_argument("--intent", help="one sentence, what and why; without it the call is a dry-run")
     pfp.add_argument("--json", action="store_true")
     pfp.set_defaults(func=cmd_fastpath_eval)
+
+    pcu = sub.add_parser("curation-check",
+                         help="the INV-CURATION-01 gate: candidates, verdicts, append-only ledger (ADR-009/010)")
+    pcu.add_argument("--ledger", default="QA-LEDGER.json")
+    pcu.add_argument("--repo", required=True)
+    pcu.add_argument("--json", action="store_true")
+    pcu.set_defaults(func=cmd_curation_check)
 
     pcr = sub.add_parser("cleanroom",
                          help="run a command against a CLEAN checkout of one commit in a throwaway worktree (ADR-008)")

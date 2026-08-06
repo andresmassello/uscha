@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.63.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.64.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -177,6 +177,25 @@ previous run stale for the gate.
 Honest limit: this is **not** a substitute for CI. A local worktree runs on your machine, your
 OS, your shell - environment variance is invisible to it. Different failure class, different
 instrument.
+
+## Curation (ADR-009/010) - candidates in quarantine, verdicts on the record
+
+Reverse discovery's brownfield entry: the agent may author CANDIDATE specs of a legacy
+system - in `discovery/`, with mandatory `evidence` (`test|code|inference`) and
+`confidence` frontmatter, refs the engine resolves against real files - and **nothing is
+promoted without a human verdict**:
+
+```bash
+python qa_ledger.py curation-check --repo <name> [--json]
+```
+
+Verdicts live in `BEHAVIOR-LEDGER.md` (`preserve` / `fix` / `undefined`, one ADR each) -
+a human-readable table with machine-enforced rules: strict shape (`exit 2` on malformed,
+because under this gate a silent "no verdicts" would UNBLOCK what it guards), append-only
+verified against git (revert = new row + new ADR, never an edit; latest row wins). While
+any candidate lacks a verdict, `pr-ready` is blocked naming it (INV-CURATION-01) - the
+quarantine is measured, not promised. No `discovery/` directory -> the feature does not
+exist and nothing changes.
 
 ## End-to-end flow
 

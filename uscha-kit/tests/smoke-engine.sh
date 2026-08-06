@@ -3419,6 +3419,7 @@ rm -f "$KIT/reports/junit/.specdrift-cases.json"  # same rule for T114
 rm -f "$KIT/reports/junit/.goldencov-cases.json"  # same rule for T117
 rm -f "$KIT/reports/junit/.origin-cases.json"     # same rule for T118
 rm -f "$KIT/reports/junit/.cleanroom-cases.json"  # same rule for T119
+rm -f "$KIT/reports/junit/.curation-cases.json"   # same rule for T120
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -4098,6 +4099,157 @@ PY
 case "$T119" in
   OK*) PASS=$((PASS+1)); echo "  ok   cleanroom: $T119";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T119";;
+esac
+
+echo "== T120 (1.64.0): curation -- candidates in quarantine, verdicts in the ledger (ADR-009/010) =="
+# The promotion-gate assertion is ATTRIBUTABLE by construction (the AC-CR-06 lesson): the
+# same ledger reaches pr-ready with no discovery/, is blocked by one unjudged candidate,
+# and opens again the moment the verdict lands.
+T120=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
+os.makedirs(os.path.join(repo, "reports")); os.makedirs(os.path.join(repo, "src"))
+
+def sh(*a):
+    return subprocess.run(list(a), cwd=repo, capture_output=True, text=True)
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+sh("git", "init", "-b", "main"); sh("git", "config", "user.email", "t@t")
+sh("git", "config", "user.name", "t")
+io.open(os.path.join(repo, "src", "calc.go"), "w").write("package main\nfunc Iva() {}\n")
+sh("git", "add", "-A"); sh("git", "commit", "-m", "base")
+io.open(os.path.join(repo, "reports", "junit.xml"), "w").write(
+    '<testsuite tests="1" failures="0" errors="0" skipped="0"/>')
+
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
+    "defaults": {"acceptance_file": "ACCEPTANCE.md",
+                 "qa_tools_order": ["code-review", "judgment-day", "improve"]},
+    "repos": [{"name": "r", "path": "r", "type": "go"}],
+    "integration": {"enabled": False}}))
+eng("init", "--config", "c.json", "--out", "L.json")
+eng("snapshot", "--ledger", "L.json", "--repo", "r")
+for tool in ("code-review", "judgment-day", "improve"):
+    eng("log-step", "--ledger", "L.json", "--repo", "r", "--tool", tool,
+        "--iteration", "1", "--gated-reported", "0", "--files-changed", "0",
+        "--tests-passed", "true")
+
+def pr_ready():
+    return eng("phase", "--ledger", "L.json", "--repo", "r", "--require", "pr-ready")
+
+def cc(*extra):
+    return eng("curation-check", "--ledger", "L.json", "--repo", "r", *extra)
+
+def write_cand(name, body):
+    os.makedirs(os.path.join(repo, "discovery"), exist_ok=True)
+    io.open(os.path.join(repo, "discovery", name), "w").write(body)
+
+def write_ledger(body, commit=False):
+    io.open(os.path.join(repo, "BEHAVIOR-LEDGER.md"), "w").write(body)
+    if commit:
+        sh("git", "add", "-A"); sh("git", "commit", "-m", "ledger")
+
+VALID = ("---\nevidence:\n  type: code\n  refs:\n    - \x22src/calc.go:1-2\x22\n"
+         "confidence: high\n---\n# iva behavior\n")
+HDR = ("# Behavior Ledger\n\n"
+       "| # | candidate | evidence | confidence | verdict | adr |\n"
+       "|---|-----------|----------|------------|---------|-----|\n")
+
+# --- AC-RD-07 first half: no discovery/ -> feature unused, pr-ready reachable
+before = pr_ready().returncode
+unused = cc()
+res["AC-RD-07"] = before == 0 and unused.returncode == 0
+
+# --- AC-RD-01: valid candidate accepted (exit 1: awaiting verdict); malformed fm -> exit 2
+write_cand("001-iva.md", VALID)
+r = cc("--json"); d = json.loads(r.stdout)
+valid_ok = r.returncode == 1 and d["candidates"] == ["001-iva.md"] and d["unjudged"] == ["001-iva.md"]
+write_cand("002-bad.md", "---\nevidence:\n  type: guesswork\n  refs:\n    - \x22src/calc.go\x22\nconfidence: high\n---\n# bad\n")
+r = cc("--json"); d = json.loads(r.stdout)
+mal_ok = (r.returncode == 2 and d["malformed"]
+          and d["malformed"][0]["candidate"] == "002-bad.md")
+res["AC-RD-01"] = bool(valid_ok and mal_ok)
+os.remove(os.path.join(repo, "discovery", "002-bad.md"))
+
+# --- AC-RD-02: unresolvable evidence ref -> invalid, NAMED
+write_cand("003-ghost.md", "---\nevidence:\n  type: code\n  refs:\n    - \x22src/nope.go:9\x22\nconfidence: low\n---\n# ghost\n")
+r = cc("--json"); d = json.loads(r.stdout)
+gm = [m for m in d["malformed"] if m["candidate"] == "003-ghost.md"]
+res["AC-RD-02"] = (r.returncode == 2 and gm
+                   and any("src/nope.go" in e for e in gm[0]["errors"]))
+os.remove(os.path.join(repo, "discovery", "003-ghost.md"))
+
+# --- AC-RD-03: unjudged candidate blocks pr-ready, reason NAMES it (attributable)
+blocked = pr_ready()
+res["AC-RD-03"] = (blocked.returncode == 1 and "001-iva.md" in blocked.stdout
+                   and before == 0)
+
+# --- AC-RD-06: the three verdicts land in three distinct buckets
+write_cand("004-keep.md", VALID.replace("# iva behavior", "# keep me"))
+write_cand("005-drop.md", VALID.replace("# iva behavior", "# drop me"))
+write_ledger(HDR
+             + "| 1 | 001-iva.md | code | high | fix | ADR-RD-001 |\n"
+             + "| 2 | 004-keep.md | code | high | preserve | ADR-RD-002 |\n"
+             + "| 3 | 005-drop.md | code | high | undefined | ADR-RD-003 |\n",
+             commit=True)
+r = cc("--json"); d = json.loads(r.stdout)
+res["AC-RD-06"] = (r.returncode == 0
+                   and d["promote_as_is"] == ["004-keep.md"]
+                   and d["promote_with_declared_divergence"] == ["001-iva.md"]
+                   and d["excluded"] == ["005-drop.md"])
+# and the gate OPENS now that every candidate is judged -- closes the attributable arc
+res["AC-RD-03"] = bool(res["AC-RD-03"] and pr_ready().returncode == 0)
+
+# --- AC-RD-04: malformed ledger (fourth verdict state) -> exit 2, named
+write_ledger(HDR + "| 1 | 001-iva.md | code | high | maybe | ADR-RD-001 |\n")
+r = cc("--json"); d = json.loads(r.stdout)
+# malformation must block via the PHASE gate too, and be attributed there (fresh review:
+# the gate blocked with a generic message and only curation-check was tested)
+pm = pr_ready()
+res["AC-RD-04"] = (r.returncode == 2 and any("maybe" in e for e in d["ledger_errors"])
+                   and pm.returncode == 1 and "BEHAVIOR-LEDGER.md" in pm.stdout)
+
+# --- AC-RD-05: EDIT an existing committed row -> violation; and no git -> UNMEASURED
+write_ledger(HDR
+             + "| 1 | 001-iva.md | code | high | preserve | ADR-RD-001 |\n"
+             + "| 2 | 004-keep.md | code | high | preserve | ADR-RD-002 |\n"
+             + "| 3 | 005-drop.md | code | high | undefined | ADR-RD-003 |\n")
+r = cc("--json"); d = json.loads(r.stdout)
+tamper_ok = r.returncode == 2 and d["append_only"] == "violation"
+# no-git shape: same tree copied outside any repo
+import shutil as _sh
+w2 = tempfile.mkdtemp(); _sh.copytree(repo, os.path.join(w2, "r"),
+                                      ignore=_sh.ignore_patterns(".git"))
+io.open(os.path.join(w2, "c.json"), "w").write(json.dumps({
+    "defaults": {"acceptance_file": "ACCEPTANCE.md"},
+    "repos": [{"name": "r", "path": "r", "type": "go"}],
+    "integration": {"enabled": False}}))
+def eng2(*a):
+    env2 = dict(os.environ)
+    env2["GIT_CEILING_DIRECTORIES"] = w2   # a .git ABOVE the tempdir must not un-break no-git
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w2, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace", env=env2)
+eng2("init", "--config", "c.json", "--out", "L.json")
+r2 = eng2("curation-check", "--ledger", "L.json", "--repo", "r", "--json")
+d2 = json.loads(r2.stdout)
+res["AC-RD-05"] = bool(tamper_ok and d2["append_only"] == "unmeasured"
+                       and d2["append_only"] != "ok")
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".curation-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T120" in
+  OK*) PASS=$((PASS+1)); echo "  ok   curation: $T120";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T120";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -5159,6 +5311,24 @@ for _cid in ("AC-CR-01", "AC-CR-02", "AC-CR-03", "AC-CR-04",
         results.append((_cid, "cleanroom", None))
     else:
         results.append((_cid, "cleanroom", "T119 case failed or missing"))
+
+# Curation criteria (ADR-009/010): measured by T120, same sidecar contract.
+def _curation_cases():
+    p = os.path.join(kit, "reports", "junit", ".curation-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_cuc = _curation_cases()
+for _uid in ("AC-RD-01", "AC-RD-02", "AC-RD-03", "AC-RD-04",
+             "AC-RD-05", "AC-RD-06", "AC-RD-07"):
+    if _cuc is None or _cuc.get(_uid) is None:
+        results.append((_uid, "curation", SKIP))
+    elif _cuc.get(_uid) is True:
+        results.append((_uid, "curation", None))
+    else:
+        results.append((_uid, "curation", "T120 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

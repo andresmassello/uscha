@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.64.0** — [curation: candidates in quarantine, verdicts on the record (2026-08-06)](CHANGELOG-1.64.0.md)
 - **1.63.0** — [the clean-room: verify the commit, not your tree (2026-08-03)](CHANGELOG-1.63.0.md)
 - **1.62.0** — [`NO-CODE`: declaring nothing is not declaring *nothing to declare* (2026-08-03)](CHANGELOG-1.62.0.md)
 - **1.61.0** — [green, but green at *what*? (2026-08-03)](CHANGELOG-1.61.0.md)

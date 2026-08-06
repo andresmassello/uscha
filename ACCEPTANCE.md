@@ -144,19 +144,19 @@ because the code does not exist yet - criteria before implementation, as always.
 (declared oracle divergences, spec-id, roundtrip) is out of scope here and gets its own
 criteria when it starts.
 
-- [ ] AC-RD-01 - candidate spec with valid `evidence`/`confidence` frontmatter accepted;
+- [x] AC-RD-01 - candidate spec with valid `evidence`/`confidence` frontmatter accepted;
   malformed frontmatter -> exit 2.
-- [ ] AC-RD-02 - an `evidence.refs` entry that does not resolve to a real `file:line(s)` ->
+- [x] AC-RD-02 - an `evidence.refs` entry that does not resolve to a real `file:line(s)` ->
   candidate invalid, named.
-- [ ] AC-RD-03 - any candidate without a ledger verdict -> forward blocked, the reason names
+- [x] AC-RD-03 - any candidate without a ledger verdict -> forward blocked, the reason names
   the candidate (the INV-CURATION-01 gate, measured).
-- [ ] AC-RD-04 - malformed `BEHAVIOR-LEDGER.md` (bad shape, unknown verdict, missing ADR
+- [x] AC-RD-04 - malformed `BEHAVIOR-LEDGER.md` (bad shape, unknown verdict, missing ADR
   ref) -> exit 2, never a silent "no verdicts".
-- [ ] AC-RD-05 - editing an existing ledger row -> append-only violation detected against
+- [x] AC-RD-05 - editing an existing ledger row -> append-only violation detected against
   git HEAD, named; without git the check reports UNMEASURED, never pass.
-- [ ] AC-RD-06 - `preserve` / `fix` / `undefined` produce three distinct, verifiable
+- [x] AC-RD-06 - `preserve` / `fix` / `undefined` produce three distinct, verifiable
   promotion effects.
-- [ ] AC-RD-07 - feature unused (no `discovery/`, no ledger) -> behavior identical to the
+- [x] AC-RD-07 - feature unused (no `discovery/`, no ledger) -> behavior identical to the
   prior release, and `cmd_spec_drift` untouched (ADR-011).
 
 ## Out of scope for measurement here

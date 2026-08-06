@@ -5,8 +5,10 @@ description: >
   inverse of discovery: the system already exists and its behavior IS the truth, so you
   EXTRACT facts instead of proposing shape. Produce ONLY facts — a system map (endpoints,
   contracts, dependency graph, module candidates via static analysis) and a golden suite
-  captured mechanically at the boundaries. NEVER author an inferred SPEC or ADR of the old
-  system; the human writes those reading your facts. Invoke for "reverse-discovery",
+  captured mechanically at the boundaries — plus CANDIDATE specs in quarantine
+  (discovery/, evidence + confidence mandatory), which NEVER promote without a human
+  verdict in BEHAVIOR-LEDGER.md (ADR-009, INV-CURATION-01: the engine measures the gate).
+  Invoke for "reverse-discovery",
   "migrar/modernizar este sistema", "caracterizar el sistema viejo antes de tocarlo".
 allowed-tools: Read, Write, Glob, Grep, Bash
 disable-model-invocation: false
@@ -15,8 +17,9 @@ disable-model-invocation: false
 # reverse-discovery — extract the facts of an existing system before migrating it
 
 `uscha-discovery` is greenfield: you only have an idea, so you PROPOSE the shape. This is the
-opposite. The system already runs; its observable behavior is the ground truth. **You do
-not invent anything — you characterize what is already there, as facts.**
+opposite. The system already runs; its observable behavior is the ground truth. **Facts
+first, always — and what cannot be fact yet becomes a CANDIDATE in quarantine: evidenced,
+confidence-tagged, and promoted to the contract only by a human verdict (ADR-009).**
 
 ## First contact (show ONCE, then never again)
 
@@ -29,11 +32,11 @@ breadcrumb. Repeating it every run would be exactly the ceremony the method forb
 [uscha · reverse-discovery · START]
 Method: you bring the idea, the method builds the rest. Facts block, guesses advise;
         nothing closes on a checkbox, and the human approves the merge.
-Here:   I EXTRACT facts from the system that already exists. I never invent its spec -- you write that reading my facts.
+Here:   I EXTRACT facts and CANDIDATES from the system that already exists. Candidates stay quarantined until YOUR verdict promotes them.
 Output: SYSTEM-MAP.md · DISCOVERY-SUMMARY.md -- endpoints, contracts, dependency graph,
-        module candidates. Facts only: the SPEC and the ADRs are yours to write.
+        module candidates + discovery/ candidates + BEHAVIOR-LEDGER.md. The verdicts are yours.
 Next:   `/uscha-characterize` freezes current behavior and a HUMAN approves the golden;
-        only then do you write the migration SPEC, reading these facts + that golden.
+        only judged candidates reach the migration SPEC; the golden stays the oracle.
 Stop:   say so at any point -- whatever is already written stays.
 ```
 
@@ -88,17 +91,30 @@ and say exactly what unblocks it.
 Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, `Produced`,
 `Blocks`, `Next`, `Run`) verbatim — they are the method's vocabulary and the smoke checks them.
 
-## The one non-negotiable: produce ONLY facts
+## The one non-negotiable: quarantine, not judgment (ADR-009)
 
 A system map (from static analysis) and a golden suite (byte-captured) are FACTS —
-verifiable, not opinions. **You do NOT author a SPEC of "what it does" or ADRs of "why it
-is built this way."** Those are inference, and if the agent writes them it encodes its own
-(mis)reading of the code — the exact blind spot the golden exists to counter. The golden
-is field truth; a SPEC the agent writes about legacy code is a claim. So this skill emits
-facts, and the human infers meaning from them.
+verifiable, not opinions. What you read out of the code beyond that is a CLAIM, and an
+LLM's claim about legacy code is plausible on the surface and divergent from reality —
+the exact blind spot the golden exists to counter. The old rule banned authoring such
+claims outright; ADR-009 renegotiated it: **you may author them as CANDIDATES, in
+quarantine, and you may NEVER judge or promote them.**
 
-If you catch yourself writing a requirement or a rationale, stop: that belongs to the human
-(and to `/uscha-adr-refine` for the FORWARD decisions), not here.
+- Every candidate lives in `discovery/`, with mandatory frontmatter: `evidence.type`
+  (`test | code | inference`), `evidence.refs` (real `file:line(s)` — the engine resolves
+  them; a ref that does not resolve makes the candidate invalid, named), and `confidence`
+  (`inference` is ALWAYS `low`).
+- **You capture; you do not judge.** Never decide whether a behavior is bug or feature —
+  that is the verdict (`preserve` / `fix` / `undefined`), it belongs to the human, and it
+  lands in `BEHAVIOR-LEDGER.md` with an ADR per verdict. You may present a candidate with
+  its evidence and ASK; you may write the skeleton row once the human decides; the verdict
+  itself is theirs.
+- The gate is MEASURED, not promised: `qa_ledger.py curation-check` blocks the forward flow
+  while any candidate lacks a verdict (INV-CURATION-01) — and a malformed candidate or a
+  tampered ledger blocks harder (`exit 2`), because "could not validate" must never read
+  as judged.
+- The ledger is append-only (verified against git): reverting a verdict is a NEW row plus a
+  new ADR, never an edit.
 
 ## Phase 1 — Map (fact)
 
@@ -127,7 +143,29 @@ Delegate to the `uscha-characterize` skill; if it is not installed, follow its c
   inputs of past bugs. A boundary whose corpus does not exercise its known branches is
   marked **PARTIAL**, never covered.
 
-## Phase 3 — Summary (facts, no opinion)
+## Phase 3 — Candidates (claims, quarantined)
+
+For every observable behavior the map + golden surface, emit one candidate file in
+`discovery/` (`NNN-short-slug.md`): frontmatter per the section above, then a short
+description of the behavior — what it does, not whether it should. Undesigned edge cases
+are captured too, as `inference`/`low`. Then run:
+
+```bash
+python qa_ledger.py curation-check --repo <name>
+```
+
+Echo its output verbatim — it names invalid candidates and everything awaiting verdict.
+The skill wires; the engine measures.
+
+## Phase 4 — Curation (the human's verdicts)
+
+Present one candidate at a time: the behavior, its evidence refs, its confidence. Ask for
+the verdict. On each answer, append the ledger row (`| # | candidate | evidence |
+confidence | verdict | ADR-RD-NNN |`) and write the skeleton `ADR-RD-NNN` (5-10 lines:
+context, evidence, verdict, consequence) for the human to complete. Re-run `curation-check`
+after the pass: exit 0 means every candidate is judged and the quarantine is clear.
+
+## Phase 5 — Summary (facts, no opinion)
 
 Write `DISCOVERY-SUMMARY.md`: the system map + the golden coverage report (which boundaries
 are captured and approved, which are PARTIAL and why). This is the fact base the human reads
@@ -135,8 +173,9 @@ to write the migration SPEC. Do not editorialize.
 
 ## What you do NOT do (the human's job)
 
-- Do NOT write a SPEC of the old system's behavior — the golden IS the executable spec.
-- Do NOT write ADRs of the old system's implicit decisions.
+- Do NOT record a verdict, promote a candidate, or skip the ledger — the quarantine gate
+  is the human's, and the engine measures it (INV-CURATION-01).
+- Do NOT write the migration SPEC — only judged candidates feed it, and the human writes it.
 - Do NOT decide the NEW structure (module boundaries, shared kernel, sync vs events). Those
   are forward decisions → `/uscha-adr-refine`.
 
@@ -150,15 +189,17 @@ to write the migration SPEC. Do not editorialize.
 ## Convergence — finish when
 
 The map is complete (every boundary and dependency accounted for, or explicitly marked
-unknown), the golden is captured and **human-approved**, and the coverage report states
+unknown), the golden is captured and **human-approved**, every candidate has a verdict
+(`curation-check` exits 0 — measured, not remembered), and the coverage report states
 what is covered vs PARTIAL. State plainly that the facts are ready, then hand off.
 
 ## Handoff
 
-> "Read SYSTEM-MAP.md and DISCOVERY-SUMMARY.md, and inspect the approved golden. These are
-> FACTS about the current system. Now write the migration SPEC — behavior == golden,
-> structure == the new module boundaries — and take the partition decisions via /uscha-adr-refine.
-> Do not treat any of my output as a requirement or a rationale; those are yours to decide."
+> "Read SYSTEM-MAP.md, DISCOVERY-SUMMARY.md and BEHAVIOR-LEDGER.md, and inspect the
+> approved golden. The facts are measured; the verdicts are yours and recorded. Now write
+> the migration SPEC from the JUDGED candidates — `preserve` == golden must match, `fix` ==
+> divergence declared by its ADR, `undefined` == out of contract — and take the partition
+> decisions via /uscha-adr-refine."
 
 Flow (migration): `uscha-reverse-discovery` (facts) → human writes SPEC + `/uscha-adr-refine` (forward
 module decisions) → `/uscha-devloop` (restructure; `golden-diff` + `ApplicationModules.verify()`
