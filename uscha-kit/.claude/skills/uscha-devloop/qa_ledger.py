@@ -3749,6 +3749,62 @@ def _curation_state(repo_path):
     return state
 
 
+def cmd_roundtrip(args):
+    """Advisory spec-id coverage (ADR-009 slice 2, v1): which PROMOTED candidates are
+    traceable in the code via an embedded `uscha-spec: <candidate>` marker. Coverage by id,
+    deliberately NOT semantic matching -- that stays out of scope until it can be measured
+    (ADR-011). Advisory end to end: exit 0 always, a report, never a gate."""
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+    st = _curation_state(repo_path)
+    if st is None:
+        print("ROUNDTRIP %s: no %s/ directory -- feature unused, nothing to trace."
+              % (args.repo, CANDIDATE_DIR))
+        sys.exit(0)
+    promoted = sorted(st["promote_as_is"] + st["promote_with_declared_divergence"])
+    ls = subprocess.run(["git", "ls-files"], cwd=repo_path, capture_output=True,
+                        text=True, encoding="utf-8", errors="replace")
+    tracked = [l.strip() for l in ls.stdout.splitlines()
+               if ls.returncode == 0 and l.strip()
+               and not l.strip().startswith(CANDIDATE_DIR + "/")
+               and os.path.basename(l.strip()) != BEHAVIOR_LEDGER_FILE]
+    found = set()
+    pat = re.compile(r"uscha-spec:\s*([\w.\-]+)")
+    ROUNDTRIP_MAX_BYTES = 2 * 1024 * 1024
+    for f in tracked:
+        full = os.path.join(repo_path, f)
+        try:
+            if os.path.getsize(full) > ROUNDTRIP_MAX_BYTES:
+                continue    # a 2MB+ tracked file is not where a spec-id marker lives; an
+                            # unbounded full-tree read is the T112 lesson, applied here
+            with open(full, encoding="utf-8", errors="replace") as fh:
+                body = fh.read()
+        except OSError:
+            continue
+        for m in pat.finditer(body):
+            mid = m.group(1)
+            found.add(mid if mid.endswith(".md") else mid + ".md")
+    covered = [c for c in promoted if c in found]
+    missing = [c for c in promoted if c not in found]
+    out = {"repo": args.repo, "promoted": len(promoted), "covered": len(covered),
+           "missing": missing, "advisory": True,
+           "coverage_pct": round(100.0 * len(covered) / len(promoted), 1) if promoted else None}
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        if not promoted:
+            print("ROUNDTRIP %s: no promoted candidates yet -- nothing to trace (advisory)."
+                  % args.repo)
+        else:
+            print("ROUNDTRIP %s: %d/%d promoted candidate(s) traceable by uscha-spec id "
+                  "(advisory)" % (args.repo, len(covered), len(promoted)))
+            for mss in missing:
+                print("  .. %s: no uscha-spec marker found in the code" % mss)
+    sys.exit(0)
+
+
+
 def cmd_curation_check(args):
     """The INV-CURATION-01 gate, measured. Exit 2: malformation or tampering (config-error
     class -- candidates that cannot be validated, a ledger that cannot be trusted). Exit 1:
@@ -6933,6 +6989,34 @@ def _golden_approved_path(rec):
 
 
 GOLDEN_SCRUB_FILE = "golden.scrub.json"
+GOLDEN_DIVERGENCES_FILE = "golden.divergences.json"
+
+
+def _load_golden_divergences(root):
+    """Expected divergences for `fix` verdicts (ADR-009 slice 2): a golden that MUST differ
+    because its ADR says the behavior was corrected. Shape:
+    {"divergences": {"<fixture basename>": {"adr": "ADR-RD-NNN", "reason": "..."}}}.
+    Strict like the scrub rules: a typo must not degrade into "no declarations" -- that
+    silence would turn every expected divergence back into a blocker, or worse, hide a
+    declared one behind a malformed file. Absent file -> {} (nothing declared)."""
+    path = os.path.join(root, GOLDEN_DIVERGENCES_FILE)
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            spec = json.load(fh)
+        if not isinstance(spec, dict) or not isinstance(spec.get("divergences"), dict):
+            raise TypeError('expected {"divergences": {"<fixture>": {"adr":..., "reason":...}}}')
+        for k, v in spec["divergences"].items():
+            if (not isinstance(v, dict) or not re.match(r"^ADR-\S+$", str(v.get("adr", "")))
+                    or not str(v.get("reason", "")).strip()):
+                raise TypeError("divergence %r needs adr (ADR-...) and a reason" % k)
+        return spec["divergences"]
+    except (json.JSONDecodeError, TypeError, KeyError) as exc:
+        print("[qa_ledger] %s invalid (%s) - declared divergences are not skipped in "
+              "silence: fix the file or delete it." % (path, exc), file=sys.stderr)
+        sys.exit(2)
+
 
 
 def _load_scrub_rules(root):
@@ -7050,6 +7134,9 @@ def cmd_golden_diff(args):
     received = [p for p in sorted(hits) if os.path.isfile(p)]   # skip dirs matched by glob
     rules = _load_scrub_rules(root)
     labels = _load_golden_labels(getattr(args, "labels", None))
+    divergences = _load_golden_divergences(root)
+    expected_diverged = 0
+    consumed_declarations = set()
     scrub_counts = {}
     diverged = []   # (received_path, reason)
     fixtures = []
@@ -7078,21 +7165,60 @@ def cmd_golden_diff(args):
             fixture["result"] = "read_error"
             diverged.append((rec, f"could not read: {exc}"))
             continue
+        decl, decl_key = None, None
+        for cand_key in (os.path.relpath(app, root).replace(os.sep, "/"),
+                         os.path.relpath(rec, root).replace(os.sep, "/"),
+                         os.path.basename(app), os.path.basename(rec)):
+            # relpath first (the _golden_label pattern: nested suites share basenames and a
+            # declaration must not launder an unrelated module\x27s divergence -- fresh-review
+            # finding); basename stays as the flat-layout convenience.
+            if cand_key in divergences:
+                decl, decl_key = divergences[cand_key], cand_key
+                break
+        if decl:
+            consumed_declarations.add(decl_key)   # only what MATCHED: an unexercised twin
+                                                  # key must still show as unconsumed
         if rb == ab:
+            if decl:
+                # a `fix` verdict DECLARED this golden must differ -- identical bytes mean
+                # the corrected behavior never landed. An expected divergence that is not
+                # observed is a red finding, not a quiet pass (ADR-010: fix cases must
+                # diverge exactly as their ADR describes; identical is not that).
+                fixture["result"] = "declared_divergence_not_observed"
+                diverged.append((rec, "declared divergent (%s) but IDENTICAL -- the fix "
+                                      "this declaration describes is not in the output"
+                                      % decl["adr"]))
+                continue
             fixture["result"] = "matched"
             matched += 1
         # el conteo reportado es del lado RECEIVED (la captura fresca) — sumar
         # ambos lados duplicaria cada volatil enmascarado en el reporte.
         elif rules and (_scrub(rb, rules, scrub_counts)
                         == _scrub(ab, rules, {})):
+            if decl:
+                # scrub-equal IS "not observed": once declared volatiles are masked the
+                # outputs are behaviorally identical, so the fix this declaration
+                # describes is absent -- and letting the scrub branch swallow it hid the
+                # case from every signal (fresh-review HIGH: untested interaction).
+                fixture["result"] = "declared_divergence_not_observed"
+                diverged.append((rec, "declared divergent (%s) but scrub-equal -- "
+                                      "identical once volatiles are masked; the declared "
+                                      "fix is not in the output" % decl["adr"]))
+                continue
             # matchea SOLO tras enmascarar volatiles declarados — cuenta como
             # pass pero se reporta APARTE: el masking jamas es invisible.
             fixture["result"] = "matched_scrubbed"
             matched_scrubbed += 1
+        elif decl:
+            # diverges AND a fix verdict declared it would: expected, named, never silent.
+            fixture["result"] = "expected_divergence"
+            fixture["divergence_adr"] = decl["adr"]
+            expected_diverged += 1
         else:
             fixture["result"] = "diverged"
             diverged.append((rec, "diff NO aprobado contra .approved"))
 
+    unconsumed = sorted(k for k in divergences if k not in consumed_declarations)
     passed = len(diverged) == 0
     # zero fixtures is NOT-RUN, never CLEAN: a comparison that had nothing to
     # compare is absent evidence — log it as not-run (absence advises, a present
@@ -7114,6 +7240,8 @@ def cmd_golden_diff(args):
             "scrub_rules": len(rules),
             "scrub_substitutions": scrub_counts,
             "golden_labels": _golden_label_counts(fixtures),
+            "expected_diverged": expected_diverged,
+            "unconsumed_declarations": unconsumed,
             "fixtures": fixtures,
             "diverged": [{"file": f, "reason": r} for f, r in diverged],
         }, indent=2, ensure_ascii=False))
@@ -7550,6 +7678,13 @@ def build_parser():
     pcu.add_argument("--repo", required=True)
     pcu.add_argument("--json", action="store_true")
     pcu.set_defaults(func=cmd_curation_check)
+
+    prt = sub.add_parser("roundtrip",
+                         help="advisory: which promoted candidates are traceable in code via uscha-spec ids (ADR-009 slice 2)")
+    prt.add_argument("--ledger", default="QA-LEDGER.json")
+    prt.add_argument("--repo", required=True)
+    prt.add_argument("--json", action="store_true")
+    prt.set_defaults(func=cmd_roundtrip)
 
     pcr = sub.add_parser("cleanroom",
                          help="run a command against a CLEAN checkout of one commit in a throwaway worktree (ADR-008)")

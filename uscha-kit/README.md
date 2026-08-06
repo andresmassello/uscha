@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.64.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.65.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -196,6 +196,25 @@ verified against git (revert = new row + new ADR, never an edit; latest row wins
 any candidate lacks a verdict, `pr-ready` is blocked naming it (INV-CURATION-01) - the
 quarantine is measured, not promised. No `discovery/` directory -> the feature does not
 exist and nothing changes.
+
+## Oracle divergences + roundtrip (slice 2)
+
+A `fix` verdict means the new system must NOT match the legacy golden - and that divergence
+is **declared**, never tolerated implicitly:
+
+```json
+// golden.divergences.json
+{ "divergences": { "invoice-totals.approved.json": {
+    "adr": "ADR-RD-003", "reason": "IVA now rounds; legacy truncated" } } }
+```
+
+`golden-diff` then reads the pair as `expected_divergence` (named, with its ADR) instead of
+a blocker - and a declared pair that comes back **identical** goes red: the fix the
+declaration describes is not in the output. Malformed declarations exit 2.
+
+`roundtrip --repo <name>` is the advisory closing of the loop, v1: which promoted
+candidates are traceable in the code via an embedded `uscha-spec: <candidate>` marker -
+coverage by id, deliberately not semantic matching, exit 0 always.
 
 ## End-to-end flow
 

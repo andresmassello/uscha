@@ -3420,6 +3420,7 @@ rm -f "$KIT/reports/junit/.goldencov-cases.json"  # same rule for T117
 rm -f "$KIT/reports/junit/.origin-cases.json"     # same rule for T118
 rm -f "$KIT/reports/junit/.cleanroom-cases.json"  # same rule for T119
 rm -f "$KIT/reports/junit/.curation-cases.json"   # same rule for T120
+rm -f "$KIT/reports/junit/.oracle-cases.json"     # same rule for T121
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -4250,6 +4251,102 @@ PY
 case "$T120" in
   OK*) PASS=$((PASS+1)); echo "  ok   curation: $T120";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T120";;
+esac
+
+echo "== T121 (1.65.0): oracle -- declared divergences + roundtrip by spec-id (slice 2) =="
+T121=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); os.makedirs(os.path.join(w, "golden"))
+SUF = ".appro" + "ved.json"
+
+def eng(*a, cwd=w):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=cwd, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+def wr(rel, body):
+    io.open(os.path.join(w, rel), "w").write(body)
+
+wr("golden/keep.received.json", "AAA"); wr("golden/keep" + SUF, "AAA")
+wr("golden/fixed.received.json", "NEW"); wr("golden/fixed" + SUF, "OLD")
+
+# --- AC-RD-08: undeclared divergence blocks; declared -> CLEAN with the pair NAMED
+r = eng("golden-diff", "--dir", ".", "--json"); d = json.loads(r.stdout)
+undeclared_blocks = d["verdict"] == "DIVERGE" and r.returncode == 1
+wr("golden.divergences.json", json.dumps({"divergences": {
+    "fixed" + SUF: {"adr": "ADR-RD-003", "reason": "behavior corrected per verdict"}}}))
+r = eng("golden-diff", "--dir", ".", "--json"); d = json.loads(r.stdout)
+fx = {os.path.basename(f["received"]): f for f in d["fixtures"]}
+res["AC-RD-08"] = (undeclared_blocks and d["verdict"] == "CLEAN" and r.returncode == 0
+                   and d["expected_diverged"] == 1
+                   and fx["fixed.received.json"]["result"] == "expected_divergence"
+                   and fx["fixed.received.json"].get("divergence_adr") == "ADR-RD-003"
+                   and fx["keep.received.json"]["result"] == "matched")
+
+# --- AC-RD-09: declared but IDENTICAL -> red, the reason names the ADR -- in BOTH shapes:
+# raw-identical, and SCRUB-EQUAL (identical once masked volatiles are removed; the first
+# build let the scrub branch swallow that case silently -- fresh-review HIGH)
+wr("golden/fixed.received.json", "OLD")
+r = eng("golden-diff", "--dir", ".", "--json"); d = json.loads(r.stdout)
+raw_red = (d["verdict"] == "DIVERGE" and r.returncode == 1
+           and any("ADR-RD-003" in x["reason"] for x in d["diverged"]))
+wr("golden/fixed.received.json", "OLD ts=111")
+wr("golden/fixed" + SUF, "OLD ts=999")
+wr("golden.scrub.json", json.dumps({"rules": [{"pattern": "ts=[0-9]+", "replace": "ts=X"}]}))
+r = eng("golden-diff", "--dir", ".", "--json"); d = json.loads(r.stdout)
+scrub_red = (d["verdict"] == "DIVERGE" and r.returncode == 1
+             and any("scrub-equal" in x["reason"] for x in d["diverged"]))
+os.remove(os.path.join(w, "golden.scrub.json"))
+res["AC-RD-09"] = bool(raw_red and scrub_red)
+wr("golden/fixed.received.json", "NEW")
+wr("golden/fixed" + SUF, "OLD")
+
+# --- AC-RD-10: malformed declaration file -> exit 2, never silent
+wr("golden.divergences.json", "{\x22divergences\x22: {\x22x\x22: {\x22adr\x22: \x22nope\x22}}}")
+r = eng("golden-diff", "--dir", ".", "--json")
+res["AC-RD-10"] = r.returncode == 2 and "invalid" in (r.stderr or "").lower()
+os.remove(os.path.join(w, "golden.divergences.json"))
+
+# --- AC-RD-11: roundtrip coverage by embedded id, advisory (exit 0 even with misses)
+repo = os.path.join(w, "r")
+os.makedirs(os.path.join(repo, "discovery")); os.makedirs(os.path.join(repo, "src"))
+def sh(*a):
+    return subprocess.run(list(a), cwd=repo, capture_output=True, text=True)
+sh("git", "init", "-b", "main"); sh("git", "config", "user.email", "t@t")
+sh("git", "config", "user.name", "t")
+CAND = ("---\nevidence:\n  type: code\n  refs:\n    - \x22src/a.go\x22\n"
+        "confidence: high\n---\n# c\n")
+io.open(os.path.join(repo, "src", "a.go"), "w").write(
+    "package main\n// uscha-spec: 001-covered\nfunc A() {}\n")
+io.open(os.path.join(repo, "discovery", "001-covered.md"), "w").write(CAND)
+io.open(os.path.join(repo, "discovery", "002-missing.md"), "w").write(CAND)
+io.open(os.path.join(repo, "BEHAVIOR-LEDGER.md"), "w").write(
+    "| # | candidate | evidence | confidence | verdict | adr |\n"
+    "|---|-----------|----------|------------|---------|-----|\n"
+    "| 1 | 001-covered.md | code | high | preserve | ADR-RD-001 |\n"
+    "| 2 | 002-missing.md | code | high | fix | ADR-RD-002 |\n")
+sh("git", "add", "-A"); sh("git", "commit", "-m", "x")
+wr("c.json", json.dumps({"defaults": {"acceptance_file": "ACCEPTANCE.md"},
+                         "repos": [{"name": "r", "path": "r", "type": "go"}],
+                         "integration": {"enabled": False}}))
+eng("init", "--config", "c.json", "--out", "L.json")
+r = eng("roundtrip", "--ledger", "L.json", "--repo", "r", "--json")
+d = json.loads(r.stdout)
+res["AC-RD-11"] = (r.returncode == 0 and d["promoted"] == 2 and d["covered"] == 1
+                   and d["missing"] == ["002-missing.md"] and d["advisory"] is True)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".oracle-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T121" in
+  OK*) PASS=$((PASS+1)); echo "  ok   oracle: $T121";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T121";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -5329,6 +5426,23 @@ for _uid in ("AC-RD-01", "AC-RD-02", "AC-RD-03", "AC-RD-04",
         results.append((_uid, "curation", None))
     else:
         results.append((_uid, "curation", "T120 case failed or missing"))
+
+# Oracle criteria (slice 2): measured by T121, same sidecar contract.
+def _oracle_cases():
+    p = os.path.join(kit, "reports", "junit", ".oracle-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_orc = _oracle_cases()
+for _oid in ("AC-RD-08", "AC-RD-09", "AC-RD-10", "AC-RD-11"):
+    if _orc is None or _orc.get(_oid) is None:
+        results.append((_oid, "oracle", SKIP))
+    elif _orc.get(_oid) is True:
+        results.append((_oid, "oracle", None))
+    else:
+        results.append((_oid, "oracle", "T121 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

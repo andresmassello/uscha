@@ -159,6 +159,22 @@ criteria when it starts.
 - [x] AC-RD-07 - feature unused (no `discovery/`, no ledger) -> behavior identical to the
   prior release, and `cmd_spec_drift` untouched (ADR-011).
 
+## Reverse discovery, slice 2 (oracle) - feature acceptance, closes on green `AC-RD-nn` tests
+
+The `fix` verdict reaches the oracle: expected divergences are DECLARED
+(`golden.divergences.json`, one ADR + reason each), never tolerated implicitly.
+`roundtrip` is advisory coverage by embedded id - deliberately NOT semantic matching
+(ADR-011: that stays out until it can be measured).
+
+- [x] AC-RD-08 - an undeclared divergence still blocks; a DECLARED one reads
+  `expected_divergence`, named with its ADR, and the verdict is CLEAN.
+- [x] AC-RD-09 - declared divergent but byte-identical -> red, the reason names the ADR:
+  the fix the declaration describes is not in the output.
+- [x] AC-RD-10 - malformed `golden.divergences.json` -> exit 2, never a silent
+  "no declarations".
+- [x] AC-RD-11 - `roundtrip` reports promoted-candidate coverage by `uscha-spec:` id,
+  lists the missing, and exits 0 - advisory end to end.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
