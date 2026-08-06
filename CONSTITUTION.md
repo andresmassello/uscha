@@ -52,3 +52,11 @@ readiness until a human `--resolve`s it.
   `DENY`, a skipped gate, a lowered cap at run time). Anything that weakens a control is a
   config change reviewed like code — never a runtime override. *(Introduced with ADR-003:
   without this asymmetry, a fast path is a backdoor with paperwork.)*
+
+- **INV-CURATION-01 — No candidate behavior reaches the forward flow without a human verdict.**
+  A spec candidate extracted from a legacy system — whatever its evidence or confidence — is
+  quarantined until a human records `preserve`, `fix` or `undefined` in the behavior ledger,
+  each verdict backed by its ADR. The gate is measured by the engine, fail-closed: no verdict,
+  no promotion; a malformed ledger blocks, it never degrades to "no verdicts". *(Introduced
+  with ADR-009: extraction without judgment fossilizes bugs as features — the agent may author
+  candidates, only the human may promote them.)*

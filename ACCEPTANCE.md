@@ -137,6 +137,28 @@ Opt-in: `defaults.clean_room` absent or `mode: "off"` and the gate does not exis
   Added after a fresh review reproduced the crash -- the criteria measured the feature and
   left the scope it runs in unmeasured.
 
+## Reverse discovery, slice 1 (ADR-009/010/011) - feature acceptance, closes on green `AC-RD-nn` tests
+
+Planned via `/uscha-adr-refine` against the sanitized reverse-discovery handoff; unticked
+because the code does not exist yet - criteria before implementation, as always. Slice 2
+(declared oracle divergences, spec-id, roundtrip) is out of scope here and gets its own
+criteria when it starts.
+
+- [ ] AC-RD-01 - candidate spec with valid `evidence`/`confidence` frontmatter accepted;
+  malformed frontmatter -> exit 2.
+- [ ] AC-RD-02 - an `evidence.refs` entry that does not resolve to a real `file:line(s)` ->
+  candidate invalid, named.
+- [ ] AC-RD-03 - any candidate without a ledger verdict -> forward blocked, the reason names
+  the candidate (the INV-CURATION-01 gate, measured).
+- [ ] AC-RD-04 - malformed `BEHAVIOR-LEDGER.md` (bad shape, unknown verdict, missing ADR
+  ref) -> exit 2, never a silent "no verdicts".
+- [ ] AC-RD-05 - editing an existing ledger row -> append-only violation detected against
+  git HEAD, named; without git the check reports UNMEASURED, never pass.
+- [ ] AC-RD-06 - `preserve` / `fix` / `undefined` produce three distinct, verifiable
+  promotion effects.
+- [ ] AC-RD-07 - feature unused (no `discovery/`, no ledger) -> behavior identical to the
+  prior release, and `cmd_spec_drift` untouched (ADR-011).
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
@@ -165,6 +187,9 @@ Opt-in: `defaults.clean_room` absent or `mode: "off"` and the gate does not exis
 - ADR-006 — The golden↔source mapping is derived by measurement; the veto it unblocks is opt-in.
 - ADR-007 — Evidence records the commit and tree state it was measured at.
 - ADR-008 — The clean-room verifies the COMMIT; the engine never decides what to run.
+- ADR-009 — Candidate specs in quarantine: the agent authors, only the human promotes.
+- ADR-010 — The behavior ledger: human-readable table, machine-enforced rules.
+- ADR-011 — No shared extraction engine; spec-drift and reverse discovery stay separate.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change
