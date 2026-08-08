@@ -1868,6 +1868,15 @@ def _origin_label(origin):
     return "%s/%s" % (sha, state)
 
 
+def _scope_path(ledger, name):
+    """Repo path for a scope, guarding the SYNTHETIC `integration` scope -- never present
+    in config["repos"], where _repo_cfg exits on unknown names. This crash class shipped
+    once (the clean-room gate, 1.63.0) and nearly shipped twice (spec-drift at pass close,
+    caught by fresh review): two recurrences make it a helper, not a per-site pattern."""
+    cfg = _repo_cfg(ledger, name) if name != "integration" else {"path": "."}
+    return cfg.get("path", ".")
+
+
 def _evidence_origin(repo_path):
     """WHERE the evidence came from: the commit it was measured at, and whether the tree
     was clean (ADR-007). The engine's freshness check compares file MTIMES, so until now a
@@ -3145,7 +3154,7 @@ def cmd_spec_drift(args):
     cfg = ledger["config"].get("defaults", {}).get("spec_drift") or {}
     lag_days = int(args.max_lag_days if args.max_lag_days is not None
                    else cfg.get("max_lag_days", 30))
-    repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+    repo_path = _scope_path(ledger, args.repo)
 
     # The spec surface is fixed by ADR-005: the repo SPEC.md plus every ADR.
     spec_files = []
@@ -3756,7 +3765,7 @@ def cmd_roundtrip(args):
     (ADR-011). Advisory end to end: exit 0 always, a report, never a gate."""
     ledger = _load(args.ledger)
     _repo_node(ledger, args.repo)
-    repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+    repo_path = _scope_path(ledger, args.repo)
     st = _curation_state(repo_path)
     if st is None:
         print("ROUNDTRIP %s: no %s/ directory -- feature unused, nothing to trace."
@@ -3818,7 +3827,7 @@ def cmd_curation_check(args):
     candidate judged, or the feature unused."""
     ledger = _load(args.ledger)
     _repo_node(ledger, args.repo)
-    repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+    repo_path = _scope_path(ledger, args.repo)
     st = _curation_state(repo_path)
     if st is None:
         if args.json:

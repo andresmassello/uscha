@@ -177,6 +177,10 @@ The `fix` verdict reaches the oracle: expected divergences are DECLARED
 - [x] AC-RD-12 - `roundtrip` persists its latest state to the ledger and `dashboard --json`
   carries it ONLY when a run exists (virgin-ledger schema unchanged): an advisory that
   evaporates on exit is invisible to every read surface, which defeats the point.
+- [x] AC-RD-13 - the three curation-family commands (`spec-drift`, `curation-check`,
+  `roundtrip`) accept the SYNTHETIC `integration` scope and return a verdict, never a
+  config-error crash. Second recurrence of the 1.63.0 class; the guard is now a helper
+  (`_scope_path`) instead of a per-site pattern.
 
 ## Out of scope for measurement here
 

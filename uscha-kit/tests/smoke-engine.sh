@@ -4241,6 +4241,15 @@ d2 = json.loads(r2.stdout)
 res["AC-RD-05"] = bool(tamper_ok and d2["append_only"] == "unmeasured"
                        and d2["append_only"] != "ok")
 
+# --- AC-RD-13: the SYNTHETIC integration scope must get a verdict, never a config crash
+# (second recurrence of the 1.63.0 class -- the devloop now auto-runs spec-drift per pass)
+ok13 = True
+for cmdname in ("spec-drift", "curation-check", "roundtrip"):
+    ri = eng(cmdname, "--ledger", "L.json", "--repo", "integration")
+    if ri.returncode not in (0, 1) or "no config entry" in (ri.stdout + ri.stderr):
+        ok13 = False
+res["AC-RD-13"] = ok13
+
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 io.open(os.path.join(side, ".curation-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
@@ -5429,7 +5438,7 @@ def _curation_cases():
         return None
 _cuc = _curation_cases()
 for _uid in ("AC-RD-01", "AC-RD-02", "AC-RD-03", "AC-RD-04",
-             "AC-RD-05", "AC-RD-06", "AC-RD-07"):
+             "AC-RD-05", "AC-RD-06", "AC-RD-07", "AC-RD-13"):
     if _cuc is None or _cuc.get(_uid) is None:
         results.append((_uid, "curation", SKIP))
     elif _cuc.get(_uid) is True:
