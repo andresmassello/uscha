@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El diamante — las specs son el código fuente</title>
+<meta name="description" content="La tesis de fondo de uscha: las specs son el código fuente, el LLM es el compilador, reverse discovery es el decompilador — y el código pasa a ser un artefacto de build. Con truth-pass: qué es real hoy y qué sigue siendo visión.">
+<link rel="canonical" href="https://uscha.dev/es/diamond">
+<link rel="alternate" hreflang="en" href="https://uscha.dev/diamond">
+<link rel="alternate" hreflang="es" href="https://uscha.dev/es/diamond">
+<link rel="alternate" hreflang="x-default" href="https://uscha.dev/diamond">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/uscha.css">
+<style>
+  .equation{
+    font-family:var(--mono); font-size:13px; line-height:2.1;
+    border-left:3px solid var(--cyan); padding:6px 0 6px 20px; margin:28px 0 0;
+    color:var(--mute);
+  }
+  .equation b{color:var(--fg); font-weight:500}
+  .equation .a{color:var(--cyan)}
+  figure{
+    margin:34px 0; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:26px 20px 16px; overflow-x:auto;
+  }
+  figure svg{display:block; max-width:100%; height:auto; margin:0 auto}
+  figcaption{
+    font-family:var(--body); font-size:13px; color:var(--mute);
+    margin-top:16px; line-height:1.55; max-width:600px;
+  }
+  figcaption b{color:var(--fg-soft); font-weight:600}
+  .box{fill:var(--bg-2); stroke:#638079; stroke-width:1.5}
+  .box-solid{fill:var(--bg-2); stroke:#dbe8e6; stroke-width:3}
+  .box-dash{fill:none; stroke:#9db3b0; stroke-width:1.5; stroke-dasharray:6 5}
+  .box-gem{fill:rgba(79,214,201,.10); stroke:var(--cyan); stroke-width:3}
+  .box-gate{fill:rgba(255,107,74,.10); stroke:var(--coral); stroke-width:2}
+  .edge{stroke:#638079; stroke-width:1.5; fill:none}
+  .edge-acc{stroke:var(--cyan); stroke-width:1.8; fill:none}
+  .lbl{font-family:var(--body); font-size:13px; fill:#dbe8e6}
+  .lbl-b{font-family:var(--disp); font-size:13.5px; font-weight:700; fill:#dbe8e6}
+  .lbl-s{font-family:var(--body); font-size:11.5px; fill:#9db3b0}
+  .lbl-acc{font-family:var(--body); font-size:11.5px; font-weight:600; fill:var(--cyan)}
+  .lbl-coral{font-family:var(--body); font-size:11.5px; font-weight:600; fill:var(--coral)}
+  .lbl-decay{font-family:var(--body); font-size:11.5px; font-style:italic; fill:var(--amber)}
+  .lbl-mono{font-family:var(--mono); font-size:10.5px; fill:#9db3b0}
+  .chip{
+    display:inline-block; font-family:var(--mono); font-size:10px; font-weight:700;
+    letter-spacing:.06em; padding:2px 9px; border-radius:20px; white-space:nowrap;
+  }
+  .chip.real{color:#16110f; background:var(--pass)}
+  .chip.vision{color:#dbe8e6; background:#2a4341; border:1px solid var(--line)}
+  .article table td:first-child{min-width:200px}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="wordmark" href="../index.html">uscha<b>.</b>dev</a>
+    <nav>
+      <a href="../index.html#paradigma">paradigma</a>
+      <a href="../how/index.html">cómo funciona</a>
+      <a href="../index.html#biblioteca">biblioteca</a>
+      <a href="https://github.com/andresmassello/uscha">github</a>
+      <a class="lang" href="../../diamond/index.html">EN</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <article class="article">
+    <div class="kicker">tesis de fondo</div>
+    <h1>Las specs son el código fuente. El código es un artefacto de build.</h1>
+    <p class="epigraph">Por qué cerrar el ciclo con reverse discovery no agrega un comando — invierte qué cosa es el activo de un sistema de software.</p>
+
+    <div class="equation">
+      las <b>specs</b> son <span class="a">el código fuente</span><br>
+      el <b>LLM</b> es <span class="a">el compilador</span><br>
+      <b>reverse discovery</b> es <span class="a">el decompilador</span> — uno que recupera <b>intención</b>, no solo estructura
+    </div>
+
+    <h2>01 · Antes — el código es la verdad</h2>
+    <p>Así funciona hoy casi todo proyecto: el activo es el <strong>código</strong>. La spec
+    —si existe— es documentación: se escribe una vez y se pudre en silencio, porque nada la
+    obliga a moverse cuando el código se mueve. A los seis meses nadie le cree, y con razón.
+    Cuando el documento y el código dicen cosas distintas, gana el código. Siempre.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 218" role="img" aria-label="Flujo lineal actual: la intención produce una spec que se pudre, la spec produce código, y el código queda como único activo y única verdad.">
+        <defs>
+          <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#638079"/>
+          </marker>
+          <marker id="ar1d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f5b13d"/>
+          </marker>
+        </defs>
+        <rect class="box" x="30" y="66" width="140" height="58" rx="6"/>
+        <text class="lbl-b" x="100" y="91" text-anchor="middle">intención</text>
+        <text class="lbl-s" x="100" y="109" text-anchor="middle">en la cabeza de alguien</text>
+
+        <line class="edge" x1="170" y1="95" x2="242" y2="95" marker-end="url(#ar1)"/>
+        <text class="lbl-s" x="206" y="84" text-anchor="middle">se escribe una vez</text>
+
+        <rect class="box-dash" x="244" y="66" width="160" height="58" rx="6"/>
+        <text class="lbl-b" x="324" y="91" text-anchor="middle">SPEC</text>
+        <text class="lbl-s" x="324" y="109" text-anchor="middle">documentación</text>
+        <line x1="324" y1="130" x2="324" y2="164" stroke="#f5b13d" stroke-width="1.4" stroke-dasharray="3 4" marker-end="url(#ar1d)"/>
+        <text class="lbl-decay" x="324" y="184" text-anchor="middle">se pudre en silencio —</text>
+        <text class="lbl-decay" x="324" y="200" text-anchor="middle">nadie la cree, y con razón</text>
+
+        <line class="edge" x1="404" y1="95" x2="486" y2="95" marker-end="url(#ar1)"/>
+        <text class="lbl-s" x="445" y="84" text-anchor="middle">se implementa</text>
+
+        <rect class="box-solid" x="488" y="58" width="200" height="74" rx="6"/>
+        <text class="lbl-b" x="588" y="88" text-anchor="middle">CÓDIGO</text>
+        <text class="lbl-s" x="588" y="107" text-anchor="middle">el activo · la única verdad</text>
+        <text class="lbl-s" x="588" y="158" text-anchor="middle">en cualquier conflicto, gana él</text>
+      </svg>
+      <figcaption><b>El flujo es de ida, y el trazo lo dice todo:</b> el código es la caja
+      sólida — el activo. La spec es punteada — prescindible, y en descomposición desde el
+      día uno. Un sistema legacy de 25 años es este mismo dibujo con la spec ya desaparecida.</figcaption>
+    </figure>
+
+    <p>Fíjense la consecuencia económica: todo lo que la organización sabe del sistema vive
+    en un artefacto que <em>solo se puede leer ejecutándolo</em>. Cuando el único que lo
+    entiende se jubila, el conocimiento se jubila con él.</p>
+
+    <h2>02 · La analogía — nadie edita el binario</h2>
+    <p>Pensemos en C. Nadie parchea el binario compilado a mano — sería una locura: se edita
+    el <code>.c</code> y se recompila. El binario es descartable, <strong>regenerable</strong>;
+    el <code>.c</code> es el activo. La tesis dice: con LLMs suficientemente buenos, el
+    código fuente pasa a ocupar el lugar del binario. Se edita la <strong>spec</strong> y se
+    «recompila»: el LLM genera el código.</p>
+    <p>Un compilador solo, sin embargo, va en una dirección. Mientras la metodología era solo
+    <em>forward</em> (intención → spec → código), la spec era <em>una entrada más</em> — no
+    la representación canónica — porque el mundo está lleno de sistemas donde solo existe el
+    código. Falta la vuelta.</p>
+
+    <h2>03 · Después — el ciclo cerrado invierte el activo</h2>
+    <p>Reverse discovery agrega la dirección inversa: código → spec. Es el
+    <strong>decompilador</strong>. Y con las dos direcciones, cualquier sistema — incluso el
+    legacy sin un solo documento — puede entrar al formato canónico. Con una condición que
+    hace todo el trabajo: el código legacy mezcla intención con accidente. Bugs de los que
+    los clientes ya dependen, timeouts que nadie decidió. Un decompilador ingenuo fotocopia
+    los bugs como features. Por eso el paso que ninguna herramienta automática puede hacer
+    es un <strong>gate humano</strong>: la máquina extrae candidatas con evidencia, y solo
+    una persona dictamina qué era intención (<code>preserve</code>), qué era bug
+    (<code>fix</code>) y qué nadie decidió jamás (<code>undefined</code>).</p>
+
+    <figure>
+      <svg viewBox="0 0 760 388" role="img" aria-label="Ciclo cerrado: el activo canónico (spec package y behavior ledger) genera código vía el LLM como compilador; el código y los sistemas legacy vuelven al activo vía reverse discovery, pasando obligatoriamente por el gate humano de curación.">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#638079"/>
+          </marker>
+          <marker id="ar2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4fd6c9"/>
+          </marker>
+        </defs>
+
+        <rect class="box-gem" x="42" y="96" width="230" height="104" rx="8"/>
+        <text class="lbl-b" x="157" y="130" text-anchor="middle">SPEC PACKAGE</text>
+        <text class="lbl-b" x="157" y="149" text-anchor="middle">+ BEHAVIOR LEDGER</text>
+        <text class="lbl-acc" x="157" y="176" text-anchor="middle">el activo canónico</text>
+
+        <rect class="box-dash" x="510" y="96" width="204" height="104" rx="8"/>
+        <text class="lbl-b" x="612" y="136" text-anchor="middle">CÓDIGO</text>
+        <text class="lbl-s" x="612" y="156" text-anchor="middle">artefacto de build</text>
+        <text class="lbl-s" x="612" y="173" text-anchor="middle">regenerable</text>
+
+        <path class="edge-acc" d="M 272 118 L 508 118" marker-end="url(#ar2a)"/>
+        <text class="lbl-acc" x="390" y="104" text-anchor="middle">forward · el LLM compila</text>
+
+        <path class="edge" d="M 612 200 L 612 300 L 465 300" marker-end="url(#ar2)"/>
+        <path class="edge" d="M 321 300 L 157 300 L 157 202" marker-end="url(#ar2)"/>
+        <text class="lbl-s" x="530" y="290" text-anchor="middle">reverse discovery</text>
+        <text class="lbl-s" x="530" y="316" text-anchor="middle">decompila intención</text>
+        <text class="lbl-s" x="240" y="290" text-anchor="middle">solo lo juzgado</text>
+        <text class="lbl-s" x="240" y="316" text-anchor="middle">se promueve</text>
+
+        <rect class="box-gate" x="323" y="262" width="140" height="76" rx="8"/>
+        <text class="lbl-b" x="393" y="288" text-anchor="middle">CURACIÓN</text>
+        <text class="lbl-coral" x="393" y="306" text-anchor="middle">veredicto humano</text>
+        <text class="lbl-mono" x="393" y="324" text-anchor="middle">preserve·fix·undefined</text>
+
+        <rect class="box" x="42" y="330" width="176" height="46" rx="6"/>
+        <text class="lbl" x="130" y="349" text-anchor="middle">sistema legacy</text>
+        <text class="lbl-s" x="130" y="366" text-anchor="middle">= 100% de drift</text>
+        <path class="edge" d="M 218 353 L 290 353 L 290 314 L 321 314" marker-end="url(#ar2)"/>
+
+        <text class="lbl-s" x="390" y="52" text-anchor="middle">el activo se aprecia con cada generación de modelos;</text>
+        <text class="lbl-s" x="390" y="70" text-anchor="middle">el código se regenera y se deprecia — como un binario</text>
+      </svg>
+      <figcaption><b>Los trazos se invirtieron:</b> ahora la caja sólida — el activo — es el
+      paquete de specs más el behavior ledger, y el código pasó a línea punteada: descartable,
+      regenerable. Todo camino de vuelta pasa <b>obligatoriamente</b> por la curación: sin
+      veredicto humano no hay promoción — el gate lo mide el engine, no lo promete la prosa.</figcaption>
+    </figure>
+
+    <div class="pullquote">
+      Sin la curación en el medio, reverse discovery no recupera intención —
+      produce una fotocopia más prolija del legacy, <span class="no">con los bugs fosilizados como features</span>.
+    </div>
+
+    <h2>04 · Corolarios — lo que se desprende solo</h2>
+    <p><strong>El activo se aprecia; el código se deprecia.</strong> Si el código es
+    regenerable, cada mejora de los modelos mejora el «build» gratis: el mismo paquete de
+    specs, recompilado con el LLM de 2027, produce mejor código. Las specs son la única
+    inversión que no envejece — y ese es el argumento comercial: no se vende la reescritura,
+    se vende <em>el activo que sobrevive también a la próxima reescritura</em>.</p>
+    <p><strong>La fidelidad se vuelve medible.</strong> Si se decompila lo que se compiló y
+    el resultado coincide con lo que había, la metodología es <em>lossless</em> — y eso es
+    un número, como el bootstrap test de un compilador que se compila a sí mismo:</p>
+
+    <figure>
+      <svg viewBox="0 0 720 130" role="img" aria-label="El round-trip: las specs se compilan a código, el código se decompila a specs recuperadas, y la comparación entre specs originales y recuperadas es una métrica de fidelidad.">
+        <defs>
+          <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#638079"/>
+          </marker>
+        </defs>
+        <rect class="box-solid" x="24" y="30" width="120" height="50" rx="6"/>
+        <text class="lbl-b" x="84" y="60" text-anchor="middle">specs</text>
+        <line class="edge" x1="144" y1="55" x2="216" y2="55" marker-end="url(#ar3)"/>
+        <text class="lbl-s" x="180" y="44" text-anchor="middle">forward</text>
+        <rect class="box-dash" x="218" y="30" width="120" height="50" rx="6"/>
+        <text class="lbl-b" x="278" y="60" text-anchor="middle">código</text>
+        <line class="edge" x1="338" y1="55" x2="410" y2="55" marker-end="url(#ar3)"/>
+        <text class="lbl-s" x="374" y="44" text-anchor="middle">discovery</text>
+        <rect class="box" x="412" y="30" width="130" height="50" rx="6"/>
+        <text class="lbl-b" x="477" y="60" text-anchor="middle">specs&#8242;</text>
+        <text class="lbl-b" x="576" y="61" text-anchor="middle" style="font-size:20px">&#8776;</text>
+        <rect class="box-gem" x="606" y="30" width="94" height="50" rx="6"/>
+        <text class="lbl-acc" x="653" y="61" text-anchor="middle">¿specs?</text>
+        <text class="lbl-s" x="362" y="112" text-anchor="middle">hoy medible por cobertura de ID (uscha-spec) · la versión semántica sigue siendo visión</text>
+      </svg>
+      <figcaption><b>El self-test de la metodología:</b> <code>discovery(forward(specs)) &#8776; specs</code>.
+      Nadie en el espacio spec-driven mide la fidelidad de su propia metodología; este ciclo
+      la convierte en un número publicable.</figcaption>
+    </figure>
+
+    <p><strong>Drift y migración son el mismo problema.</strong> Una spec que quedó tres
+    semanas atrás del código es 5% de drift; un legacy sin ningún documento es 100% de drift.
+    La misma pregunta, a distinta escala — con la honestidad de que hoy son instrumentos
+    distintos, no un motor común.</p>
+
+    <h2>05 · Truth-pass — qué es real hoy, qué sigue siendo visión</h2>
+    <p>El pitch es hermoso, y justamente por eso hay que tenerle desconfianza. La regla de la
+    casa: <em>under-claim, luego cablear, luego re-claim</em>. Estado al día de hoy
+    (kit&nbsp;1.65.0):</p>
+    <table>
+      <thead><tr><th>Afirmación</th><th>Estado</th><th>Dónde</th></tr></thead>
+      <tbody>
+        <tr><td>Curación con veredictos, gate medido, ledger auditable apéndice-only</td>
+            <td><span class="chip real">REAL</span></td><td>1.64.0 · ADR-009/010</td></tr>
+        <tr><td>Oráculo que distingue comportamiento preservado de fixes declarados</td>
+            <td><span class="chip real">REAL</span></td><td>1.65.0 · golden-diff</td></tr>
+        <tr><td>Round-trip por cobertura de ID (¿qué specs son trazables en el código?)</td>
+            <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
+        <tr><td>Round-trip semántico (¿el código <em>dice lo mismo</em> que la spec?)</td>
+            <td><span class="chip vision">VISIÓN</span></td><td>diferido con condiciones · ADR-011</td></tr>
+        <tr><td>«El código es totalmente regenerable desde las specs»</td>
+            <td><span class="chip vision">VISIÓN</span></td><td>el bootstrap test es el experimento pendiente</td></tr>
+        <tr><td>«Drift = reverse discovery incremental, mismo motor»</td>
+            <td><span class="chip vision">VISIÓN</span></td><td>idea válida, arquitectura rechazada · ADR-011</td></tr>
+      </tbody>
+    </table>
+    <p>Y nótese lo elegante: la parte del diamante que <strong>ya es real</strong> — la capa
+    de juicio humano formal, trazable y bloqueante — es exactamente la que ninguna
+    herramienta del espacio tiene. La parte que sigue siendo visión es la que cualquiera
+    podría prometer. Está construido lo difícil y falta lo glamoroso: el orden correcto.</p>
+
+    <h2>06 · Por qué «diamante»</h2>
+    <p>Porque no es la feature. Reverse discovery — el comando — es solo la primera
+    materialización. Lo que el ciclo cerrado cambia es la categoría del proyecto entero: de
+    <em>metodología de desarrollo</em> a <strong>formato de representación canónica de
+    sistemas</strong>. El código va y viene; las decisiones — evidenciadas, juzgadas,
+    registradas — son lo único que vale la pena migrar.</p>
+
+    <p style="margin-top:32px;color:var(--mute);font-size:13px">
+      Estado verificado contra kit 1.65.0 · fuentes: ADR-009, ADR-010, ADR-011,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0 · los estados REAL/VISIÓN siguen la regla
+      INV-TRUTH-01 del repo.
+    </p>
+
+    <div class="backlinks">
+      <a href="../how/index.html">Ver el mecanismo: cómo funciona →</a>
+      <a href="../../docs/paper/uscha-paper.html">Leer el paper (inglés) →</a>
+      <a href="../index.html">← Volver al inicio</a>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="foot-motto">El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</p>
+    <div class="foot-links">
+      <a href="https://github.com/andresmassello/uscha">github.com/andresmassello/uscha</a>
+      <a href="https://www.npmjs.com/package/@andresmassello/uscha">npm · @andresmassello/uscha</a>
+      <a href="mailto:info@uscha.dev">info@uscha.dev</a>
+      <a href="../../diamond/index.html">English version</a>
+    </div>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.65.0</p>
+  </div>
+</footer>
+
+</body>
+</html>
