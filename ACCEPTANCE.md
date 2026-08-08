@@ -174,6 +174,9 @@ The `fix` verdict reaches the oracle: expected divergences are DECLARED
   "no declarations".
 - [x] AC-RD-11 - `roundtrip` reports promoted-candidate coverage by `uscha-spec:` id,
   lists the missing, and exits 0 - advisory end to end.
+- [x] AC-RD-12 - `roundtrip` persists its latest state to the ledger and `dashboard --json`
+  carries it ONLY when a run exists (virgin-ledger schema unchanged): an advisory that
+  evaporates on exit is invisible to every read surface, which defeats the point.
 
 ## Out of scope for measurement here
 

@@ -4337,6 +4337,16 @@ d = json.loads(r.stdout)
 res["AC-RD-11"] = (r.returncode == 0 and d["promoted"] == 2 and d["covered"] == 1
                    and d["missing"] == ["002-missing.md"] and d["advisory"] is True)
 
+# --- AC-RD-12: the run PERSISTS (ledger + conditional dashboard); virgin ledger unchanged
+L = json.load(open(os.path.join(w, "L.json")))
+persisted = (L.get("roundtrip") or {}).get("covered") == 1
+r = eng("dashboard", "--ledger", "L.json", "--json")
+has = "roundtrip" in json.loads(r.stdout)
+eng("init", "--config", "c.json", "--out", "Lv.json")
+r = eng("dashboard", "--ledger", "Lv.json", "--json")
+virgin = "roundtrip" in json.loads(r.stdout)
+res["AC-RD-12"] = bool(persisted and has and not virgin)
+
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 io.open(os.path.join(side, ".oracle-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
@@ -5436,7 +5446,7 @@ def _oracle_cases():
     except (OSError, ValueError):
         return None
 _orc = _oracle_cases()
-for _oid in ("AC-RD-08", "AC-RD-09", "AC-RD-10", "AC-RD-11"):
+for _oid in ("AC-RD-08", "AC-RD-09", "AC-RD-10", "AC-RD-11", "AC-RD-12"):
     if _orc is None or _orc.get(_oid) is None:
         results.append((_oid, "oracle", SKIP))
     elif _orc.get(_oid) is True:

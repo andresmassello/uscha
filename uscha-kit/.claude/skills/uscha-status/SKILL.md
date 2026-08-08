@@ -100,6 +100,10 @@ nothing and gates nothing.
 `spec-drift: N stale / M docs (advisory)` — or `spec-drift: no drift measured` when zero are
 stale. Always label it advisory; it never explains a blocked phase. Absent key → no line.
 
+**Roundtrip (ADR-009 slice 2):** if the ledger carries a `roundtrip` run, add ONE line:
+`roundtrip: N/M promoted traceable by uscha-spec id (advisory)`. Absent key → no line —
+silence is honest when the loop was never measured.
+
 ## Degradation (honest, specific)
 
 - `measured` missing entirely → print: *"No measurement recorded yet — the trail

@@ -488,6 +488,19 @@ count, plateau flag per repo — to `ledger["measured"]` (what the statusline re
 Without it the trail starves: the mirador shows "no history yet" and the statusline
 falls back to counting checkboxes. Recording is append-only facts, never a gate.
 
+Right after readiness, run the spec-maintenance advisory (kit 1.66.0):
+
+```bash
+python3 $QL spec-drift --repo <REPO>
+```
+
+Milliseconds, deterministic, exit 0 always — it never gates, so running it every pass
+adds zero ceremony. What it adds is VISIBILITY: the run lands in the ledger, so the
+mirador card and `/uscha-status` show drift without anyone remembering the command —
+the user this advisory exists for is precisely the one who never types it. If any doc
+reads `SPEC_STALE`, mention it in the close block's `Blocks:` line as advisory context
+(it blocks nothing; it informs the human's next conversation).
+
 **Single-verdict view (kit 1.25.0, anti-ceremony).** By default `readiness` is ONE
 screen: the verdict line, any conditional warning that actually fired (it speaks only
 when it matters), and a `--- gates:` line that COLLAPSES every persisted gate record —

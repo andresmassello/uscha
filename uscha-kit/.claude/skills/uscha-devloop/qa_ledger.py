@@ -3790,6 +3790,12 @@ def cmd_roundtrip(args):
     out = {"repo": args.repo, "promoted": len(promoted), "covered": len(covered),
            "missing": missing, "advisory": True,
            "coverage_pct": round(100.0 * len(covered) / len(promoted), 1) if promoted else None}
+    # Latest-state record so the mirador/status can surface it without anyone re-running the
+    # command (the spec_drift pattern). A report that evaporates on exit is invisible to
+    # every read surface -- which defeats the point of an advisory (found by auditing which
+    # features actually REACH the user). Advisory data: no step counter, no gate record.
+    ledger["roundtrip"] = dict(out, at=_now())
+    _save(args.ledger, ledger)
     if args.json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
     else:
@@ -4896,6 +4902,8 @@ def cmd_dashboard(args):
     if ledger.get(CLEAN_ROOM_KEY):
         out["clean_room"] = {r: [e for e in ledger[CLEAN_ROOM_KEY] if e.get("repo") == r][-1]
                              for r in {e.get("repo") for e in ledger[CLEAN_ROOM_KEY]}}
+    if ledger.get("roundtrip"):
+        out["roundtrip"] = ledger["roundtrip"]
     if getattr(args, "json", False):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
