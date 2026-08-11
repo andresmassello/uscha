@@ -100,6 +100,11 @@ nothing and gates nothing.
 `spec-drift: N stale / M docs (advisory)` — or `spec-drift: no drift measured` when zero are
 stale. Always label it advisory; it never explains a blocked phase. Absent key → no line.
 
+**Clean-room (ADR-008):** if the ledger carries `clean_room` runs, add ONE line with the
+latest run per repo: `clean-room: GREEN @ <sha8> (12.3s)` / `RED @ <sha8>`. When the gate is
+declared (`mode: "final"`) and the latest run does not match the current HEAD, append
+`(stale for gate)`. Absent key → no line.
+
 **Roundtrip (ADR-009 slice 2):** if the ledger carries a `roundtrip` run, add ONE line:
 `roundtrip: N/M promoted traceable by uscha-spec id (advisory)`. Absent key → no line —
 silence is honest when the loop was never measured.

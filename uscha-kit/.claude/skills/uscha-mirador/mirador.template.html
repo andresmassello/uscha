@@ -665,8 +665,8 @@ function renderModes(){
      ledger fact visible. BOTH keys are conditional in dashboard --json, so a project
      that never used either sees no card at all (absent block = identical view). */
   const card=$("#card-modes");if(!card)return;
-  const fp=DATA.fast_path,sd=DATA.spec_drift;
-  if(!fp&&!sd){card.hidden=true;return;}
+  const fp=DATA.fast_path,sd=DATA.spec_drift,cr=DATA.clean_room;
+  if(!fp&&!sd&&!cr){card.hidden=true;return;}
   const host=$("#modes");host.replaceChildren();
   const parts=[];
   if(fp){
@@ -676,6 +676,16 @@ function renderModes(){
         node("span","t",r+(e.intent?(" — "+e.intent):"")),
         node("span","chip "+(cls[e.verdict]||"st-todo"),String(e.verdict||"?"))));});
     parts.push(Object.keys(fp).length+" repo"+(Object.keys(fp).length>1?"s":""));
+  }
+  if(cr){
+    const cls={GREEN:"st-done",RED:"st-block"};
+    Object.keys(cr).forEach(r=>{const e=cr[r]||{};
+      const sha=(e.ref||"").slice(0,8)||"?";
+      const wall=(typeof e.wall_ms==="number")?(" · "+(e.wall_ms/1000).toFixed(1)+"s"):"";
+      append(host,append(node("div","spec"),node("span","id","clean-room"),
+        node("span","t",r+" @ "+sha+wall),
+        node("span","chip "+(cls[e.status]||"st-prog"),String(e.status||"?"))));});
+    parts.push("clean-room ×"+Object.keys(cr).length);
   }
   if(sd){
     const cls={SPEC_STALE:"st-block",CLEAN:"st-done",UNMAPPED:"st-todo",UNTRACKED:"st-todo"};

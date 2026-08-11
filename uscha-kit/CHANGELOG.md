@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.67.0** — [the handoff's last residue: clean-room reaches the readouts (2026-08-10)](CHANGELOG-1.67.0.md)
 - **1.66.0** — [the advisories reach the user who never asks (2026-08-06)](CHANGELOG-1.66.0.md)
 - **1.65.0** — [the oracle learns the fix verdict, and the loop reports back (2026-08-06)](CHANGELOG-1.65.0.md)
 - **1.64.0** — [curation: candidates in quarantine, verdicts on the record (2026-08-06)](CHANGELOG-1.64.0.md)

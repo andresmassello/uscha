@@ -3615,7 +3615,7 @@ bad = []
 if "id=\x22card-modes\x22 hidden" not in t: bad.append("card-modes markup (hidden by default)")
 if "function renderModes()" not in t: bad.append("renderModes definition")
 if "renderModes();" not in t.split("/* ==== init ==== */")[-1]: bad.append("renderModes init call")
-if "if(!fp&&!sd){card.hidden=true;return;}" not in t: bad.append("conditional degradation")
+if "if(!fp&&!sd&&!cr){card.hidden=true;return;}" not in t: bad.append("conditional degradation")
 # extract the renderModes body FIRST; no quotes may sit inside bracket expressions here
 # (the documented bash 3.2 heredoc-in-substitution trap), hence chr() and two-step slicing.
 start = t.index("function renderModes()")
@@ -3623,7 +3623,7 @@ js = t[start:]
 cut = js.find(chr(10) + chr(125))
 js = js[:cut] if cut > 0 else js
 # verdict map checked INSIDE the renderer body, so a whole-file match cannot false-pass it
-for v in ("SPEC_STALE", "UNMAPPED", "UNTRACKED", "ESCALATED"):
+for v in ("SPEC_STALE", "UNMAPPED", "UNTRACKED", "ESCALATED", "clean-room"):
     if v not in js: bad.append("verdict class map: " + v)
 if "ADVISORY (ADR-005)" not in js: bad.append("advisory label")
 if "innerHTML" in js or "insertAdjacentHTML" in js: bad.append("HTML sink in renderModes")
