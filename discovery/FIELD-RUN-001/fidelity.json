@@ -1,0 +1,37 @@
+{
+  "repo": "uscha",
+  "path": "uscha-kit/install-uscha.py",
+  "dimensions": {
+    "traceability": {
+      "value": 0.0,
+      "provenance": "uscha-spec marker scan over 1 git-tracked files (bounded to uscha-kit/install-uscha.py) vs 40 canonical item(s)",
+      "class": "measured"
+    },
+    "behavior": {
+      "value": null,
+      "provenance": "UNMEASURED: no golden-diff run ingested (log-gate --kind golden-diff)",
+      "class": "measured"
+    },
+    "contracts": {
+      "value": 1.0,
+      "provenance": "re-ran static extractors (bounded to uscha-kit/install-uscha.py); 40/40 canonical static item(s) still derive from the code",
+      "class": "measured"
+    },
+    "curation_closure": {
+      "value": 1.0,
+      "provenance": "40/40 OBS in CANDIDATE-DELTA.json carry a ledger verdict",
+      "class": "measured"
+    },
+    "unexplained_code": {
+      "value": 0.0,
+      "provenance": "0/1 tracked prod source file(s) (bounded to uscha-kit/install-uscha.py) with no path to a canonical item or preserved OBS (v0 granularity: FILE)",
+      "files": [],
+      "class": "measured"
+    },
+    "semantic": {
+      "value": null,
+      "provenance": "not wired: an LLM-judged comparison enters as advisory only and can NEVER gate (INV-ADVISORY-01)",
+      "class": "advisory"
+    }
+  }
+}

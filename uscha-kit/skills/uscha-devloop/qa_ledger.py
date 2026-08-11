@@ -4533,6 +4533,10 @@ def cmd_fidelity(args):
         sys.exit(2)
     obs = (delta.get("observations") or []) if delta else []
     verdicts = _curation_verdicts(ledger, args.repo)
+    # fidelity respects the SAME bound that produced the delta (user decision, FR-001): a
+    # bounded discovery is measured over its own subtree, so unexplained_code and the other
+    # mechanical dimensions never mix the delta's scope with the whole repo's.
+    bound = delta.get("path") if delta else None
     dims = {}
     # traceability: canonical items reachable in code via the uscha-spec id machinery
     canon_items = []
@@ -4543,7 +4547,17 @@ def cmd_fidelity(args):
                 canon_items = json.load(fh).get("items") or []
         except (OSError, ValueError):
             canon_items = []
-    tracked = _tracked_files(repo_path) or []
+    tracked = [f for f in (_tracked_files(repo_path) or []) if _under_bound(f, bound)]
+    _scope = " (bounded to %s)" % bound if bound else ""
+    if bound:
+        # scope the DENOMINATOR too, not just the file scan: promote MERGES into CANONICAL
+        # repo-wide, so an earlier unbounded promote would otherwise count out-of-bound
+        # items as "no longer derives" -- the exact scope-mixing this release kills, half-
+        # done if only the numerator moves (fresh-review LOW). An item is under the bound
+        # when its primary provenance file is.
+        canon_items = [it for it in canon_items
+                       if any(_under_bound(f.split(":")[0].split("#")[0], bound)
+                              for f in (it.get("provenance") or {}).get("files") or [])]
     marked, marker_files = set(), set()
     for f, mid in _scan_spec_markers(repo_path, tracked):
         marked.add(mid)
@@ -4552,8 +4566,8 @@ def cmd_fidelity(args):
         traced = sum(1 for it in canon_items if (it.get("derived_from") or "") in marked)
         dims["traceability"] = _fid_dim(round(traced / len(canon_items), 4),
                                         "uscha-spec marker scan over %d git-tracked "
-                                        "files vs %d canonical item(s)"
-                                        % (len(tracked), len(canon_items)))
+                                        "files%s vs %d canonical item(s)"
+                                        % (len(tracked), _scope, len(canon_items)))
     else:
         dims["traceability"] = _fid_dim(None, "UNMEASURED: no canonical items promoted yet")
     # behavior: the latest ingested golden-diff gate verdict
@@ -4579,9 +4593,9 @@ def cmd_fidelity(args):
         cur_ids = {o["id"] for o in cur_static}
         okc = sum(1 for it in static_canon if it.get("derived_from") in cur_ids)
         dims["contracts"] = _fid_dim(round(okc / len(static_canon), 4),
-                                     "re-ran static extractors; %d/%d canonical static "
+                                     "re-ran static extractors%s; %d/%d canonical static "
                                      "item(s) still derive from the code"
-                                     % (okc, len(static_canon)))
+                                     % (_scope, okc, len(static_canon)))
     else:
         dims["contracts"] = _fid_dim(None, "UNMEASURED: no static-class canonical items")
     # curation_closure: curated OBS / total OBS in the active delta
@@ -4616,14 +4630,15 @@ def cmd_fidelity(args):
         unex = [f for f in prod if f not in lineage]
         dims["unexplained_code"] = _fid_dim(
             round(len(unex) / len(prod), 4),
-            "%d/%d tracked prod source file(s) with no path to a canonical item or "
-            "preserved OBS (v0 granularity: FILE)" % (len(unex), len(prod)),
+            "%d/%d tracked prod source file(s)%s with no path to a canonical item or "
+            "preserved OBS (v0 granularity: FILE)" % (len(unex), len(prod), _scope),
             files=unex[:10] + (["(+%d)" % (len(unex) - 10)] if len(unex) > 10 else []))
     else:
         dims["unexplained_code"] = _fid_dim(None, "UNMEASURED: no tracked prod source files")
     dims["semantic"] = _fid_dim(None, "not wired: an LLM-judged comparison enters as "
                                       "advisory only and can NEVER gate (INV-ADVISORY-01)")
     out = {"repo": args.repo,
+           **({"path": bound} if bound else {}),
            "dimensions": {k: dict(dims[k], **{"class": FIDELITY_DIMENSIONS[k]})
                           for k in ("traceability", "behavior", "contracts",
                                     "curation_closure", "unexplained_code", "semantic")}}
@@ -4632,8 +4647,8 @@ def cmd_fidelity(args):
     if args.json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
     else:
-        print("FIDELITY %s (vector -- no blend; each number stands on its own evidence):"
-              % args.repo)
+        print("FIDELITY %s%s (vector -- no blend; each number stands on its own evidence):"
+              % (args.repo, " [bounded to %s]" % bound if bound else ""))
         for k, d in out["dimensions"].items():
             val = "UNMEASURED" if d["value"] is None else "%.2f" % d["value"]
             print("  %-17s %-10s [%s] %s" % (k, val, d["class"], d["provenance"]))

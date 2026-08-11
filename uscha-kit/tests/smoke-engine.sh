@@ -4695,6 +4695,10 @@ sh("git", "config", "user.name", "t")
 io.open(os.path.join(repo, "src", "app.py"), "w").write(
     "def facturar(total):\n    return total\n")
 io.open(os.path.join(repo, "orphan.py"), "w").write("def _hidden():\n    return 0\n")
+# a PUBLIC def OUTSIDE src -> a canonical static item outside the src bound, so AC-FV-06
+# exercises the DENOMINATOR scoping, not just the file scan (fresh-review LOW)
+os.makedirs(os.path.join(repo, "pkg"))
+io.open(os.path.join(repo, "pkg", "mod.py"), "w").write("def exported():\n    return 1\n")
 os.makedirs(os.path.join(repo, "goldens"))
 io.open(os.path.join(repo, "goldens", "case.approved.json"), "w").write("{}\n")
 sh("git", "add", "-A"); sh("git", "commit", "-m", "base")
@@ -4760,6 +4764,30 @@ io.open(os.path.join(w, "broken.json"), "w").write("{ not json")
 rb = eng("fidelity", "--ledger", "L.json", "--repo", "r",
          "--config", os.path.join(w, "broken.json"))
 res["review-h2"] = rb.returncode == 2 and "unreadable" in rb.stderr
+
+# --- AC-FV-06: fidelity respects the SAME --path bound the delta was produced with (user
+# decision, FR-001) -- unexplained_code measures only files under the bound, and the scope
+# is NAMED. Unbounded, orphan.py is unexplained; bounded to src, it is out of scope.
+eng("discover", "--ledger", "L.json", "--repo", "r", "--path", "src",
+    "--narrated", os.path.join(w, "narr.json"))
+dl = json.load(io.open(os.path.join(repo, "discovery", "CANDIDATE-DELTA.json"),
+                       encoding="utf-8"))
+for o in dl["observations"]:
+    eng("curate", "--ledger", "L.json", "--repo", "r", "--obs", o["id"],
+        "--verdict", "preserve")
+eng("promote", "--ledger", "L.json", "--repo", "r")
+rbnd = eng("fidelity", "--ledger", "L.json", "--repo", "r", "--json")
+fb = json.loads(rbnd.stdout)
+uc = fb["dimensions"]["unexplained_code"]
+ct = fb["dimensions"]["contracts"]
+# CANONICAL still holds exported@pkg/mod.py (unbounded promote in AC-FV-01..05 merged it),
+# but a src-bounded fidelity must NOT count it against contracts -- denominator scoped too
+res["AC-FV-06"] = (fb.get("path") == "src"
+                   and "orphan.py" not in (uc.get("files") or [])
+                   and "pkg/mod.py" not in (uc.get("files") or [])
+                   and "bounded to src" in uc["provenance"]
+                   and uc["value"] == 0.0
+                   and ct["value"] == 1.0 and "bounded to src" in ct["provenance"])
 
 # --- regression: a malformed delta is exit 2 for fidelity too, never mislabeled as
 # "no delta" (fresh-review MEDIUM, reproduced pre-release)
@@ -5934,7 +5962,7 @@ def _fidelity_cases():
     except (OSError, ValueError):
         return None
 _fvc = _fidelity_cases()
-for _fid in ("AC-FV-01", "AC-FV-02", "AC-FV-03", "AC-FV-04", "AC-FV-05"):
+for _fid in ("AC-FV-01", "AC-FV-02", "AC-FV-03", "AC-FV-04", "AC-FV-05", "AC-FV-06"):
     if _fvc is None or _fvc.get(_fid) is None:
         results.append((_fid, "fidelity", SKIP))
     elif _fvc.get(_fid) is True:

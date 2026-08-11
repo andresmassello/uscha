@@ -31,6 +31,11 @@ discovery + curation:
 - `unexplained_code` — **v0 deliberately crude: unit = source FILE.** Share of files with no
   path to any canonical item or preserved OBS. Symbol granularity is a future milestone,
   said in the docs rather than half-built. Crude and honest beats fine-grained and narrated.
+  **Scoped to the delta's bound** (FR-001 finding, user decision): a discovery produced with
+  `discover --path <sub>` is measured over `<sub>` only — mixing a bounded delta with a
+  repo-wide denominator produced a number (0.93 on the installer field run) that answered a
+  question nobody asked. The bound is recorded in the delta, so fidelity reads it and the
+  scope is named in every dimension's provenance.
 - `semantic` — if a skill-layer LLM comparison is ever wired, its value enters as
   `{class: "advisory"}` and **can never gate**.
 
@@ -66,3 +71,4 @@ deterministic: same inputs, same numbers, no LLM anywhere in their path.
 - [ ] configuring any advisory dimension as blocking → engine refusal (AC-FV-03)
 - [ ] `curation_closure` < 1.0 iff uncurated OBS exist (AC-FV-04)
 - [ ] measured dimensions deterministic: same inputs, same numbers (AC-FV-05)
+- [x] fidelity respects the delta's `--path` bound; scope named in provenance (AC-FV-06)

@@ -1,0 +1,525 @@
+{
+  "_generated_by": "qa_ledger.py promote (ADR-013) -- items carry derived_from lineage to their OBS",
+  "items": [
+    {
+      "statement": "uscha-kit/install-uscha.py defines function cmd_install(args)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:598"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-09f802e4876e"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function prepared_settings(path, command)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:223"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-2000fc9939f2"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function copy_skill(src, dst, mode)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:109"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-2a305d62a3df"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function hook_registered(settings, command)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:202"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-2d3170474b31"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function plugin_manifest()",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:126"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-327e20900db5"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function prepared_marketplace(path)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:179"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-3424f817c715"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function now_iso()",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:46"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-396316b7b18b"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function uninstall_target(target, home, dry_run, operations, force)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:859"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-3e78c1e1fb99"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines class InstallError",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:38"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-4041c2d597a4"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function stage_plugin(plugin_root, mode)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:267"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-4b911b0859b0"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function install_claude(home, mode, dry_run, operations)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:360"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-571b6a7d89d2"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function build_parser()",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:983"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-58ac97638591"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function cmd_init(args)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:696"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-5fd284fe8e96"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function main(argv)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:1012"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-5ff31d87b46a"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function selected_targets(value)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:54"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-629db14f5ace"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function target_status(home, target)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:543"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-63245d23b799"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function valid_marketplace_source(source)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:148"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-6aa4e7bc5a9b"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function source_version()",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:42"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-6d6ee8d4dd6d"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function next_steps(target)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:945"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-705d092dfabd"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function cmd_doctor(args)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:610"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-760dfb73b1a8"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function emit(data, as_json)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:961"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-78386cfa635e"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function remove_path(path)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:93"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-7954471b71cf"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function settings_without_hook(path)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:810"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-82fd721f5375"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function cmd_uninstall(args)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:934"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-84c40f852bf0"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function home_path(args)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:50"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-8e1df3593323"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function atomic_json(path, data)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:68"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-9cdfd0cb5c4d"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function valid_marketplace_plugin(plugin)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:157"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-9dc746c08891"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function atomic_bytes(path, data)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:81"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-9f1bc2f4a74a"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function cmd_mirador(args)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:771"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-ae81b4d23110"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function source_skills()",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:116"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-b03535e8829c"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function marker_ok(path, target)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:533"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-b223b5a7956c"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function marker(target, install_root, mode)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:138"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-b33e33bc2fb9"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function valid_marketplace(data)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:169"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-bf312c002c17"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function install_codex(home, mode, dry_run, operations)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:285"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-bf5859a73f0d"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function hook_command(hook)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:197"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-c1b42a098387"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function link_dir(src, dst)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:100"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-dc3d3b6fb060"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function marketplace_entry()",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:143"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-ede263c6c82e"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function cmd_version(args)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:594"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-fc06b7749681"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function install_skills_only(target, home, mode, dry_run, operations)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:449"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-fdf652ecbdfa"
+    },
+    {
+      "statement": "uscha-kit/install-uscha.py defines function load_json(path, label)",
+      "type": "contract",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "uscha-kit/install-uscha.py:61"
+        ],
+        "derivation": "AST scan (python ast, top-level defs)",
+        "tool": "qa_ledger-static-py"
+      },
+      "derived_from": "OBS-ff30747cfe06"
+    }
+  ]
+}

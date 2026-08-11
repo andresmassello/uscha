@@ -233,6 +233,8 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   (INV-ADVISORY-01).
 - [x] AC-FV-04 - `curation_closure` < 1.0 whenever uncurated OBS exist; 1.0 only when none.
 - [x] AC-FV-05 - the measured dimensions are deterministic: same inputs, same numbers.
+- [x] AC-FV-06 - fidelity respects the delta's `--path` bound: mechanical dimensions
+  measure only files under the bound, and the scope is named in each provenance.
 
 ## Out of scope for measurement here
 
