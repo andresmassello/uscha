@@ -4590,6 +4590,42 @@ recs = [c for c in led.get("curation", []) if c["obs_id"] == und_id]
 res["AC-CU-05"] = (len(recs) == 2 and recs[0]["verdict"] == "undefined"
                    and recs[1]["verdict"] == "preserve")
 
+# --- AC-DD-07: --path bounds the mechanical scans; empty match refuses named; the bound
+# is recorded in the delta AND surfaced in the human-facing twin (field-found before
+# FIELD-RUN-001; twin/seal/empty gaps closed after the fresh review)
+rb1 = eng("discover", "--ledger", "L.json", "--repo", "r", "--path", "src/app.py",
+          "--narrated", os.path.join(w, "narr.json"), "--json")
+db = json.load(io.open(DPATH, encoding="utf-8"))
+bnd = [o for o in db["observations"] if o["evidence_class"] != "narrated"]
+TWINB = io.open(os.path.join(repo, "discovery", "CANDIDATE-DELTA.md"),
+                encoding="utf-8").read()
+rb2 = eng("discover", "--ledger", "L.json", "--repo", "r", "--path", "no/such/dir")
+# empty bound must refuse, not silently scan the whole repo (fresh-review MEDIUM)
+rb3 = eng("discover", "--ledger", "L.json", "--repo", "r", "--path", "",
+          "--narrated", os.path.join(w, "narr.json"))
+# ./src normalizes rather than being misattributed to a nonexistent path (fresh-review LOW)
+rb4 = eng("discover", "--ledger", "L.json", "--repo", "r", "--path", "./src/app.py",
+          "--narrated", os.path.join(w, "narr.json"))
+# the bound is SEALED: hand-editing path in a bounded delta breaks the seal (fresh-review MED)
+raw_b = json.load(io.open(DPATH, encoding="utf-8"))    # rb4 left a bounded delta
+raw_b["path"] = "totally/other"
+io.open(DPATH, "w", encoding="utf-8").write(json.dumps(raw_b, indent=2))
+rb5 = eng("curate", "--ledger", "L.json", "--repo", "r", "--obs",
+          raw_b["observations"][0]["id"], "--verdict", "preserve")
+res["AC-DD-07"] = (rb1.returncode == 0 and db.get("path") == "src/app.py"
+                   and bnd and all(o["provenance"]["files"][0].startswith("src/app.py")
+                                   for o in bnd)
+                   and "BOUNDED" in TWINB and "src/app.py" in TWINB
+                   and rb2.returncode == 2 and "matches no tracked file" in rb2.stderr
+                   and rb3.returncode == 2 and "empty" in rb3.stderr
+                   and rb4.returncode == 0
+                   and rb5.returncode == 2 and "seal" in rb5.stderr)
+# restore the unbounded delta for the cases below; the rerun must succeed or the seal
+# regressions afterward would silently run against a bounded delta (fresh-review nit)
+rr0 = eng("discover", "--ledger", "L.json", "--repo", "r",
+          "--narrated", os.path.join(w, "narr.json"))
+res["AC-DD-07"] = bool(res["AC-DD-07"] and rr0.returncode == 0)
+
 # --- regression: malformed narrated input (non-string ref) is a NAMED exit-2 refusal,
 # never a TypeError traceback (fresh-review MEDIUM, reproduced pre-release)
 io.open(os.path.join(w, "badref.json"), "w").write(json.dumps(
@@ -5880,6 +5916,7 @@ def _delta_cases():
         return None
 _dlc = _delta_cases()
 for _did in ("AC-DD-01", "AC-DD-02", "AC-DD-03", "AC-DD-04", "AC-DD-05", "AC-DD-06",
+             "AC-DD-07",
              "AC-CU-01", "AC-CU-02", "AC-CU-03", "AC-CU-04", "AC-CU-05", "AC-CU-06"):
     if _dlc is None or _dlc.get(_did) is None:
         results.append((_did, "candidate-delta", SKIP))

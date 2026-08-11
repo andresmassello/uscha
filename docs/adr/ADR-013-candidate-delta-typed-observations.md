@@ -65,6 +65,16 @@ from ledger objects would read as tampering to the very append-only check that g
 engine is Python, and the proof chain is shortest there. Every other stack reports
 `UNSUPPORTED`, explicit, per house style. Do not build 11 extractors.
 
+**The target can be bounded** (added at FIELD-RUN-001, completing the originating handoff's
+own `discover --path <target>` signature): `--path` restricts the MECHANICAL scans (static
+extraction, measured golden inventory) to one subtree or file; narrated input stays the
+skill's to scope. A bound that matches no tracked file is a named refusal — a typo'd path
+silently emitting an empty delta is the silent-degrade trap. The bound is recorded in the
+delta, so two deltas with different bounds cannot read as the same discovery. Discovered in
+the field before the first run: an unbounded discover over this repo emits 197 static OBS
+(134 of them the engine twins) where the bounded target emits 40 — "real, bounded" (ADR-014)
+was unimplementable without it.
+
 **Criteria namespace: `AC-DD-nn`** (delta discovery) — the handoff's `AC-RD-nn` collides
 with the thirteen criteria already shipped under that prefix with different meanings.
 
@@ -99,6 +109,8 @@ with the thirteen criteria already shipped under that prefix with different mean
 - [ ] unchanged fixture → byte-identical OBS IDs (AC-DD-04)
 - [ ] canonical_match populated when a match exists, null otherwise (AC-DD-05)
 - [ ] rendered twin regenerates; hand edits detectably overwritten (AC-DD-06)
+- [x] `--path` bounds the mechanical scans; empty match refuses named; bound recorded,
+  surfaced in the twin, and sealed (AC-DD-07)
 - [ ] promote over one uncurated OBS → refusal naming it; ledger unchanged (AC-CU-01)
 - [ ] preserve → promoted with `derived_from`; fix → ISSUES-DEFERRED entry, never canonical;
   undefined → open in readouts; re-curation supersedes without deleting; no batch-accept

@@ -216,6 +216,9 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   unmatched carries null.
 - [x] AC-DD-06 - the rendered `.md` twin regenerates from the JSON; hand edits are
   detectably overwritten.
+- [x] AC-DD-07 - `discover --path` bounds the mechanical scans to the subtree; a bound
+  matching no tracked file is a named refusal; the bound is recorded in the delta (and
+  surfaced in the human-facing twin; sealed).
 - [x] AC-CU-01 - promote over a delta with one uncurated OBS -> refusal naming it; ledger
   unchanged.
 - [x] AC-CU-02 - `preserve` promotes into the canonical package with `derived_from` lineage.
