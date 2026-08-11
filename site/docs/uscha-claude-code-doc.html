@@ -603,6 +603,10 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">fastpath-eval</td><td>Veredicto medido de fast-path (ADR-003): ALLOW/DENY a partir del diff real contra el merge-base; <code class="in">--intent</code> lo registra, sin él la llamada es dry-run. Fail-closed (1.57.0).</td></tr>
       <tr><td class="t">spec-drift</td><td>Deriva consultiva de spec vs código desde las fechas de commit (ADR-005). Nunca gatea; exit 0 siempre (1.58.0).</td></tr>
       <tr><td class="t">golden-coverage</td><td>Registra los archivos fuente MEDIDOS que ejercita el harness de un golden, corriéndolo bajo coverage.py (ADR-006). Alimenta la veda golden-touched opt-in (1.60.0).</td></tr>
+      <tr><td class="t">cleanroom</td><td>Ejecuta un comando provisto por el invocador contra un worktree LIMPIO de un commit; gate opt-in de pr-ready (ADR-008, 1.63.0).</td></tr>
+      <tr><td class="t">curation-check</td><td>El gate INV-CURATION-01: candidatas, veredictos, behavior ledger append-only (ADR-009/010, 1.64.0).</td></tr>
+      <tr><td class="t">roundtrip</td><td>Consultivo: qué candidatas promovidas son trazables en el código vía ids uscha-spec (1.65.0).</td></tr>
+      <tr><td class="t">facts</td><td>Deriva SYSTEM-FACTS.json desde los artefactos y chequea claims publicados contra él (ADR-012, 1.68.0).</td></tr>
       <tr><td class="t">execution-policy</td><td>Imprime el ruteo de ejecuci?n.</td></tr>
       <tr><td class="t">dashboard</td><td>Entrega el contrato de datos de Mirador.</td></tr>
       <tr><td class="t">simplicity-check</td><td>Eval?a minimalidad del diff.</td></tr>

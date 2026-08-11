@@ -570,7 +570,7 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
   <div class="kicker"><span class="n">09</span> the measurement engine <span class="callout-status real">in the kit</span></div>
   <h2><code class="in" style="font-size:.7em">qa_ledger.py</code> <span class="accent">— command reference.</span></h2>
   <p>Pure stdlib, Python 3.8+, no dependencies. It owns everything that <strong>must be exact and reproducible</strong>. The judgments (did it converge? is it oscillating? do we escalate?) are made by the skill reading this data; the script only exposes deterministic advisory helpers.</p>
-  <p class="small"><strong>Exact current parser surface:</strong> 32 subcommands; the list below mirrors <code class="in">build_parser()</code>, including <code class="in">dashboard</code>, <code class="in">waste-check</code>, and <code class="in">spec-change-request</code>.</p>
+  <p class="small"><strong>Exact current parser surface:</strong> 36 subcommands; the list below mirrors <code class="in">build_parser()</code>, including <code class="in">dashboard</code>, <code class="in">waste-check</code>, and <code class="in">spec-change-request</code>.</p>
   <table>
     <thead><tr><th>Subcommand</th><th>What it does</th></tr></thead>
     <tbody>
@@ -600,6 +600,10 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
       <tr><td class="t">fastpath-eval</td><td>Measured fast-path verdict (ADR-003): ALLOW/DENY from the real diff against the merge-base; <code class="in">--intent</code> records it, without it the call is a dry-run. Fail-closed (1.57.0).</td></tr>
       <tr><td class="t">spec-drift</td><td>Advisory spec-vs-code drift from git commit dates (ADR-005). Never gates; exit 0 always (1.58.0).</td></tr>
       <tr><td class="t">golden-coverage</td><td>Records the MEASURED source files a golden's harness exercises, by running it under coverage.py (ADR-006). Feeds the opt-in golden-touched veto (1.60.0).</td></tr>
+      <tr><td class="t">cleanroom</td><td>Runs a caller-supplied command against a CLEAN worktree of one commit; opt-in pr-ready gate (ADR-008, 1.63.0).</td></tr>
+      <tr><td class="t">curation-check</td><td>The INV-CURATION-01 gate: candidates, verdicts, append-only behavior ledger (ADR-009/010, 1.64.0).</td></tr>
+      <tr><td class="t">roundtrip</td><td>Advisory: which promoted candidates are traceable in code via uscha-spec ids (1.65.0).</td></tr>
+      <tr><td class="t">facts</td><td>Derives SYSTEM-FACTS.json from the artifacts and checks published claims against it (ADR-012, 1.68.0).</td></tr>
       <tr><td class="t">execution-policy</td><td>Prints execution routing.</td></tr>
       <tr><td class="t">dashboard</td><td>Emits Mirador data contract.</td></tr>
       <tr><td class="t">simplicity-check</td><td>Scores diff minimality.</td></tr>

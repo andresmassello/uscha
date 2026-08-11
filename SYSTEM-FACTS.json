@@ -1,0 +1,64 @@
+{
+  "_derivation": {
+    "omitted": "stack matrix and REAL/VISION registry: no mechanical source exists yet -- omitted, not guessed (ADR-012)",
+    "skills": "SKILL.md inventory under uscha-kit/.claude/skills/",
+    "subcommands": "argparse introspection of build_parser()",
+    "version": "uscha-kit/VERSION"
+  },
+  "skills": {
+    "count": 9,
+    "list": [
+      "uscha-adr-refine",
+      "uscha-characterize",
+      "uscha-devloop",
+      "uscha-discovery",
+      "uscha-mirador",
+      "uscha-reverse-discovery",
+      "uscha-rubric",
+      "uscha-status",
+      "uscha-sysdoc"
+    ]
+  },
+  "subcommands": {
+    "count": 36,
+    "list": [
+      "check-coverage",
+      "cleanroom",
+      "converged",
+      "curation-check",
+      "dashboard",
+      "doctor",
+      "escalate",
+      "execution-policy",
+      "facts",
+      "fastpath-eval",
+      "flag-blocker",
+      "gate-check",
+      "golden-coverage",
+      "golden-diff",
+      "ingest-gate",
+      "init",
+      "log-gate",
+      "log-step",
+      "oscillation",
+      "phase",
+      "pit-check",
+      "production-finding",
+      "readiness",
+      "rebuild",
+      "regression-check",
+      "resolve-escalation",
+      "roundtrip",
+      "rubric-ingest",
+      "simplicity-check",
+      "snapshot",
+      "spec-change-request",
+      "spec-check",
+      "spec-doubt",
+      "spec-drift",
+      "summary",
+      "waste-check"
+    ]
+  },
+  "version": "1.68.0"
+}

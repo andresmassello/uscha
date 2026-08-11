@@ -3862,6 +3862,142 @@ def cmd_curation_check(args):
 
 
 
+# --------------------------------------------------------------------------- #
+# facts  (T0 / SYSTEM-FACTS: public claims become compiled artifacts of repo
+# facts -- Diamond applied to Diamond. ADR-012.)
+# --------------------------------------------------------------------------- #
+
+FACTS_FILE = "SYSTEM-FACTS.json"
+
+
+def _derive_facts():
+    """Facts derived from the ARTIFACTS themselves, never from prose and never from greps
+    over documentation: the subcommand list comes from introspecting the REAL parser, the
+    skill list from the REAL kit tree, the version from the kit VERSION file. No timestamp
+    on purpose: regeneration over an unchanged repo must be byte-identical (AC-SF-01)."""
+    here = os.path.abspath(__file__)
+    # kit root by MARKER, not by fixed depth: the canonical engine sits 4 levels deep
+    # (.claude/skills/uscha-devloop/) and the Codex twin 3 (skills/uscha-devloop/). A fixed
+    # dirname walk made the twin silently derive the OUTER repo root -- version None,
+    # 0 skills, no error (fresh-review HIGH, reproduced by running both copies).
+    kit, cur = None, os.path.dirname(here)
+    for _ in range(6):
+        if os.path.isfile(os.path.join(cur, "VERSION")):
+            kit = cur
+            break
+        nxt = os.path.dirname(cur)
+        if nxt == cur:
+            break
+        cur = nxt
+    if kit is None:
+        print("[qa_ledger] facts: no VERSION file found walking up from the engine -- "
+              "facts that cannot locate their own kit are not facts.", file=sys.stderr)
+        sys.exit(2)
+    with open(os.path.join(kit, "VERSION"), encoding="utf-8") as fh:
+        version = fh.read().split()[-1].strip()
+    subs = []
+    for action in build_parser()._subparsers._group_actions:
+        subs = sorted(action.choices.keys())
+    skills = []
+    for sdir in (os.path.join(kit, ".claude", "skills"), os.path.join(kit, "skills")):
+        # canonical tree first; the Codex install ships only skills/ -- same inventory
+        if os.path.isdir(sdir):
+            skills = sorted(d for d in os.listdir(sdir)
+                            if os.path.isfile(os.path.join(sdir, d, "SKILL.md")))
+            break
+    return {
+        "version": version,
+        "subcommands": {"count": len(subs), "list": subs},
+        "skills": {"count": len(skills), "list": skills},
+        "_derivation": {
+            "version": "uscha-kit/VERSION",
+            "subcommands": "argparse introspection of build_parser()",
+            "skills": "SKILL.md inventory under uscha-kit/.claude/skills/",
+            "omitted": "stack matrix and REAL/VISION registry: no mechanical "
+                       "source exists yet -- omitted, not guessed (ADR-012)",
+        },
+    }
+
+
+_CLAIM_PATTERNS = (
+    # (fact key path, regex over one line, needs-context substring or None)
+    ("version", r"v(\d+\.\d+\.\d+)", "kit"),
+    ("version", r"uscha-kit\s+v?(\d+\.\d+\.\d+)", None),
+    ("subcommands.count", r"(\d+)\s+sub-?comm?ands", None),
+    ("subcommands.count", r"(\d+)\s+subcomandos", None),
+    ("skills.count", r"(\d+)\s+skills", None),
+)
+
+
+def _fact_value(facts, dotted):
+    cur = facts
+    for part in dotted.split("."):
+        cur = cur[part]
+    return str(cur)
+
+
+def cmd_facts(args):
+    """Generate SYSTEM-FACTS.json, or --check published claims against the derived facts.
+
+    The founding fixture (recorded in ADR-012): the site claimed kit 1.65.0 with 32 engine
+    subcommands while the repo was at 1.67.0 with 35 -- factual drift, live, in the project
+    about factual drift. A claim that CI does not compare against a derived fact will
+    drift; this makes the comparison mechanical and the drift a named red."""
+    facts = _derive_facts()
+    if args.check:
+        problems = []
+        # 1) the committed facts file must match a fresh derivation (stale facts are drift)
+        if os.path.isfile(args.out):
+            with open(args.out, encoding="utf-8") as fh:
+                committed = fh.read()
+            fresh = json.dumps(facts, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+            if committed.replace("\r\n", "\n") != fresh:
+                problems.append((args.out, 0, "committed facts file",
+                                 "stale vs regenerated", "run: qa_ledger.py facts"))
+        else:
+            problems.append((args.out, 0, "facts file", "absent",
+                             "run: qa_ledger.py facts"))
+        # 2) every recognizable claim in the given files must equal the derived fact
+        for path in args.check:
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    lines = fh.read().splitlines()
+            except OSError as exc:
+                problems.append((path, 0, "file", "unreadable: %s" % exc, ""))
+                continue
+            for n, line in enumerate(lines, 1):
+                # an HTML comment is not a published claim -- the first live run flagged a
+                # section marker (a comment reading "2 Skills") as a drifted count
+                line = re.sub(r"<!--.*?-->", "", line)
+                low = line.lower()
+                for key, pat, ctx in _CLAIM_PATTERNS:
+                    if ctx and ctx not in low:
+                        continue
+                    for m in re.finditer(pat, line, re.I):
+                        claimed = m.group(1)
+                        actual = _fact_value(facts, key)
+                        if claimed != actual:
+                            problems.append((path, n, key, claimed, actual))
+        if problems:
+            print("FACTUAL DRIFT: %d claim(s) disagree with the derived facts"
+                  % len(problems))
+            for path, n, key, claimed, actual in problems:
+                loc = "%s:%d" % (path, n) if n else path
+                print("  !! %s: %s claims %r, the artifact says %r"
+                      % (loc, key, claimed, actual))
+            sys.exit(1)
+        print("FACTS: %d file(s) checked, every claim matches the derived facts"
+              % len(args.check))
+        sys.exit(0)
+    body = json.dumps(facts, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(body)
+    print("FACTS -> %s: version %s · %d subcommands · %d skills"
+          % (args.out, facts["version"], facts["subcommands"]["count"],
+             facts["skills"]["count"]))
+
+
+
 def cmd_escalate(args):
     ledger = _load(args.ledger)
     _repo_node(ledger, args.repo)
@@ -7695,6 +7831,13 @@ def build_parser():
     pcu.add_argument("--repo", required=True)
     pcu.add_argument("--json", action="store_true")
     pcu.set_defaults(func=cmd_curation_check)
+
+    pfa = sub.add_parser("facts",
+                         help="SYSTEM-FACTS: derive repo facts from the artifacts, or --check published claims against them (ADR-012)")
+    pfa.add_argument("--out", default="SYSTEM-FACTS.json")
+    pfa.add_argument("--check", nargs="*", default=None,
+                     help="files whose claims must match the derived facts; exit 1 on drift")
+    pfa.set_defaults(func=cmd_facts)
 
     prt = sub.add_parser("roundtrip",
                          help="advisory: which promoted candidates are traceable in code via uscha-spec ids (ADR-009 slice 2)")

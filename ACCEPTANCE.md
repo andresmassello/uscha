@@ -182,6 +182,24 @@ The `fix` verdict reaches the oracle: expected divergences are DECLARED
   config-error crash. Second recurrence of the 1.63.0 class; the guard is now a helper
   (`_scope_path`) instead of a per-site pattern.
 
+## SYSTEM-FACTS (T0, ADR-012) - feature acceptance, closes on green `AC-SF-nn` tests
+
+Published claims become compiled artifacts of derived facts. Founding fixture: the site
+claimed 1.65.0/32 subcommands while the repo was at 1.67.0/35 - live factual drift in the
+project about factual drift.
+
+- [x] AC-SF-01 - `facts` derivation is deterministic: two runs over an unchanged repo are
+  byte-identical, and the facts come from the artifacts (parser introspection, tree
+  inventory), never from prose.
+- [x] AC-SF-02 - an injected wrong claim -> `facts --check` exits 1 naming file:line, the
+  claim and the derived fact.
+- [x] AC-SF-03 - a stale committed `SYSTEM-FACTS.json` is itself drift, named.
+- [x] AC-SF-04 - correct claims + fresh facts -> exit 0.
+- [x] AC-SF-05 - the Codex twin engine derives byte-identical facts: the twins are identical
+  FILES, but a fixed-depth root walk made runtime behavior diverge by install location
+  (version null, 0 skills, silently). Root is now found by marker, and facts that cannot
+  locate their own VERSION exit 2 instead of emitting nulls.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced
@@ -213,6 +231,7 @@ The `fix` verdict reaches the oracle: expected divergences are DECLARED
 - ADR-009 — Candidate specs in quarantine: the agent authors, only the human promotes.
 - ADR-010 — The behavior ledger: human-readable table, machine-enforced rules.
 - ADR-011 — No shared extraction engine; spec-drift and reverse discovery stay separate.
+- ADR-012 — Published claims are compiled artifacts of derived facts (SYSTEM-FACTS).
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

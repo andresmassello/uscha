@@ -3421,6 +3421,7 @@ rm -f "$KIT/reports/junit/.origin-cases.json"     # same rule for T118
 rm -f "$KIT/reports/junit/.cleanroom-cases.json"  # same rule for T119
 rm -f "$KIT/reports/junit/.curation-cases.json"   # same rule for T120
 rm -f "$KIT/reports/junit/.oracle-cases.json"     # same rule for T121
+rm -f "$KIT/reports/junit/.facts-cases.json"      # same rule for T122
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -4367,6 +4368,84 @@ case "$T121" in
   OK*) PASS=$((PASS+1)); echo "  ok   oracle: $T121";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T121";;
 esac
+
+echo "== T122 (1.68.0): facts -- published claims become compiled artifacts (T0, ADR-012) =="
+T122=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp()
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+# --- AC-SF-01: derivation is deterministic -- two runs, byte-identical, well-formed
+eng("facts", "--out", "f1.json")
+eng("facts", "--out", "f2.json")
+b1 = io.open(os.path.join(w, "f1.json"), "rb").read()
+b2 = io.open(os.path.join(w, "f2.json"), "rb").read()
+d = json.loads(b1)
+res["AC-SF-01"] = (b1 == b2 and d["version"] and d["subcommands"]["count"] > 30
+                   and "facts" in d["subcommands"]["list"]
+                   and d["skills"]["count"] == len(d["skills"]["list"]))
+
+# --- AC-SF-02: an injected wrong claim fails the check NAMING file, key and both values
+io.open(os.path.join(w, "wrong.md"), "w").write(
+    "the kit v9.9.9 ships with 999 subcommands and 99 skills\n")
+r = eng("facts", "--check", "wrong.md", "--out", "f1.json")
+out = r.stdout
+res["AC-SF-02"] = (r.returncode == 1 and "wrong.md:1" in out and "9.9.9" in out
+                   and "999" in out and "99" in out and "FACTUAL DRIFT" in out)
+
+# --- AC-SF-03: a stale committed facts file is itself drift, named
+stale = dict(d); stale["version"] = "0.0.0"
+io.open(os.path.join(w, "stale.json"), "w").write(
+    json.dumps(stale, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
+io.open(os.path.join(w, "right.md"), "w").write(
+    "the kit v%s ships %d subcommands and %d skills\n"
+    % (d["version"], d["subcommands"]["count"], d["skills"]["count"]))
+r = eng("facts", "--check", "right.md", "--out", "stale.json")
+res["AC-SF-03"] = r.returncode == 1 and "stale" in r.stdout
+
+# --- AC-SF-04: correct claims + fresh facts -> exit 0
+r = eng("facts", "--check", "right.md", "--out", "f1.json")
+res["AC-SF-04"] = r.returncode == 0
+
+# --- AC-SF-05: the CODEX TWIN derives identical facts. The twins are byte-identical files,
+# but a fixed-depth root walk made runtime behavior diverge by install location (fresh
+# review, reproduced): version None and 0 skills from skills/uscha-devloop/.
+TWIN = os.path.join(kit, "skills", "uscha-devloop", "qa_ledger.py")
+rt = subprocess.run([sys.executable, TWIN, "facts", "--out", "ftwin.json"],
+                    cwd=w, capture_output=True, text=True)
+tb = io.open(os.path.join(w, "ftwin.json"), "rb").read() if rt.returncode == 0 else b""
+res["AC-SF-05"] = rt.returncode == 0 and tb == b1
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".facts-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T122" in
+  OK*) PASS=$((PASS+1)); echo "  ok   facts: $T122";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T122";;
+esac
+
+echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
+# The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
+# while the repo was 1.67.0/35) went red on this exact command before being fixed.
+# Historical changelogs are archives, deliberately out of scope (ADR-012).
+chk "site+README+manifests+docs claims match SYSTEM-FACTS" 0 \
+  "$PY" "$QL" facts --check \
+    "$ROOT/README.md" "$ROOT/uscha-kit/README.md" \
+    "$ROOT/site/index.html" "$ROOT/site/es/index.html" "$ROOT/site/llms.txt" \
+    "$ROOT/.claude-plugin/marketplace.json" "$ROOT/uscha-kit/.claude-plugin/plugin.json" \
+    "$ROOT/docs/uscha-claude-code-doc.html" "$ROOT/docs/uscha-claude-code-doc-EN.html" \
+    "$ROOT/site/docs/uscha-claude-code-doc.html" "$ROOT/site/docs/uscha-claude-code-doc-EN.html" \
+    --out "$ROOT/SYSTEM-FACTS.json"
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
@@ -5462,6 +5541,23 @@ for _oid in ("AC-RD-08", "AC-RD-09", "AC-RD-10", "AC-RD-11", "AC-RD-12"):
         results.append((_oid, "oracle", None))
     else:
         results.append((_oid, "oracle", "T121 case failed or missing"))
+
+# SYSTEM-FACTS criteria (T0, ADR-012): measured by T122, same sidecar contract.
+def _facts_cases():
+    p = os.path.join(kit, "reports", "junit", ".facts-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_sfc = _facts_cases()
+for _sfid in ("AC-SF-01", "AC-SF-02", "AC-SF-03", "AC-SF-04", "AC-SF-05"):
+    if _sfc is None or _sfc.get(_sfid) is None:
+        results.append((_sfid, "system-facts", SKIP))
+    elif _sfc.get(_sfid) is True:
+        results.append((_sfid, "system-facts", None))
+    else:
+        results.append((_sfid, "system-facts", "T122 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)
