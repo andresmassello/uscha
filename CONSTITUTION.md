@@ -60,3 +60,10 @@ readiness until a human `--resolve`s it.
   no promotion; a malformed ledger blocks, it never degrades to "no verdicts". *(Introduced
   with ADR-009: extraction without judgment fossilizes bugs as features — the agent may author
   candidates, only the human may promote them.)*
+
+- **INV-ADVISORY-01 — An advisory-class judgment can never gate.** Any dimension, signal or
+  finding whose source is an LLM judgment (semantic similarity, suggested verdicts, inferred
+  intent) carries `class: advisory` and the gate/readiness machinery REFUSES to register it
+  as blocking — attempting it is an error, not a configuration. Facts block; guesses advise;
+  and the boundary is enforced by the engine, not by convention. *(Introduced with ADR-014;
+  the INV-GOLDEN-01 lesson applied to judgment itself.)*
