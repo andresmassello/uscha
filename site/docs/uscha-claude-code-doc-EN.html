@@ -570,7 +570,7 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
   <div class="kicker"><span class="n">09</span> the measurement engine <span class="callout-status real">in the kit</span></div>
   <h2><code class="in" style="font-size:.7em">qa_ledger.py</code> <span class="accent">— command reference.</span></h2>
   <p>Pure stdlib, Python 3.8+, no dependencies. It owns everything that <strong>must be exact and reproducible</strong>. The judgments (did it converge? is it oscillating? do we escalate?) are made by the skill reading this data; the script only exposes deterministic advisory helpers.</p>
-  <p class="small"><strong>Exact current parser surface:</strong> 36 subcommands; the list below mirrors <code class="in">build_parser()</code>, including <code class="in">dashboard</code>, <code class="in">waste-check</code>, and <code class="in">spec-change-request</code>.</p>
+  <p class="small"><strong>Exact current parser surface:</strong> 40 subcommands; the list below mirrors <code class="in">build_parser()</code>, including <code class="in">dashboard</code>, <code class="in">waste-check</code>, and <code class="in">spec-change-request</code>.</p>
   <table>
     <thead><tr><th>Subcommand</th><th>What it does</th></tr></thead>
     <tbody>
@@ -604,6 +604,10 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
       <tr><td class="t">curation-check</td><td>The INV-CURATION-01 gate: candidates, verdicts, append-only behavior ledger (ADR-009/010, 1.64.0).</td></tr>
       <tr><td class="t">roundtrip</td><td>Advisory: which promoted candidates are traceable in code via uscha-spec ids (1.65.0).</td></tr>
       <tr><td class="t">facts</td><td>Derives SYSTEM-FACTS.json from the artifacts and checks published claims against it (ADR-012, 1.68.0).</td></tr>
+      <tr><td class="t">discover</td><td>Emits discovery/CANDIDATE-DELTA.json: typed observations with content-addressed OBS ids, measured/static/narrated (ADR-013, 1.69.0).</td></tr>
+      <tr><td class="t">curate</td><td>Records ONE human verdict per observation as an append-only ledger object; no batch path (ADR-013, 1.69.0).</td></tr>
+      <tr><td class="t">promote</td><td>Moves preserve-verdict observations into the canonical package with derived_from lineage; refuses over uncurated OBS (ADR-013, 1.69.0).</td></tr>
+      <tr><td class="t">fidelity</td><td>The fidelity vector: 5 measured dimensions plus an advisory quarantine that can never gate (ADR-014, 1.69.0).</td></tr>
       <tr><td class="t">execution-policy</td><td>Prints execution routing.</td></tr>
       <tr><td class="t">dashboard</td><td>Emits Mirador data contract.</td></tr>
       <tr><td class="t">simplicity-check</td><td>Scores diff minimality.</td></tr>

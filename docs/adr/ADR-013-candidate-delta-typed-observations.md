@@ -54,9 +54,12 @@ visible in the readouts. Promotion over any uncurated OBS is a hard refusal nami
 
 **What survives from ADR-009/010 untouched**: INV-CURATION-01 (nothing promotes without a
 human verdict, engine-measured, fail-closed), the three-verdict set, the append-only
-philosophy, and the `pr-ready` block. `BEHAVIOR-LEDGER.md` becomes a **rendered view** of the
-ledger's curation objects — same audit value for humans, no longer a source. What is
-superseded is ADR-010's *storage* decision only.
+philosophy, and the `pr-ready` block. For delta-flow repos the human **rendered view** of
+verdicts is the `CANDIDATE-DELTA.md` twin (verdict column, regenerated per OBS);
+`BEHAVIOR-LEDGER.md` stays the `.md`-candidate flow's source unchanged — regenerating it
+from ledger objects would read as tampering to the very append-only check that guards it
+(amended at implementation: the original "BL becomes a rendered view" wording collided with
+`_bl_append_only`). What is superseded is ADR-010's *storage* decision only.
 
 **Extractor scope v0: Python** — the repo's own fixture/golden inventory is Python, the
 engine is Python, and the proof chain is shortest there. Every other stack reports

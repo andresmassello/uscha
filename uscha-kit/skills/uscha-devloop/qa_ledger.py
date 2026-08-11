@@ -52,6 +52,7 @@ Usage (see `--help` on each subcommand):
 """
 
 import argparse
+import ast
 import glob
 import hashlib
 import json
@@ -2472,6 +2473,10 @@ def cmd_log_gate(args):
       not-run -> a steps event ONLY, never an iterations record: absence is not
                  evidence — it neither reads as clean nor fakes a red (last state stands).
     """
+    # INV-ADVISORY-01 note (ADR-014): --kind is a CLOSED vocabulary (argparse choices), so
+    # an advisory-class dimension (e.g. "semantic") cannot be registered as a gate through
+    # this door at all -- the refusal is structural. The smoke suite measures that the
+    # vocabulary stays closed; widening it to admit an advisory kind is a red build.
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
     tool = f"gate:{args.kind}"
@@ -2664,6 +2669,20 @@ def _derive_phase(ledger, name, node, k, qa_order):
                            + ", ".join(_cu["unjudged"][:3])
                            + (" (+%d)" % (len(_cu["unjudged"]) - 3)
                               if len(_cu["unjudged"]) > 3 else "")
+                           + " -- INV-CURATION-01: sin juicio no hay promocion")
+            conv = False
+    # CANDIDATE-DELTA gate (ADR-013): same invariant, typed storage. Creating the delta IS
+    # the opt-in; an uncurated OBS blocks exactly like an unjudged .md candidate did.
+    _dl = _delta_state(ledger, name, _cu_cfg.get("path", "."))
+    if _dl is not None:
+        if _dl["malformed"]:
+            reasons.append("CANDIDATE-DELTA invalido: " + "; ".join(_dl["malformed"][:3])
+                           + " -- corregir antes de avanzar")
+            conv = False
+        elif _dl["uncurated"]:
+            reasons.append("OBS sin veredicto humano: " + ", ".join(_dl["uncurated"][:3])
+                           + (" (+%d)" % (len(_dl["uncurated"]) - 3)
+                              if len(_dl["uncurated"]) > 3 else "")
                            + " -- INV-CURATION-01: sin juicio no hay promocion")
             conv = False
     _cr = _cr_cfg(ledger)
@@ -3758,6 +3777,29 @@ def _curation_state(repo_path):
     return state
 
 
+_SPEC_MARKER_MAX_BYTES = 2 * 1024 * 1024   # a 2MB+ tracked file is not where a spec-id
+                                           # marker lives; unbounded reads are the T112 lesson
+
+
+def _scan_spec_markers(repo_path, tracked):
+    """Every `uscha-spec: <id>` marker in the given tracked files, as (file, id) pairs.
+    One scanner shared by roundtrip and fidelity (REUSE-FIRST)."""
+    pat = re.compile(r"uscha-spec:\s*([\w.\-]+)")
+    hits = []
+    for f in tracked:
+        full = os.path.join(repo_path, f.replace("/", os.sep))
+        try:
+            if os.path.getsize(full) > _SPEC_MARKER_MAX_BYTES:
+                continue
+            with open(full, encoding="utf-8", errors="replace") as fh:
+                body = fh.read()
+        except OSError:
+            continue
+        for m in pat.finditer(body):
+            hits.append((f, m.group(1)))
+    return hits
+
+
 def cmd_roundtrip(args):
     """Advisory spec-id coverage (ADR-009 slice 2, v1): which PROMOTED candidates are
     traceable in the code via an embedded `uscha-spec: <candidate>` marker. Coverage by id,
@@ -3779,21 +3821,8 @@ def cmd_roundtrip(args):
                and not l.strip().startswith(CANDIDATE_DIR + "/")
                and os.path.basename(l.strip()) != BEHAVIOR_LEDGER_FILE]
     found = set()
-    pat = re.compile(r"uscha-spec:\s*([\w.\-]+)")
-    ROUNDTRIP_MAX_BYTES = 2 * 1024 * 1024
-    for f in tracked:
-        full = os.path.join(repo_path, f)
-        try:
-            if os.path.getsize(full) > ROUNDTRIP_MAX_BYTES:
-                continue    # a 2MB+ tracked file is not where a spec-id marker lives; an
-                            # unbounded full-tree read is the T112 lesson, applied here
-            with open(full, encoding="utf-8", errors="replace") as fh:
-                body = fh.read()
-        except OSError:
-            continue
-        for m in pat.finditer(body):
-            mid = m.group(1)
-            found.add(mid if mid.endswith(".md") else mid + ".md")
+    for _f, mid in _scan_spec_markers(repo_path, tracked):
+        found.add(mid if mid.endswith(".md") else mid + ".md")
     covered = [c for c in promoted if c in found]
     missing = [c for c in promoted if c not in found]
     out = {"repo": args.repo, "promoted": len(promoted), "covered": len(covered),
@@ -3860,6 +3889,704 @@ def cmd_curation_check(args):
             print("  .. %s: awaiting human verdict (blocks forward)" % f)
     sys.exit(2 if hard else (1 if st["unjudged"] else 0))
 
+
+
+# --------------------------------------------------------------------------- #
+# CANDIDATE-DELTA  (Diamond M1: discovery emits typed observations, verdicts
+# become ledger objects, fidelity is a vector. ADR-013 / ADR-014.)
+# --------------------------------------------------------------------------- #
+
+CANDIDATE_DELTA_FILE = "CANDIDATE-DELTA.json"    # under discovery/, machine-canonical
+CANDIDATE_DELTA_TWIN = "CANDIDATE-DELTA.md"      # rendered view, regenerated, never a source
+CANONICAL_FILE = "CANONICAL.json"                # under discovery/: the promoted package
+ISSUES_DEFERRED_FILE = "ISSUES-DEFERRED.md"
+OBS_TYPES = ("behavior", "invariant", "contract", "config", "dependency", "decision_trace")
+EVIDENCE_CLASSES = ("measured", "static", "narrated")
+# ADR-014 / INV-ADVISORY-01: dimensions an LLM judges can only advise. The QUARANTINE is an
+# engine invariant: nothing here may ever be registered as a blocking gate.
+FIDELITY_DIMENSIONS = {
+    "traceability": "measured", "behavior": "measured", "contracts": "measured",
+    "curation_closure": "measured", "unexplained_code": "measured",
+    "semantic": "advisory",
+}
+_DELTA_BANNER = ("GENERATED by qa_ledger.py discover (ADR-013). Rendered view of "
+                 + CANDIDATE_DELTA_FILE + " -- hand edits are overwritten on regeneration.")
+
+
+def _obs_id(otype, statement, primary_prov):
+    """Content-addressed: OBS-sha256(type + LF + normalized statement + LF + primary
+    provenance)[:12]. Normalization = lowercase + whitespace collapse. Re-running discovery
+    over unchanged code MUST yield byte-identical ids (AC-DD-04) -- the id is the identity
+    of the observation, not of the run."""
+    norm = re.sub(r"\s+", " ", statement.strip().lower())
+    blob = otype + "\n" + norm + "\n" + primary_prov
+    return "OBS-" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
+
+
+def _tracked_files(repo_path):
+    r = subprocess.run(["git", "ls-files"], cwd=repo_path, capture_output=True,
+                       text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        return None                                # no git: caller decides what that means
+    return [l.strip() for l in r.stdout.splitlines() if l.strip()]
+
+
+_STATIC_PY_MAX_BYTES = 2 * 1024 * 1024             # the T112 lesson: never unbounded reads
+
+
+def _extract_static_py(repo_path, tracked):
+    """v0 static extractors, PYTHON ONLY (ADR-013): public signatures via ast, dependency
+    manifests via requirements*.txt. Deterministic by construction -- if AST/manifest cannot
+    establish it, it is not `static`. Every other stack is UNSUPPORTED: counted and named,
+    never guessed at. Returns (observations, unsupported_count)."""
+    obs, unsupported = [], 0
+    code_exts = (".java", ".kt", ".js", ".ts", ".tsx", ".go", ".rs", ".cs",
+                 ".cpp", ".c", ".swift", ".dart", ".rb", ".php")
+    for rel in tracked:
+        low = rel.lower()
+        if low.endswith(code_exts):
+            unsupported += 1
+            continue
+        if not low.endswith(".py"):
+            continue
+        full = os.path.join(repo_path, rel.replace("/", os.sep))
+        try:
+            if os.path.getsize(full) > _STATIC_PY_MAX_BYTES:
+                continue
+            with open(full, encoding="utf-8", errors="replace") as fh:
+                tree = ast.parse(fh.read())
+        except (OSError, SyntaxError):
+            continue                               # unparseable code yields no static facts
+        for nd in tree.body:                       # top-level only: the PUBLIC surface
+            if isinstance(nd, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if nd.name.startswith("_"):
+                    continue
+                sig = ", ".join(a.arg for a in nd.args.args)
+                stmt = "%s defines function %s(%s)" % (rel, nd.name, sig)
+                prov = "%s:%d" % (rel, nd.lineno)
+            elif isinstance(nd, ast.ClassDef):
+                if nd.name.startswith("_"):
+                    continue
+                stmt = "%s defines class %s" % (rel, nd.name)
+                prov = "%s:%d" % (rel, nd.lineno)
+            else:
+                continue
+            obs.append({"id": _obs_id("contract", stmt, prov), "type": "contract",
+                        "statement": stmt, "evidence_class": "static",
+                        "provenance": {"files": [prov],
+                                       "derivation": "AST scan (python ast, top-level defs)",
+                                       "tool": "qa_ledger-static-py"}})
+    for man in sorted(f for f in tracked
+                      if re.match(r"^requirements[^/]*\.txt$", f)):
+        try:
+            with open(os.path.join(repo_path, man), encoding="utf-8",
+                      errors="replace") as fh:
+                lines = fh.read().splitlines()
+        except OSError:
+            continue
+        for n, ln in enumerate(lines, 1):
+            s = ln.strip()
+            if not s or s.startswith("#"):
+                continue
+            stmt = "depends on %s (declared in %s)" % (s, man)
+            prov = "%s:%d" % (man, n)
+            obs.append({"id": _obs_id("dependency", stmt, prov), "type": "dependency",
+                        "statement": stmt, "evidence_class": "static",
+                        "provenance": {"files": [prov],
+                                       "derivation": "dependency manifest",
+                                       "tool": "qa_ledger-static-py"}})
+    return obs, unsupported
+
+
+def _golden_backed_obs(ledger, repo, repo_path):
+    """Measured observations: one per approved golden fixture, backed by the LATEST ingested
+    golden-diff gate record (AC-DD-03). Only source: real, ledger-ingested execution. No
+    ingested run -> no measured OBS; a fixture on disk that nothing executed is not evidence."""
+    node = ledger["repos"].get(repo) or {}
+    latest = None
+    for rec in node.get("iterations", []):
+        if rec.get("tool") == "gate:golden-diff":
+            latest = rec
+    if latest is None or latest.get("gated_reported", 1) != 0:
+        return []                                  # no clean ingested run: nothing measured
+    obs = []
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".uscha-worktrees")]
+        for f in sorted(files):
+            if ".approved." not in f:
+                continue
+            rel = os.path.relpath(os.path.join(root, f), repo_path).replace(os.sep, "/")
+            stmt = "behavior frozen by golden fixture %s matches the approved baseline" % rel
+            obs.append({"id": _obs_id("behavior", stmt, rel), "type": "behavior",
+                        "statement": stmt, "evidence_class": "measured",
+                        "provenance": {"files": [rel],
+                                       "derivation": "golden-diff run ingested %s"
+                                                     % latest.get("at"),
+                                       "tool": "golden-suite"}})
+    return obs
+
+
+def _load_narrated(path, repo_path):
+    """Strict shape for the skill-supplied narrated observations: a JSON list of
+    {type, statement, files}. The CLASS is the engine's to assign -- an input that declares
+    evidence_class (or an id) is malformation, not a suggestion (ADR-013: the skill
+    narrates, the engine classifies). Returns (observations, errors)."""
+    errors = []
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return [], ["unreadable narrated input: %s" % exc]
+    if not isinstance(data, list):
+        return [], ["narrated input must be a JSON list"]
+    obs = []
+    for i, item in enumerate(data):
+        if not isinstance(item, dict):
+            errors.append("item %d: not an object" % i)
+            continue
+        if "evidence_class" in item or "id" in item:
+            errors.append("item %d: declares %s -- the class and id are the ENGINE's to "
+                          "assign; a narrated input cannot self-classify (ADR-013)"
+                          % (i, "/".join(k for k in ("evidence_class", "id") if k in item)))
+            continue
+        otype = item.get("type")
+        stmt = item.get("statement")
+        stmt = stmt.strip() if isinstance(stmt, str) else ""
+        files = item.get("files") or []
+        if otype not in OBS_TYPES:
+            errors.append("item %d: type %r (expected %s)" % (i, otype, "|".join(OBS_TYPES)))
+            continue
+        if not stmt:
+            errors.append("item %d: empty statement" % i)
+            continue
+        if not isinstance(files, list) or not all(isinstance(x, str) for x in files):
+            # a non-string ref must be a NAMED refusal, never a TypeError traceback
+            # (fresh-review MEDIUM, reproduced)
+            errors.append("item %d: files must be a list of strings" % i)
+            continue
+        bad = None
+        for ref in files:
+            bad = _resolve_ref(repo_path, ref)
+            if bad:
+                errors.append("item %d: ref %r: %s" % (i, ref, bad))
+                break
+        if bad:
+            continue
+        prov = files[0] if files else "agent-inference"
+        obs.append({"id": _obs_id(otype, stmt, prov), "type": otype,
+                    "statement": stmt, "evidence_class": "narrated",
+                    "provenance": {"files": files, "derivation": "agent inference",
+                                   "tool": "skill"}})
+    return obs, errors
+
+
+def _canonical_ids(repo_path, acceptance_file):
+    """The ids the canonical package answers to today: traceable AC-nn ids from the
+    acceptance file. Match is by ID REFERENCE (ADR-013) -- fuzzy semantic matching is
+    exactly what stays out of scope."""
+    path = acceptance_file if os.path.isabs(acceptance_file) \
+        else os.path.join(repo_path, acceptance_file)
+    if not os.path.isfile(path):
+        return {}
+    ids = {}
+    try:
+        items, _legacy = _parse_acceptance_items(path)
+    except Exception:
+        return {}
+    for it in items or []:
+        if it.get("id"):                          # normalized "AC-<n>" (numeric ids only)
+            ids[int(it["id"].split("-")[1])] = it["id"]
+    return ids
+
+
+def _match_canonical(statement, canon_ids):
+    m = re.search(r"(?i)\bAC[-_]?0*(\d+)\b", statement)
+    if m and int(m.group(1)) in canon_ids:
+        return canon_ids[int(m.group(1))]
+    return None
+
+
+def _render_delta_md(delta, verdicts):
+    lines = ["<!-- %s -->" % _DELTA_BANNER, "",
+             "# CANDIDATE-DELTA (rendered view)", "",
+             "| id | type | class | verdict | statement | provenance |",
+             "|----|------|-------|---------|-----------|------------|"]
+    for o in delta["observations"]:
+        v = verdicts.get(o["id"], "(uncurated)")
+        files = ", ".join(o["provenance"].get("files") or []) or "-"
+        stmt = o["statement"].replace("|", "\\|")
+        lines.append("| %s | %s | %s | %s | %s | %s |"
+                     % (o["id"], o["type"], o["evidence_class"], v, stmt, files))
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _delta_path(repo_path):
+    return os.path.join(repo_path, CANDIDATE_DIR, CANDIDATE_DELTA_FILE)
+
+
+def _load_delta(repo_path):
+    """Strict loader (ADR-013): malformation is exit-2 class, never a silent degrade. The
+    id of every OBS is RECOMPUTED -- the delta is mechanically derived and never hand-edited,
+    so an id that no longer matches its content is tampering, said as such. Returns
+    (delta, errors); delta None when the file does not exist (feature unused)."""
+    path = _delta_path(repo_path)
+    if not os.path.isfile(path):
+        return None, []
+    errors = []
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            delta = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return {}, ["unreadable: %s" % exc]
+    obs = delta.get("observations")
+    if not isinstance(obs, list):
+        return {}, ["no observations list"]
+    seen = set()
+    for i, o in enumerate(obs):
+        if not isinstance(o, dict):
+            errors.append("observation %d: not an object" % i)
+            continue
+        oid = o.get("id")
+        if o.get("type") not in OBS_TYPES:
+            errors.append("%s: type %r" % (oid or i, o.get("type")))
+        if o.get("evidence_class") not in EVIDENCE_CLASSES:
+            errors.append("%s: evidence_class %r" % (oid or i, o.get("evidence_class")))
+        stmt = o.get("statement")
+        prov = o.get("provenance")
+        files = prov.get("files") if isinstance(prov, dict) else None
+        # SHAPE before use (fresh-review HIGH, reproduced): a provenance that is a list, a
+        # non-string statement or a non-string ref must be a NAMED error, never a traceback
+        # -- the crash would take down phase/dashboard, the read-only readouts.
+        if (not isinstance(stmt, str) or not stmt.strip()
+                or not isinstance(prov, dict) or not isinstance(files, list)
+                or not all(isinstance(x, str) for x in files)):
+            errors.append("%s: statement/provenance shape invalid -- the delta is "
+                          "derived, never hand-edited" % (oid or i))
+        elif o.get("type") in OBS_TYPES:
+            primary = files[0] if files else "agent-inference"
+            want = _obs_id(o["type"], stmt, primary)
+            if oid != want:
+                errors.append("%s: id does not match its content (recomputed %s) -- the "
+                              "delta is derived, never hand-edited" % (oid, want))
+        if oid in seen:
+            errors.append("%s: duplicate id" % oid)
+        seen.add(oid)
+    # the ids cover type+statement+primary provenance; the SEAL covers everything else
+    # (evidence_class, canonical_match, the full ref list) -- without it, one JSON edit
+    # launders narrated inference into measured evidence (fresh-review MEDIUM, reproduced)
+    if not errors:
+        seal = delta.get("_integrity")
+        want = _integrity_hash({"observations": obs})
+        if seal != want:
+            errors.append("integrity seal %s does not match the observations -- the delta "
+                          "is derived, never hand-edited (regenerate via `discover`)"
+                          % ("missing" if seal is None else repr(seal)))
+    return delta, errors
+
+
+def _curation_verdicts(ledger, repo):
+    """Latest verdict per OBS from the append-only ledger records (re-curation supersedes,
+    never deletes -- every superseded record stays retrievable, AC-CU-05)."""
+    verdicts = {}
+    for rec in ledger.get("curation") or []:
+        if rec.get("repo") == repo:
+            verdicts[rec["obs_id"]] = rec["verdict"]
+    return verdicts
+
+
+def _delta_state(ledger, repo, repo_path):
+    """Everything the gates/readouts need about the delta, or None when unused."""
+    delta, errors = _load_delta(repo_path)
+    if delta is None:
+        return None
+    verdicts = _curation_verdicts(ledger, repo)
+    obs = delta.get("observations") or [] if not errors else []
+    uncurated = [o["id"] for o in obs if o.get("id") not in verdicts]
+    undefined = [o["id"] for o in obs
+                 if verdicts.get(o.get("id")) == "undefined"]
+    return {"total": len(obs), "curated": len(obs) - len(uncurated),
+            "uncurated": uncurated, "undefined_open": undefined,
+            "malformed": errors}
+
+
+def cmd_discover(args):
+    """Emit discovery/CANDIDATE-DELTA.json (ADR-013): typed, content-addressed observations
+    from three strictly separated sources -- measured (ledger-ingested golden runs), static
+    (deterministic extractors, Python-only v0), narrated (skill-supplied inference; the
+    engine classifies and stores, it NEVER calls an LLM). Plus a rendered .md twin."""
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    repo_path = _scope_path(ledger, args.repo)
+    tracked = _tracked_files(repo_path)
+    if tracked is None:
+        print("[qa_ledger] discover: %s is not a git tree -- discovery derives provenance "
+              "from tracked files and cannot proceed without it." % repo_path,
+              file=sys.stderr)
+        sys.exit(2)
+    static_obs, unsupported = _extract_static_py(repo_path, tracked)
+    measured_obs = _golden_backed_obs(ledger, args.repo, repo_path)
+    narrated_obs, nerrs = ([], [])
+    if args.narrated:
+        narrated_obs, nerrs = _load_narrated(args.narrated, repo_path)
+    if nerrs:
+        for e in nerrs:
+            print("[qa_ledger] discover: %s" % e, file=sys.stderr)
+        sys.exit(2)                                # malformed input: refuse, never degrade
+    by_id = {}
+    for o in measured_obs + static_obs + narrated_obs:
+        by_id.setdefault(o["id"], o)               # identical content = the same observation
+    acc = (args.acceptance
+           or ledger.get("config", {}).get("defaults", {}).get("acceptance_file")
+           or "ACCEPTANCE.md")
+    canon = _canonical_ids(repo_path, acc)
+    for o in by_id.values():
+        o["canonical_match"] = _match_canonical(o["statement"], canon)
+    observations = sorted(by_id.values(), key=lambda o: o["id"])
+    delta = {"_generated_by": "qa_ledger.py discover (ADR-013) -- machine-canonical; "
+                              "never hand-edit (ids are content-addressed, the seal "
+                              "covers the rest)",
+             "_integrity": _integrity_hash({"observations": observations}),
+             "repo": args.repo,
+             "observations": observations,
+             "static_unsupported": {"files": unsupported,
+                                    "note": "static extractors are Python-only in v0 "
+                                            "(ADR-013); other stacks report here, "
+                                            "never guess"}}
+    disc = os.path.join(repo_path, CANDIDATE_DIR)
+    os.makedirs(disc, exist_ok=True)
+    with open(_delta_path(repo_path), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(delta, indent=2, ensure_ascii=False) + "\n")
+    twin_path = os.path.join(disc, CANDIDATE_DELTA_TWIN)
+    twin = _render_delta_md(delta, _curation_verdicts(ledger, args.repo))
+    prev = None
+    if os.path.isfile(twin_path):
+        try:
+            with open(twin_path, encoding="utf-8-sig") as fh:
+                prev = fh.read()
+        except OSError:
+            prev = None
+    with open(twin_path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(twin)
+    if prev is not None and prev != twin:
+        # stderr, not stdout: on this exact path --json must still emit parseable output
+        # (fresh-review MEDIUM, reproduced)
+        print("[qa_ledger] discover: %s differed from the regenerated render -- overwritten "
+              "(the .md twin is a rendered view, never a source; edit verdicts via `curate`)"
+              % CANDIDATE_DELTA_TWIN, file=sys.stderr)
+    counts = {c: sum(1 for o in observations if o["evidence_class"] == c)
+              for c in EVIDENCE_CLASSES}
+    out = {"repo": args.repo, "observations": len(observations), "by_class": counts,
+           "static_unsupported_files": unsupported,
+           "delta": os.path.join(CANDIDATE_DIR, CANDIDATE_DELTA_FILE)}
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print("DISCOVER %s: %d observation(s) (%d measured / %d static / %d narrated) -> %s"
+              % (args.repo, len(observations), counts["measured"], counts["static"],
+                 counts["narrated"], out["delta"]))
+        if unsupported:
+            print("  -- %d non-Python source file(s): static extraction UNSUPPORTED in v0 "
+                  "(ADR-013) -- reported, not guessed" % unsupported)
+    sys.exit(0)
+
+
+def cmd_curate(args):
+    """ONE human verdict for ONE observation, recorded as an append-only ledger object
+    (ADR-013). No batch path exists -- and this refusal is the assertion of its absence:
+    curation is the human's judgment applied per-item, never a bulk operation."""
+    if re.search(r"[,\s*]", args.obs) or args.obs.lower() in ("all", "*"):
+        print("[qa_ledger] curate: %r -- one OBS, one human verdict. A batch-accept path "
+              "does not exist and will not (ADR-013, INV-CURATION-01)." % args.obs,
+              file=sys.stderr)
+        sys.exit(2)
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    repo_path = _scope_path(ledger, args.repo)
+    delta, errors = _load_delta(repo_path)
+    if delta is None:
+        print("[qa_ledger] curate: no %s -- run `discover` first."
+              % os.path.join(CANDIDATE_DIR, CANDIDATE_DELTA_FILE), file=sys.stderr)
+        sys.exit(2)
+    if errors:
+        for e in errors:
+            print("[qa_ledger] curate: delta malformed: %s" % e, file=sys.stderr)
+        sys.exit(2)
+    known = {o["id"] for o in delta.get("observations") or []}
+    if args.obs not in known:
+        print("[qa_ledger] curate: %s is not in the current delta -- a verdict must judge "
+              "a real observation." % args.obs, file=sys.stderr)
+        sys.exit(2)
+    prev = _curation_verdicts(ledger, args.repo).get(args.obs)
+    human = args.human or os.environ.get("USERNAME") or os.environ.get("USER") or "unknown"
+    rec = {"obs_id": args.obs, "verdict": args.verdict, "human": human,
+           "at": _now(), "note": args.note, "repo": args.repo}
+    ledger.setdefault("curation", []).append(rec)
+    _save(args.ledger, ledger)
+    if prev and prev != args.verdict:
+        print("[qa_ledger] curate: %s = %s (supersedes %r -- the earlier record stays; "
+              "append-only, never deleted)" % (args.obs, args.verdict, prev))
+    else:
+        print("[qa_ledger] curate: %s = %s (by %s)" % (args.obs, args.verdict, human))
+    sys.exit(0)
+
+
+def cmd_promote(args):
+    """Move ONLY preserve-verdict observations into the canonical package, with
+    `derived_from` lineage (ADR-013). fix -> a work item in ISSUES-DEFERRED.md, never
+    canonical. undefined -> stays open in the readouts. ANY uncurated OBS -> hard refusal
+    naming the ids; nothing moves (INV-CURATION-01, fail-closed)."""
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    repo_path = _scope_path(ledger, args.repo)
+    delta, errors = _load_delta(repo_path)
+    if delta is None:
+        print("[qa_ledger] promote: no %s -- run `discover` first."
+              % os.path.join(CANDIDATE_DIR, CANDIDATE_DELTA_FILE), file=sys.stderr)
+        sys.exit(2)
+    if errors:
+        for e in errors:
+            print("[qa_ledger] promote: delta malformed: %s" % e, file=sys.stderr)
+        sys.exit(2)
+    obs = delta.get("observations") or []
+    verdicts = _curation_verdicts(ledger, args.repo)
+    uncurated = [o["id"] for o in obs if o["id"] not in verdicts]
+    if uncurated:
+        print("[qa_ledger] promote: REFUSED -- %d observation(s) without a human verdict: %s"
+              % (len(uncurated), ", ".join(uncurated[:5])
+                 + (" (+%d)" % (len(uncurated) - 5) if len(uncurated) > 5 else "")),
+              file=sys.stderr)
+        print("  INV-CURATION-01: nothing promotes unjudged. Curate each with "
+              "`curate --obs <id> --verdict preserve|fix|undefined`.", file=sys.stderr)
+        sys.exit(1)
+    canon_path = os.path.join(repo_path, CANDIDATE_DIR, CANONICAL_FILE)
+    canonical = {"_generated_by": "qa_ledger.py promote (ADR-013) -- items carry "
+                                  "derived_from lineage to their OBS", "items": []}
+    if os.path.isfile(canon_path):
+        try:
+            with open(canon_path, encoding="utf-8-sig") as fh:
+                canonical = json.load(fh)
+        except (OSError, ValueError) as exc:
+            print("[qa_ledger] promote: %s unreadable: %s" % (CANONICAL_FILE, exc),
+                  file=sys.stderr)
+            sys.exit(2)
+    have = {it.get("derived_from") for it in canonical.get("items") or []}
+    promoted, fixes, undefined_open = [], [], []
+    for o in obs:
+        v = verdicts[o["id"]]
+        if v == "preserve":
+            if o["id"] not in have:
+                canonical.setdefault("items", []).append(
+                    {"statement": o["statement"], "type": o["type"],
+                     "evidence_class": o["evidence_class"],
+                     "provenance": o["provenance"], "derived_from": o["id"]})
+                promoted.append(o["id"])
+        elif v == "fix":
+            fixes.append(o)
+        else:
+            undefined_open.append(o["id"])
+    canonical["items"] = sorted(canonical.get("items") or [],
+                                key=lambda it: it.get("derived_from") or "")
+    with open(canon_path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(canonical, indent=2, ensure_ascii=False) + "\n")
+    new_fix = []
+    if fixes:
+        dpath = os.path.join(repo_path, ISSUES_DEFERRED_FILE)
+        existing = ""
+        if os.path.isfile(dpath):
+            with open(dpath, encoding="utf-8-sig", errors="replace") as fh:
+                existing = fh.read()
+        add = [o for o in fixes if o["id"] not in existing]
+        if add:
+            with open(dpath, "a", encoding="utf-8", newline="\n") as fh:
+                if existing and not existing.endswith("\n"):
+                    fh.write("\n")
+                for o in add:
+                    fh.write("- [ ] %s (curated `fix`): %s -- observed behavior the human "
+                             "ruled a defect; NEVER canonical (ADR-013)\n"
+                             % (o["id"], o["statement"]))
+            new_fix = [o["id"] for o in add]
+    ledger["candidate_delta"] = {"repo": args.repo, "total": len(obs),
+                                 "curated": len(obs),
+                                 "undefined_open": undefined_open,
+                                 "canonical_items": len(canonical["items"]),
+                                 "at": _now()}
+    _save(args.ledger, ledger)
+    out = {"repo": args.repo, "promoted": promoted, "fix_deferred": new_fix,
+           "undefined_open": undefined_open,
+           "canonical": os.path.join(CANDIDATE_DIR, CANONICAL_FILE)}
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print("PROMOTE %s: %d promoted, %d fix -> %s, %d undefined OPEN"
+              % (args.repo, len(promoted), len(new_fix), ISSUES_DEFERRED_FILE,
+                 len(undefined_open)))
+        for oid in undefined_open:
+            print("  .. %s: undefined -- stays open and visible until re-curated" % oid)
+    sys.exit(0)
+
+
+def _fid_dim(value, provenance, **extra):
+    d = {"value": value, "provenance": provenance}
+    d.update(extra)
+    return d
+
+
+def cmd_fidelity(args):
+    """The fidelity VECTOR (ADR-014): five independently measured dimensions, each with its
+    own provenance, plus the advisory quarantine. Deterministic: same inputs, same numbers,
+    no LLM anywhere in the measured path. Advisory dimensions can NEVER gate -- attempting
+    to configure one as blocking is an engine refusal, not a configuration
+    (INV-ADVISORY-01)."""
+    ledger = _load(args.ledger)
+    node = _repo_node(ledger, args.repo)
+    repo_path = _scope_path(ledger, args.repo)
+    cfg = {}
+    if os.path.isfile(args.config):
+        try:
+            with open(args.config, encoding="utf-8-sig") as fh:
+                cfg = json.load(fh)
+        except (OSError, ValueError) as exc:
+            # a config that cannot be parsed cannot declare gates -- swallowing the error
+            # would DISABLE the INV-ADVISORY-01 refusal on a syntax slip (fresh-review
+            # HIGH, reproduced). Malformation is exit 2, never a silent degrade.
+            print("[qa_ledger] fidelity: %s unreadable: %s -- refusing to guess what it "
+                  "declares." % (args.config, exc), file=sys.stderr)
+            sys.exit(2)
+    declared = ((cfg.get("defaults") or {}).get("fidelity") or {}).get("gate") or []
+    for dim in (ledger.get("config", {}).get("defaults", {}).get("fidelity")
+                or {}).get("gate") or []:
+        if dim not in declared:                    # both surfaces checked -- no silent path
+            declared.append(dim)
+    for dim in declared:
+        cls = FIDELITY_DIMENSIONS.get(dim)
+        if cls is None:
+            print("[qa_ledger] fidelity: %r is not a dimension (%s)"
+                  % (dim, ", ".join(sorted(FIDELITY_DIMENSIONS))), file=sys.stderr)
+            sys.exit(2)
+        if cls == "advisory":
+            print("[qa_ledger] fidelity: REFUSED -- %r is an ADVISORY-class dimension and "
+                  "can never be registered as blocking. This is an engine invariant "
+                  "(INV-ADVISORY-01, ADR-014), not a configuration." % dim, file=sys.stderr)
+            sys.exit(2)
+        print("[qa_ledger] fidelity: gating on measured dimension %r is not implemented "
+              "in v0 (ADR-014) -- declared but unenforceable is a silent lie; remove it "
+              "or wait for the milestone that wires it." % dim, file=sys.stderr)
+        sys.exit(2)
+    delta, derrs = _load_delta(repo_path)
+    if derrs:
+        # same posture as curate/promote: a delta that EXISTS but cannot be validated is
+        # exit 2, and "no delta" must never be the label for it (fresh-review MEDIUM)
+        for e in derrs:
+            print("[qa_ledger] fidelity: delta malformed: %s" % e, file=sys.stderr)
+        sys.exit(2)
+    obs = (delta.get("observations") or []) if delta else []
+    verdicts = _curation_verdicts(ledger, args.repo)
+    dims = {}
+    # traceability: canonical items reachable in code via the uscha-spec id machinery
+    canon_items = []
+    canon_path = os.path.join(repo_path, CANDIDATE_DIR, CANONICAL_FILE)
+    if os.path.isfile(canon_path):
+        try:
+            with open(canon_path, encoding="utf-8-sig") as fh:
+                canon_items = json.load(fh).get("items") or []
+        except (OSError, ValueError):
+            canon_items = []
+    tracked = _tracked_files(repo_path) or []
+    marked, marker_files = set(), set()
+    for f, mid in _scan_spec_markers(repo_path, tracked):
+        marked.add(mid)
+        marker_files.add(f)
+    if canon_items:
+        traced = sum(1 for it in canon_items if (it.get("derived_from") or "") in marked)
+        dims["traceability"] = _fid_dim(round(traced / len(canon_items), 4),
+                                        "uscha-spec marker scan over %d git-tracked "
+                                        "files vs %d canonical item(s)"
+                                        % (len(tracked), len(canon_items)))
+    else:
+        dims["traceability"] = _fid_dim(None, "UNMEASURED: no canonical items promoted yet")
+    # behavior: the latest ingested golden-diff gate verdict
+    latest_g = None
+    for rec in node.get("iterations", []):
+        if rec.get("tool") == "gate:golden-diff":
+            latest_g = rec
+    if latest_g is not None:
+        ok = latest_g.get("gated_reported", 1) == 0
+        prov = "gate:golden-diff record ingested %s (iteration %s)" % (
+            latest_g.get("at"), latest_g.get("iteration"))
+        cr = _cr_latest(ledger, args.repo)
+        if cr and cr.get("status") == "GREEN":
+            prov += "; clean-room GREEN at %s" % (cr.get("ref") or "?")[:12]
+        dims["behavior"] = _fid_dim(1.0 if ok else 0.0, prov)
+    else:
+        dims["behavior"] = _fid_dim(None, "UNMEASURED: no golden-diff run ingested "
+                                          "(log-gate --kind golden-diff)")
+    # contracts: canonical static items still derivable from the code RIGHT NOW
+    static_canon = [it for it in canon_items if it.get("evidence_class") == "static"]
+    if static_canon:
+        cur_static, _u = _extract_static_py(repo_path, tracked)
+        cur_ids = {o["id"] for o in cur_static}
+        okc = sum(1 for it in static_canon if it.get("derived_from") in cur_ids)
+        dims["contracts"] = _fid_dim(round(okc / len(static_canon), 4),
+                                     "re-ran static extractors; %d/%d canonical static "
+                                     "item(s) still derive from the code"
+                                     % (okc, len(static_canon)))
+    else:
+        dims["contracts"] = _fid_dim(None, "UNMEASURED: no static-class canonical items")
+    # curation_closure: curated OBS / total OBS in the active delta
+    if obs:
+        cur = sum(1 for o in obs if o["id"] in verdicts)
+        dims["curation_closure"] = _fid_dim(round(cur / len(obs), 4),
+                                            "%d/%d OBS in %s carry a ledger verdict"
+                                            % (cur, len(obs), CANDIDATE_DELTA_FILE))
+    else:
+        dims["curation_closure"] = _fid_dim(
+            None, "UNMEASURED: no delta" if delta is None
+            else "no observations in the delta")
+    # unexplained_code: v0 deliberately crude -- unit = source FILE (ADR-014: crude and
+    # honest beats fine-grained and narrated; over-fires on monoliths BY DESIGN)
+    rtype = (_repo_cfg(ledger, args.repo).get("type")
+             if args.repo != "integration" else None)
+    src_exts = (".py", ".java", ".kt", ".js", ".ts", ".tsx", ".go", ".rs", ".cs",
+                ".cpp", ".c", ".swift", ".dart", ".rb", ".php")
+    prod = [f for f in tracked
+            if f.lower().endswith(src_exts)
+            and not f.startswith(CANDIDATE_DIR + "/")
+            and not _is_test_path(f, rtype)]
+    lineage = set(marker_files)                    # a file CARRYING a spec marker is explained
+    for o in obs:
+        if verdicts.get(o["id"]) == "preserve":
+            for ref in o["provenance"].get("files") or []:
+                lineage.add(ref.split(":")[0].split("#")[0])
+    for it in canon_items:
+        for ref in (it.get("provenance") or {}).get("files") or []:
+            lineage.add(ref.split(":")[0].split("#")[0])
+    if prod:
+        unex = [f for f in prod if f not in lineage]
+        dims["unexplained_code"] = _fid_dim(
+            round(len(unex) / len(prod), 4),
+            "%d/%d tracked prod source file(s) with no path to a canonical item or "
+            "preserved OBS (v0 granularity: FILE)" % (len(unex), len(prod)),
+            files=unex[:10] + (["(+%d)" % (len(unex) - 10)] if len(unex) > 10 else []))
+    else:
+        dims["unexplained_code"] = _fid_dim(None, "UNMEASURED: no tracked prod source files")
+    dims["semantic"] = _fid_dim(None, "not wired: an LLM-judged comparison enters as "
+                                      "advisory only and can NEVER gate (INV-ADVISORY-01)")
+    out = {"repo": args.repo,
+           "dimensions": {k: dict(dims[k], **{"class": FIDELITY_DIMENSIONS[k]})
+                          for k in ("traceability", "behavior", "contracts",
+                                    "curation_closure", "unexplained_code", "semantic")}}
+    ledger["fidelity"] = dict(out, at=_now())
+    _save(args.ledger, ledger)
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print("FIDELITY %s (vector -- no blend; each number stands on its own evidence):"
+              % args.repo)
+        for k, d in out["dimensions"].items():
+            val = "UNMEASURED" if d["value"] is None else "%.2f" % d["value"]
+            print("  %-17s %-10s [%s] %s" % (k, val, d["class"], d["provenance"]))
+    sys.exit(0)
 
 
 # --------------------------------------------------------------------------- #
@@ -5049,6 +5776,20 @@ def cmd_dashboard(args):
                              for r in {e.get("repo") for e in ledger[CLEAN_ROOM_KEY]}}
     if ledger.get("roundtrip"):
         out["roundtrip"] = ledger["roundtrip"]
+    # AC-CU-04: undefined verdicts stay OPEN and visible in the readouts -- derived live
+    # from delta + curation records per repo (conditional key, the roundtrip pattern)
+    _dl_all = {}
+    for _rn in ledger["repos"]:
+        try:
+            _dls = _delta_state(ledger, _rn, _scope_path(ledger, _rn))
+        except SystemExit:
+            _dls = None
+        if _dls is not None:
+            _dl_all[_rn] = _dls
+    if _dl_all:
+        out["candidate_delta"] = _dl_all
+    if ledger.get("fidelity"):
+        out["fidelity"] = ledger["fidelity"]
     if getattr(args, "json", False):
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
@@ -7845,6 +8586,54 @@ def build_parser():
     prt.add_argument("--repo", required=True)
     prt.add_argument("--json", action="store_true")
     prt.set_defaults(func=cmd_roundtrip)
+
+    pdd = sub.add_parser(
+        "discover",
+        help="emit discovery/CANDIDATE-DELTA.json: typed observations with content-addressed "
+             "OBS ids -- measured/static/narrated, strictly classified (ADR-013)")
+    pdd.add_argument("--ledger", default="QA-LEDGER.json")
+    pdd.add_argument("--repo", required=True)
+    pdd.add_argument("--narrated", default=None,
+                     help="JSON list of skill-supplied observations {type, statement, files}; "
+                          "the engine classifies them narrated -- it never calls an LLM")
+    pdd.add_argument("--acceptance", default=None,
+                     help="acceptance file for canonical_match (default: config "
+                          "defaults.acceptance_file, else ACCEPTANCE.md)")
+    pdd.add_argument("--json", action="store_true")
+    pdd.set_defaults(func=cmd_discover)
+
+    pcv = sub.add_parser(
+        "curate",
+        help="record ONE human verdict (preserve|fix|undefined) for ONE observation as an "
+             "append-only ledger object; no batch path exists (ADR-013)")
+    pcv.add_argument("--ledger", default="QA-LEDGER.json")
+    pcv.add_argument("--repo", required=True)
+    pcv.add_argument("--obs", required=True, help="a single OBS id from the delta")
+    pcv.add_argument("--verdict", required=True, choices=("preserve", "fix", "undefined"))
+    pcv.add_argument("--note", default=None)
+    pcv.add_argument("--human", default=None,
+                     help="who judged (default: the OS user)")
+    pcv.set_defaults(func=cmd_curate)
+
+    ppr = sub.add_parser(
+        "promote",
+        help="move preserve-verdict observations into discovery/CANONICAL.json with "
+             "derived_from lineage; refuses over ANY uncurated OBS (INV-CURATION-01)")
+    ppr.add_argument("--ledger", default="QA-LEDGER.json")
+    ppr.add_argument("--repo", required=True)
+    ppr.add_argument("--json", action="store_true")
+    ppr.set_defaults(func=cmd_promote)
+
+    pfv = sub.add_parser(
+        "fidelity",
+        help="the fidelity vector: 5 measured dimensions + advisory quarantine; an advisory "
+             "dimension can NEVER gate (ADR-014, INV-ADVISORY-01)")
+    pfv.add_argument("--ledger", default="QA-LEDGER.json")
+    pfv.add_argument("--repo", required=True)
+    pfv.add_argument("--config", default="uscha.config.json",
+                     help="checked for defaults.fidelity.gate -- advisory there is a refusal")
+    pfv.add_argument("--json", action="store_true")
+    pfv.set_defaults(func=cmd_fidelity)
 
     pcr = sub.add_parser("cleanroom",
                          help="run a command against a CLEAN checkout of one commit in a throwaway worktree (ADR-008)")

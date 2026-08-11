@@ -200,36 +200,36 @@ project about factual drift.
   (version null, 0 skills, silently). Root is now found by marker, and facts that cannot
   locate their own VERSION exit 2 instead of emitting nulls.
 
-## Diamond M1 (ADR-013/014) - planned; closes on green `AC-DD/AC-CU/AC-FV` tests
+## Diamond M1 (ADR-013/014) - closes on green `AC-DD/AC-CU/AC-FV` tests
 
-Unticked because the code does not exist yet - criteria before implementation. Namespace
+Shipped in 1.69.0 (criteria preceded the code by one session). Namespace
 note: the originating handoff numbered these `AC-RD-nn`, which collides with the thirteen
 criteria already shipped under that prefix; renamed at planning time (ADR-013).
 
-- [ ] AC-DD-01 - discovery over a fixture emits a well-formed CANDIDATE-DELTA; every OBS
+- [x] AC-DD-01 - discovery over a fixture emits a well-formed CANDIDATE-DELTA; every OBS
   carries id, type, evidence_class, provenance.
-- [ ] AC-DD-02 - an inference-only statement is `narrated`, never `static`/`measured`.
-- [ ] AC-DD-03 - a statement backed by an ingested characterization run is `measured`, run
+- [x] AC-DD-02 - an inference-only statement is `narrated`, never `static`/`measured`.
+- [x] AC-DD-03 - a statement backed by an ingested characterization run is `measured`, run
   timestamp in provenance.
-- [ ] AC-DD-04 - re-running discovery on an unchanged fixture yields byte-identical OBS IDs.
-- [ ] AC-DD-05 - an OBS matching an existing canonical item carries `canonical_match`;
+- [x] AC-DD-04 - re-running discovery on an unchanged fixture yields byte-identical OBS IDs.
+- [x] AC-DD-05 - an OBS matching an existing canonical item carries `canonical_match`;
   unmatched carries null.
-- [ ] AC-DD-06 - the rendered `.md` twin regenerates from the JSON; hand edits are
+- [x] AC-DD-06 - the rendered `.md` twin regenerates from the JSON; hand edits are
   detectably overwritten.
-- [ ] AC-CU-01 - promote over a delta with one uncurated OBS -> refusal naming it; ledger
+- [x] AC-CU-01 - promote over a delta with one uncurated OBS -> refusal naming it; ledger
   unchanged.
-- [ ] AC-CU-02 - `preserve` promotes into the canonical package with `derived_from` lineage.
-- [ ] AC-CU-03 - `fix` never enters the canonical package; an ISSUES-DEFERRED entry exists.
-- [ ] AC-CU-04 - `undefined` appears as open in the status readouts.
-- [ ] AC-CU-05 - re-curation supersedes without deleting; both records retrievable.
-- [ ] AC-CU-06 - no CLI/skill path performs curation without an explicit human verdict per
+- [x] AC-CU-02 - `preserve` promotes into the canonical package with `derived_from` lineage.
+- [x] AC-CU-03 - `fix` never enters the canonical package; an ISSUES-DEFERRED entry exists.
+- [x] AC-CU-04 - `undefined` appears as open in the status readouts.
+- [x] AC-CU-05 - re-curation supersedes without deleting; both records retrievable.
+- [x] AC-CU-06 - no CLI/skill path performs curation without an explicit human verdict per
   OBS (absence of batch-accept asserted).
-- [ ] AC-FV-01 - fidelity emits all v0 dimensions with per-dimension provenance.
-- [ ] AC-FV-02 - a file with no canonical/OBS lineage -> `unexplained_code` > 0, file named.
-- [ ] AC-FV-03 - configuring any advisory-class dimension as blocking -> engine refusal
+- [x] AC-FV-01 - fidelity emits all v0 dimensions with per-dimension provenance.
+- [x] AC-FV-02 - a file with no canonical/OBS lineage -> `unexplained_code` > 0, file named.
+- [x] AC-FV-03 - configuring any advisory-class dimension as blocking -> engine refusal
   (INV-ADVISORY-01).
-- [ ] AC-FV-04 - `curation_closure` < 1.0 whenever uncurated OBS exist; 1.0 only when none.
-- [ ] AC-FV-05 - the measured dimensions are deterministic: same inputs, same numbers.
+- [x] AC-FV-04 - `curation_closure` < 1.0 whenever uncurated OBS exist; 1.0 only when none.
+- [x] AC-FV-05 - the measured dimensions are deterministic: same inputs, same numbers.
 
 ## Out of scope for measurement here
 

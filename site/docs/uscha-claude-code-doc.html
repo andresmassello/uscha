@@ -607,6 +607,10 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">curation-check</td><td>El gate INV-CURATION-01: candidatas, veredictos, behavior ledger append-only (ADR-009/010, 1.64.0).</td></tr>
       <tr><td class="t">roundtrip</td><td>Consultivo: qué candidatas promovidas son trazables en el código vía ids uscha-spec (1.65.0).</td></tr>
       <tr><td class="t">facts</td><td>Deriva SYSTEM-FACTS.json desde los artefactos y chequea claims publicados contra él (ADR-012, 1.68.0).</td></tr>
+      <tr><td class="t">discover</td><td>Emite discovery/CANDIDATE-DELTA.json: observaciones tipadas con ids OBS content-addressed, measured/static/narrated (ADR-013, 1.69.0).</td></tr>
+      <tr><td class="t">curate</td><td>Registra UN veredicto humano por observacion como objeto append-only del ledger; sin camino batch (ADR-013, 1.69.0).</td></tr>
+      <tr><td class="t">promote</td><td>Mueve las observaciones preserve al paquete canonico con lineage derived_from; rechaza sobre OBS sin curar (ADR-013, 1.69.0).</td></tr>
+      <tr><td class="t">fidelity</td><td>El vector de fidelidad: 5 dimensiones medidas mas una cuarentena advisory que jamas bloquea (ADR-014, 1.69.0).</td></tr>
       <tr><td class="t">execution-policy</td><td>Imprime el ruteo de ejecuci?n.</td></tr>
       <tr><td class="t">dashboard</td><td>Entrega el contrato de datos de Mirador.</td></tr>
       <tr><td class="t">simplicity-check</td><td>Eval?a minimalidad del diff.</td></tr>

@@ -5,9 +5,10 @@ description: >
   inverse of discovery: the system already exists and its behavior IS the truth, so you
   EXTRACT facts instead of proposing shape. Produce ONLY facts — a system map (endpoints,
   contracts, dependency graph, module candidates via static analysis) and a golden suite
-  captured mechanically at the boundaries — plus CANDIDATE specs in quarantine
-  (discovery/, evidence + confidence mandatory), which NEVER promote without a human
-  verdict in BEHAVIOR-LEDGER.md (ADR-009, INV-CURATION-01: the engine measures the gate).
+  captured mechanically at the boundaries — plus a typed CANDIDATE-DELTA of quarantined
+  observations (discovery/CANDIDATE-DELTA.json, evidence class + provenance mandatory),
+  which NEVER promote without a per-observation human verdict recorded by `curate`
+  (ADR-013, INV-CURATION-01: the engine measures the gate).
   Invoke for "reverse-discovery",
   "migrar/modernizar este sistema", "caracterizar el sistema viejo antes de tocarlo".
 allowed-tools: Read, Write, Glob, Grep, Bash
@@ -18,8 +19,9 @@ disable-model-invocation: false
 
 `uscha-discovery` is greenfield: you only have an idea, so you PROPOSE the shape. This is the
 opposite. The system already runs; its observable behavior is the ground truth. **Facts
-first, always — and what cannot be fact yet becomes a CANDIDATE in quarantine: evidenced,
-confidence-tagged, and promoted to the contract only by a human verdict (ADR-009).**
+first, always — and what cannot be fact yet becomes an OBSERVATION in quarantine: typed,
+evidence-classed, content-addressed, and promoted to the contract only by a per-observation
+human verdict (ADR-013).**
 
 ## First contact (show ONCE, then never again)
 
@@ -32,9 +34,9 @@ breadcrumb. Repeating it every run would be exactly the ceremony the method forb
 [uscha · reverse-discovery · START]
 Method: you bring the idea, the method builds the rest. Facts block, guesses advise;
         nothing closes on a checkbox, and the human approves the merge.
-Here:   I EXTRACT facts and CANDIDATES from the system that already exists. Candidates stay quarantined until YOUR verdict promotes them.
-Output: SYSTEM-MAP.md · DISCOVERY-SUMMARY.md -- endpoints, contracts, dependency graph,
-        module candidates + discovery/ candidates + BEHAVIOR-LEDGER.md. The verdicts are yours.
+Here:   I EXTRACT facts and OBSERVATIONS from the system that already exists. Observations stay quarantined until YOUR verdict promotes them.
+Output: SYSTEM-MAP.md · DISCOVERY-SUMMARY.md · discovery/CANDIDATE-DELTA.json (+ rendered
+        .md twin) -- endpoints, contracts, dependency graph, typed observations. The verdicts are yours, one OBS at a time.
 Next:   `/uscha-characterize` freezes current behavior and a HUMAN approves the golden;
         only judged candidates reach the migration SPEC; the golden stays the oracle.
 Stop:   say so at any point -- whatever is already written stays.
@@ -100,21 +102,26 @@ the exact blind spot the golden exists to counter. The old rule banned authoring
 claims outright; ADR-009 renegotiated it: **you may author them as CANDIDATES, in
 quarantine, and you may NEVER judge or promote them.**
 
-- Every candidate lives in `discovery/`, with mandatory frontmatter: `evidence.type`
-  (`test | code | inference`), `evidence.refs` (real `file:line(s)` — the engine resolves
-  them; a ref that does not resolve makes the candidate invalid, named), and `confidence`
-  (`inference` is ALWAYS `low`).
+- Every observation lives in `discovery/CANDIDATE-DELTA.json` (ADR-013), typed
+  (`behavior | invariant | contract | config | dependency | decision_trace`) with a strict
+  evidence class the ENGINE assigns: `measured` (a ledger-ingested golden/characterization
+  run — real execution, nothing else), `static` (deterministic extraction — if AST/regex
+  cannot establish it, it is not static), `narrated` (your inference: legitimate, useful,
+  and labeled). You supply ONLY the narrated ones, as `{type, statement, files}`; refs must
+  resolve (a ref that does not makes the input invalid, named). OBS ids are
+  content-addressed — never invent or edit one.
 - **You capture; you do not judge.** Never decide whether a behavior is bug or feature —
   that is the verdict (`preserve` / `fix` / `undefined`), it belongs to the human, and it
-  lands in `BEHAVIOR-LEDGER.md` with an ADR per verdict. You may present a candidate with
-  its evidence and ASK; you may write the skeleton row once the human decides; the verdict
-  itself is theirs.
-- The gate is MEASURED, not promised: `qa_ledger.py curation-check` blocks the forward flow
-  while any candidate lacks a verdict (INV-CURATION-01) — and a malformed candidate or a
-  tampered ledger blocks harder (`exit 2`), because "could not validate" must never read
-  as judged.
-- The ledger is append-only (verified against git): reverting a verdict is a NEW row plus a
-  new ADR, never an edit.
+  is recorded as an append-only ledger object by `curate`, one OBS at a time (no batch path
+  exists, and the CLI refuses to grow one). You may present an observation with its
+  evidence and ASK; you run `curate` once the human decides; the verdict itself is theirs.
+- The gate is MEASURED, not promised: `promote` refuses over ANY uncurated OBS naming the
+  ids, and `phase --require pr-ready` blocks while they exist (INV-CURATION-01) — and a
+  malformed or hand-edited delta blocks harder (`exit 2`), because "could not validate"
+  must never read as judged.
+- Re-curation SUPERSEDES, never deletes: a changed mind is a new ledger record; both stay
+  retrievable. (Repos still on the 1.64 `.md`-candidate flow: `curation-check` +
+  `BEHAVIOR-LEDGER.md` keep working unchanged; new runs use the delta.)
 
 ## Phase 1 — Map (fact)
 
@@ -143,27 +150,36 @@ Delegate to the `uscha-characterize` skill; if it is not installed, follow its c
   inputs of past bugs. A boundary whose corpus does not exercise its known branches is
   marked **PARTIAL**, never covered.
 
-## Phase 3 — Candidates (claims, quarantined)
+## Phase 3 — Candidates (the typed delta, quarantined)
 
-For every observable behavior the map + golden surface, emit one candidate file in
-`discovery/` (`NNN-short-slug.md`): frontmatter per the section above, then a short
-description of the behavior — what it does, not whether it should. Undesigned edge cases
-are captured too, as `inference`/`low`. Then run:
+For every observable behavior the map + golden surface that is NOT already a mechanical
+fact, write one narrated observation — `{type, statement, files}` — into a JSON list
+(e.g. `discovery/narrated.json`). Undesigned edge cases are captured too; they are
+inference, and the engine will label them `narrated`. Then run:
 
 ```bash
-python qa_ledger.py curation-check --repo <name>
+python qa_ledger.py discover --repo <name> --narrated discovery/narrated.json
 ```
 
-Echo its output verbatim — it names invalid candidates and everything awaiting verdict.
+The engine derives the `measured` observations (from ingested golden runs) and the
+`static` ones (deterministic extractors — Python-only in v0; other stacks are reported
+UNSUPPORTED, never guessed) itself, assigns content-addressed OBS ids, and emits
+`discovery/CANDIDATE-DELTA.json` plus the rendered `.md` twin. Echo its summary verbatim.
 The skill wires; the engine measures.
 
-## Phase 4 — Curation (the human's verdicts)
+## Phase 4 — Curation (the human's verdicts, one OBS at a time)
 
-Present one candidate at a time: the behavior, its evidence refs, its confidence. Ask for
-the verdict. On each answer, append the ledger row (`| # | candidate | evidence |
-confidence | verdict | ADR-RD-NNN |`) and write the skeleton `ADR-RD-NNN` (5-10 lines:
-context, evidence, verdict, consequence) for the human to complete. Re-run `curation-check`
-after the pass: exit 0 means every candidate is judged and the quarantine is clear.
+Present one observation at a time: the statement, its evidence class, its provenance.
+Ask for the verdict. On each answer run:
+
+```bash
+python qa_ledger.py curate --repo <name> --obs OBS-xxxxxxxxxxxx --verdict preserve|fix|undefined [--note "..."]
+```
+
+After the pass run `promote --repo <name>`: `preserve` moves into
+`discovery/CANONICAL.json` with `derived_from` lineage, `fix` becomes an
+`ISSUES-DEFERRED.md` work item (never canonical), `undefined` stays open in the readouts.
+A refusal naming uncurated ids means the pass is not done — never work around it.
 
 ## Phase 5 — Summary (facts, no opinion)
 
@@ -173,9 +189,9 @@ to write the migration SPEC. Do not editorialize.
 
 ## What you do NOT do (the human's job)
 
-- Do NOT record a verdict, promote a candidate, or skip the ledger — the quarantine gate
-  is the human's, and the engine measures it (INV-CURATION-01).
-- Do NOT write the migration SPEC — only judged candidates feed it, and the human writes it.
+- Do NOT choose a verdict, batch-curate, or skip the gate — the verdict is the human's per
+  OBS; you only run `curate` with what they decided (INV-CURATION-01).
+- Do NOT write the migration SPEC — only judged observations feed it, and the human writes it.
 - Do NOT decide the NEW structure (module boundaries, shared kernel, sync vs events). Those
   are forward decisions → `/uscha-adr-refine`.
 
@@ -189,17 +205,17 @@ to write the migration SPEC. Do not editorialize.
 ## Convergence — finish when
 
 The map is complete (every boundary and dependency accounted for, or explicitly marked
-unknown), the golden is captured and **human-approved**, every candidate has a verdict
-(`curation-check` exits 0 — measured, not remembered), and the coverage report states
+unknown), the golden is captured and **human-approved**, every observation has a verdict
+(`promote` runs without refusal — measured, not remembered), and the coverage report states
 what is covered vs PARTIAL. State plainly that the facts are ready, then hand off.
 
 ## Handoff
 
-> "Read SYSTEM-MAP.md, DISCOVERY-SUMMARY.md and BEHAVIOR-LEDGER.md, and inspect the
-> approved golden. The facts are measured; the verdicts are yours and recorded. Now write
-> the migration SPEC from the JUDGED candidates — `preserve` == golden must match, `fix` ==
-> divergence declared by its ADR, `undefined` == out of contract — and take the partition
-> decisions via /uscha-adr-refine."
+> "Read SYSTEM-MAP.md, DISCOVERY-SUMMARY.md and discovery/CANONICAL.json (with its
+> CANDIDATE-DELTA twin), and inspect the approved golden. The facts are measured; the
+> verdicts are yours and recorded. Now write the migration SPEC from the JUDGED
+> observations — `preserve` == golden must match, `fix` == an ISSUES-DEFERRED work item,
+> `undefined` == out of contract — and take the partition decisions via /uscha-adr-refine."
 
 Flow (migration): `uscha-reverse-discovery` (facts) → human writes SPEC + `/uscha-adr-refine` (forward
 module decisions) → `/uscha-devloop` (restructure; `golden-diff` + `ApplicationModules.verify()`

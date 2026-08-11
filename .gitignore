@@ -46,3 +46,5 @@ chat-*.md
 .curation-cases.json
 .oracle-cases.json
 .facts-cases.json
+.delta-cases.json
+.fidelity-cases.json

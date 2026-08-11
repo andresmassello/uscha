@@ -20,18 +20,21 @@
     ]
   },
   "subcommands": {
-    "count": 36,
+    "count": 40,
     "list": [
       "check-coverage",
       "cleanroom",
       "converged",
+      "curate",
       "curation-check",
       "dashboard",
+      "discover",
       "doctor",
       "escalate",
       "execution-policy",
       "facts",
       "fastpath-eval",
+      "fidelity",
       "flag-blocker",
       "gate-check",
       "golden-coverage",
@@ -44,6 +47,7 @@
       "phase",
       "pit-check",
       "production-finding",
+      "promote",
       "readiness",
       "rebuild",
       "regression-check",
@@ -60,5 +64,5 @@
       "waste-check"
     ]
   },
-  "version": "1.68.0"
+  "version": "1.69.0"
 }

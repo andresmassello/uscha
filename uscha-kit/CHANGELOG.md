@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.69.0** — [Diamond M1: the curation loop closes on items, not prose (2026-08-11)](CHANGELOG-1.69.0.md)
 - **1.68.0** — [SYSTEM-FACTS: published claims become compiled artifacts (2026-08-10)](CHANGELOG-1.68.0.md)
 - **1.67.0** — [the handoff's last residue: clean-room reaches the readouts (2026-08-10)](CHANGELOG-1.67.0.md)
 - **1.66.0** — [the advisories reach the user who never asks (2026-08-06)](CHANGELOG-1.66.0.md)

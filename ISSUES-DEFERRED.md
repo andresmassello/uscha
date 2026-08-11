@@ -86,3 +86,15 @@ silently lost:
   poisoned report → DoS of the measurement engine (not RCE, not exfiltration), already wrapped
   in `try/except ParseError`. The stdlib-compatible mitigation is a **size guard before
   parsing** — worth a small ADR, not a silent patch.
+
+## 1.69.0 fresh review — LOW (deferred, below the severity gate)
+
+- **Delta twin render: interior newlines in a narrated statement break the .md table row**
+  (the JSON and the OBS id survive; only the rendered view corrupts). Sanitize newlines in
+  `_render_delta_md`.
+- **`promote` ISSUES-DEFERRED dedupe is a raw substring test**: an OBS id merely mentioned
+  in prose in that file suppresses its work item. Match on the structured `- [ ] OBS-` line
+  shape instead.
+- **`fidelity --config` default resolves against cwd**: running from another directory
+  silently means no gate declared (unnamed absence). Consider resolving relative to the
+  ledger, or naming the miss.

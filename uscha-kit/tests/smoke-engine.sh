@@ -3422,6 +3422,8 @@ rm -f "$KIT/reports/junit/.cleanroom-cases.json"  # same rule for T119
 rm -f "$KIT/reports/junit/.curation-cases.json"   # same rule for T120
 rm -f "$KIT/reports/junit/.oracle-cases.json"     # same rule for T121
 rm -f "$KIT/reports/junit/.facts-cases.json"      # same rule for T122
+rm -f "$KIT/reports/junit/.delta-cases.json"      # same rule for T123
+rm -f "$KIT/reports/junit/.fidelity-cases.json"   # same rule for T124
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -4432,6 +4434,315 @@ PY
 case "$T122" in
   OK*) PASS=$((PASS+1)); echo "  ok   facts: $T122";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T122";;
+esac
+
+echo "== T123 (1.69.0): CANDIDATE-DELTA -- typed observations, verdicts as ledger objects (ADR-013) =="
+# The promotion refusal is ATTRIBUTABLE: pr-ready green before the delta exists, blocked by
+# one uncurated OBS, and the same ledger promotes clean once every verdict lands.
+T123=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
+os.makedirs(os.path.join(repo, "src")); os.makedirs(os.path.join(repo, "reports"))
+
+def sh(*a):
+    return subprocess.run(list(a), cwd=repo, capture_output=True, text=True)
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+sh("git", "init", "-b", "main"); sh("git", "config", "user.email", "t@t")
+sh("git", "config", "user.name", "t")
+io.open(os.path.join(repo, "src", "app.py"), "w").write(
+    "def facturar(cliente, total):\n    return total\n\nclass Cliente:\n    pass\n")
+io.open(os.path.join(repo, "orphan.py"), "w").write("def _hidden():\n    return 0\n")
+io.open(os.path.join(repo, "requirements.txt"), "w").write("requests==2.31.0\n")
+io.open(os.path.join(repo, "ACCEPTANCE.md"), "w").write(
+    "- [ ] AC-1 - facturar returns the total\n")
+os.makedirs(os.path.join(repo, "goldens"))
+io.open(os.path.join(repo, "goldens", "case.approved.json"), "w").write("{}\n")
+sh("git", "add", "-A"); sh("git", "commit", "-m", "base")
+io.open(os.path.join(repo, "reports", "junit.xml"), "w").write(
+    '<testsuite tests="1" failures="0" errors="0" skipped="0"/>')
+
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
+    "defaults": {"acceptance_file": "ACCEPTANCE.md",
+                 "qa_tools_order": ["code-review", "judgment-day", "improve"]},
+    "repos": [{"name": "r", "path": "r", "type": "python"}],
+    "integration": {"enabled": False}}))
+eng("init", "--config", "c.json", "--out", "L.json")
+eng("snapshot", "--ledger", "L.json", "--repo", "r")
+for tool in ("code-review", "judgment-day", "improve"):
+    eng("log-step", "--ledger", "L.json", "--repo", "r", "--tool", tool,
+        "--iteration", "1", "--gated-reported", "0", "--files-changed", "0",
+        "--tests-passed", "true")
+eng("log-gate", "--ledger", "L.json", "--repo", "r", "--iteration", "1",
+    "--kind", "golden-diff", "--verdict", "pass")
+before = eng("phase", "--ledger", "L.json", "--repo", "r",
+             "--require", "pr-ready").returncode
+
+io.open(os.path.join(w, "narr.json"), "w").write(json.dumps([
+    {"type": "behavior", "statement": "facturar keeps AC-1: returns the total",
+     "files": ["src/app.py:1"]},
+    {"type": "decision_trace", "statement": "totals are never rounded", "files": []}]))
+r = eng("discover", "--ledger", "L.json", "--repo", "r",
+        "--narrated", os.path.join(w, "narr.json"))
+DPATH = os.path.join(repo, "discovery", "CANDIDATE-DELTA.json")
+delta = json.load(io.open(DPATH, encoding="utf-8"))
+obs = delta["observations"]
+
+# --- AC-DD-01: well-formed delta, every OBS fully typed
+res["AC-DD-01"] = (r.returncode == 0 and len(obs) >= 4 and
+                   all(o.get("id") and o.get("type") and o.get("evidence_class")
+                       and o.get("provenance") for o in obs))
+
+# --- AC-DD-02: skill input stays narrated; a self-classifying input is refused (exit 2)
+narr = [o for o in obs if o["provenance"].get("tool") == "skill"]
+io.open(os.path.join(w, "bad.json"), "w").write(json.dumps(
+    [{"type": "behavior", "statement": "x", "evidence_class": "measured"}]))
+rb = eng("discover", "--ledger", "L.json", "--repo", "r",
+         "--narrated", os.path.join(w, "bad.json"))
+res["AC-DD-02"] = (len(narr) == 2
+                   and all(o["evidence_class"] == "narrated" for o in narr)
+                   and rb.returncode == 2 and "self-classify" in rb.stderr)
+
+# --- AC-DD-03: the measured OBS carries the ingested run's timestamp in its provenance
+meas = [o for o in obs if o["evidence_class"] == "measured"]
+res["AC-DD-03"] = (len(meas) == 1
+                   and "ingested 20" in meas[0]["provenance"]["derivation"])
+
+# --- AC-DD-04: re-running discovery over the unchanged fixture is byte-identical
+b1 = io.open(DPATH, "rb").read()
+eng("discover", "--ledger", "L.json", "--repo", "r",
+    "--narrated", os.path.join(w, "narr.json"))
+res["AC-DD-04"] = io.open(DPATH, "rb").read() == b1
+
+# --- AC-DD-05: canonical_match populated exactly when an AC id matches
+withm = [o for o in obs if o.get("canonical_match")]
+res["AC-DD-05"] = len(withm) == 1 and withm[0]["canonical_match"] == "AC-1"
+
+# --- AC-DD-06: the .md twin regenerates; a hand edit is overwritten AND named -- on
+# stderr, so --json stdout stays parseable on this exact path (fresh-review MEDIUM)
+TWIN = os.path.join(repo, "discovery", "CANDIDATE-DELTA.md")
+orig = io.open(TWIN, encoding="utf-8").read()
+io.open(TWIN, "a").write("HAND EDIT\n")
+rt = eng("discover", "--ledger", "L.json", "--repo", "r",
+         "--narrated", os.path.join(w, "narr.json"), "--json")
+try:
+    json.loads(rt.stdout)
+    parseable = True
+except ValueError:
+    parseable = False
+res["AC-DD-06"] = (io.open(TWIN, encoding="utf-8").read() == orig
+                   and "overwritten" in rt.stderr and parseable)
+
+ids = [o["id"] for o in obs]
+# --- AC-CU-06: no batch path -- a comma list is refused, and the CLI offers no bulk flag
+rc = eng("curate", "--ledger", "L.json", "--repo", "r",
+         "--obs", ids[0] + "," + ids[1], "--verdict", "preserve")
+hp = eng("curate", "--help")
+res["AC-CU-06"] = (rc.returncode == 2 and "batch" in rc.stderr.lower()
+                   and "--all" not in hp.stdout and "--accept" not in hp.stdout)
+
+# --- AC-CU-01: promote over uncurated OBS refuses naming them; nothing moves; pr-ready
+# blocks (attributable: it was green before the delta existed)
+eng("curate", "--ledger", "L.json", "--repo", "r", "--obs", meas[0]["id"],
+    "--verdict", "preserve")
+rp = eng("promote", "--ledger", "L.json", "--repo", "r")
+blocked = eng("phase", "--ledger", "L.json", "--repo", "r", "--require", "pr-ready")
+res["AC-CU-01"] = (before == 0 and rp.returncode == 1 and "REFUSED" in rp.stderr
+                   and any(i in rp.stderr for i in ids if i != meas[0]["id"])
+                   and not os.path.isfile(os.path.join(repo, "discovery",
+                                                       "CANONICAL.json"))
+                   and blocked.returncode == 1
+                   and "INV-CURATION-01" in blocked.stdout + blocked.stderr)
+
+# --- judge the rest: one fix, one undefined, the rest preserve
+fix_id, und_id = narr[0]["id"], narr[1]["id"]
+for oid in ids:
+    if oid == meas[0]["id"]:
+        continue
+    v = "fix" if oid == fix_id else ("undefined" if oid == und_id else "preserve")
+    eng("curate", "--ledger", "L.json", "--repo", "r", "--obs", oid, "--verdict", v)
+rp = eng("promote", "--ledger", "L.json", "--repo", "r", "--json")
+canon = json.load(io.open(os.path.join(repo, "discovery", "CANONICAL.json"),
+                          encoding="utf-8"))
+lineage = set(it.get("derived_from") for it in canon["items"])
+# --- AC-CU-02: preserve promoted with derived_from lineage
+res["AC-CU-02"] = (rp.returncode == 0 and meas[0]["id"] in lineage
+                   and all(it.get("derived_from") for it in canon["items"]))
+# --- AC-CU-03: fix -> ISSUES-DEFERRED work item, never canonical
+issues = io.open(os.path.join(repo, "ISSUES-DEFERRED.md"), encoding="utf-8").read()
+res["AC-CU-03"] = fix_id in issues and fix_id not in lineage
+# --- AC-CU-04: undefined stays OPEN in the readouts
+rd = eng("dashboard", "--ledger", "L.json", "--json")
+dash = json.loads(rd.stdout)
+res["AC-CU-04"] = und_id in (dash.get("candidate_delta", {}).get("r", {})
+                             .get("undefined_open") or [])
+# --- AC-CU-05: re-curation SUPERSEDES; both records stay retrievable
+eng("curate", "--ledger", "L.json", "--repo", "r", "--obs", und_id,
+    "--verdict", "preserve")
+led = json.load(io.open(os.path.join(w, "L.json"), encoding="utf-8"))
+recs = [c for c in led.get("curation", []) if c["obs_id"] == und_id]
+res["AC-CU-05"] = (len(recs) == 2 and recs[0]["verdict"] == "undefined"
+                   and recs[1]["verdict"] == "preserve")
+
+# --- regression: malformed narrated input (non-string ref) is a NAMED exit-2 refusal,
+# never a TypeError traceback (fresh-review MEDIUM, reproduced pre-release)
+io.open(os.path.join(w, "badref.json"), "w").write(json.dumps(
+    [{"type": "behavior", "statement": "x", "files": [3]}]))
+rr = eng("discover", "--ledger", "L.json", "--repo", "r",
+         "--narrated", os.path.join(w, "badref.json"))
+res["review-m1"] = rr.returncode == 2 and "list of strings" in rr.stderr
+
+# --- regression: a class-flip hand edit (narrated -> measured) breaks the integrity
+# seal even though the OBS id survives; curate refuses exit 2 (fresh-review MEDIUM)
+raw = json.load(io.open(DPATH, encoding="utf-8"))
+for o in raw["observations"]:
+    if o["evidence_class"] == "narrated":
+        o["evidence_class"] = "measured"
+        break
+io.open(DPATH, "w", encoding="utf-8").write(json.dumps(raw, indent=2))
+rf = eng("curate", "--ledger", "L.json", "--repo", "r", "--obs", ids[0],
+         "--verdict", "preserve")
+res["review-m3"] = rf.returncode == 2 and "seal" in rf.stderr
+
+# --- regression: a STRUCTURALLY broken observation (provenance as a list) is a named
+# malformation everywhere -- curate exit 2, dashboard/phase never traceback
+# (fresh-review HIGH, reproduced pre-release)
+raw["observations"][0]["provenance"] = ["not", "a", "dict"]
+io.open(DPATH, "w", encoding="utf-8").write(json.dumps(raw, indent=2))
+rh = eng("curate", "--ledger", "L.json", "--repo", "r", "--obs", ids[0],
+         "--verdict", "preserve")
+rdash = eng("dashboard", "--ledger", "L.json", "--json")
+rph = eng("phase", "--ledger", "L.json", "--repo", "r", "--require", "pr-ready")
+res["review-h1"] = (rh.returncode == 2 and "shape invalid" in rh.stderr
+                    and rdash.returncode == 0
+                    and "Traceback" not in rdash.stderr
+                    and rph.returncode == 1 and "Traceback" not in rph.stderr
+                    and "CANDIDATE-DELTA invalido" in rph.stdout + rph.stderr)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".delta-cases.json"), "w", encoding="utf-8").write(
+    json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T123" in
+  OK*) PASS=$((PASS+1)); echo "  ok   candidate-delta: $T123";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T123";;
+esac
+
+echo "== T124 (1.69.0): fidelity -- a vector of measured dimensions; advisory can NEVER gate (ADR-014) =="
+T124=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
+os.makedirs(os.path.join(repo, "src"))
+
+def sh(*a):
+    return subprocess.run(list(a), cwd=repo, capture_output=True, text=True)
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+sh("git", "init", "-b", "main"); sh("git", "config", "user.email", "t@t")
+sh("git", "config", "user.name", "t")
+io.open(os.path.join(repo, "src", "app.py"), "w").write(
+    "def facturar(total):\n    return total\n")
+io.open(os.path.join(repo, "orphan.py"), "w").write("def _hidden():\n    return 0\n")
+os.makedirs(os.path.join(repo, "goldens"))
+io.open(os.path.join(repo, "goldens", "case.approved.json"), "w").write("{}\n")
+sh("git", "add", "-A"); sh("git", "commit", "-m", "base")
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
+    "defaults": {},
+    "repos": [{"name": "r", "path": "r", "type": "python"}],
+    "integration": {"enabled": False}}))
+eng("init", "--config", "c.json", "--out", "L.json")
+eng("log-gate", "--ledger", "L.json", "--repo", "r", "--iteration", "1",
+    "--kind", "golden-diff", "--verdict", "pass")
+io.open(os.path.join(w, "narr.json"), "w").write(json.dumps([
+    {"type": "behavior", "statement": "facturar returns the total",
+     "files": ["src/app.py:1"]}]))
+eng("discover", "--ledger", "L.json", "--repo", "r",
+    "--narrated", os.path.join(w, "narr.json"))
+delta = json.load(io.open(os.path.join(repo, "discovery", "CANDIDATE-DELTA.json"),
+                          encoding="utf-8"))
+ids = [o["id"] for o in delta["observations"]]
+
+# --- AC-FV-04 first half: uncurated OBS exist -> closure strictly < 1.0
+r1 = eng("fidelity", "--ledger", "L.json", "--repo", "r", "--json")
+f1 = json.loads(r1.stdout)["dimensions"]
+half1 = (f1["curation_closure"]["value"] is not None
+         and f1["curation_closure"]["value"] < 1.0)
+
+for oid in ids:
+    eng("curate", "--ledger", "L.json", "--repo", "r", "--obs", oid,
+        "--verdict", "preserve")
+eng("promote", "--ledger", "L.json", "--repo", "r")
+r2 = eng("fidelity", "--ledger", "L.json", "--repo", "r", "--json")
+f2 = json.loads(r2.stdout)["dimensions"]
+
+# --- AC-FV-01: every v0 dimension present, each with provenance and class
+want = {"traceability", "behavior", "contracts", "curation_closure",
+        "unexplained_code", "semantic"}
+res["AC-FV-01"] = (set(f2) == want
+                   and all(d.get("provenance") and d.get("class") in
+                           ("measured", "advisory") for d in f2.values())
+                   and f2["semantic"]["class"] == "advisory")
+# --- AC-FV-02: a file with no lineage -> unexplained_code > 0, file NAMED
+res["AC-FV-02"] = (f2["unexplained_code"]["value"] is not None
+                   and f2["unexplained_code"]["value"] > 0
+                   and "orphan.py" in f2["unexplained_code"]["files"])
+# --- AC-FV-04 second half: all curated -> exactly 1.0
+res["AC-FV-04"] = half1 and f2["curation_closure"]["value"] == 1.0
+# --- AC-FV-05: deterministic -- same inputs, byte-identical output
+r3 = eng("fidelity", "--ledger", "L.json", "--repo", "r", "--json")
+res["AC-FV-05"] = r2.stdout == r3.stdout and r2.stdout
+# --- AC-FV-03: advisory-as-blocking is an ENGINE refusal on both doors
+io.open(os.path.join(w, "cg.json"), "w").write(json.dumps(
+    {"defaults": {"fidelity": {"gate": ["semantic"]}}}))
+rg = eng("fidelity", "--ledger", "L.json", "--repo", "r",
+         "--config", os.path.join(w, "cg.json"))
+rl = eng("log-gate", "--ledger", "L.json", "--repo", "r", "--iteration", "2",
+         "--kind", "semantic", "--verdict", "fail")
+res["AC-FV-03"] = (rg.returncode == 2 and "INV-ADVISORY-01" in rg.stderr
+                   and rl.returncode == 2 and "invalid choice" in rl.stderr)
+res["AC-FV-05"] = bool(res["AC-FV-05"])
+
+# --- regression: a config that cannot be PARSED cannot silently disable the refusal
+# door (fresh-review HIGH, reproduced pre-release)
+io.open(os.path.join(w, "broken.json"), "w").write("{ not json")
+rb = eng("fidelity", "--ledger", "L.json", "--repo", "r",
+         "--config", os.path.join(w, "broken.json"))
+res["review-h2"] = rb.returncode == 2 and "unreadable" in rb.stderr
+
+# --- regression: a malformed delta is exit 2 for fidelity too, never mislabeled as
+# "no delta" (fresh-review MEDIUM, reproduced pre-release)
+io.open(os.path.join(repo, "discovery", "CANDIDATE-DELTA.json"), "w").write("{ nope")
+rm = eng("fidelity", "--ledger", "L.json", "--repo", "r")
+res["review-m4"] = (rm.returncode == 2 and "malformed" in rm.stderr
+                    and "no delta" not in rm.stdout)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".fidelity-cases.json"), "w", encoding="utf-8").write(
+    json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T124" in
+  OK*) PASS=$((PASS+1)); echo "  ok   fidelity: $T124";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T124";;
 esac
 
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
@@ -5558,6 +5869,41 @@ for _sfid in ("AC-SF-01", "AC-SF-02", "AC-SF-03", "AC-SF-04", "AC-SF-05"):
         results.append((_sfid, "system-facts", None))
     else:
         results.append((_sfid, "system-facts", "T122 case failed or missing"))
+
+# CANDIDATE-DELTA criteria (Diamond M1, ADR-013): measured by T123, same sidecar contract.
+def _delta_cases():
+    p = os.path.join(kit, "reports", "junit", ".delta-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_dlc = _delta_cases()
+for _did in ("AC-DD-01", "AC-DD-02", "AC-DD-03", "AC-DD-04", "AC-DD-05", "AC-DD-06",
+             "AC-CU-01", "AC-CU-02", "AC-CU-03", "AC-CU-04", "AC-CU-05", "AC-CU-06"):
+    if _dlc is None or _dlc.get(_did) is None:
+        results.append((_did, "candidate-delta", SKIP))
+    elif _dlc.get(_did) is True:
+        results.append((_did, "candidate-delta", None))
+    else:
+        results.append((_did, "candidate-delta", "T123 case failed or missing"))
+
+# Fidelity criteria (Diamond M1, ADR-014): measured by T124, same sidecar contract.
+def _fidelity_cases():
+    p = os.path.join(kit, "reports", "junit", ".fidelity-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_fvc = _fidelity_cases()
+for _fid in ("AC-FV-01", "AC-FV-02", "AC-FV-03", "AC-FV-04", "AC-FV-05"):
+    if _fvc is None or _fvc.get(_fid) is None:
+        results.append((_fid, "fidelity", SKIP))
+    elif _fvc.get(_fid) is True:
+        results.append((_fid, "fidelity", None))
+    else:
+        results.append((_fid, "fidelity", "T124 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)
