@@ -45,3 +45,4 @@ chat-*.md
 .cleanroom-cases.json
 .curation-cases.json
 .oracle-cases.json
+.facts-cases.json
