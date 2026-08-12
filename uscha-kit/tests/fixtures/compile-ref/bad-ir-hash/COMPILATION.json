@@ -1,0 +1,44 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "synthetic"
+  ],
+  "source": [
+    {
+      "unit": "source/x.py",
+      "sha256": "74e0b6bbb9b457d72ffdd12d94fcc9aa1e95a5a487504d834a0466987b496cca"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/x.py",
+      "implements": [
+        "AC-TC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-TC-01",
+      "decision": "stub",
+      "rationale": "stub"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "bad-fixture",
+    "model_version": "bad-fixture",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "all constraints honored; see implementation_constraints"
+  },
+  "_integrity": "d30f8118010a7002a82e60e31a9b64f399375bcab9c6a849cc501a93cc8eaa70"
+}

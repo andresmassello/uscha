@@ -4966,6 +4966,339 @@ def cmd_ir_render(args):
 
 
 # --------------------------------------------------------------------------- #
+# compiler contract  (Diamond M3: the LLM is a compiler with a validated output
+# contract. The engine VALIDATES and INGESTS compilations; it NEVER compiles and
+# never calls a model. Only mechanical violations gate; every statistic is
+# advisory (INV-ADVISORY-01). ADR-016.)
+# --------------------------------------------------------------------------- #
+COMPILE_SCHEMA = "compile/0.1"
+COMPILE_REQUIRED = ("schema_version", "canonical_ir", "target_stack", "source",
+                    "tests", "trace_manifest", "unresolved_intent",
+                    "compilation_report")
+# The seal covers the load-bearing contract, NOT compilation_report: model, versions and
+# timestamps legitimately vary and never change WHAT was compiled. A hand edit of the
+# substance (source/tests/manifest/unresolved_intent) after production must trip the seal.
+COMPILE_SEALED = ("schema_version", "canonical_ir", "target_stack",
+                  "implementation_constraints", "source", "tests",
+                  "trace_manifest", "unresolved_intent")
+# Advisory degeneracy dial: a manifest of >=2 units where EVERY unit claims >= this share
+# of ALL IR nodes is "everything traces to everything" -- no unit discriminates. ADVISORY
+# ONLY: printed, never gates. The exact value is a reporting choice, not a contract,
+# precisely because it can never block (a threshold on a smell would be a judgment).
+_COMPILE_DEGENERATE_FANOUT = 0.8
+
+
+def _compile_seal(c):
+    return _integrity_hash({k: c.get(k) for k in COMPILE_SEALED})
+
+
+def _sha256_file(path):
+    try:
+        with open(path, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def _contained_unit(base, unit):
+    """A compilation's units must be RELATIVE paths CONTAINED within the compilation
+    directory: the manifest references what was compiled, and what was compiled lives with
+    the compilation. An absolute path or a `..` escape lets a manifest name any file on the
+    filesystem as a "source" unit and pass on that file's hash -- exactly the "manifest
+    cannot lie about what was compiled" guarantee, defeated. Returns the resolved path, or
+    None if the unit is absolute or escapes `base`. Both sides are `realpath`-normalized
+    before comparison -- the Windows 8.3 short-path trap this repo already paid for once
+    (a file INSIDE a tree judged outside it) applies to any containment check."""
+    if os.path.isabs(unit):
+        return None
+    full = os.path.realpath(os.path.join(base, unit.replace("/", os.sep)))
+    root = os.path.realpath(base)
+    if full == root or full.startswith(root + os.sep):
+        return full
+    return None
+
+
+def _load_ir_at(path):
+    """Strict IR loader for an ARBITRARY IR.json. The repo's own ir/ is gitignored (a
+    regenerable index), so the M3 reference IR is a committed fixture loaded here with the
+    same posture as _load_ir: an unknown schema or a broken/hand-edited seal is refused,
+    never mis-read. Returns (graph, errors); graph None when the file is absent."""
+    if not os.path.isfile(path):
+        return None, ["no reference IR at %s" % path]
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            g = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return {}, ["unreadable: %s" % exc]
+    if g.get("schema_version") != IR_SCHEMA:
+        return g, ["schema_version %r != %r (an IR version this engine does not know is "
+                   "refused, not read)" % (g.get("schema_version"), IR_SCHEMA)]
+    if not isinstance(g.get("nodes"), list) or not isinstance(g.get("edges"), list):
+        return g, ["nodes/edges missing or not lists"]
+    if g.get("_integrity") != _ir_seal(g):
+        return g, ["reference IR integrity seal does not match -- it was hand-edited "
+                   "(regenerate via ir-extract)"]
+    return g, []
+
+
+def _validate_compilation(comp_path, ir_graph):
+    """The deterministic checker (ADR-016). Returns (blocking_errors, advisory).
+
+    BLOCKS only on FACTS: unknown schema, a missing/mistyped section, a broken seal, an
+    ir_hash that does not match the reference IR, a trace_manifest id that is not an IR
+    node, a unit whose file is absent or whose hash does not match the bytes on disk, a
+    malformed unresolved_intent entry. Every STATISTIC (fan-out degeneracy, empty/generic
+    unresolved_intent, coverage) is advisory and can NEVER change the outcome -- a
+    threshold on a smell is a judgment, and no judgment gates (INV-ADVISORY-01)."""
+    errors, advisory = [], {}
+    base = os.path.dirname(os.path.abspath(comp_path))
+    try:
+        with open(comp_path, encoding="utf-8-sig") as fh:
+            c = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return ["unreadable compilation: %s" % exc], advisory
+    if c.get("schema_version") != COMPILE_SCHEMA:
+        return ["schema_version %r != %r (a contract version this engine does not know is "
+                "refused, not read)" % (c.get("schema_version"), COMPILE_SCHEMA)], advisory
+    for k in COMPILE_REQUIRED:
+        if k not in c:
+            errors.append("required section missing: %s" % k)
+    if errors:
+        return errors, advisory
+    for k, typ in (("source", list), ("tests", list), ("trace_manifest", list),
+                   ("unresolved_intent", list), ("canonical_ir", dict),
+                   ("compilation_report", dict)):
+        if not isinstance(c.get(k), typ):
+            errors.append("%s must be a %s" % (k, typ.__name__))
+    if errors:
+        return errors, advisory
+    # ELEMENT shapes, checked before any `.get` on them: an adversarial/buggy compiler that
+    # emits a list of strings (or a non-list `implements`) is a mechanical violation -> exit
+    # 2 with a named fault, NEVER an AttributeError traceback (exit 1). This is the trust
+    # boundary the contract exists to defend; the loops below assume dict elements.
+    for k in ("source", "tests"):
+        for i, u in enumerate(c.get(k)):
+            if not isinstance(u, dict):
+                errors.append("%s[%d] must be an object with unit/sha256" % (k, i))
+    for i, e in enumerate(c.get("trace_manifest")):
+        if not isinstance(e, dict):
+            errors.append("trace_manifest[%d] must be an object with unit/implements" % i)
+        elif not isinstance(e.get("implements"), list):
+            errors.append("trace_manifest[%d].implements must be a list of IR node ids" % i)
+    for i, ui in enumerate(c.get("unresolved_intent")):
+        if not isinstance(ui, dict):
+            errors.append("unresolved_intent[%d] must be an object with ir_region/decision"
+                          % i)
+    if errors:
+        return errors, advisory
+    if c.get("_integrity") != _compile_seal(c):
+        errors.append("compilation integrity seal does not match -- source/tests/manifest/"
+                      "unresolved_intent was hand-edited after production")
+    # the compilation NAMES which IR it compiled; a stale or foreign ir_hash is refused --
+    # a compilation cannot be measured against a graph this repo does not reproduce.
+    ir_seal = ir_graph.get("_integrity")
+    named = (c.get("canonical_ir") or {}).get("ir_hash")
+    if named != ir_seal:
+        errors.append("canonical_ir.ir_hash %s.. does not match the reference IR seal %s.. "
+                      "-- a stale or foreign IR is refused, never assumed"
+                      % (str(named)[:12], str(ir_seal)[:12]))
+    node_ids = {nd["id"] for nd in ir_graph.get("nodes") or []}
+    # units resolve on disk and their hashes match the bytes: the manifest cannot lie about
+    # what was compiled.
+    units = {}
+    for section in ("source", "tests"):
+        for u in c.get(section) or []:
+            unit, want = u.get("unit"), u.get("sha256")
+            if not unit:
+                errors.append("%s entry without a unit path" % section)
+                continue
+            # source classification is sticky: a unit listed in BOTH source and tests stays
+            # source, so the degeneracy detector (over source units) cannot be dodged by also
+            # listing a source file under tests. Advisory-only, but the detector stays honest.
+            if units.get(unit) != "source":
+                units[unit] = section
+            full = _contained_unit(base, unit)
+            if full is None:
+                errors.append("%s unit escapes the compilation directory -- a relative, "
+                              "contained path is required (the manifest references what was "
+                              "compiled): %s" % (section, unit))
+                continue
+            got = _sha256_file(full)
+            if got is None:
+                errors.append("%s unit missing on disk: %s" % (section, unit))
+            elif got != want:
+                errors.append("%s unit hash mismatch (manifest lies about the bytes): %s"
+                              % (section, unit))
+    # every manifest id is an IR node (THE named mechanical violation); every manifest unit
+    # is a real source/test unit.
+    for entry in c.get("trace_manifest") or []:
+        unit = entry.get("unit")
+        if unit not in units:
+            errors.append("trace_manifest unit is not a declared source/test unit: %s" % unit)
+        for nid in entry.get("implements") or []:
+            if nid not in node_ids:
+                errors.append("trace_manifest implements an id that is not an IR node: %s"
+                              % nid)
+    # unresolved_intent SHAPE blocks; its richness (count, specificity) is advisory only.
+    for ui in c.get("unresolved_intent") or []:
+        if not ui.get("ir_region") or not ui.get("decision"):
+            errors.append("unresolved_intent entry missing ir_region or decision")
+    # ---- ADVISORY (computed always, gates never) ----
+    manifest_units = {e.get("unit") for e in c.get("trace_manifest") or []}
+    per_unit = [len(e.get("implements") or []) for e in c.get("trace_manifest") or []]
+    total_nodes = len(node_ids) or 1
+    mean_fanout = (sum(per_unit) / len(per_unit)) if per_unit else 0.0
+    covered = {nid for e in c.get("trace_manifest") or []
+               for nid in (e.get("implements") or []) if nid in node_ids}
+    # Degeneracy is a property of the SOURCE units: >=2 source units that EACH claim >= the
+    # threshold share of all nodes -> the manifest cannot tell you which code implements
+    # which intent (everything traces to everything). Min-based, not mean-based, and over
+    # source only: one comprehensive source file legitimately implements a whole tiny
+    # package, and tests naturally exercise everything, so neither is a degeneracy signal.
+    source_units = {u for u, s in units.items() if s == "source"}
+    src_fanout = [len(e.get("implements") or []) for e in c.get("trace_manifest") or []
+                  if e.get("unit") in source_units]
+    advisory = {
+        "trace_units": len(manifest_units),
+        "mean_nodes_per_unit": round(mean_fanout, 3),
+        "node_coverage": round(len(covered) / total_nodes, 3),
+        "unexplained_units": sorted(u for u in units if u not in manifest_units),
+        "unresolved_intent_count": len(c.get("unresolved_intent") or []),
+        "degenerate": len(src_fanout) >= 2 and all(
+            (pu / total_nodes) >= _COMPILE_DEGENERATE_FANOUT for pu in src_fanout),
+        "empty_unresolved": len(c.get("unresolved_intent") or []) == 0,
+    }
+    return errors, advisory
+
+
+def _print_compile_advisory(advisory):
+    if not advisory:
+        return
+    print("  advisory (never gates): coverage %.2f, mean %.2f nodes/unit, %d unresolved_intent%s"
+          % (advisory.get("node_coverage", 0.0), advisory.get("mean_nodes_per_unit", 0.0),
+             advisory.get("unresolved_intent_count", 0),
+             ", DEGENERATE manifest" if advisory.get("degenerate") else ""))
+    if advisory.get("empty_unresolved"):
+        print("  advisory: unresolved_intent is EMPTY -- suspicious (a compiler that made no "
+              "choices is rare); reported, never blocked")
+    for u in advisory.get("unexplained_units") or []:
+        print("  advisory: %s has no trace_manifest entry -- unexplained by construction" % u)
+
+
+def cmd_compile_validate(args):
+    ir_graph, ir_errors = _load_ir_at(args.ir)
+    if ir_graph is None or ir_errors:
+        for e in ir_errors:
+            print("[qa_ledger] compile-validate: reference IR: %s" % e, file=sys.stderr)
+        sys.exit(2)
+    errors, advisory = _validate_compilation(args.compilation, ir_graph)
+    if args.json:
+        print(json.dumps({"compilation": args.compilation, "ir": args.ir,
+                          "valid": not errors, "errors": errors, "advisory": advisory},
+                         indent=2, ensure_ascii=False))
+    elif errors:
+        # diagnostics to stderr (Unix convention, and consistent with compile-ingest); the
+        # machine signal is the exit code. stdout stays clean for the VALID payload path.
+        print("COMPILE-VALIDATE %s: REFUSED (%d mechanical violation(s))"
+              % (args.compilation, len(errors)), file=sys.stderr)
+        for e in errors:
+            print("  x %s" % e, file=sys.stderr)
+    else:
+        print("COMPILE-VALIDATE %s: VALID (contract conformant)" % args.compilation)
+        _print_compile_advisory(advisory)
+    sys.exit(2 if errors else 0)
+
+
+def cmd_compile_ingest(args):
+    """Record a VALIDATED compilation into the ledger (ADR-016). Ingesting an invalid
+    compilation is a refusal. unresolved_intent becomes append-only, content-addressed
+    UINT objects + an ISSUES-DEFERRED.md mirror (the house convention `fix` uses); the
+    by-construction unexplained_code is the set of units with no trace_manifest entry."""
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    repo_path = _scope_path(ledger, args.repo)
+    ir_graph, ir_errors = _load_ir_at(args.ir)
+    if ir_graph is None or ir_errors:
+        for e in ir_errors:
+            print("[qa_ledger] compile-ingest: reference IR: %s" % e, file=sys.stderr)
+        sys.exit(2)
+    errors, advisory = _validate_compilation(args.compilation, ir_graph)
+    if errors:
+        print("[qa_ledger] compile-ingest: REFUSED -- ingesting an invalid compilation is a "
+              "refusal (%d mechanical violation(s)); run compile-validate." % len(errors),
+              file=sys.stderr)
+        for e in errors:
+            print("  x %s" % e, file=sys.stderr)
+        sys.exit(2)
+    with open(args.compilation, encoding="utf-8-sig") as fh:
+        c = json.load(fh)
+    comp_seal = c.get("_integrity")
+    uints, seen_uint = [], set()
+    for ui in c.get("unresolved_intent") or []:
+        uid = "UINT-" + hashlib.sha256(
+            (ui.get("ir_region", "") + "\n" + ui.get("decision", "")).encode("utf-8")
+        ).hexdigest()[:12]
+        # content-addressed: two entries that resolve to the same id ARE the same intent gap
+        # (same ir_region + decision), deduped within this ingest just as across ingests --
+        # otherwise ISSUES-DEFERRED and the ledger record carry the id twice.
+        if uid in seen_uint:
+            continue
+        seen_uint.add(uid)
+        uints.append({"id": uid, "ir_region": ui.get("ir_region"),
+                      "decision": ui.get("decision"), "rationale": ui.get("rationale", "")})
+    comp_rec = {"id": comp_seal[:12], "repo": args.repo,
+                "ir_hash": (c.get("canonical_ir") or {}).get("ir_hash"),
+                "model": (c.get("compilation_report") or {}).get("model"),
+                "target_stack": c.get("target_stack"), "seal": comp_seal,
+                "unexplained_units": advisory.get("unexplained_units") or [],
+                "node_coverage": advisory.get("node_coverage"),
+                "unresolved_intent": uints, "at": _now()}
+    comps = ledger.setdefault("compilations", [])
+    # re-ingest is idempotent PER REPO: the seal is the identity within a repo, and a
+    # byte-identical compilation has nothing to supersede. The compilations list is flat and
+    # cross-repo, so the supersede check MUST be scoped by repo -- otherwise two repos that
+    # legitimately produce the same compilation (a shared/small canonical package -- exactly
+    # this milestone's own fixtures) collide, and the second repo's first ingest is dropped
+    # as a false "superseded". A CHANGED compilation reseals -> a new record. Never a dup.
+    superseded = any(x.get("seal") == comp_seal and x.get("repo") == args.repo for x in comps)
+    if not superseded:
+        comps.append(comp_rec)
+        _save(args.ledger, ledger)
+    new_items = []
+    if uints:
+        dpath = os.path.join(repo_path, ISSUES_DEFERRED_FILE)
+        existing = ""
+        if os.path.isfile(dpath):
+            with open(dpath, encoding="utf-8-sig", errors="replace") as fh:
+                existing = fh.read()
+        add = [u for u in uints if u["id"] not in existing]
+        if add:
+            with open(dpath, "a", encoding="utf-8", newline="\n") as fh:
+                if existing and not existing.endswith("\n"):
+                    fh.write("\n")
+                for u in add:
+                    fh.write("- [ ] %s (unresolved_intent): %s -- the compiler decided "
+                             "'%s' on its own; a candidate canonical improvement (ADR-016)\n"
+                             % (u["id"], u["ir_region"], u["decision"]))
+            new_items = [u["id"] for u in add]
+    out = {"repo": args.repo, "compilation": comp_rec["id"], "superseded": superseded,
+           "unresolved_intent": [u["id"] for u in uints],
+           "issues_deferred_new": new_items,
+           "unexplained_units": comp_rec["unexplained_units"]}
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print("COMPILE-INGEST %s: compilation %s%s"
+              % (args.repo, comp_rec["id"],
+                 " (byte-identical to a prior ingest -- nothing superseded)"
+                 if superseded else ""))
+        print("  %d unresolved_intent -> %d new %s item(s); %d unexplained unit(s)"
+              % (len(uints), len(new_items), ISSUES_DEFERRED_FILE,
+                 len(comp_rec["unexplained_units"])))
+    sys.exit(0)
+
+
+# --------------------------------------------------------------------------- #
 # facts  (T0 / SYSTEM-FACTS: public claims become compiled artifacts of repo
 # facts -- Diamond applied to Diamond. ADR-012.)
 # --------------------------------------------------------------------------- #
@@ -9034,6 +9367,28 @@ def build_parser():
     pir.add_argument("--ledger", default="QA-LEDGER.json")
     pir.add_argument("--repo", required=True)
     pir.set_defaults(func=cmd_ir_render)
+
+    pcmv = sub.add_parser(
+        "compile-validate",
+        help="validate a COMPILATION.json against a reference IR (ADR-016); only mechanical "
+             "violations gate, degeneracy stats are advisory and NEVER block")
+    pcmv.add_argument("--ir", required=True,
+                      help="the reference IR.json the compilation targets")
+    pcmv.add_argument("--compilation", required=True, help="path to COMPILATION.json")
+    pcmv.add_argument("--json", action="store_true")
+    pcmv.set_defaults(func=cmd_compile_validate)
+
+    pcmi = sub.add_parser(
+        "compile-ingest",
+        help="record a VALIDATED compilation into the ledger (ADR-016): by-construction "
+             "unexplained_code + unresolved_intent as append-only UINT objects + backlog")
+    pcmi.add_argument("--ledger", default="QA-LEDGER.json")
+    pcmi.add_argument("--repo", required=True)
+    pcmi.add_argument("--ir", required=True,
+                      help="the reference IR.json the compilation targets")
+    pcmi.add_argument("--compilation", required=True, help="path to COMPILATION.json")
+    pcmi.add_argument("--json", action="store_true")
+    pcmi.set_defaults(func=cmd_compile_ingest)
 
     pcr = sub.add_parser("cleanroom",
                          help="run a command against a CLEAN checkout of one commit in a throwaway worktree (ADR-008)")

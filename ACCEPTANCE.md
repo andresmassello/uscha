@@ -251,6 +251,25 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - [x] AC-IR-06 - `fidelity --ir` answers `curation_closure` as a graph path query and
   reproduces v0's FIELD-RUN-001 number.
 
+## Diamond M3 (ADR-016) - the LLM is a compiler with a validated output contract
+
+- [x] AC-CC-01 - a well-formed compilation over the reference IR passes `compile-validate`;
+  every trace_manifest id resolves to an IR node and every unit hash matches disk.
+- [x] AC-CC-02 - the manifest cannot lie: a trace_manifest id that is not an IR node, a unit
+  whose file/hash does not match disk, and a hand-edited seal each `exit 2` naming the fault.
+- [x] AC-CC-03 - a `canonical_ir.ir_hash` this repo cannot reproduce is refused (`exit 2`); a
+  compilation never validates against an absent or stale IR.
+- [x] AC-CC-04 - a degenerate manifest (everything traces to everything) and an empty
+  `unresolved_intent` are flagged `advisory` and printed, and `compile-validate` still exits
+  0 — statistics never gate (INV-ADVISORY-01).
+- [x] AC-CC-05 - `compile-ingest` records each `unresolved_intent` as an append-only,
+  content-addressed `UINT-` object with an `ISSUES-DEFERRED.md` mirror; re-ingest supersedes,
+  never duplicates.
+- [x] AC-CC-06 - by-construction `unexplained_code`: a source unit absent from the
+  trace_manifest is named and counted in the compilation's ingest record.
+- [x] AC-CC-07 - two reference compilations produced by two different models both pass
+  `compile-validate`; the contract is backend-blind.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

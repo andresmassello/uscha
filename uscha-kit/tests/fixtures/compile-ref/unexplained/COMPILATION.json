@@ -1,0 +1,52 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e88718bb6b6a30d19e102dfabaa2f765c5b1c88a9d539bba12187ff6b896fd59",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "synthetic: b.py has no trace_manifest entry"
+  ],
+  "source": [
+    {
+      "unit": "source/a.py",
+      "sha256": "78cc717508abebd2aeaec5a587466b4f9e645bcad0ac609a58a77ce7bc6ff017"
+    },
+    {
+      "unit": "source/b.py",
+      "sha256": "6590d0bc312ecd1555dd8779019125a5228f433824df7609dbca3fd41b98e389"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/a.py",
+      "implements": [
+        "AC-TC-01",
+        "AC-TC-02",
+        "AC-TC-03",
+        "AC-TC-04",
+        "INV-TC-ROUNDTRIP-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-TC-03",
+      "decision": "chose iterative inverse",
+      "rationale": "stub"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "unexplained-fixture",
+    "model_version": "unexplained-fixture",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "all constraints honored; see implementation_constraints"
+  },
+  "_integrity": "a402f043638c2f8d7890824b96b1c25e1e24655bfeed2c4f0c59ad4c67741aba"
+}

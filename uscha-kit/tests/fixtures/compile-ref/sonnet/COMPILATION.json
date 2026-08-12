@@ -1,0 +1,79 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e88718bb6b6a30d19e102dfabaa2f765c5b1c88a9d539bba12187ff6b896fd59",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Python 3.x, stdlib only, no external dependencies",
+    "pure functions, importable via sys.path insertion (no package/__init__.py)"
+  ],
+  "source": [
+    {
+      "unit": "source/thermo.py",
+      "sha256": "1a9dbf157424d295fdf1ed2008a73149951cfd80b5837040402977948732ee26"
+    }
+  ],
+  "tests": [
+    {
+      "unit": "tests/test_thermo.py",
+      "sha256": "09469640e893d713fdc425f37a641f7447ba7b1508216e3e4bc13543b3744165"
+    }
+  ],
+  "trace_manifest": [
+    {
+      "unit": "source/thermo.py",
+      "implements": [
+        "AC-TC-01",
+        "AC-TC-02",
+        "AC-TC-03",
+        "AC-TC-04",
+        "INV-TC-ROUNDTRIP-01"
+      ]
+    },
+    {
+      "unit": "tests/test_thermo.py",
+      "implements": [
+        "AC-TC-01",
+        "AC-TC-02",
+        "AC-TC-03",
+        "AC-TC-04",
+        "INV-TC-ROUNDTRIP-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-TC-04",
+      "decision": "bool inputs (True/False) are explicitly rejected with TypeError, even though bool is a subclass of int in Python",
+      "rationale": "the spec says 'non-numeric input' without addressing bool; silently accepting True as 1 felt like a surprising, easy-to-misuse behavior"
+    },
+    {
+      "ir_region": "AC-TC-04",
+      "decision": "fahrenheit_to_celsius validates its input with the exact same rule as celsius_to_fahrenheit (symmetric validation)",
+      "rationale": "AC-TC-04 only names 'either function' generically; one shared validator gives both directions identical, predictable error behavior"
+    },
+    {
+      "ir_region": "AC-TC-01 / AC-TC-02",
+      "decision": "both conversion functions always return a Python float (never an int), using explicit float division (9.0/5.0)",
+      "rationale": "the AC examples (32.0, 212.0) show float results; forcing float division guarantees float output even for integer inputs"
+    },
+    {
+      "ir_region": "module/function naming",
+      "decision": "module named thermo.py; function names taken verbatim from the IR text",
+      "rationale": "the IR only fixes the two function names inside prose, not the module name, so the module name itself was a free choice"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "all constraints honored; see implementation_constraints"
+  },
+  "_integrity": "a9aaa82a78412e691eee7b6b8081bfa2ace9247928b63c1ffcf21f434255cb99"
+}

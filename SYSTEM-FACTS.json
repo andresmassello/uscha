@@ -20,10 +20,12 @@
     ]
   },
   "subcommands": {
-    "count": 42,
+    "count": 44,
     "list": [
       "check-coverage",
       "cleanroom",
+      "compile-ingest",
+      "compile-validate",
       "converged",
       "curate",
       "curation-check",
@@ -66,5 +68,5 @@
       "waste-check"
     ]
   },
-  "version": "1.72.0"
+  "version": "1.73.0"
 }

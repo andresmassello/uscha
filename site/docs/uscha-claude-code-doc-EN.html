@@ -570,7 +570,7 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
   <div class="kicker"><span class="n">09</span> the measurement engine <span class="callout-status real">in the kit</span></div>
   <h2><code class="in" style="font-size:.7em">qa_ledger.py</code> <span class="accent">— command reference.</span></h2>
   <p>Pure stdlib, Python 3.8+, no dependencies. It owns everything that <strong>must be exact and reproducible</strong>. The judgments (did it converge? is it oscillating? do we escalate?) are made by the skill reading this data; the script only exposes deterministic advisory helpers.</p>
-  <p class="small"><strong>Exact current parser surface:</strong> 42 subcommands; the list below mirrors <code class="in">build_parser()</code>, including <code class="in">dashboard</code>, <code class="in">waste-check</code>, and <code class="in">spec-change-request</code>.</p>
+  <p class="small"><strong>Exact current parser surface:</strong> 44 subcommands; the list below mirrors <code class="in">build_parser()</code>, including <code class="in">dashboard</code>, <code class="in">waste-check</code>, and <code class="in">spec-change-request</code>.</p>
   <table>
     <thead><tr><th>Subcommand</th><th>What it does</th></tr></thead>
     <tbody>
@@ -610,6 +610,8 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
       <tr><td class="t">fidelity</td><td>The fidelity vector: 5 measured dimensions plus an advisory quarantine that can never gate (ADR-014, 1.69.0).</td></tr>
       <tr><td class="t">ir-extract</td><td>Extracts the canonical package into a typed graph (ir/IR.json); what cannot be typed deterministically is UNTYPED, counted, never guessed (ADR-015, 1.72.0).</td></tr>
       <tr><td class="t">ir-render</td><td>Regenerates the human view (ir/IR.md) from the graph; round-trip content-stable for the structured parts (ADR-015, 1.72.0).</td></tr>
+      <tr><td class="t">compile-validate</td><td>Validates a COMPILATION.json (the LLM-compiler output contract) against a reference IR: unknown manifest ids, unit hash mismatches, a stale ir_hash and a broken seal each gate; degeneracy stats are advisory and never block (ADR-016, 1.73.0).</td></tr>
+      <tr><td class="t">compile-ingest</td><td>Records a validated compilation into the ledger: by-construction unexplained_code plus each unresolved_intent as an append-only, content-addressed UINT object mirrored into ISSUES-DEFERRED.md — the compiler's output generates the backlog for the representation (ADR-016, 1.73.0).</td></tr>
       <tr><td class="t">execution-policy</td><td>Prints execution routing.</td></tr>
       <tr><td class="t">dashboard</td><td>Emits Mirador data contract.</td></tr>
       <tr><td class="t">simplicity-check</td><td>Scores diff minimality.</td></tr>

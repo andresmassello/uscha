@@ -3425,6 +3425,7 @@ rm -f "$KIT/reports/junit/.facts-cases.json"      # same rule for T122
 rm -f "$KIT/reports/junit/.delta-cases.json"      # same rule for T123
 rm -f "$KIT/reports/junit/.fidelity-cases.json"   # same rule for T124
 rm -f "$KIT/reports/junit/.ir-cases.json"         # same rule for T125
+rm -f "$KIT/reports/junit/.compile-cases.json"    # same rule for T126
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -4937,6 +4938,172 @@ case "$T125" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T125";;
 esac
 
+echo "== T126 (1.73.0): compiler contract -- the LLM is a validated backend; only facts gate (M3, ADR-016) =="
+T126=$("$PY" - "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+FIX = os.path.join(kit, "tests", "fixtures", "compile-ref")
+IR = os.path.join(FIX, "IR.json")
+res = {}
+w = tempfile.mkdtemp()
+
+def comp(name):
+    return os.path.join(FIX, name, "COMPILATION.json")
+
+def cv(name):
+    r = subprocess.run([sys.executable, ENG, "compile-validate", "--ir", IR,
+                        "--compilation", comp(name), "--json"], capture_output=True,
+                       text=True, encoding="utf-8", errors="replace")
+    try:
+        rep = json.loads(r.stdout)
+    except ValueError:
+        rep = {}
+    return r.returncode, rep
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+# --- AC-CC-01: the opus reference compilation validates; ids resolve, hashes match; and the
+# reference IR genuinely reproduces from canonical/ via ir-extract (guards fixture drift)
+rc, rep = cv("opus")
+shutil.copytree(os.path.join(FIX, "canonical"), os.path.join(w, "canon"))
+io.open(os.path.join(w, "cir.json"), "w").write(json.dumps({
+    "defaults": {}, "repos": [{"name": "c", "path": "canon", "type": "python"}],
+    "integration": {"enabled": False}}))
+eng("init", "--config", "cir.json", "--out", "Lir.json")
+eng("ir-extract", "--ledger", "Lir.json", "--repo", "c")
+gen_ir = json.load(io.open(os.path.join(w, "canon", "ir", "IR.json"), encoding="utf-8"))
+committed_ir = json.load(io.open(IR, encoding="utf-8"))
+res["AC-CC-01"] = (rc == 0 and rep.get("valid") is True and not rep.get("errors")
+                   and gen_ir.get("_integrity") == committed_ir.get("_integrity"))
+
+# --- AC-CC-02: the manifest cannot lie -- an unknown IR id, a hash that does not match the
+# bytes on disk, a hand-edited seal, and a unit path that escapes the compilation directory
+# each exit 2 naming the fault (violations print to stderr, exit code is the machine signal)
+rc_uid, rep_uid = cv("bad-unknown-id")
+rc_h, rep_h = cv("bad-hash")
+shutil.copytree(os.path.join(FIX, "opus"), os.path.join(w, "opus"))
+cp = os.path.join(w, "opus", "COMPILATION.json")
+tc = json.load(io.open(cp, encoding="utf-8"))
+tc["unresolved_intent"][0]["decision"] = "TAMPERED after production"
+io.open(cp, "w", encoding="utf-8").write(json.dumps(tc))
+rseal = subprocess.run([sys.executable, ENG, "compile-validate", "--ir", IR,
+                        "--compilation", cp], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+# a unit that escapes the compilation directory (a `..` path) must be refused -- otherwise a
+# manifest can name any file on disk as a "source" unit and pass on that file's hash
+esc = os.path.join(w, "escape")
+shutil.copytree(os.path.join(FIX, "opus"), esc)
+ecp = os.path.join(esc, "COMPILATION.json")
+ec = json.load(io.open(ecp, encoding="utf-8"))
+ec["source"][0]["unit"] = "../secret.py"
+io.open(ecp, "w", encoding="utf-8").write(json.dumps(ec))
+re_esc = subprocess.run([sys.executable, ENG, "compile-validate", "--ir", IR,
+                         "--compilation", ecp, "--json"], capture_output=True, text=True,
+                        encoding="utf-8", errors="replace")
+try:
+    rep_esc = json.loads(re_esc.stdout)
+except ValueError:
+    rep_esc = {}
+# a malformed element (a list of strings where objects are required) must be a clean exit-2
+# mechanical refusal, NEVER an AttributeError traceback (exit 1) -- the trust boundary
+mal = os.path.join(w, "malformed")
+os.makedirs(mal)
+io.open(os.path.join(mal, "COMPILATION.json"), "w").write(json.dumps({
+    "schema_version": "compile/0.1",
+    "canonical_ir": {"ir_hash": committed_ir.get("_integrity"), "schema_version": "0.1"},
+    "target_stack": "python", "implementation_constraints": [],
+    "source": ["source/x.py"], "tests": [], "trace_manifest": [],
+    "unresolved_intent": [], "compilation_report": {}}))
+r_mal = subprocess.run([sys.executable, ENG, "compile-validate", "--ir", IR,
+                        "--compilation", os.path.join(mal, "COMPILATION.json"), "--json"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+try:
+    rep_mal = json.loads(r_mal.stdout)
+except ValueError:
+    rep_mal = {}
+res["AC-CC-02"] = (rc_uid == 2 and any("not an IR node" in e for e in rep_uid.get("errors", []))
+                   and rc_h == 2 and any("hash mismatch" in e for e in rep_h.get("errors", []))
+                   and rseal.returncode == 2 and "seal" in rseal.stderr
+                   and re_esc.returncode == 2
+                   and any("escapes the compilation directory" in e
+                           for e in rep_esc.get("errors", []))
+                   and r_mal.returncode == 2 and not r_mal.stderr.startswith("Traceback")
+                   and any("must be an object" in e for e in rep_mal.get("errors", [])))
+
+# --- AC-CC-03: an ir_hash this repo does not reproduce is refused, never assumed
+rc_ir, rep_ir = cv("bad-ir-hash")
+res["AC-CC-03"] = (rc_ir == 2 and any("reference IR seal" in e for e in rep_ir.get("errors", [])))
+
+# --- AC-CC-04: a degenerate manifest + empty unresolved_intent are ADVISORY: flagged, exit 0
+rc_d, rep_d = cv("degenerate")
+adv = rep_d.get("advisory", {})
+res["AC-CC-04"] = (rc_d == 0 and rep_d.get("valid") is True
+                   and adv.get("degenerate") is True and adv.get("empty_unresolved") is True)
+
+# --- AC-CC-05: ingest records unresolved_intent as content-addressed UINT objects + an
+# ISSUES-DEFERRED mirror; re-ingest is idempotent PER REPO (never a duplicate), the same
+# compilation into a DIFFERENT repo is its own record (no cross-repo collision), and two
+# unresolved_intent entries that resolve to the same UINT dedupe within one ingest
+os.makedirs(os.path.join(w, "r"))
+os.makedirs(os.path.join(w, "r2"))
+os.makedirs(os.path.join(w, "rd"))
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
+    "defaults": {}, "repos": [{"name": "r", "path": "r", "type": "python"},
+                              {"name": "r2", "path": "r2", "type": "python"},
+                              {"name": "rd", "path": "rd", "type": "python"}],
+    "integration": {"enabled": False}}))
+eng("init", "--config", "c.json", "--out", "L.json")
+i1 = json.loads(eng("compile-ingest", "--ledger", "L.json", "--repo", "r", "--ir", IR,
+                    "--compilation", comp("opus"), "--json").stdout)
+i2 = json.loads(eng("compile-ingest", "--ledger", "L.json", "--repo", "r", "--ir", IR,
+                    "--compilation", comp("opus"), "--json").stdout)
+# the SAME compilation into a different repo must NOT read as superseded (F1 regression)
+i_r2 = json.loads(eng("compile-ingest", "--ledger", "L.json", "--repo", "r2", "--ir", IR,
+                      "--compilation", comp("opus"), "--json").stdout)
+# a compilation with two entries resolving to the same UINT dedupes to one (F3 regression)
+i_dup = json.loads(eng("compile-ingest", "--ledger", "L.json", "--repo", "rd", "--ir", IR,
+                       "--compilation", comp("dup-intent"), "--json").stdout)
+dupm = io.open(os.path.join(w, "rd", "ISSUES-DEFERRED.md"), encoding="utf-8").read()
+L = json.load(io.open(os.path.join(w, "L.json"), encoding="utf-8"))
+idm = io.open(os.path.join(w, "r", "ISSUES-DEFERRED.md"), encoding="utf-8").read()
+res["AC-CC-05"] = (len(i1["unresolved_intent"]) == 3
+                   and all(u.startswith("UINT-") for u in i1["unresolved_intent"])
+                   and len(i1["issues_deferred_new"]) == 3
+                   and i2["superseded"] is True and i2["issues_deferred_new"] == []
+                   and i_r2["superseded"] is False
+                   and len(L.get("compilations", [])) == 3
+                   and idm.count("UINT-") == 3
+                   and len(i_dup["unresolved_intent"]) == 1
+                   and dupm.count("UINT-") == 1)
+
+# --- AC-CC-06: by-construction unexplained_code -- a source unit absent from the manifest
+i3 = json.loads(eng("compile-ingest", "--ledger", "L.json", "--repo", "r", "--ir", IR,
+                    "--compilation", comp("unexplained"), "--json").stdout)
+res["AC-CC-06"] = (i3["unexplained_units"] == ["source/b.py"])
+
+# --- AC-CC-07: two reference compilations, two different models, both validate: backend-blind
+rc_o, rep_o = cv("opus")
+rc_s, rep_s = cv("sonnet")
+res["AC-CC-07"] = (rc_o == 0 and rep_o.get("valid") is True
+                   and rc_s == 0 and rep_s.get("valid") is True
+                   and rep_o.get("advisory", {}).get("degenerate") is False
+                   and rep_s.get("advisory", {}).get("degenerate") is False)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".compile-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T126" in
+  OK*) PASS=$((PASS+1)); echo "  ok   compile: $T126";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T126";;
+esac
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -6114,6 +6281,24 @@ for _iid in ("AC-IR-01", "AC-IR-02", "AC-IR-03", "AC-IR-04", "AC-IR-05", "AC-IR-
         results.append((_iid, "ir", None))
     else:
         results.append((_iid, "ir", "T125 case failed or missing"))
+
+# Compiler-contract criteria (Diamond M3, ADR-016): measured by T126, same sidecar contract.
+def _compile_cases():
+    p = os.path.join(kit, "reports", "junit", ".compile-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_ccc = _compile_cases()
+for _cid in ("AC-CC-01", "AC-CC-02", "AC-CC-03", "AC-CC-04", "AC-CC-05", "AC-CC-06",
+             "AC-CC-07"):
+    if _ccc is None or _ccc.get(_cid) is None:
+        results.append((_cid, "compile", SKIP))
+    elif _ccc.get(_cid) is True:
+        results.append((_cid, "compile", None))
+    else:
+        results.append((_cid, "compile", "T126 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

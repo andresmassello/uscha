@@ -1,6 +1,6 @@
 {
   "name": "@andresmassello/uscha",
-  "version": "1.72.0",
+  "version": "1.73.0",
   "description": "Spec-driven development for LLM coding agents: 9 skills + a stdlib evidence engine. Facts block, guesses advise; the human approves.",
   "author": {
     "name": "Andres Massello",
