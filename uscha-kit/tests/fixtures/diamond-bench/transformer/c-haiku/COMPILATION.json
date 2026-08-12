@@ -1,0 +1,56 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads stdin, prints result, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "f81f2fa95b7226592495827ab6b2c3e2b2276532b9fc2c853f7af8ffce5435c4"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-TR-05",
+      "decision": "a JSON boolean age is rejected (bool is not a JSON integer)",
+      "rationale": "Python bool subclasses int; explicit exclusion honors spec intent"
+    },
+    {
+      "ir_region": "AC-TR-06",
+      "decision": "default json.dumps formatting (spec fixes structure/values, not whitespace/key order)",
+      "rationale": "AC-TR-06 leaves formatting free"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "M5 bench blind compilation"
+  },
+  "_integrity": "c83cad7479abb458065d277d226885b27e2b1caff05aee7a399704eae0ab0c86"
+}

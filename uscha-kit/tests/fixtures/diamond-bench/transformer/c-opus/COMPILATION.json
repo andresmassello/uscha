@@ -1,0 +1,56 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads stdin, prints result, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "42f3570b66f6473a43eae690ba3961d506f7f46d1a9e1a309ea66e9f979389b0"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-TR-05",
+      "decision": "a JSON boolean age is rejected (bool is not a JSON integer)",
+      "rationale": "Python bool subclasses int; explicit exclusion honors spec intent"
+    },
+    {
+      "ir_region": "AC-TR-06",
+      "decision": "default json.dumps formatting (spec fixes structure/values, not whitespace/key order)",
+      "rationale": "AC-TR-06 leaves formatting free"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "M5 bench blind compilation"
+  },
+  "_integrity": "505d5b3448ecb368e656bd35822578b4492ecf40e7ff055f7d63c12d89e78a0a"
+}

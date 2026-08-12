@@ -1,0 +1,56 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "87a1fb592f34dc31209436f0ea035945b4b463de13d285bef26f46eba4121ba0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads stdin, prints result, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "3bfd25226c69e326f204e38b927fdea21f6f8724bcf3cc054f93151757e308e8"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-PR-04",
+      "decision": "integer division truncates toward zero via sign-aware division, not Python floor division",
+      "rationale": "spec pins truncation toward zero; // would floor"
+    },
+    {
+      "ir_region": "AC-PR-05",
+      "decision": "one generic ERROR path covers tokenizer/parse/div-by-zero/empty",
+      "rationale": "spec asks for ERROR without distinguishing failure subtypes"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "M5 bench blind compilation"
+  },
+  "_integrity": "5573457b813ba71bf4d849102ea0f5d950bdcf78cb192c8cf30b6f2228389a2f"
+}

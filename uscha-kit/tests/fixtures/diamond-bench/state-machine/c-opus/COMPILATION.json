@@ -1,0 +1,56 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e3754924dc80a7dbdfa6ee98c6aa82a06ecc57b577e930f3f2370248cbeea69c",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads stdin, prints result, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "2ad0f8822914b7b74437a21c47248b28051b48bbae34a4cdb5399d916a282038"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-SM-05",
+      "decision": "a non-string element (incl. JSON bool/null) is rejected as ERROR, not coerced",
+      "rationale": "bool is an int subclass; explicit isinstance(str) guard"
+    },
+    {
+      "ir_region": "AC-SM-06",
+      "decision": "invalid JSON and well-formed-but-non-array are both ERROR",
+      "rationale": "'not a JSON array' covers both"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "M5 bench blind compilation"
+  },
+  "_integrity": "7b0af165ef68dd58dac456967f271076a56567ba8cdc421836e59494ddbfe6f0"
+}

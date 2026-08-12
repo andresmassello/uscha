@@ -3427,6 +3427,7 @@ rm -f "$KIT/reports/junit/.fidelity-cases.json"   # same rule for T124
 rm -f "$KIT/reports/junit/.ir-cases.json"         # same rule for T125
 rm -f "$KIT/reports/junit/.compile-cases.json"    # same rule for T126
 rm -f "$KIT/reports/junit/.bootstrap-cases.json"  # same rule for T127
+rm -f "$KIT/reports/junit/.bench-cases.json"      # same rule for T128
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -5215,6 +5216,157 @@ case "$T127" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T127";;
 esac
 
+echo "== T128 (1.75.0): the Diamond Bench -- regeneration fidelity across archetypes; PASS/PARTIAL/FAIL/PENDING (M5, ADR-018) =="
+T128=$("$PY" - "$KIT" <<'PY'
+import hashlib, importlib.util, io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+res = {}
+spec = importlib.util.spec_from_file_location("qa_ledger_t128", ENG)
+q = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(q)
+
+def bench(dirpath):
+    r = subprocess.run([sys.executable, ENG, "bench", "--dir", dirpath, "--json"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+# AC-DB-01: bench over the committed dir emits a table; a PASS entry's numbers are a real run;
+# DIAMOND-BENCH.md is written
+d = bench(BENCH)
+byarch = {r["archetype"]: r for r in d.get("raw", [])}
+oracle = os.path.join(BENCH, "parser", "oracle", "ORACLE.json")
+impl = os.path.join(BENCH, "parser", "c-opus", "source", "impl.py")
+rr = subprocess.run([sys.executable, ENG, "bootstrap-oracle", "--impl", impl, "--oracle", oracle,
+                     "--json"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+direct = json.loads(rr.stdout)["passed"]
+outp = os.path.join(tempfile.mkdtemp(), "DIAMOND-BENCH.md")
+subprocess.run([sys.executable, ENG, "bench", "--dir", BENCH, "--out", outp],
+               capture_output=True, text=True, encoding="utf-8", errors="replace")
+res["AC-DB-01"] = (d.get("entries") == 4 and byarch.get("parser", {}).get("verdict") == "PASS"
+                   and any(c["oracle"]["passed"] == direct
+                           for c in byarch["parser"]["compilations"] if c["model"] == "opus")
+                   and os.path.isfile(outp) and os.path.getsize(outp) > 0)
+
+disc_ok = all((r.get("discrimination") or {}).get("stub_green") is False
+              for r in d.get("raw", []) if r.get("discrimination"))
+
+w = tempfile.mkdtemp()
+EXIT0 = "import sys\nsys.exit(0)\n"
+
+def mk_ir(entry):
+    cdir = os.path.join(entry, "canonical")
+    os.makedirs(cdir)
+    io.open(os.path.join(cdir, "ACCEPTANCE.md"), "w").write("- [ ] AC-X-01 do the thing\n")
+    io.open(os.path.join(cdir, "CONSTITUTION.md"), "w").write("- **INV-X-01 — an invariant.** b\n")
+    g = q._extract_ir(cdir, {})
+    io.open(os.path.join(entry, "IR.json"), "w", encoding="utf-8").write(json.dumps(g))
+    return g
+
+def mk_oracle(entry):
+    odir = os.path.join(entry, "oracle")
+    os.makedirs(odir)
+    io.open(os.path.join(odir, "ORACLE.json"), "w").write(
+        json.dumps({"cases": [{"name": "c", "raw_stdin": "x", "expected_exit": 0}]}))
+
+def mk_stub(entry, code):
+    sdir = os.path.join(entry, "stub")
+    os.makedirs(sdir)
+    io.open(os.path.join(sdir, "stub.py"), "w", newline="\n").write(code)
+
+def mk_comp(entry, model, body, ir):
+    sdir = os.path.join(entry, "c-" + model, "source")
+    os.makedirs(sdir)
+    p = os.path.join(sdir, "impl.py")
+    io.open(p, "w", newline="\n").write(body)
+    sha = hashlib.sha256(io.open(p, "rb").read()).hexdigest()
+    ids = [n["id"] for n in ir["nodes"]]
+    c = {"schema_version": q.COMPILE_SCHEMA,
+         "canonical_ir": {"ir_hash": ir["_integrity"], "schema_version": q.IR_SCHEMA},
+         "target_stack": "python", "implementation_constraints": ["x"],
+         "source": [{"unit": "source/impl.py", "sha256": sha}], "tests": [],
+         "trace_manifest": [{"unit": "source/impl.py", "implements": ids}],
+         "unresolved_intent": [{"ir_region": "AC-X-01", "decision": "d", "rationale": "r"}],
+         "compilation_report": {"stack": "python", "model": model, "model_version": model,
+                                "timestamps": {}, "constraint_handling": "x"}}
+    c["_integrity"] = q._compile_seal(c)
+    io.open(os.path.join(entry, "c-" + model, "COMPILATION.json"), "w",
+            encoding="utf-8").write(json.dumps(c))
+
+nd = os.path.join(w, "nondiscrim")
+os.makedirs(nd)
+ir_nd = mk_ir(nd)
+mk_oracle(nd)
+mk_stub(nd, EXIT0)
+for i, m in enumerate(("opus", "sonnet", "haiku")):
+    mk_comp(nd, m, "# v%d\n" % i + EXIT0, ir_nd)
+
+cv = os.path.join(w, "converged")
+os.makedirs(cv)
+ir_cv = mk_ir(cv)
+mk_oracle(cv)
+mk_stub(cv, "import sys\nsys.exit(1)\n")
+mk_comp(cv, "opus", EXIT0, ir_cv)
+mk_comp(cv, "sonnet", EXIT0, ir_cv)
+mk_comp(cv, "haiku", "# different\n" + EXIT0, ir_cv)
+
+p3 = os.path.join(w, "pass3")
+os.makedirs(p3)
+ir_p3 = mk_ir(p3)
+mk_oracle(p3)
+mk_stub(p3, "import sys\nsys.exit(1)\n")
+for i, m in enumerate(("opus", "sonnet", "haiku")):
+    mk_comp(p3, m, "# d%d\n" % i + EXIT0, ir_p3)
+
+pd = os.path.join(w, "pending")
+os.makedirs(pd)
+mk_ir(pd)
+mk_oracle(pd)
+
+td = bench(w)
+tv = {r["archetype"]: r["verdict"] for r in td.get("raw", [])}
+# AC-DB-02: discrimination -- committed stubs never green; an oracle a stub satisfies is FAIL
+res["AC-DB-02"] = (disc_ok and tv.get("nondiscrim") == "FAIL")
+# AC-DB-03: PASS logic -- 3 green + distinct is PASS; a byte-identical pair is FAIL, not PASS
+res["AC-DB-03"] = (byarch.get("parser", {}).get("verdict") == "PASS"
+                   and tv.get("pass3") == "PASS" and tv.get("converged") == "FAIL")
+# AC-DB-05: an entry with no compilations is PENDING, counted, not dropped
+res["AC-DB-05"] = (tv.get("pending") == "PENDING")
+# AC-DB-04: model identities anonymized in the headline; raw mapping present
+res["AC-DB-04"] = (d.get("model_map") == {"haiku": "M1", "opus": "M2", "sonnet": "M3"}
+                   and all(any(mm in t["compilers"] for mm in ("M1", "M2", "M3"))
+                           for t in d["table"] if t["verdict"] in ("PASS", "PARTIAL")))
+
+def refs(p):
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            t = fh.read().lower()
+        return "oracle" in t or "expected_exit" in t or "expected_stdout" in t
+    except OSError:
+        return True
+
+srcs = [os.path.join(BENCH, a, "c-" + m, "source", "impl.py")
+        for a in ("parser", "state-machine", "transformer")
+        for m in ("opus", "sonnet", "haiku")]
+# AC-DB-06: the maker!=checker wall holds across every bench entry
+res["AC-DB-06"] = all(os.path.isfile(s) and not refs(s) for s in srcs)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".bench-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T128" in
+  OK*) PASS=$((PASS+1)); echo "  ok   bench: $T128";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T128";;
+esac
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -6427,6 +6579,23 @@ for _bid in ("AC-BS-01", "AC-BS-02", "AC-BS-03", "AC-BS-04", "AC-BS-05", "AC-BS-
         results.append((_bid, "bootstrap", None))
     else:
         results.append((_bid, "bootstrap", "T127 case failed or missing"))
+
+# Diamond Bench criteria (Diamond M5, ADR-018): measured by T128, same sidecar contract.
+def _bench_cases():
+    p = os.path.join(kit, "reports", "junit", ".bench-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_dbc = _bench_cases()
+for _dbid in ("AC-DB-01", "AC-DB-02", "AC-DB-03", "AC-DB-04", "AC-DB-05", "AC-DB-06"):
+    if _dbc is None or _dbc.get(_dbid) is None:
+        results.append((_dbid, "bench", SKIP))
+    elif _dbc.get(_dbid) is True:
+        results.append((_dbid, "bench", None))
+    else:
+        results.append((_dbid, "bench", "T128 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

@@ -1,0 +1,56 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads stdin, prints result, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "b3f6ef93d282b74468725e58e58edc1023468dbb477ea47718fa4e8226bb373b"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-TR-05",
+      "decision": "a JSON boolean age is rejected (bool is not a JSON integer)",
+      "rationale": "Python bool subclasses int; explicit exclusion honors spec intent"
+    },
+    {
+      "ir_region": "AC-TR-06",
+      "decision": "default json.dumps formatting (spec fixes structure/values, not whitespace/key order)",
+      "rationale": "AC-TR-06 leaves formatting free"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "M5 bench blind compilation"
+  },
+  "_integrity": "ef3d3e7a20b36208d7c4e9d291de000dfc404e748c1bf156c3714a350c892488"
+}

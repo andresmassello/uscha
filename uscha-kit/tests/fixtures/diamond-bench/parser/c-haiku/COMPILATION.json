@@ -1,0 +1,56 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "87a1fb592f34dc31209436f0ea035945b4b463de13d285bef26f46eba4121ba0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads stdin, prints result, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "1c49858d1465441d464e304d8c7772832df9b2dda3c2cfd19b57a4a03ca7ff17"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-PR-04",
+      "decision": "integer division truncates toward zero via sign-aware division, not Python floor division",
+      "rationale": "spec pins truncation toward zero; // would floor"
+    },
+    {
+      "ir_region": "AC-PR-05",
+      "decision": "one generic ERROR path covers tokenizer/parse/div-by-zero/empty",
+      "rationale": "spec asks for ERROR without distinguishing failure subtypes"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "M5 bench blind compilation"
+  },
+  "_integrity": "abd5304a0daba73a4d2ba2357fea97d1724ead4001fe31c0d836799c6f14253d"
+}

@@ -1,0 +1,20 @@
+{
+  "_generated_by": "hand-authored from the canonical SPEC BEFORE any compilation (ADR-018). WITHHELD. payload is the input array; expected_json compares stdout structurally (formatting is free per the spec); expected_stdout is used for the ERROR cases.",
+  "cases": [
+    {"name": "single-adult", "payload": [{"first": "Ada", "last": "Lovelace", "age": 36}],
+     "expected_json": [{"name": "Ada Lovelace", "adult": true}]},
+    {"name": "empty-array", "payload": [], "expected_json": []},
+    {"name": "minor", "payload": [{"first": "Bo", "last": "Vue", "age": 17}],
+     "expected_json": [{"name": "Bo Vue", "adult": false}]},
+    {"name": "boundary-18-is-adult", "payload": [{"first": "Sam", "last": "Roe", "age": 18}],
+     "expected_json": [{"name": "Sam Roe", "adult": true}]},
+    {"name": "order-preserved", "payload": [{"first": "A", "last": "One", "age": 20}, {"first": "B", "last": "Two", "age": 10}],
+     "expected_json": [{"name": "A One", "adult": true}, {"name": "B Two", "adult": false}]},
+    {"name": "not-an-array", "payload": {"first": "A", "last": "B", "age": 30}, "expected_stdout": "ERROR"},
+    {"name": "missing-age", "payload": [{"first": "A", "last": "B"}], "expected_stdout": "ERROR"},
+    {"name": "missing-last", "payload": [{"first": "A", "age": 30}], "expected_stdout": "ERROR"},
+    {"name": "age-not-integer", "payload": [{"first": "A", "last": "B", "age": "old"}], "expected_stdout": "ERROR"},
+    {"name": "record-not-object", "payload": ["nope"], "expected_stdout": "ERROR"},
+    {"name": "not-json", "raw_stdin": "first,last,age", "expected_stdout": "ERROR"}
+  ]
+}

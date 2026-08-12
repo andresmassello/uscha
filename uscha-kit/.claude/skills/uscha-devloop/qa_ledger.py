@@ -5309,9 +5309,16 @@ _BOOTSTRAP_CASE_TIMEOUT = 15                        # a compiled hook must decid
 
 def _run_oracle_case(impl_path, case):
     """Run ONE withheld oracle case against a compiled implementation: feed the case's stdin
-    (raw_stdin verbatim if present, else json.dumps(payload)) to `python <impl>`, and compare
-    the process exit code to `expected_exit`. Deterministic execution -- the oracle is a
-    `measured` fact, never an LLM judgment. Returns a per-case result dict."""
+    (raw_stdin verbatim if present, else json.dumps(payload)) to `python <impl>`, and check its
+    result against whichever expectations the case declares. Deterministic execution -- the
+    oracle is a `measured` fact, never an LLM judgment. Returns a per-case result dict.
+
+    A case may assert any of: `expected_exit` (process exit code -- the M4 guard's contract),
+    `expected_stdout` (the program's stdout, compared stripped -- for archetypes that COMPUTE an
+    output, e.g. a parser or transformer), and `expected_json` (stdout parsed as JSON and
+    compared structurally, so an output whose formatting is free but whose value is fixed is not
+    penalised for whitespace or key order). The case passes iff EVERY declared expectation holds;
+    a case that declares none proves nothing and fails."""
     if "raw_stdin" in case:
         stdin = case["raw_stdin"]
     else:
@@ -5320,14 +5327,24 @@ def _run_oracle_case(impl_path, case):
         r = subprocess.run([sys.executable, impl_path], input=stdin, capture_output=True,
                            text=True, encoding="utf-8", errors="replace",
                            timeout=_BOOTSTRAP_CASE_TIMEOUT)
-        got, err = r.returncode, None
+        got, out, err = r.returncode, r.stdout, None
     except subprocess.TimeoutExpired:
-        got, err = None, "timeout"
+        got, out, err = None, "", "timeout"
     except OSError as exc:
-        got, err = None, "could not run impl: %s" % exc
+        got, out, err = None, "", "could not run impl: %s" % exc
     want = case.get("expected_exit")
-    return {"name": case.get("name"), "expected": want, "got": got,
-            "ok": (err is None and got == want), "error": err}
+    asserted = [k for k in ("expected_exit", "expected_stdout", "expected_json") if k in case]
+    ok = err is None and bool(asserted)
+    if ok and "expected_exit" in case:
+        ok = got == want
+    if ok and "expected_stdout" in case:
+        ok = (out or "").strip() == str(case["expected_stdout"]).strip()
+    if ok and "expected_json" in case:
+        try:
+            ok = json.loads(out) == case["expected_json"]
+        except (ValueError, TypeError):
+            ok = False
+    return {"name": case.get("name"), "expected": want, "got": got, "ok": ok, "error": err}
 
 
 def cmd_bootstrap_oracle(args):
@@ -5451,6 +5468,189 @@ def cmd_bootstrap_variance(args):
         if all_distinct is not None:
             print("  all implementations distinct: %s (advisory, never gates)"
                   % ("yes" if all_distinct else "NO -- convergence, a weak result"))
+    sys.exit(0)
+
+
+# --------------------------------------------------------------------------- #
+# bench  (Diamond M5: the Diamond Bench aggregates the M3/M4 primitives over a
+# set of bounded systems and emits a per-archetype verdict table. It measures
+# REGENERATION FIDELITY of canonical representations, not "which model codes
+# better" -- model identities are anonymized in the headline. Deterministic, no
+# LLM. ADR-018.)
+# --------------------------------------------------------------------------- #
+# min oracle pass-rate for a non-green compilation to still count as PARTIAL (core identity).
+_BENCH_PARTIAL_FLOOR = 0.8
+
+
+def _bench_oracle_all(impl_path, cases):
+    results = [_run_oracle_case(impl_path, c) for c in cases]
+    passed = sum(1 for r in results if r["ok"])
+    return {"passed": passed, "total": len(results), "green": passed == len(results),
+            "failing": [r["name"] for r in results if not r["ok"]]}
+
+
+def _bench_entry(entry_dir, name):
+    """Run compile-validate + the withheld oracle + variance over ONE bench entry and compute
+    its verdict. Reuses the M3/M4 organs unchanged; consults no model. A PASS is >=3 oracle-green
+    compilations that genuinely differ; PARTIAL is core identity with the divergence isolated;
+    FAIL is no green, convergence to near-identical code, or an oracle a degenerate stub can
+    satisfy (non-discriminating); PENDING is an entry not yet fully compiled."""
+    ir_graph, ir_errors = _load_ir_at(os.path.join(entry_dir, IR_FILE))
+    try:
+        with open(os.path.join(entry_dir, "oracle", "ORACLE.json"), encoding="utf-8-sig") as fh:
+            cases = (json.load(fh) or {}).get("cases") or []
+    except (OSError, ValueError):
+        cases = []
+    rec = {"archetype": name, "oracle_cases": len(cases), "compilations": [],
+           "variance": None, "discrimination": None, "verdict": "PENDING", "reason": None}
+    if ir_graph is None or ir_errors or not cases:
+        rec["reason"] = "entry incomplete (missing/invalid IR or oracle)"
+        return rec
+    comp_dirs = sorted(d for d in os.listdir(entry_dir)
+                       if d.startswith("c-") and
+                       os.path.isfile(os.path.join(entry_dir, d, "COMPILATION.json")))
+    for d in comp_dirs:
+        cd = os.path.join(entry_dir, d)
+        cj = os.path.join(cd, "COMPILATION.json")
+        errors, _adv = _validate_compilation(cj, ir_graph)
+        unit, model = None, None
+        try:
+            with open(cj, encoding="utf-8-sig") as fh:
+                c = json.load(fh)
+            src = c.get("source") or []
+            unit = src[0].get("unit") if src else None
+            model = (c.get("compilation_report") or {}).get("model")
+        except (OSError, ValueError, AttributeError, IndexError):
+            pass
+        impl = os.path.join(cd, unit.replace("/", os.sep)) if unit else None
+        ores = (_bench_oracle_all(impl, cases) if impl and os.path.isfile(impl)
+                else {"passed": 0, "total": len(cases), "green": False, "failing": ["<no impl>"]})
+        rec["compilations"].append({"dir": d, "model": model, "impl": impl,
+                                    "compile_valid": not errors, "oracle": ores})
+    impls = rec["compilations"]
+    impl_paths = [i["impl"] for i in impls if i["impl"] and os.path.isfile(i["impl"])]
+    if len(impl_paths) >= 2:
+        metrics = [_impl_metrics(p) for p in impl_paths]
+        shas = [m.get("sha256") for m in metrics if "error" not in m and m.get("sha256")]
+        rec["variance"] = {"all_distinct": len(set(shas)) == len(shas) and len(shas) >= 2,
+                           "metrics": metrics}
+    stub_dir = os.path.join(entry_dir, "stub")
+    stub_green = False
+    if os.path.isdir(stub_dir):
+        stubs = sorted(f for f in os.listdir(stub_dir) if f.endswith(".py"))
+        if stubs:
+            sres = _bench_oracle_all(os.path.join(stub_dir, stubs[0]), cases)
+            stub_green = sres["green"]
+            rec["discrimination"] = {"stub_passed": sres["passed"], "total": sres["total"],
+                                     "stub_green": stub_green}
+    n = len(impls)
+    if n == 0:
+        rec["reason"] = "no compilations yet"
+        return rec                                  # PENDING
+    all_valid = all(i["compile_valid"] for i in impls)
+    greens = sum(1 for i in impls if i["oracle"]["green"])
+    min_rate = min((i["oracle"]["passed"] / i["oracle"]["total"]) if i["oracle"]["total"]
+                   else 0.0 for i in impls)
+    distinct = rec["variance"]["all_distinct"] if rec["variance"] else (n == 1)
+    if stub_green:
+        rec["verdict"], rec["reason"] = "FAIL", ("oracle satisfied by a degenerate stub -- not "
+                                                 "discriminating; the entry proves nothing")
+    elif not all_valid:
+        rec["verdict"], rec["reason"] = "FAIL", "a compilation does not validate against the pinned IR"
+    elif n < 3:
+        rec["verdict"], rec["reason"] = "PENDING", "fewer than 3 compilations (have %d)" % n
+    elif not distinct:
+        rec["verdict"], rec["reason"] = "FAIL", ("implementations converged to a byte-identical "
+                                                 "pair -- a disguised implementation")
+    elif greens == n:
+        rec["verdict"], rec["reason"] = "PASS", ("all %d compilations oracle-green and genuinely "
+                                                 "different -- the same system" % n)
+    elif min_rate >= _BENCH_PARTIAL_FLOOR:
+        rec["verdict"], rec["reason"] = "PARTIAL", ("core identity (min %.0f%% of cases); "
+                                                    "divergence isolated" % (min_rate * 100))
+    else:
+        rec["verdict"], rec["reason"] = "FAIL", ("a compilation below the core-identity floor "
+                                                 "(min %.0f%%)" % (min_rate * 100))
+    return rec
+
+
+def _render_bench_md(table, anon, recs):
+    lines = ["<!-- GENERATED by qa_ledger.py bench (ADR-018) -- every number is a measured run; "
+             "do not hand-edit. -->", "", "# DIAMOND-BENCH", "",
+             "Regeneration fidelity of canonical representations across archetypes. Each row is a "
+             "bounded system compiled blind by independent models through the M3 contract and "
+             "judged by a WITHHELD oracle (M4). Model identities are anonymized here; the mapping "
+             "is published below.", "",
+             "| Archetype | Verdict | Compilers (oracle pass / total) | Distinct | Oracle cases |",
+             "|-----------|---------|--------------------------------|----------|--------------|"]
+    for t in table:
+        dist = "—" if t["distinct"] is None else ("yes" if t["distinct"] else "NO")
+        lines.append("| %s | %s | %s | %s | %d |" % (t["archetype"], t["verdict"],
+                     t["compilers"], dist, t["oracle_cases"]))
+    counts = {}
+    for t in table:
+        counts[t["verdict"]] = counts.get(t["verdict"], 0) + 1
+    lines += ["", "**Coverage:** " + ", ".join("%d %s" % (v, k) for k, v in sorted(counts.items()))
+              + " (of %d entries)." % len(table), "",
+              "**Model map (published, not the headline):** "
+              + (", ".join("%s = %s" % (a, m) for m, a in sorted(anon.items(), key=lambda x: x[1]))
+                 or "none yet") + ".", "",
+              "## Per-entry detail", ""]
+    for r in recs:
+        lines.append("### %s — %s" % (r["archetype"], r["verdict"]))
+        lines.append("*%s*" % (r["reason"] or ""))
+        if r["compilations"]:
+            for i in r["compilations"]:
+                lines.append("- `%s` (%s): oracle %d/%d%s%s" % (
+                    i["dir"], anon.get(i["model"], i["model"] or "?"),
+                    i["oracle"]["passed"], i["oracle"]["total"],
+                    " GREEN" if i["oracle"]["green"] else "",
+                    "" if i["compile_valid"] else " [does not compile-validate]"))
+        if r["discrimination"]:
+            dsc = r["discrimination"]
+            lines.append("- discrimination stub: %d/%d (%s)" % (
+                dsc["stub_passed"], dsc["total"],
+                "NON-DISCRIMINATING" if dsc["stub_green"] else "oracle rejects the stub"))
+        lines.append("")
+    return "\n".join(lines)
+
+
+def cmd_bench(args):
+    if not os.path.isdir(args.dir):
+        print("[qa_ledger] bench: no directory %s" % args.dir, file=sys.stderr)
+        sys.exit(2)
+    entries = sorted(d for d in os.listdir(args.dir)
+                     if os.path.isfile(os.path.join(args.dir, d, IR_FILE)))
+    if not entries:
+        print("[qa_ledger] bench: no entries under %s (an entry is a subdir with %s)"
+              % (args.dir, IR_FILE), file=sys.stderr)
+        sys.exit(2)
+    recs = [_bench_entry(os.path.join(args.dir, e), e) for e in entries]
+    models = sorted({i["model"] for r in recs for i in r["compilations"] if i.get("model")})
+    anon = {m: "M%d" % (k + 1) for k, m in enumerate(models)}
+    table = []
+    for r in recs:
+        cols = ", ".join("%s %d/%d" % (anon.get(i["model"], "?"), i["oracle"]["passed"],
+                                       i["oracle"]["total"]) for i in r["compilations"])
+        table.append({"archetype": r["archetype"], "verdict": r["verdict"],
+                      "compilers": cols or "(none yet)",
+                      "distinct": (r["variance"] or {}).get("all_distinct"),
+                      "oracle_cases": r["oracle_cases"], "reason": r["reason"]})
+    md = _render_bench_md(table, anon, recs)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(md)
+    if args.json:
+        print(json.dumps({"entries": len(recs), "model_map": anon, "table": table,
+                          "raw": recs}, indent=2, ensure_ascii=False))
+    else:
+        print("BENCH: %d entries" % len(recs))
+        for t in table:
+            dist = "" if t["distinct"] is None else (" | distinct" if t["distinct"]
+                                                     else " | CONVERGED")
+            print("  %-14s %-8s | %s%s" % (t["archetype"], t["verdict"], t["compilers"], dist))
+        if args.out:
+            print("  -> %s" % args.out)
     sys.exit(0)
 
 
@@ -9565,6 +9765,17 @@ def build_parser():
                      help="two or more compiled implementations to compare")
     pbv.add_argument("--json", action="store_true")
     pbv.set_defaults(func=cmd_bootstrap_variance)
+
+    pbn = sub.add_parser(
+        "bench",
+        help="the Diamond Bench (ADR-018): per-archetype verdict table over a set of bounded "
+             "systems, aggregating compile-validate + bootstrap-oracle + bootstrap-variance; "
+             "model identities anonymized in the headline; deterministic, no LLM")
+    pbn.add_argument("--dir", required=True,
+                     help="the bench directory; each subdir with an IR.json is an entry")
+    pbn.add_argument("--out", default=None, help="write DIAMOND-BENCH.md here")
+    pbn.add_argument("--json", action="store_true")
+    pbn.set_defaults(func=cmd_bench)
 
     pcr = sub.add_parser("cleanroom",
                          help="run a command against a CLEAN checkout of one commit in a throwaway worktree (ADR-008)")

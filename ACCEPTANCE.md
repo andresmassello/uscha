@@ -286,6 +286,21 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   failing cases to the ledger, and the improvement round makes at least one independent
   recompilation oracle-green; partial convergence is reported, not chased.
 
+## Diamond M5 (ADR-018) - the Diamond Bench: regeneration fidelity across archetypes
+
+- [x] AC-DB-01 - `bench` over the bench directory emits a per-archetype verdict table and writes
+  `DIAMOND-BENCH.md`; every number traces to a compile-validate/bootstrap-oracle run.
+- [x] AC-DB-02 - each entry's withheld oracle is discriminating: a degenerate stub scores below
+  the real compilers and never all-green; an entry whose oracle a stub satisfies is `FAIL`.
+- [x] AC-DB-03 - a `PASS` entry has >=3 oracle-green compilations that genuinely differ; a
+  near-identical (byte-identical) convergence is `FAIL`, not `PASS`.
+- [x] AC-DB-04 - model identities are anonymized in the headline table; the raw identity mapping
+  is present in the per-entry data.
+- [x] AC-DB-05 - an entry with no compilations yet is `PENDING`, counted, never silently
+  dropped; the bench reports honestly on a partial set.
+- [x] AC-DB-06 - no compiler input references any oracle; the maker≠checker wall holds across
+  every bench entry.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

@@ -20,8 +20,9 @@
     ]
   },
   "subcommands": {
-    "count": 46,
+    "count": 47,
     "list": [
+      "bench",
       "bootstrap-oracle",
       "bootstrap-variance",
       "check-coverage",
@@ -70,5 +71,5 @@
       "waste-check"
     ]
   },
-  "version": "1.74.0"
+  "version": "1.75.0"
 }

@@ -1,0 +1,17 @@
+{
+  "_generated_by": "hand-authored from the canonical SPEC BEFORE any compilation (ADR-018). WITHHELD. payload is the JSON event array; expected_stdout is the final state or ERROR.",
+  "cases": [
+    {"name": "empty-stays-locked", "payload": [], "expected_stdout": "locked"},
+    {"name": "coin-unlocks", "payload": ["coin"], "expected_stdout": "unlocked"},
+    {"name": "coin-then-push-locks", "payload": ["coin", "push"], "expected_stdout": "locked"},
+    {"name": "push-on-locked-stays", "payload": ["push"], "expected_stdout": "locked"},
+    {"name": "coin-on-unlocked-stays", "payload": ["coin", "coin"], "expected_stdout": "unlocked"},
+    {"name": "push-coin-push", "payload": ["push", "coin", "push"], "expected_stdout": "locked"},
+    {"name": "coin-push-coin", "payload": ["coin", "push", "coin"], "expected_stdout": "unlocked"},
+    {"name": "long-sequence", "payload": ["coin", "coin", "push", "push"], "expected_stdout": "locked"},
+    {"name": "unknown-event", "payload": ["spin"], "expected_stdout": "ERROR"},
+    {"name": "non-string-event", "payload": ["coin", 5], "expected_stdout": "ERROR"},
+    {"name": "not-an-array-object", "payload": {"event": "coin"}, "expected_stdout": "ERROR"},
+    {"name": "not-json", "raw_stdin": "coin push", "expected_stdout": "ERROR"}
+  ]
+}
