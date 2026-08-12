@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.72.0** — [Diamond M2: the canonical package becomes a typed graph (2026-08-11)](CHANGELOG-1.72.0.md)
 - **1.71.0** — [fidelity measures what the delta measured (2026-08-11)](CHANGELOG-1.71.0.md)
 - **1.70.0** — [the field run's first finding: a discovery you cannot bound (2026-08-11)](CHANGELOG-1.70.0.md)
 - **1.69.0** — [Diamond M1: the curation loop closes on items, not prose (2026-08-11)](CHANGELOG-1.69.0.md)

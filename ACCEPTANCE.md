@@ -236,6 +236,21 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - [x] AC-FV-06 - fidelity respects the delta's `--path` bound: mechanical dimensions
   measure only files under the bound, and the scope is named in each provenance.
 
+## Diamond M2 (ADR-015) - the canonical package extracts into a typed graph
+
+- [x] AC-IR-01 - `ir-extract` over a fixture emits a well-formed typed graph; every node
+  carries id/type/source, every edge has resolvable endpoints.
+- [x] AC-IR-02 - a line that cannot be deterministically typed lands in `untyped`, is
+  counted in the UNTYPED rate, and is never given a guessed id.
+- [x] AC-IR-03 - native ids are reused (AC-nn, ADR-nnn, INV-*); edges derive from real
+  references; re-extraction over unchanged sources is byte-identical.
+- [x] AC-IR-04 - `ir-render` regenerates the human view; extract -> render -> extract is
+  content-stable for the structured parts.
+- [x] AC-IR-05 - an unknown `schema_version` or a hand-edited graph is `exit 2`, never
+  mis-read.
+- [x] AC-IR-06 - `fidelity --ir` answers `curation_closure` as a graph path query and
+  reproduces v0's FIELD-RUN-001 number.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

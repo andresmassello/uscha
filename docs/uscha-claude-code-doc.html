@@ -611,6 +611,8 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">curate</td><td>Registra UN veredicto humano por observacion como objeto append-only del ledger; sin camino batch (ADR-013, 1.69.0).</td></tr>
       <tr><td class="t">promote</td><td>Mueve las observaciones preserve al paquete canonico con lineage derived_from; rechaza sobre OBS sin curar (ADR-013, 1.69.0).</td></tr>
       <tr><td class="t">fidelity</td><td>El vector de fidelidad: 5 dimensiones medidas mas una cuarentena advisory que jamas bloquea (ADR-014, 1.69.0).</td></tr>
+      <tr><td class="t">ir-extract</td><td>Extrae el paquete canonico a un grafo tipado (ir/IR.json); lo que no se puede tipar de forma determinista queda UNTYPED, contado, jamas adivinado (ADR-015, 1.72.0).</td></tr>
+      <tr><td class="t">ir-render</td><td>Regenera la vista humana (ir/IR.md) desde el grafo; round-trip estable en contenido para las partes estructuradas (ADR-015, 1.72.0).</td></tr>
       <tr><td class="t">execution-policy</td><td>Imprime el ruteo de ejecuci?n.</td></tr>
       <tr><td class="t">dashboard</td><td>Entrega el contrato de datos de Mirador.</td></tr>
       <tr><td class="t">simplicity-check</td><td>Eval?a minimalidad del diff.</td></tr>

@@ -20,7 +20,7 @@
     ]
   },
   "subcommands": {
-    "count": 40,
+    "count": 42,
     "list": [
       "check-coverage",
       "cleanroom",
@@ -41,6 +41,8 @@
       "golden-diff",
       "ingest-gate",
       "init",
+      "ir-extract",
+      "ir-render",
       "log-gate",
       "log-step",
       "oscillation",
@@ -64,5 +66,5 @@
       "waste-check"
     ]
   },
-  "version": "1.71.0"
+  "version": "1.72.0"
 }

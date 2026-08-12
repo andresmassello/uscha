@@ -3424,6 +3424,7 @@ rm -f "$KIT/reports/junit/.oracle-cases.json"     # same rule for T121
 rm -f "$KIT/reports/junit/.facts-cases.json"      # same rule for T122
 rm -f "$KIT/reports/junit/.delta-cases.json"      # same rule for T123
 rm -f "$KIT/reports/junit/.fidelity-cases.json"   # same rule for T124
+rm -f "$KIT/reports/junit/.ir-cases.json"         # same rule for T125
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -4809,6 +4810,133 @@ case "$T124" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T124";;
 esac
 
+echo "== T125 (1.72.0): IR -- the canonical package extracts into a typed graph (M2, ADR-015) =="
+T125=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
+os.makedirs(os.path.join(repo, "src")); os.makedirs(os.path.join(repo, "docs", "adr"))
+
+def sh(*a):
+    return subprocess.run(list(a), cwd=repo, capture_output=True, text=True)
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+sh("git", "init", "-b", "main"); sh("git", "config", "user.email", "t@t")
+sh("git", "config", "user.name", "t")
+io.open(os.path.join(repo, "src", "app.py"), "w").write(
+    "def facturar(total):\n    return total\n")
+# ACCEPTANCE: two id'd criteria + one checkbox WITHOUT an id (must land in untyped)
+io.open(os.path.join(repo, "ACCEPTANCE.md"), "w").write(
+    "# Acceptance\n\n- [x] AC-01 - facturar returns the total\n"
+    "- [ ] AC-DD-07 - a bounded scan\n- [ ] a checkbox with no traceable id\n")
+# CONSTITUTION: one invariant heading
+io.open(os.path.join(repo, "CONSTITUTION.md"), "w").write(
+    "# Constitution\n\n- **INV-CURATION-01 \x2d\x2d nothing promotes unjudged.** body\n")
+# an ADR that governs the invariant and references an AC
+io.open(os.path.join(repo, "docs", "adr", "ADR-001-x.md"), "w").write(
+    "---\ngovity: x\n---\n# ADR-001: the curation gate\n\n## Status: Accepted\n\n"
+    "Enforces INV-CURATION-01. Verifies (AC-01).\n")
+io.open(os.path.join(repo, "ACCEPTANCE.md"), "a").write("")
+sh("git", "add", "-A"); sh("git", "commit", "-m", "base")
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
+    "defaults": {}, "repos": [{"name": "r", "path": "r", "type": "python"}],
+    "integration": {"enabled": False}}))
+eng("init", "--config", "c.json", "--out", "L.json")
+
+# --- AC-IR-01: well-formed typed graph; every node has id/type/source, edges resolvable
+r1 = eng("ir-extract", "--ledger", "L.json", "--repo", "r", "--json")
+IRP = os.path.join(repo, "ir", "IR.json")
+g = json.load(io.open(IRP, encoding="utf-8"))
+node_ids = {nd["id"] for nd in g["nodes"]}
+res["AC-IR-01"] = (r1.returncode == 0 and g["schema_version"] == "0.1"
+                   and g["nodes"] and all(nd.get("id") and nd.get("type") in
+                       ("REQ", "INV", "AC", "CONTRACT", "DECISION", "NFR", "GOLDEN",
+                        "OBS", "CURATION", "EVIDENCE") and nd.get("source", {}).get("file")
+                       for nd in g["nodes"])
+                   and all(e["from"] in node_ids and e["to"] in node_ids
+                           for e in g["edges"] if e["type"] != "supersedes"))
+
+# --- AC-IR-02: the id-less checkbox lands in untyped, counted, never guessed
+res["AC-IR-02"] = (any("no traceable id" in u["text"] for u in g["untyped"])
+                   and g["stats"]["untyped"] >= 1
+                   and g["stats"]["untyped_rate"] > 0
+                   and not any(nd["statement"] == "a checkbox with no traceable id"
+                               for nd in g["nodes"]))
+
+# --- AC-IR-03: native ids reused (not content-addressed); re-extraction byte-identical;
+# edges derived from real references (ADR-001 governs INV-CURATION-01, references AC-01)
+have = {nd["id"] for nd in g["nodes"]}
+b1 = io.open(IRP, "rb").read()
+eng("ir-extract", "--ledger", "L.json", "--repo", "r")
+res["AC-IR-03"] = ({"AC-01", "AC-DD-07", "INV-CURATION-01", "ADR-001"} <= have
+                   and io.open(IRP, "rb").read() == b1
+                   and any(e["from"] == "ADR-001" and e["to"] == "INV-CURATION-01"
+                           and e["type"] == "DECISION->INV" for e in g["edges"])
+                   and any(e["from"] == "ADR-001" and e["to"] == "AC-01"
+                           for e in g["edges"]))
+
+# --- AC-IR-04: ir-render regenerates; extract -> render -> extract is stable
+eng("ir-render", "--ledger", "L.json", "--repo", "r")
+eng("ir-extract", "--ledger", "L.json", "--repo", "r")
+res["AC-IR-04"] = io.open(IRP, "rb").read() == b1 and os.path.isfile(
+    os.path.join(repo, "ir", "IR.md"))
+
+# --- AC-IR-05: an unknown schema_version / hand edit is exit 2, never mis-read
+gg = json.load(io.open(IRP, encoding="utf-8"))
+gg["schema_version"] = "9.9"
+io.open(IRP, "w", encoding="utf-8").write(json.dumps(gg))
+r5a = eng("ir-render", "--ledger", "L.json", "--repo", "r")
+gg["schema_version"] = "0.1"; gg["nodes"][0]["statement"] = "TAMPERED"
+io.open(IRP, "w", encoding="utf-8").write(json.dumps(gg))
+r5b = eng("ir-render", "--ledger", "L.json", "--repo", "r")
+# a doctored SUMMARY (stats) must also trip the seal -- ir-render would faithfully print a
+# lie otherwise (fresh-review MEDIUM, reproduced pre-release)
+eng("ir-extract", "--ledger", "L.json", "--repo", "r")
+gg2 = json.load(io.open(IRP, encoding="utf-8"))
+gg2["stats"]["nodes"] = 999; gg2["stats"]["untyped_rate"] = 0.9999
+io.open(IRP, "w", encoding="utf-8").write(json.dumps(gg2))
+r5c = eng("ir-render", "--ledger", "L.json", "--repo", "r")
+res["AC-IR-05"] = (r5a.returncode == 2 and "schema_version" in r5a.stderr
+                   and r5b.returncode == 2 and "seal" in r5b.stderr
+                   and r5c.returncode == 2 and "seal" in r5c.stderr)
+
+# --- AC-IR-06: fidelity --ir reproduces v0's curation_closure via graph path query
+eng("ir-extract", "--ledger", "L.json", "--repo", "r")     # restore a valid graph
+io.open(os.path.join(w, "narr.json"), "w").write(json.dumps([
+    {"type": "behavior", "statement": "facturar returns the total",
+     "files": ["src/app.py:1"]}]))
+eng("discover", "--ledger", "L.json", "--repo", "r", "--narrated",
+    os.path.join(w, "narr.json"))
+dl = json.load(io.open(os.path.join(repo, "discovery", "CANDIDATE-DELTA.json"),
+                       encoding="utf-8"))
+for o in dl["observations"]:
+    eng("curate", "--ledger", "L.json", "--repo", "r", "--obs", o["id"],
+        "--verdict", "preserve")
+eng("promote", "--ledger", "L.json", "--repo", "r")
+v0 = json.loads(eng("fidelity", "--ledger", "L.json", "--repo", "r",
+                    "--json").stdout)["dimensions"]["curation_closure"]["value"]
+vir = json.loads(eng("fidelity", "--ledger", "L.json", "--repo", "r", "--ir",
+                     "--json").stdout)["dimensions"]["curation_closure"]
+res["AC-IR-06"] = (v0 == 1.0 and vir["value"] == v0
+                   and "IR path query" in vir["provenance"])
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".ir-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T125" in
+  OK*) PASS=$((PASS+1)); echo "  ok   ir: $T125";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T125";;
+esac
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -5969,6 +6097,23 @@ for _fid in ("AC-FV-01", "AC-FV-02", "AC-FV-03", "AC-FV-04", "AC-FV-05", "AC-FV-
         results.append((_fid, "fidelity", None))
     else:
         results.append((_fid, "fidelity", "T124 case failed or missing"))
+
+# IR criteria (Diamond M2, ADR-015): measured by T125, same sidecar contract.
+def _ir_cases():
+    p = os.path.join(kit, "reports", "junit", ".ir-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_irc = _ir_cases()
+for _iid in ("AC-IR-01", "AC-IR-02", "AC-IR-03", "AC-IR-04", "AC-IR-05", "AC-IR-06"):
+    if _irc is None or _irc.get(_iid) is None:
+        results.append((_iid, "ir", SKIP))
+    elif _irc.get(_iid) is True:
+        results.append((_iid, "ir", None))
+    else:
+        results.append((_iid, "ir", "T125 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

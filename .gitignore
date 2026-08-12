@@ -48,3 +48,5 @@ chat-*.md
 .facts-cases.json
 .delta-cases.json
 .fidelity-cases.json
+.ir-cases.json
+ir/
