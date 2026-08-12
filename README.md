@@ -40,7 +40,7 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.73.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v1.74.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -76,7 +76,7 @@ and see which file, which test, and when.
 | `/uscha-mirador` | Bird's-eye HTML dashboard: readiness, trail, acceptance, loops |
 | `/uscha-status` | One-line progress readout, in chat |
 
-**A measurement engine** (`qa_ledger.py`, 44 subcommands, Python stdlib) that ingests
+**A measurement engine** (`qa_ledger.py`, 46 subcommands, Python stdlib) that ingests
 evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
 cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
 

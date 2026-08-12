@@ -20,8 +20,10 @@
     ]
   },
   "subcommands": {
-    "count": 44,
+    "count": 46,
     "list": [
+      "bootstrap-oracle",
+      "bootstrap-variance",
       "check-coverage",
       "cleanroom",
       "compile-ingest",
@@ -68,5 +70,5 @@
       "waste-check"
     ]
   },
-  "version": "1.73.0"
+  "version": "1.74.0"
 }

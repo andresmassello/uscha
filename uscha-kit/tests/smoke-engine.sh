@@ -3426,6 +3426,7 @@ rm -f "$KIT/reports/junit/.delta-cases.json"      # same rule for T123
 rm -f "$KIT/reports/junit/.fidelity-cases.json"   # same rule for T124
 rm -f "$KIT/reports/junit/.ir-cases.json"         # same rule for T125
 rm -f "$KIT/reports/junit/.compile-cases.json"    # same rule for T126
+rm -f "$KIT/reports/junit/.bootstrap-cases.json"  # same rule for T127
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -5104,6 +5105,116 @@ case "$T126" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T126";;
 esac
 
+echo "== T127 (1.74.0): bootstrap -- a bounded subsystem's identity is its canonical package + a withheld oracle (M4, ADR-017) =="
+T127=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BF = os.path.join(kit, "tests", "fixtures", "bootstrap-golden-hook")
+IR = os.path.join(BF, "IR.json")
+ORACLE = os.path.join(BF, "oracle", "ORACLE.json")
+ORIGINAL = os.path.join(kit, "hooks", "block-approved-writes.py")
+res = {}
+w = tempfile.mkdtemp()
+
+def eng(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=w, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+def oracle(impl):
+    r = subprocess.run([sys.executable, ENG, "bootstrap-oracle", "--impl", impl,
+                        "--oracle", ORACLE, "--json"], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    try:
+        rep = json.loads(r.stdout)
+    except ValueError:
+        rep = {}
+    return r.returncode, rep
+
+# AC-BS-01: the withheld oracle runs against a real impl and is a measured fact; the canonical
+# system (the original guard) is all-green, exit 0
+rc_o, rep_o = oracle(ORIGINAL)
+res["AC-BS-01"] = (rc_o == 0 and rep_o.get("oracle_green") is True
+                   and rep_o.get("passed") == rep_o.get("total") and rep_o.get("total", 0) >= 20)
+
+# AC-BS-02: the oracle is decisive and names divergences -- a guard that allows a blocked case
+# fails, case-by-case, exit 1; the runner consults no model
+broken = os.path.join(BF, "broken", "source", "guard.py")
+rc_b, rep_b = oracle(broken)
+res["AC-BS-02"] = (rc_b == 1 and rep_b.get("oracle_green") is False
+                   and rep_b.get("failed", 0) > 0
+                   and any(not r["ok"] for r in rep_b.get("results", [])))
+
+# AC-BS-03: the maker!=checker wall -- no compiled source references the withheld oracle
+def refs_oracle(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            t = fh.read().lower()
+        return "oracle" in t or "expected_exit" in t
+    except OSError:
+        return True
+srcs = [os.path.join(BF, d, "source", "guard.py") for d in
+        ("c-opus", "c-sonnet", "c-haiku", "c-opus-r2", "c-sonnet-r2")]
+res["AC-BS-03"] = all(os.path.isfile(s) and not refs_oracle(s) for s in srcs)
+
+# AC-BS-04: all three round-1 compilations compile-validate against the pinned canonical IR
+def cv(comp):
+    r = subprocess.run([sys.executable, ENG, "compile-validate", "--ir", IR,
+                        "--compilation", comp, "--json"], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    try:
+        return json.loads(r.stdout).get("valid")
+    except ValueError:
+        return False
+res["AC-BS-04"] = all(cv(os.path.join(BF, d, "COMPILATION.json")) is True
+                      for d in ("c-opus", "c-sonnet", "c-haiku"))
+
+# AC-BS-05: variance proves the three genuinely differ; advisory, never gates
+rv = subprocess.run([sys.executable, ENG, "bootstrap-variance", "--impls",
+                     os.path.join(BF, "c-opus", "source", "guard.py"),
+                     os.path.join(BF, "c-sonnet", "source", "guard.py"),
+                     os.path.join(BF, "c-haiku", "source", "guard.py"), "--json"],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace")
+try:
+    vrep = json.loads(rv.stdout)
+except ValueError:
+    vrep = {}
+res["AC-BS-05"] = (rv.returncode == 0 and vrep.get("all_distinct") is True
+                   and vrep.get("advisory") is True
+                   and len(vrep.get("implementations", [])) == 3)
+
+# AC-BS-06: the S-gap loop is measured and bounded (N=2) -- a round-1 divergence records its
+# failing cases to the ledger (the S-gap catalog is a measured fact, not narrated), and the
+# improvement round closes the unanimous interpreter gap for at least one independent compiler
+# (c-sonnet-r2 recompiled from the improved canonical package is oracle-green). Partial
+# convergence is the honest outcome: the other round-2 recompile refines the gap rather than
+# closing it, and N=2 reports that trajectory instead of chasing it.
+os.makedirs(os.path.join(w, "r"))
+io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
+    "defaults": {}, "repos": [{"name": "r", "path": "r", "type": "python"}],
+    "integration": {"enabled": False}}))
+eng("init", "--config", "c.json", "--out", "L.json")
+eng("bootstrap-oracle", "--impl", os.path.join(BF, "c-haiku", "source", "guard.py"),
+    "--oracle", ORACLE, "--ledger", "L.json", "--repo", "r")
+L = json.load(io.open(os.path.join(w, "L.json"), encoding="utf-8"))
+recs = L.get("bootstrap_oracle", [])
+rc_r2, rep_r2 = oracle(os.path.join(BF, "c-sonnet-r2", "source", "guard.py"))
+res["AC-BS-06"] = (len(recs) == 1 and recs[0].get("oracle_green") is False
+                   and len(recs[0].get("failing", [])) > 0
+                   and rc_r2 == 0 and rep_r2.get("oracle_green") is True)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".bootstrap-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T127" in
+  OK*) PASS=$((PASS+1)); echo "  ok   bootstrap: $T127";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T127";;
+esac
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -6299,6 +6410,23 @@ for _cid in ("AC-CC-01", "AC-CC-02", "AC-CC-03", "AC-CC-04", "AC-CC-05", "AC-CC-
         results.append((_cid, "compile", None))
     else:
         results.append((_cid, "compile", "T126 case failed or missing"))
+
+# Bootstrap criteria (Diamond M4, ADR-017): measured by T127, same sidecar contract.
+def _bootstrap_cases():
+    p = os.path.join(kit, "reports", "junit", ".bootstrap-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_bsc = _bootstrap_cases()
+for _bid in ("AC-BS-01", "AC-BS-02", "AC-BS-03", "AC-BS-04", "AC-BS-05", "AC-BS-06"):
+    if _bsc is None or _bsc.get(_bid) is None:
+        results.append((_bid, "bootstrap", SKIP))
+    elif _bsc.get(_bid) is True:
+        results.append((_bid, "bootstrap", None))
+    else:
+        results.append((_bid, "bootstrap", "T127 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

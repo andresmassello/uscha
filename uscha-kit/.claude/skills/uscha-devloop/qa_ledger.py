@@ -5299,6 +5299,162 @@ def cmd_compile_ingest(args):
 
 
 # --------------------------------------------------------------------------- #
+# bootstrap  (Diamond M4: a bounded subsystem's identity is carried by its
+# canonical package + a WITHHELD oracle, not by its implementation. The oracle
+# runner is a measured fact and decides "same system"; variance is advisory
+# evidence that the implementations genuinely differ. ADR-017.)
+# --------------------------------------------------------------------------- #
+_BOOTSTRAP_CASE_TIMEOUT = 15                        # a compiled hook must decide fast
+
+
+def _run_oracle_case(impl_path, case):
+    """Run ONE withheld oracle case against a compiled implementation: feed the case's stdin
+    (raw_stdin verbatim if present, else json.dumps(payload)) to `python <impl>`, and compare
+    the process exit code to `expected_exit`. Deterministic execution -- the oracle is a
+    `measured` fact, never an LLM judgment. Returns a per-case result dict."""
+    if "raw_stdin" in case:
+        stdin = case["raw_stdin"]
+    else:
+        stdin = json.dumps(case.get("payload"))
+    try:
+        r = subprocess.run([sys.executable, impl_path], input=stdin, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace",
+                           timeout=_BOOTSTRAP_CASE_TIMEOUT)
+        got, err = r.returncode, None
+    except subprocess.TimeoutExpired:
+        got, err = None, "timeout"
+    except OSError as exc:
+        got, err = None, "could not run impl: %s" % exc
+    want = case.get("expected_exit")
+    return {"name": case.get("name"), "expected": want, "got": got,
+            "ok": (err is None and got == want), "error": err}
+
+
+def cmd_bootstrap_oracle(args):
+    """Run a WITHHELD oracle suite (ADR-017) against a compiled implementation. The oracle
+    predates and is physically separate from every compiler input; this runner is the
+    maker!=checker wall made executable. Exit 0 iff every case matches its expected exit,
+    else 1 -- a measured behavioural fact about whether this implementation is the same
+    system. It runs the implementation as a subprocess and consults no model."""
+    try:
+        with open(args.oracle, encoding="utf-8-sig") as fh:
+            oracle = json.load(fh)
+    except (OSError, ValueError) as exc:
+        print("[qa_ledger] bootstrap-oracle: unreadable oracle %s: %s" % (args.oracle, exc),
+              file=sys.stderr)
+        sys.exit(2)
+    cases = oracle.get("cases")
+    if not isinstance(cases, list) or not cases:
+        print("[qa_ledger] bootstrap-oracle: oracle has no cases", file=sys.stderr)
+        sys.exit(2)
+    if not os.path.isfile(args.impl):
+        print("[qa_ledger] bootstrap-oracle: no implementation at %s" % args.impl,
+              file=sys.stderr)
+        sys.exit(2)
+    results = [_run_oracle_case(args.impl, c) for c in cases]
+    passed = sum(1 for r in results if r["ok"])
+    failed = [r for r in results if not r["ok"]]
+    report = {"impl": args.impl, "oracle": args.oracle, "total": len(results),
+              "passed": passed, "failed": len(failed),
+              "oracle_green": not failed, "results": results}
+    if args.ledger and args.repo:
+        ledger = _load(args.ledger)
+        _repo_node(ledger, args.repo)
+        rec = {"impl": os.path.basename(args.impl), "oracle": os.path.basename(args.oracle),
+               "total": len(results), "passed": passed, "failed": len(failed),
+               "oracle_green": not failed,
+               "failing": [r["name"] for r in failed], "at": _now()}
+        ledger.setdefault("bootstrap_oracle", []).append(rec)
+        _save(args.ledger, ledger)
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        print("BOOTSTRAP-ORACLE %s: %d/%d cases pass -- %s"
+              % (os.path.basename(args.impl), passed, len(results),
+                 "ORACLE GREEN (same system on this suite)" if not failed
+                 else "ORACLE RED (%d divergence(s))" % len(failed)))
+        for r in failed:
+            print("  x %s: expected exit %s, got %s%s"
+                  % (r["name"], r["expected"], r["got"],
+                     " (%s)" % r["error"] if r["error"] else ""))
+    sys.exit(0 if not failed else 1)
+
+
+def _impl_metrics(path):
+    """Structural fingerprint of one implementation: physical LOC, AST node count, function
+    and class counts, and the set of imported top-level modules. Deterministic; no judgment."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            src = fh.read()
+    except OSError as exc:
+        return {"path": path, "error": "unreadable: %s" % exc}
+    loc = sum(1 for ln in src.splitlines() if ln.strip())
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as exc:
+        return {"path": path, "loc": loc, "error": "unparseable: %s" % exc}
+    funcs = classes = nodes = 0
+    imports = set()
+    for nd in ast.walk(tree):
+        nodes += 1
+        if isinstance(nd, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            funcs += 1
+        elif isinstance(nd, ast.ClassDef):
+            classes += 1
+        elif isinstance(nd, ast.Import):
+            for a in nd.names:
+                imports.add(a.name.split(".")[0])
+        elif isinstance(nd, ast.ImportFrom):
+            if nd.module:
+                imports.add(nd.module.split(".")[0])
+    return {"path": path, "loc": loc, "ast_nodes": nodes, "functions": funcs,
+            "classes": classes, "imports": sorted(imports),
+            "sha256": hashlib.sha256(src.encode("utf-8")).hexdigest()}
+
+
+def cmd_bootstrap_variance(args):
+    """Prove independent compilations of the same canonical package genuinely DIFFER (ADR-017).
+    Reports per-implementation structural metrics and pairwise divergence. ADVISORY: variance
+    is evidence the implementations differ, never a certificate of 'same system' (only the
+    oracle certifies that) and never a gate -- it cannot change an exit code."""
+    metrics = [_impl_metrics(p) for p in args.impls]
+    pairs = []
+    good = [m for m in metrics if "error" not in m]
+    for i in range(len(good)):
+        for j in range(i + 1, len(good)):
+            a, b = good[i], good[j]
+            ia, ib = set(a["imports"]), set(b["imports"])
+            jac = (len(ia & ib) / len(ia | ib)) if (ia or ib) else 1.0
+            pairs.append({"a": os.path.basename(a["path"]), "b": os.path.basename(b["path"]),
+                          "byte_identical": a["sha256"] == b["sha256"],
+                          "loc_delta": abs(a["loc"] - b["loc"]),
+                          "ast_node_delta": abs(a["ast_nodes"] - b["ast_nodes"]),
+                          "function_delta": abs(a["functions"] - b["functions"]),
+                          "import_jaccard": round(jac, 3)})
+    all_distinct = all(not p["byte_identical"] for p in pairs) if pairs else None
+    report = {"implementations": metrics, "pairs": pairs, "all_distinct": all_distinct,
+              "advisory": True}
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        for m in metrics:
+            if "error" in m:
+                print("VARIANCE %s: %s" % (os.path.basename(m["path"]), m["error"]))
+            else:
+                print("VARIANCE %s: %d loc, %d ast-nodes, %d fn, %d cls, imports=%s"
+                      % (os.path.basename(m["path"]), m["loc"], m["ast_nodes"],
+                         m["functions"], m["classes"], ",".join(m["imports"]) or "-"))
+        for p in pairs:
+            print("  %s vs %s: %s | dloc=%d dnodes=%d import_jaccard=%.2f"
+                  % (p["a"], p["b"], "IDENTICAL" if p["byte_identical"] else "distinct",
+                     p["loc_delta"], p["ast_node_delta"], p["import_jaccard"]))
+        if all_distinct is not None:
+            print("  all implementations distinct: %s (advisory, never gates)"
+                  % ("yes" if all_distinct else "NO -- convergence, a weak result"))
+    sys.exit(0)
+
+
+# --------------------------------------------------------------------------- #
 # facts  (T0 / SYSTEM-FACTS: public claims become compiled artifacts of repo
 # facts -- Diamond applied to Diamond. ADR-012.)
 # --------------------------------------------------------------------------- #
@@ -9389,6 +9545,26 @@ def build_parser():
     pcmi.add_argument("--compilation", required=True, help="path to COMPILATION.json")
     pcmi.add_argument("--json", action="store_true")
     pcmi.set_defaults(func=cmd_compile_ingest)
+
+    pbo = sub.add_parser(
+        "bootstrap-oracle",
+        help="run a WITHHELD oracle suite against a compiled implementation (ADR-017); exit 0 "
+             "iff every case matches its expected exit -- the maker!=checker wall, executable")
+    pbo.add_argument("--impl", required=True, help="the compiled implementation to run")
+    pbo.add_argument("--oracle", required=True, help="the withheld ORACLE.json case suite")
+    pbo.add_argument("--ledger", default=None, help="optional: persist the measured result")
+    pbo.add_argument("--repo", default=None, help="repo scope when --ledger is given")
+    pbo.add_argument("--json", action="store_true")
+    pbo.set_defaults(func=cmd_bootstrap_oracle)
+
+    pbv = sub.add_parser(
+        "bootstrap-variance",
+        help="structural metrics + pairwise divergence proving independent compilations "
+             "genuinely differ (ADR-017); ADVISORY evidence, never a gate")
+    pbv.add_argument("--impls", required=True, nargs="+",
+                     help="two or more compiled implementations to compare")
+    pbv.add_argument("--json", action="store_true")
+    pbv.set_defaults(func=cmd_bootstrap_variance)
 
     pcr = sub.add_parser("cleanroom",
                          help="run a command against a CLEAN checkout of one commit in a throwaway worktree (ADR-008)")

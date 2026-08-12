@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.74.0** — [Diamond M4: bootstrap, the identity of a bounded subsystem (2026-08-12)](CHANGELOG-1.74.0.md)
 - **1.73.0** — [Diamond M3: the LLM is a compiler with a validated output contract (2026-08-12)](CHANGELOG-1.73.0.md)
 - **1.72.0** — [Diamond M2: the canonical package becomes a typed graph (2026-08-11)](CHANGELOG-1.72.0.md)
 - **1.71.0** — [fidelity measures what the delta measured (2026-08-11)](CHANGELOG-1.71.0.md)

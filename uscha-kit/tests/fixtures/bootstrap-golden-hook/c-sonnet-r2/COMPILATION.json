@@ -1,0 +1,73 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib (json, re, shlex, sys)",
+    "verdict solely via exit code 0/2",
+    "fail-closed: invalid JSON, wrong shape, or any unproven-read-only path blocks"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "d7492a33e8ce132cfaa3c01a6bc5b5e18cae5bc02339de8a9c71a5b488dbfc93"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "read-only tool name list",
+      "decision": "fixed set {read,grep,glob,ls,list,webfetch,websearch,notebookread,view,cat}",
+      "rationale": "spec names categories not an exhaustive list; picked common host names plus aliases"
+    },
+    {
+      "ir_region": "shell tool name list and command field",
+      "decision": "aliases {bash,shell,exec,execute,command,terminal,cmd,powershell,sh}; command text under command/cmd/script/shell_command",
+      "rationale": "spec gives only Bash as example; falls back to recursive marker search if no command field"
+    },
+    {
+      "ir_region": "visible write-flag detection",
+      "decision": "per-verb: sed/perl -i/--in-place, curl -o/-O/--output, wget -O/--output-document; other flags on readers ignored",
+      "rationale": "a blanket flag scan would misclassify grep -o as a write"
+    },
+    {
+      "ir_region": "pipeline / sequence splitting",
+      "decision": "split on |, ;, &&, ||, & and require every stage provably read-only",
+      "rationale": "spec's wording extends beyond | to command sequencing"
+    },
+    {
+      "ir_region": "unrecognized shell verb",
+      "decision": "a verb not in reader/interpreter/writer lists is NOT proven read-only -> block when the command names a golden",
+      "rationale": "default-deny; when in doubt about a visible writing path, block"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "round-2 (improved canonical package)"
+  },
+  "_integrity": "6c7d25a5b937cbf907ca839bd66d6509bcc23141d4535aac953a3993d264d165"
+}

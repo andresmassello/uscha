@@ -1,0 +1,73 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ stdlib (json, re, shlex, sys)",
+    "verdict via exit code 0/2; fail-closed on invalid JSON, non-object, missing/non-string tool_name",
+    "interpreters treated as readers when free of redirection and write flags; indirect writes out of scope"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "04b3a948fd910e761e94f5ab6e60b2d1910da442239379df532db464199bc60c"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-GH-07",
+      "decision": "fail-closed on top-level object + string tool_name; a non-dict tool_input is tolerated (searched), missing defaults to empty",
+      "rationale": "spec does not fix how strict the shape check is; gated on the fields the decision needs"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "writer verbs (cp,mv,rm,tee) block whenever the command names a golden, source or destination",
+      "rationale": "spec does not disambiguate golden-as-source from golden-as-dest; fail-closed favours blocking"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "write-flag detection scoped per verb (--in-place/--output any verb, -i for sed/perl only); -o not treated as a write flag",
+      "rationale": "flag semantics differ per tool; a blanket block would break protected read-only tools"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "unknown stage verbs default-deny; a small wrapper set (sudo,env,nice,nohup) is unwrapped, arg-consuming wrappers are not",
+      "rationale": "enumerating readers is unbounded; unknown verbs fail closed"
+    },
+    {
+      "ir_region": "AC-GH-06",
+      "decision": "recursive marker search inspects dict keys as well as values, list items, nested strings",
+      "rationale": "including keys is the stricter fail-closed reading"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "round-2 (improved canonical package)"
+  },
+  "_integrity": "9caf4d69db55a7112f0be2bfb80ca15bf8396ea4bf7e5a960d4bf30c007130b7"
+}

@@ -270,6 +270,22 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - [x] AC-CC-07 - two reference compilations produced by two different models both pass
   `compile-validate`; the contract is backend-blind.
 
+## Diamond M4 (ADR-017) - a bounded subsystem's identity is its canonical package + a withheld oracle
+
+- [x] AC-BS-01 - `bootstrap-oracle` runs the withheld oracle against a compiled implementation
+  and exits 0 iff every case matches its expected exit; the canonical system passes all-green.
+- [x] AC-BS-02 - the oracle is decisive and names divergences case-by-case: an implementation
+  that allows a case the contract blocks fails, `exit 1`; the runner consults no model.
+- [x] AC-BS-03 - the maker≠checker wall is asserted mechanically: no compiled source references
+  the withheld oracle or its cases.
+- [x] AC-BS-04 - the three round-1 compilations pass `compile-validate` against the pinned
+  canonical IR (the compile interface is M3's contract).
+- [x] AC-BS-05 - `bootstrap-variance` reports per-impl metrics and pairwise divergence proving
+  the implementations genuinely differ; advisory, never a gate.
+- [x] AC-BS-06 - the S-gap loop is measured and bounded (N=2): a round-1 divergence records its
+  failing cases to the ledger, and the improvement round makes at least one independent
+  recompilation oracle-green; partial convergence is reported, not chased.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

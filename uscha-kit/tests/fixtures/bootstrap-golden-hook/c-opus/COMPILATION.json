@@ -1,0 +1,68 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python stdlib only (json, re, shlex, sys)",
+    "reads one JSON object from stdin; verdict via exit code (0 allow, 2 block)",
+    "fail-closed everywhere; marker matched case-insensitive substring"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "6fb14ef82756f83c1fb84f5cdc942535c410ea083414a4bfe00a5af3bbffaaf5"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-GH-04",
+      "decision": "read-only tools = {Read,Grep,Glob,LS,NotebookRead,WebFetch,WebSearch}; shell = {Bash,sh,shell,zsh}",
+      "rationale": "spec names the read-only family by category, not exact identifiers; mapped to conventional host tool names, everything else conservative"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "read-only iff no '>' redirection, no command substitution, and every stage verb in a READ_ONLY_VERBS allowlist; interpreters (python,node,ruby,perl), tee, cp/mv/rm and unknown verbs are writes",
+      "rationale": "default-deny: treat as WRITE unless every part is a recognised reader; interpreters are opaque and not provable read-only"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "write flags detected per-verb (sed -i, sort -o); a bare -o on grep is NOT a write",
+      "rationale": "flag semantics are tool-specific; scoping avoids over-blocking legitimate golden reads"
+    },
+    {
+      "ir_region": "AC-GH-07",
+      "decision": "missing tool_input coerced to empty object (allow if no golden); only non-dict payload or non-string tool_name blocks on shape",
+      "rationale": "absent arguments carry no golden to protect; blocking would be over-strict without adding safety"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "all constraints honored"
+  },
+  "_integrity": "d5c9f065a759d800bbce4c85e270b075eeacaf9702ad77c7e7dd145c7a0a4d6e"
+}
