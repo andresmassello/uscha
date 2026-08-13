@@ -317,6 +317,21 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - [x] AC-CL-06 - the reference guard passes the shared oracle unchanged, and arm-B's IR differs
   from arm-A's while the oracle is byte-identical (authoring changed, behaviour held fixed).
 
+## Diamond Bench v0.2 (ADR-020) - nine archetypes
+
+- [x] AC-BG-01 - each of the five new entries (rest-handler, crud-store, worker, ui-render,
+  protocol-adapter) has canonical/ + pinned IR + withheld oracle + committed stub, and `bench`
+  reports all nine entries with a verdict (no PENDING at ship).
+- [x] AC-BG-02 - every new oracle rejects both its degenerate stub AND a plausible-wrong
+  implementation violating a SPEC-named sharp edge, checked before any compilation ran.
+- [x] AC-BG-03 - all 15 new compilations `compile-validate` against their entry's pinned IR; no
+  compiler input references any oracle; `unresolved_intent` is each model's verbatim return.
+- [x] AC-BG-04 - the worker entry's SPEC states the deterministic-scheduling boundary
+  explicitly; the bench/changelog carry it as a named limitation.
+- [x] AC-BG-05 - the discrimination evidence is committed and reproducible: every
+  plausible-wrong implementation under each new entry's wrong/ scores below oracle-green, run
+  by the suite itself — a red run of a committed fixture, not a prose note.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

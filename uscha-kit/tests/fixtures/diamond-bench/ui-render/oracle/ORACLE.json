@@ -1,0 +1,31 @@
+{
+  "_generated_by": "hand-authored from the canonical SPEC BEFORE any compilation (ADR-020). WITHHELD from every compiler. Discrimination checked pre-compilation against a degenerate stub and a plausible-wrong impl (reset-clears-instead-of-initial, submit-always-true).",
+  "cases": [
+    {"name": "no-events", "payload": {"model": {"fields": [{"name": "n", "value": ""}]}, "events": []},
+     "expected_json": {"fields": {"n": ""}, "submitted": false, "errors": []}},
+    {"name": "input-sets", "payload": {"model": {"fields": [{"name": "n", "value": ""}]}, "events": [{"type": "input", "field": "n", "value": "x"}]},
+     "expected_json": {"fields": {"n": "x"}, "submitted": false, "errors": []}},
+    {"name": "toggle-flips", "payload": {"model": {"fields": [{"name": "b", "value": false}]}, "events": [{"type": "toggle", "field": "b"}]},
+     "expected_json": {"fields": {"b": true}, "submitted": false, "errors": []}},
+    {"name": "reset-restores-initial", "payload": {"model": {"fields": [{"name": "n", "value": "init"}]}, "events": [{"type": "input", "field": "n", "value": "x"}, {"type": "reset"}]},
+     "expected_json": {"fields": {"n": "init"}, "submitted": false, "errors": []}},
+    {"name": "submit-empty-fails", "payload": {"model": {"fields": [{"name": "n", "value": ""}]}, "events": [{"type": "submit"}]},
+     "expected_json": {"fields": {"n": ""}, "submitted": false, "errors": ["n"]}},
+    {"name": "submit-ok", "payload": {"model": {"fields": [{"name": "n", "value": "v"}]}, "events": [{"type": "submit"}]},
+     "expected_json": {"fields": {"n": "v"}, "submitted": true, "errors": []}},
+    {"name": "errors-in-field-order", "payload": {"model": {"fields": [{"name": "a", "value": ""}, {"name": "b", "value": "v"}, {"name": "c", "value": ""}]}, "events": [{"type": "submit"}]},
+     "expected_json": {"fields": {"a": "", "b": "v", "c": ""}, "submitted": false, "errors": ["a", "c"]}},
+    {"name": "errors-order-not-alphabetical", "payload": {"model": {"fields": [{"name": "z", "value": ""}, {"name": "a", "value": ""}]}, "events": [{"type": "submit"}]},
+     "expected_json": {"fields": {"z": "", "a": ""}, "submitted": false, "errors": ["z", "a"]}},
+    {"name": "recover-after-failed-submit", "payload": {"model": {"fields": [{"name": "n", "value": ""}]}, "events": [{"type": "submit"}, {"type": "input", "field": "n", "value": "x"}, {"type": "submit"}]},
+     "expected_json": {"fields": {"n": "x"}, "submitted": true, "errors": []}},
+    {"name": "bool-fields-not-validated", "payload": {"model": {"fields": [{"name": "b", "value": false}, {"name": "n", "value": "v"}]}, "events": [{"type": "submit"}]},
+     "expected_json": {"fields": {"b": false, "n": "v"}, "submitted": true, "errors": []}},
+    {"name": "reset-clears-submitted", "payload": {"model": {"fields": [{"name": "n", "value": "v"}]}, "events": [{"type": "submit"}, {"type": "reset"}]},
+     "expected_json": {"fields": {"n": "v"}, "submitted": false, "errors": []}},
+    {"name": "unknown-field-error", "payload": {"model": {"fields": [{"name": "n", "value": ""}]}, "events": [{"type": "input", "field": "zz", "value": "x"}]},
+     "expected_stdout": "ERROR"},
+    {"name": "type-mismatch-error", "payload": {"model": {"fields": [{"name": "n", "value": "s"}]}, "events": [{"type": "toggle", "field": "n"}]},
+     "expected_stdout": "ERROR"}
+  ]
+}

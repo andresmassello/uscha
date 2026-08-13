@@ -6,16 +6,28 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 
 | Archetype | Verdict | Compilers (oracle pass / total) | Distinct | Oracle cases |
 |-----------|---------|--------------------------------|----------|--------------|
+| crud-store | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
 | guard | PARTIAL | M1 19/23, M2 21/23, M3 21/23 | yes | 23 |
 | parser | PASS | M1 21/21, M2 21/21, M3 21/21 | yes | 21 |
+| protocol-adapter | PASS | M1 15/15, M2 15/15, M3 15/15 | yes | 15 |
+| rest-handler | PARTIAL | M1 14/15, M2 14/15, M3 15/15 | yes | 15 |
 | state-machine | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
 | transformer | PASS | M1 14/14, M2 14/14, M3 14/14 | yes | 14 |
+| ui-render | PASS | M1 13/13, M2 13/13, M3 13/13 | yes | 13 |
+| worker | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
 
-**Coverage:** 1 PARTIAL, 3 PASS (of 4 entries).
+**Coverage:** 2 PARTIAL, 7 PASS (of 9 entries).
 
 **Model map (published, not the headline):** M1 = haiku, M2 = opus, M3 = sonnet.
 
 ## Per-entry detail
+
+### crud-store — PASS
+*all 3 compilations oracle-green and genuinely different -- the same system*
+- `c-haiku` (M1): oracle 12/12 GREEN
+- `c-opus` (M2): oracle 12/12 GREEN
+- `c-sonnet` (M3): oracle 12/12 GREEN
+- discrimination stub: 1/12 (oracle rejects the stub)
 
 ### guard — PARTIAL
 *core identity (min 83% of cases); divergence isolated*
@@ -31,6 +43,20 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-sonnet` (M3): oracle 21/21 GREEN
 - discrimination stub: 9/21 (oracle rejects the stub)
 
+### protocol-adapter — PASS
+*all 3 compilations oracle-green and genuinely different -- the same system*
+- `c-haiku` (M1): oracle 15/15 GREEN
+- `c-opus` (M2): oracle 15/15 GREEN
+- `c-sonnet` (M3): oracle 15/15 GREEN
+- discrimination stub: 6/15 (oracle rejects the stub)
+
+### rest-handler — PARTIAL
+*core identity (min 93% of cases); divergence isolated*
+- `c-haiku` (M1): oracle 14/15
+- `c-opus` (M2): oracle 14/15
+- `c-sonnet` (M3): oracle 15/15 GREEN
+- discrimination stub: 1/15 (oracle rejects the stub)
+
 ### state-machine — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
 - `c-haiku` (M1): oracle 12/12 GREEN
@@ -44,3 +70,17 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 14/14 GREEN
 - `c-sonnet` (M3): oracle 14/14 GREEN
 - discrimination stub: 1/14 (oracle rejects the stub)
+
+### ui-render — PASS
+*all 3 compilations oracle-green and genuinely different -- the same system*
+- `c-haiku` (M1): oracle 13/13 GREEN
+- `c-opus` (M2): oracle 13/13 GREEN
+- `c-sonnet` (M3): oracle 13/13 GREEN
+- discrimination stub: 2/13 (oracle rejects the stub)
+
+### worker — PASS
+*all 3 compilations oracle-green and genuinely different -- the same system*
+- `c-haiku` (M1): oracle 12/12 GREEN
+- `c-opus` (M2): oracle 12/12 GREEN
+- `c-sonnet` (M3): oracle 12/12 GREEN
+- discrimination stub: 4/12 (oracle rejects the stub)

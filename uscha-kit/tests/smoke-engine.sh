@@ -5248,7 +5248,9 @@ direct = json.loads(rr.stdout)["passed"]
 outp = os.path.join(tempfile.mkdtemp(), "DIAMOND-BENCH.md")
 subprocess.run([sys.executable, ENG, "bench", "--dir", BENCH, "--out", outp],
                capture_output=True, text=True, encoding="utf-8", errors="replace")
-res["AC-DB-01"] = (d.get("entries") == 4 and byarch.get("parser", {}).get("verdict") == "PASS"
+res["AC-DB-01"] = (d.get("entries") == 9 and byarch.get("parser", {}).get("verdict") == "PASS"
+                   and byarch.get("crud-store", {}).get("verdict") == "PASS"
+                   and all(r["verdict"] != "PENDING" for r in d.get("raw", []))
                    and any(c["oracle"]["passed"] == direct
                            for c in byarch["parser"]["compilations"] if c["model"] == "opus")
                    and os.path.isfile(outp) and os.path.getsize(outp) > 0)
@@ -5355,6 +5357,61 @@ srcs = [os.path.join(BENCH, a, "c-" + m, "source", "impl.py")
         for m in ("opus", "sonnet", "haiku")]
 # AC-DB-06: the maker!=checker wall holds across every bench entry
 res["AC-DB-06"] = all(os.path.isfile(s) and not refs(s) for s in srcs)
+
+# Bench-growth criteria (ADR-020): measured over the five new entries in the same run.
+NEW5 = ("rest-handler", "crud-store", "worker", "ui-render", "protocol-adapter")
+def entry_complete(e):
+    p = os.path.join(BENCH, e)
+    return all(os.path.isfile(os.path.join(p, *rel)) for rel in (
+        ("canonical", "SPEC.md"), ("canonical", "ACCEPTANCE.md"),
+        ("canonical", "CONSTITUTION.md"), ("IR.json",), ("oracle", "ORACLE.json"),
+        ("stub", "stub.py")))
+res["AC-BG-01"] = (d.get("entries") == 9 and all(entry_complete(e) for e in NEW5)
+                   and all(r["verdict"] != "PENDING" for r in d.get("raw", [])))
+res["AC-BG-02"] = all((byarch.get(e, {}).get("discrimination") or {}).get("stub_green") is False
+                      for e in NEW5)
+def refs_orc(p):
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            t = fh.read().lower()
+        return "oracle" in t or "expected_exit" in t or "expected_stdout" in t
+    except OSError:
+        return True
+res["AC-BG-03"] = all(all(c["compile_valid"] for c in byarch.get(e, {}).get("compilations", []))
+                      and len(byarch.get(e, {}).get("compilations", [])) == 3
+                      and all(not refs_orc(os.path.join(BENCH, e, "c-" + m, "source", "impl.py"))
+                              for m in ("opus", "sonnet", "haiku"))
+                      for e in NEW5)
+wk_spec = io.open(os.path.join(BENCH, "worker", "canonical", "SPEC.md"),
+                  encoding="utf-8").read()
+res["AC-BG-04"] = ("Stated boundary" in wk_spec and "not exercise real parallelism" in wk_spec
+                   or ("Stated boundary" in wk_spec and "real parallelism" in wk_spec))
+# AC-BG-05: the discrimination evidence is COMMITTED and reproducible -- every plausible-wrong
+# implementation under each new entry's wrong/ must score below oracle-green (the ADR-020
+# review finding: a prose note is not evidence; a red run of a committed fixture is)
+def wrongs_red(e):
+    wd = os.path.join(BENCH, e, "wrong")
+    ws = sorted(f for f in os.listdir(wd) if f.endswith(".py")) if os.path.isdir(wd) else []
+    if not ws:
+        return False
+    try:
+        with io.open(os.path.join(BENCH, e, "oracle", "ORACLE.json"),
+                     encoding="utf-8-sig") as fh:
+            wcases = (json.load(fh) or {}).get("cases") or []
+    except (OSError, ValueError):
+        return False
+    for wf in ws:
+        r = subprocess.run([sys.executable, ENG, "bootstrap-oracle", "--impl",
+                            os.path.join(wd, wf), "--oracle",
+                            os.path.join(BENCH, e, "oracle", "ORACLE.json"), "--json"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        try:
+            if json.loads(r.stdout).get("oracle_green") is not False:
+                return False
+        except ValueError:
+            return False
+    return True
+res["AC-BG-05"] = d.get("entries") == 9 and all(wrongs_red(e) for e in NEW5)
 
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
@@ -6760,7 +6817,8 @@ def _bench_cases():
     except (OSError, ValueError):
         return None
 _dbc = _bench_cases()
-for _dbid in ("AC-DB-01", "AC-DB-02", "AC-DB-03", "AC-DB-04", "AC-DB-05", "AC-DB-06"):
+for _dbid in ("AC-DB-01", "AC-DB-02", "AC-DB-03", "AC-DB-04", "AC-DB-05", "AC-DB-06",
+              "AC-BG-01", "AC-BG-02", "AC-BG-03", "AC-BG-04", "AC-BG-05"):
     if _dbc is None or _dbc.get(_dbid) is None:
         results.append((_dbid, "bench", SKIP))
     elif _dbc.get(_dbid) is True:

@@ -1,0 +1,67 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "073d8935a3aa14dfb844ed9d77e683c213f2e85d9e985cb4f7213a38b09d54af",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure stdlib (json, sys) — zero external dependencies",
+    "Python 3.8+ compatible (tested assumption: f-strings not required)",
+    "Reads entire stdin, processes deterministically, always exits 0 (error text to stdout)"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "5cc2f1a0b73646d8b37c67df1ee56caa034fe00655e7406a96b9985a4b824518"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-UI-01",
+        "AC-UI-02",
+        "AC-UI-03",
+        "AC-UI-04",
+        "AC-UI-05",
+        "AC-UI-06",
+        "INV-UI-RESET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "field_value_types",
+      "decision": "reject null/undefined/non-string-non-bool values as malformed",
+      "rationale": "Spec lists only 'str or bool' as valid field types. null is neither. Strict typing matches the error contract (malformed input -> ERROR) and prevents silent data loss via coercion."
+    },
+    {
+      "ir_region": "extra_event_fields",
+      "decision": "permit extra fields in event objects without validation or error",
+      "rationale": "Spec defines required fields per event type but does not forbid extras. Permissive input parsing (ignore unknown keys, validate only required ones) follows Postel's law and reduces brittleness if callers add metadata or debugging fields."
+    },
+    {
+      "ir_region": "error_list_order",
+      "decision": "report empty string fields in declaration order (model.fields array position), not alphabetical",
+      "rationale": "Spec: 'lists exactly the empty fields, in field order'. Interpreted as the order fields appear in initial model — preserves user intent of form layout and UI ordering."
+    },
+    {
+      "ir_region": "unknown_event_type",
+      "decision": "treat unknown event type as malformed, print ERROR, stop processing",
+      "rationale": "Spec contract requires deterministic behavior; silent skip would hide caller bugs. Malformed -> ERROR ensures the caller knows the input was not understood and can correct it."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "d60a7897b2bdefbbdd08ab2fe12f4c263db6958416eea2f0c1d337dd43799083"
+}

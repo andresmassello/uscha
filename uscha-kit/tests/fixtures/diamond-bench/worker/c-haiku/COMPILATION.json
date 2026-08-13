@@ -1,0 +1,69 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "656d528a8b6ac2932c08a603349498656201b5fb74034f1cc8af59af2d95d5c7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure stdlib only (json, sys modules)",
+    "Python 3.8+ compatible",
+    "Single file: reads stdin, writes stdout, exits 0",
+    "Deterministic scheduling: priority DESC, then input-order FIFO",
+    "Cycle detection via DFS coloring (no build-time analysis)"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "fd7b7061ec162d356272982fbf2c3c51e207faf724a63df3230bf0d8c30686d3"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-WK-01",
+        "AC-WK-02",
+        "AC-WK-03",
+        "AC-WK-04",
+        "AC-WK-05",
+        "AC-WK-06",
+        "INV-WK-DET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "error-handling",
+      "decision": "catch-all exception -> ERROR",
+      "rationale": "JSON parsing, type errors, and key access failures all sink to a single ERROR output, matching the spec's requirement for structural errors"
+    },
+    {
+      "ir_region": "dependent-skipping",
+      "decision": "recursive transitive marking on failed job",
+      "rationale": "When a job fails, mark its direct dependents as skipped, then recursively mark their dependents; this ensures all transitive dependents are marked even if not yet attempted"
+    },
+    {
+      "ir_region": "ready-job-tie-breaking",
+      "decision": "sort by (-priority, index)",
+      "rationale": "Highest priority first (descending); on tie, first in input array (ascending index) is deterministic and matches spec's FIFO requirement"
+    },
+    {
+      "ir_region": "job-status-space",
+      "decision": "three states: ok (executed, passes), failed (executed, fails=true), skipped (never reached)",
+      "rationale": "Matches spec: executed jobs get ok or failed; unreached jobs (due to failed dependencies or incomplete needs) get skipped; 'order' contains only ok and failed"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "e5228688f473a06f4932e817ee17677caefbc43a3730624bc01534c24bc04a9c"
+}

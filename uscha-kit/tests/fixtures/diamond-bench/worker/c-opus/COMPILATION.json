@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "656d528a8b6ac2932c08a603349498656201b5fb74034f1cc8af59af2d95d5c7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only (json, sys); no third-party dependencies",
+    "Single executable file source/impl.py, run as `python impl.py`, reads all of stdin, prints result, always exits 0",
+    "No threads, timers, real concurrency, or wall-clock dependence — scheduling is a pure deterministic function of the input document",
+    "Structural rejection is total: malformed input, non-string/non-int fields, duplicate id, unknown need, or cycle print exactly ERROR with no partial schedule emitted",
+    "Cycle detection is iterative (explicit stack, DFS coloring) to avoid recursion limits on long dependency chains",
+    "Selection rule implemented as a single total ordering key (-priority, input_index) so ties resolve FIFO by input array position",
+    "Failure isolates: a job whose needs are not all `ok` is never selected; after the fixpoint loop, every unexecuted job is marked skipped"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "683af6f96779b9160d0c4be38a0ba86044e41996240f7083d4d5bf0db0871d32"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-WK-01",
+        "AC-WK-02",
+        "AC-WK-03",
+        "AC-WK-04",
+        "AC-WK-05",
+        "AC-WK-06",
+        "INV-WK-DET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "field-type-strictness",
+      "decision": "Reject as ERROR any job whose id is not a string, priority is not an int (booleans excluded, since bool subclasses int in Python), needs is not a list of strings, or fails is not a boolean; `needs`/`fails` present as JSON null are treated as the documented absent defaults",
+      "rationale": "The spec types every field but only enumerates duplicate-id/unknown-need/cycle explicitly under errors; AC-WK-06 makes malformed input ERROR, so type violations are structural rejections. Explicit null is treated as absence because it is the most common JSON encoding of 'not provided' and preserves the documented defaults."
+    },
+    {
+      "ir_region": "self-dependency",
+      "decision": "A job whose needs contains its own id is a cycle of length one and yields ERROR, not a silently-unschedulable job",
+      "rationale": "Under the READY rule a self-need can never be satisfied, so it is structurally unschedulable; INV-WK-DET-01 says structural errors reject the whole input rather than degrade into a partial schedule, and reporting it as ERROR is more informative than emitting an all-skipped status map. Cycle detection is run over the full graph before any scheduling, so it is caught uniformly."
+    },
+    {
+      "ir_region": "duplicate-entries-in-needs",
+      "decision": "Repeated ids inside a single job's needs are accepted and are semantically idempotent (the readiness predicate is an `all` over the list)",
+      "rationale": "The spec forbids duplicate JOB ids but says nothing about duplicates within a needs list; a repeated need does not change readiness, does not make the schedule ambiguous, and does not threaten determinism, so rejecting it would be inventing a constraint the spec does not state."
+    },
+    {
+      "ir_region": "output-shape-and-empty-input",
+      "decision": "Emit compact single-line JSON `{\"order\": [...], \"status\": {...}}` with a trailing newline, order as a JSON array and status as a JSON object keyed by job id; an empty jobs array is valid and yields {\"order\": [], \"status\": {}}",
+      "rationale": "The spec fixes structure and values but leaves formatting free, so the canonical json.dumps form is chosen for machine comparability; an empty array is a well-formed jobs array with nothing runnable, which the fixpoint loop handles as a zero-iteration terminating case rather than an error."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "c2e77ee813d74edda70796b5881fc5c749afef0547718592a3c092e2033c4dbc"
+}

@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-PA-01",
+      "type": "AC",
+      "statement": "decode turns each frame into {type, fields as ordered pairs}; field order is",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-PA-02",
+      "type": "AC",
+      "statement": "encode turns each message into its frame string; the frame bytes are exact",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 5
+      }
+    },
+    {
+      "id": "AC-PA-03",
+      "type": "AC",
+      "statement": "round-trip holds both ways: encode(decode(frames)) == frames byte-for-byte and",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 7
+      }
+    },
+    {
+      "id": "AC-PA-04",
+      "type": "AC",
+      "statement": "an empty value is legal (key=) and survives the round-trip; a frame with zero",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 9
+      }
+    },
+    {
+      "id": "AC-PA-05",
+      "type": "AC",
+      "statement": "any malformed frame or message (bad TYPE case, field without =, bad key, value",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 11
+      }
+    },
+    {
+      "id": "AC-PA-06",
+      "type": "AC",
+      "statement": "malformed top-level shape or unknown direction prints exactly ERROR.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 13
+      }
+    },
+    {
+      "id": "INV-PA-ATOMIC-01",
+      "type": "INV",
+      "statement": "the batch is atomic and the round-trip is law",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 7,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 6
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421"
+}

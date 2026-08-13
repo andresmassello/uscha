@@ -1,0 +1,28 @@
+{
+  "_generated_by": "hand-authored from the canonical SPEC BEFORE any compilation (ADR-020). WITHHELD from every compiler. Discrimination checked pre-compilation against a degenerate stub and a plausible-wrong impl (FIFO-ignoring-priorities, runs dependents of failed jobs).",
+  "cases": [
+    {"name": "single-job", "payload": {"jobs": [{"id": "a", "priority": 1}]},
+     "expected_json": {"order": ["a"], "status": {"a": "ok"}}},
+    {"name": "priority-order", "payload": {"jobs": [{"id": "a", "priority": 1}, {"id": "b", "priority": 5}, {"id": "c", "priority": 3}]},
+     "expected_json": {"order": ["b", "c", "a"], "status": {"a": "ok", "b": "ok", "c": "ok"}}},
+    {"name": "fifo-tie-break", "payload": {"jobs": [{"id": "a", "priority": 1}, {"id": "b", "priority": 1}]},
+     "expected_json": {"order": ["a", "b"], "status": {"a": "ok", "b": "ok"}}},
+    {"name": "dependency-first", "payload": {"jobs": [{"id": "a", "priority": 9, "needs": ["b"]}, {"id": "b", "priority": 1}]},
+     "expected_json": {"order": ["b", "a"], "status": {"a": "ok", "b": "ok"}}},
+    {"name": "deps-and-priority", "payload": {"jobs": [{"id": "a", "priority": 9, "needs": ["c"]}, {"id": "b", "priority": 5}, {"id": "c", "priority": 1}]},
+     "expected_json": {"order": ["b", "c", "a"], "status": {"a": "ok", "b": "ok", "c": "ok"}}},
+    {"name": "failure-skips-dependent", "payload": {"jobs": [{"id": "a", "priority": 2, "fails": true}, {"id": "b", "priority": 1, "needs": ["a"]}]},
+     "expected_json": {"order": ["a"], "status": {"a": "failed", "b": "skipped"}}},
+    {"name": "failure-skips-transitively", "payload": {"jobs": [{"id": "a", "priority": 3, "fails": true}, {"id": "b", "priority": 2, "needs": ["a"]}, {"id": "c", "priority": 1, "needs": ["b"]}]},
+     "expected_json": {"order": ["a"], "status": {"a": "failed", "b": "skipped", "c": "skipped"}}},
+    {"name": "failure-isolates-not-aborts", "payload": {"jobs": [{"id": "a", "priority": 3, "fails": true}, {"id": "b", "priority": 2, "needs": ["a"]}, {"id": "x", "priority": 1}]},
+     "expected_json": {"order": ["a", "x"], "status": {"a": "failed", "b": "skipped", "x": "ok"}}},
+    {"name": "cycle-error", "payload": {"jobs": [{"id": "a", "priority": 1, "needs": ["b"]}, {"id": "b", "priority": 1, "needs": ["a"]}]},
+     "expected_stdout": "ERROR"},
+    {"name": "unknown-need-error", "payload": {"jobs": [{"id": "a", "priority": 1, "needs": ["zz"]}]},
+     "expected_stdout": "ERROR"},
+    {"name": "duplicate-id-error", "payload": {"jobs": [{"id": "a", "priority": 1}, {"id": "a", "priority": 2}]},
+     "expected_stdout": "ERROR"},
+    {"name": "malformed-error", "payload": {"jobs": "nope"}, "expected_stdout": "ERROR"}
+  ]
+}

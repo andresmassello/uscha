@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.77.0** — [Diamond Bench v0.2: nine archetypes, the aliasing bug the oracle caught (2026-08-13)](CHANGELOG-1.77.0.md)
 - **1.76.0** — [Diamond controlled-language arm: free prose vs EARS+STE, the same withheld oracle (2026-08-13)](CHANGELOG-1.76.0.md)
 - **1.75.1** — [the independent blind reviews earn their keep (2026-08-13)](CHANGELOG-1.75.1.md)
 - **1.75.0** — [Diamond M5: the Diamond Bench, regeneration fidelity across archetypes (2026-08-12)](CHANGELOG-1.75.0.md)

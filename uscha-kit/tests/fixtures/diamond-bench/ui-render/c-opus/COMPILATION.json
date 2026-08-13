@@ -1,0 +1,70 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "073d8935a3aa14dfb844ed9d77e683c213f2e85d9e985cb4f7213a38b09d54af",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only (json, sys); single file `source/impl.py` runnable as `python impl.py`",
+    "Reads the WHOLE of stdin once, prints exactly one line of output, always exits 0 — including on malformed input",
+    "All malformed cases (JSON parse failure, shape errors, duplicate field name, unknown field, type mismatch, unknown event type) funnel through a single internal exception and print exactly `ERROR`",
+    "Field order is captured from the model's declaration order and used for both the view's field map and the ordering of `errors`",
+    "`isinstance(v, bool)` is tested BEFORE `isinstance(v, str)`/int-like checks so Python's bool-as-int does not misclassify a boolean field",
+    "State is a pure function of (initial model, event sequence): the initial map is never mutated, `reset` copies from it, and validation never rewrites field values (INV-UI-RESET-01)"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "cfc0a38c7203f72a677dd2f98aadeec7d7b0c4edf9cb3ae90e5c22e00628c1dd"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-UI-01",
+        "AC-UI-02",
+        "AC-UI-03",
+        "AC-UI-04",
+        "AC-UI-05",
+        "AC-UI-06",
+        "INV-UI-RESET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "output-serialization-format",
+      "decision": "Print a single-line `json.dumps` of the view object with `fields` as a JSON object keyed by field name, `submitted` as a JSON boolean, and `errors` as a JSON array of strings",
+      "rationale": "The spec fixes structure and values but declares output formatting free; compact single-line JSON is the most machine-checkable rendering and preserves insertion order of `fields` for readability without making order semantically load-bearing"
+    },
+    {
+      "ir_region": "unknown-event-type",
+      "decision": "An event whose `type` is not one of input/toggle/reset/submit is treated as malformed shape -> ERROR",
+      "rationale": "The spec enumerates the complete event set and lists shape errors under AC-UI-06; silently ignoring an unrecognized type would make the view no longer a total function of a well-defined event language, so rejecting is the conservative reading"
+    },
+    {
+      "ir_region": "extra-keys-and-missing-keys-on-events",
+      "decision": "Missing required keys (`field` on input/toggle, `value` on input) are malformed; extra unrecognized keys on an otherwise well-formed event are tolerated and ignored",
+      "rationale": "The spec names the required members of each event but says nothing about additional members; rejecting absent required data is mandated by AC-UI-06, while rejecting unknown extras is not stated and would make the contract needlessly brittle to caller-added metadata"
+    },
+    {
+      "ir_region": "validation-scope-of-empty-check",
+      "decision": "`submit` inspects only fields whose CURRENT value is a string; boolean fields are never candidates for the empty-string error regardless of being false",
+      "rationale": "The spec says 'every STRING field must be non-empty' and false is a legitimate boolean value, not an empty one; keying off the current value's runtime type is equivalent to keying off the declared type because input/toggle validation already forbids changing a field's type"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "dffd03a10135df3719c87dbc83bcbcf6f66fb721e2213c326b682d27fabd15ed"
+}

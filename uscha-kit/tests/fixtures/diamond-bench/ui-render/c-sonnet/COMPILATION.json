@@ -1,0 +1,68 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "073d8935a3aa14dfb844ed9d77e683c213f2e85d9e985cb4f7213a38b09d54af",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "stdlib-only, no third-party imports",
+    "reads entire stdin as one JSON document, always exits 0",
+    "field type (str vs bool) is fixed at initial-model parse time and never changes across reset/input/toggle",
+    "submitted/errors are mutated only by submit and reset events; input/toggle leave them untouched"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "7959d5f8c570cd53248131e7295206490a40974f6f12b4863af27c0d79db3732"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-UI-01",
+        "AC-UI-02",
+        "AC-UI-03",
+        "AC-UI-04",
+        "AC-UI-05",
+        "AC-UI-06",
+        "INV-UI-RESET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "input.value type",
+      "decision": "require the input event's value to be a JSON string (else ERROR), even though only field-name/type mismatches are explicitly called out in AC-UI-06",
+      "rationale": "the model only allows string|bool field values, so accepting a non-string value into a string field would silently violate the model's own value-typing rule"
+    },
+    {
+      "ir_region": "submit re-validation semantics",
+      "decision": "treat submitted/errors as state mutated ONLY by submit and reset; input/toggle events after a failed submit change fields but leave submitted=false/errors=[prior list] until the next submit or reset",
+      "rationale": "spec says 'later events keep applying after a failed submit' but only submit/reset are defined to touch submitted/errors, so recomputing on every event would be inventing behavior not in the contract"
+    },
+    {
+      "ir_region": "duplicate field name detection scope",
+      "decision": "only the INITIAL model's field list is checked for duplicates; events can't introduce new fields so no post-init duplicate check is needed",
+      "rationale": "model fields are the only place new names are declared; events strictly reference existing names"
+    },
+    {
+      "ir_region": "malformed model/event shape granularity",
+      "decision": "any structural deviation (missing keys, wrong JSON types, unknown event type, non-dict event/field entries) collapses to the single ERROR output rather than distinguishing error kinds",
+      "rationale": "spec's output contract has no error-detail field — only 'print exactly ERROR' — so finer-grained internal error classification isn't observable and isn't attempted"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "a0c91cd8beaed7233d860bde2f18b47e33703007015a4ea0485f5b374b9d7ad6"
+}

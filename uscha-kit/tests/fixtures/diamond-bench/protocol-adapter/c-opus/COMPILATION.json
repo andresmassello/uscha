@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Single self-contained file `impl.py`, pure Python stdlib only (json, sys), no third-party imports, Python 3.8+ compatible syntax (no walrus in comprehensions, no match, no f-string `=`).",
+    "CLI contract: reads the whole of stdin with `sys.stdin.read()`, prints exactly one line, always exits 0 — malformed input is signalled by the literal token `ERROR` on stdout, never by a non-zero exit code or a stderr traceback.",
+    "Atomicity is enforced by full-batch validation before any output: every frame/message is validated and collected into a list, and a single failure returns a sentinel that short-circuits to `ERROR`, so no partial array can ever be printed.",
+    "Character-class validation is done with explicit ordinal range checks rather than `str.isupper()`/`str.islower()`, because those accept non-ASCII letters and would let illegal Unicode types/keys through.",
+    "Field segments are validated with `segment.split('=')` and a strict `len(parts) == 2` check, which rejects both a missing `=` and any second `=` (an illegal value character) in one test.",
+    "Encoded frames are produced by `'|'.join([type] + [key + '=' + value])`, the literal inverse of the decoder's split, so the round-trip is byte-for-byte by construction.",
+    "JSON output uses `json.dumps(..., ensure_ascii=False)`; only the structure and values are contractual on the JSON side, while the encoded frame strings are byte-exact."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "1363de4006bb4657d7aa24b0da32cc487d5d277406b3dd95bc4a2240391eef75"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PA-01",
+        "AC-PA-02",
+        "AC-PA-03",
+        "AC-PA-04",
+        "AC-PA-05",
+        "AC-PA-06",
+        "INV-PA-ATOMIC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "message-object-strictness-on-encode",
+      "decision": "An encode message must be a JSON object whose key set is exactly {\"type\",\"fields\"}; extra or missing keys are malformed shape -> ERROR.",
+      "rationale": "The spec defines a MESSAGE as exactly `{\"type\": str, \"fields\": [[key, value], ...]}` and says a malformed top-level shape is ERROR, but does not say whether unknown extra keys are tolerated. Strict equality was chosen because decode never produces extra keys, so accepting them would break the symmetry the round-trip law rests on (INV-PA-ATOMIC-01) and would silently discard data the caller believed it was sending."
+    },
+    {
+      "ir_region": "field-pair-representation",
+      "decision": "A field pair must be a JSON array of exactly two strings; a 2-element tuple-like of non-strings, a length-1/3 array, or an object like {\"k\":\"v\"} is malformed -> ERROR.",
+      "rationale": "The spec fixes fields as an ARRAY of pairs because order is meaningful, and requires that any type/key/value not producible by a legal frame be rejected. Non-string members cannot be produced by decoding a frame (splitting a string yields strings), so they fall under the \"could not be produced by a legal frame\" clause rather than being coerced via str()."
+    },
+    {
+      "ir_region": "stdin-not-valid-json",
+      "decision": "Unparseable stdin (empty input, truncated JSON, a bare scalar, or a top-level array) prints ERROR and exits 0, rather than raising or exiting non-zero.",
+      "rationale": "AC-PA-06 requires ERROR for malformed top-level shape, and the CLI contract requires exit 0. A JSON decode failure is the most malformed shape possible, so it is folded into the same path; letting `json.loads` raise would produce a traceback on stderr and a non-zero exit, violating both the output and exit contracts."
+    },
+    {
+      "ir_region": "error-token-emission",
+      "decision": "ERROR is printed as a bare line on stdout with a trailing newline (via `print`), with nothing else emitted and no output written before validation completes.",
+      "rationale": "AC-PA-05 demands \"exactly ERROR for the whole batch, never partial\". Emitting on stdout keeps the single-channel contract with the success case, and deferring all printing until the full batch validates is what makes \"never partial\" structurally impossible rather than merely avoided."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "c9539cb23926638b7f83389afee9c9e2716f5e3a1f003733a51c067284149fd1"
+}

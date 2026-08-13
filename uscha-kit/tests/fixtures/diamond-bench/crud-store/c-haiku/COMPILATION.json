@@ -1,0 +1,69 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure stdlib only (json, sys modules)",
+    "Python 3.8+",
+    "Single-file implementation, no external dependencies",
+    "Exit code 0 for all inputs (parse errors -> ERROR string, operation errors -> JSON)",
+    "Read whole stdin before processing"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "e856c61759601af3fe45ff0507e7c48979912858c8b4b790e078eaea3ef66bc1"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-CS-01",
+        "AC-CS-02",
+        "AC-CS-03",
+        "AC-CS-04",
+        "AC-CS-05",
+        "AC-CS-06",
+        "INV-CS-STRICT-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "key-type-validation",
+      "decision": "enforce-string-keys",
+      "rationale": "Spec states contract 'keys are strings' and list operation requires sortable keys. Implementation enforces isinstance(key, str) on all ops. Non-string keys (int, float, bool, null) are rejected as 'bad op'. This ensures AC-CS-05 (sorted list) never crashes on mixed types and guarantees INV-CS-STRICT-01 create/update semantics hold for string keys only."
+    },
+    {
+      "ir_region": "operation-case-sensitivity",
+      "decision": "exact-lowercase-match-required",
+      "rationale": "Spec lists operations in lowercase: create, read, update, delete, list. Implementation requires exact string match via op == 'create' etc. Any variant case (Create, CREATE, cReate) treated as unknown op -> 'bad op'. This matches JSON convention and spec examples, but could be relaxed to case-insensitive if needed."
+    },
+    {
+      "ir_region": "list-operation-constraints",
+      "decision": "no-key-field-required",
+      "rationale": "Spec does not require list operation to validate absence of 'key' or 'value' fields; it only checks op == 'list'. Implementation ignores extra fields silently. If strict field validation is required (reject list if key/value present), add validation: if 'key' in op_obj or 'value' in op_obj -> 'bad op'."
+    },
+    {
+      "ir_region": "parse-error-vs-operation-error",
+      "decision": "literal-ERROR-for-json-only",
+      "rationale": "Spec: non-array input -> 'ERROR' (literal string), not JSON. Implementation prints literal 'ERROR' for JSON parse failure or non-array type. Operation-level errors within valid arrays -> JSON-formatted {'ok': false, 'error': '...'}. This distinction separates structural validation from semantic validation."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "b3f76dd2d1620fa34a9b2eed06ceca67dcd8fcfbd0e1d943ff9ab1d335f745fd"
+}

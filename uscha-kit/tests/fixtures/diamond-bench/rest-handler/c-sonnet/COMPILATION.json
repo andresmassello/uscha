@@ -1,0 +1,67 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib (json, re, sys) only",
+    "reads entire stdin once, writes single JSON array (or literal ERROR) to stdout, exits 0 in all paths",
+    "in-memory state (list + counter) scoped to one process run, no persistence"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "c33f79b841130e9966977544aaeb1c118cbd20506fecab7b769f16ef48ad5bb5"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-RH-01",
+        "AC-RH-02",
+        "AC-RH-03",
+        "AC-RH-04",
+        "AC-RH-05",
+        "AC-RH-06",
+        "INV-RH-IDS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "id segment format",
+      "decision": "treat only strings matching ^[1-9][0-9]*$ as a valid positive-integer id; reject '0', leading zeros ('007'), '+1', '-1', decimals, and empty segment as 404",
+      "rationale": "spec says 'not a positive integer -> 404' but doesn't define canonical string form; rejecting non-canonical forms avoids ambiguity between id-as-string vs id-as-number"
+    },
+    {
+      "ir_region": "PUT bad-body vs missing-item ordering",
+      "decision": "validate the request body (400) before checking whether the item exists (404)",
+      "rationale": "spec doesn't order these checks explicitly; body shape is a property of the request itself and is cheaper/more fundamental to validate first, independent of collection state"
+    },
+    {
+      "ir_region": "HTTP method string matching",
+      "decision": "compare 'method' field via exact case-sensitive string equality (e.g. 'GET', not 'get')",
+      "rationale": "spec examples use uppercase method names and gives no case-folding rule; exact match is the least surprising default"
+    },
+    {
+      "ir_region": "trailing slash on item path (e.g. '/items/5/')",
+      "decision": "treat as undefined path -> 404, not as item route with empty id",
+      "rationale": "spec doesn't mention trailing slashes; splitting yields an empty final segment which fails the single-non-empty-segment shape of '/items/<id>', so it falls into the general undefined-path 404 bucket alongside '/items/1/extra'"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "181af2511d98f8af79fb63690236cc5ac2e2dc6ec319a90f0748489eb76fca15"
+}

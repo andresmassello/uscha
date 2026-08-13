@@ -1,0 +1,68 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "656d528a8b6ac2932c08a603349498656201b5fb74034f1cc8af59af2d95d5c7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib only, no third-party imports",
+    "Python 3.8+ compatible syntax",
+    "reads entire stdin, writes single-line JSON result to stdout, exits 0 on both success and validation-error paths",
+    "never raises/exits non-zero — all error conditions funnel to printing the literal string ERROR"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "6ec783bfcb826fec6f37a707fe307b30b3d6c82b28c065eaea1cec75725e962f"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-WK-01",
+        "AC-WK-02",
+        "AC-WK-03",
+        "AC-WK-04",
+        "AC-WK-05",
+        "AC-WK-06",
+        "INV-WK-DET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "job.priority type check",
+      "decision": "reject bool values for priority (True/False) even though Python's bool is an int subclass",
+      "rationale": "spec says priority: int; silently accepting True/False as 1/0 would be surprising and not clearly intended by the contract, so it is treated as malformed input -> ERROR"
+    },
+    {
+      "ir_region": "job object with unexpected extra keys",
+      "decision": "ignore any keys beyond id/priority/needs/fails rather than rejecting the job",
+      "rationale": "spec's job shape lists these fields but does not say extra keys are forbidden; being lenient here avoids over-rejecting otherwise well-formed input"
+    },
+    {
+      "ir_region": "needs field explicit null",
+      "decision": "treat an explicit \"needs\": null the same as an absent needs field (empty list)",
+      "rationale": "spec says needs absent = none; null is the closest JSON equivalent to absence and treating it as a hard error felt overly strict for an otherwise well-formed job"
+    },
+    {
+      "ir_region": "scheduling loop termination when no job is READY but undecided jobs remain",
+      "decision": "break the loop defensively rather than raising an error, since upfront cycle/unknown-need validation guarantees this branch is unreachable",
+      "rationale": "keeps the runtime scheduler simple and total for valid input; the defensive break is dead code reachable only if validation has a gap, and is safer than an infinite loop"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "6d0a6cb6c2b83705899a15cd2a90c44d0cca6f306adc954252f8bbf83382f56d"
+}

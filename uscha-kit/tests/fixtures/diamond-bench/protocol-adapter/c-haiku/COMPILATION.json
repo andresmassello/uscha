@@ -1,0 +1,68 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure stdlib (json, sys) — no external dependencies",
+    "Python 3.8+ compatibility",
+    "Reads entire stdin as single JSON object, processes atomically",
+    "Exits 0 with single output line (JSON or 'ERROR')"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "b0f873532533774dd9432813e61c834a3cf5b452bd22a2efac7c9e7aa9892d64"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PA-01",
+        "AC-PA-02",
+        "AC-PA-03",
+        "AC-PA-04",
+        "AC-PA-05",
+        "AC-PA-06",
+        "INV-PA-ATOMIC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "character_validation",
+      "decision": "explicit_membership_check",
+      "rationale": "Type (A-Z) and key (a-z) validation use direct membership checks rather than regex or isupper/islower to ensure deterministic, version-agnostic behavior and avoid Unicode classification surprises."
+    },
+    {
+      "ir_region": "empty_value_semantics",
+      "decision": "empty_strings_valid",
+      "rationale": "Spec allows empty values ('key='). The split/join operations preserve empty strings perfectly in both encode and decode, satisfying AC-PA-04 round-trip requirement without special casing."
+    },
+    {
+      "ir_region": "error_atomicity",
+      "decision": "fail_fast_entire_batch",
+      "rationale": "Any malformed frame or message causes the entire batch to fail with exactly 'ERROR'. No partial output. This ensures INV-PA-ATOMIC-01 — batch processing is all-or-nothing; atomicity is stronger than per-message error reporting."
+    },
+    {
+      "ir_region": "exception_handling",
+      "decision": "catch_and_error",
+      "rationale": "JSON parsing errors, type errors, and runtime exceptions all map to 'ERROR' for the batch. This provides robustness without silently hiding bugs; the caller learns the input was malformed but not the internal reason (which is correct for a sandboxed codec)."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "c1ba504271b8d550b8b17a037fe889b9fe43534ffbafaf1ca24102e6bf36af9a"
+}

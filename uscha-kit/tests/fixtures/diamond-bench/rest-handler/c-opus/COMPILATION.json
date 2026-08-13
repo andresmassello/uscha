@@ -1,0 +1,69 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only (json, sys); no third-party packages",
+    "Single file source/impl.py, executed as `python impl.py`, reads all of stdin and always exits 0",
+    "No sockets, HTTP parsing, headers, query strings or persistence — routing is done by string matching on the path field",
+    "Responses buffered and emitted as one JSON array so a malformed request object can still yield exactly ERROR with nothing else printed",
+    "State held in one in-memory Store instance created per run; monotonic id counter never rewound on delete"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "40a1ad4f10d79c5586452dd4d30b0764011d53cfc62b11fde85a726155fe8d34"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-RH-01",
+        "AC-RH-02",
+        "AC-RH-03",
+        "AC-RH-04",
+        "AC-RH-05",
+        "AC-RH-06",
+        "INV-RH-IDS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "<id> segment validity",
+      "decision": "Accept only pure decimal digit strings with value >= 1 (so \"+1\", \" 1\", \"1.0\", \"-3\", \"0\" and \"01\"-style non-canonical forms are all rejected as undefined paths -> 404)",
+      "rationale": "Spec says a non-positive-integer segment yields 404 but does not define the lexical form; strict isdigit plus value>0 is the narrowest reading and keeps the 404-vs-405 boundary deterministic"
+    },
+    {
+      "ir_region": "trailing slash and empty path segments (e.g. /items/, /items//1)",
+      "decision": "Treated as undefined paths -> 404 {\"error\":\"not found\"}, not as /items or /items/1",
+      "rationale": "Only /items and /items/<id> are defined; splitting on / makes a trailing slash an empty final segment that matches no route, avoiding an invented alias"
+    },
+    {
+      "ir_region": "ordering of 400 (bad body) vs 404 (missing item) on PUT /items/<id>",
+      "decision": "Body validation runs first: a bad body on a nonexistent id returns 400, not 404",
+      "rationale": "The spec lists body validation as a request-shape error independent of resource existence; validating shape before lookup keeps the rule uniform with POST and is the only ordering that makes AC-RH-05 unconditional"
+    },
+    {
+      "ir_region": "malformed element inside an otherwise valid JSON array (e.g. a string, or an object lacking method/path)",
+      "decision": "Abort the whole run and print exactly ERROR — no partial response array",
+      "rationale": "Spec scopes ERROR to \"not a JSON array of request objects\", which such input is; the batch-continues rule (AC-RH-05) is explicitly about body errors on well-formed requests, so it does not apply here"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "30aa9a694a6a0e1fc29918f99004348044de61e5427ab7bc8cb42b43e3c100b3"
+}

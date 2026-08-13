@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-CS-01",
+      "type": "AC",
+      "statement": "create stores a new key and returns ok; create on an existing key returns",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-CS-02",
+      "type": "AC",
+      "statement": "read returns the stored value, or {\"ok\": false, \"error\": \"missing\"}.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 5
+      }
+    },
+    {
+      "id": "AC-CS-03",
+      "type": "AC",
+      "statement": "update replaces the value of an existing key; update on a missing key returns",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 6
+      }
+    },
+    {
+      "id": "AC-CS-04",
+      "type": "AC",
+      "statement": "delete removes an existing key (a later create on it succeeds); delete on a",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 8
+      }
+    },
+    {
+      "id": "AC-CS-05",
+      "type": "AC",
+      "statement": "list returns the current keys sorted lexicographically.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 10
+      }
+    },
+    {
+      "id": "AC-CS-06",
+      "type": "AC",
+      "statement": "an unknown op or one missing its required fields returns {\"ok\": false, \"error\":",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 11
+      }
+    },
+    {
+      "id": "INV-CS-STRICT-01",
+      "type": "INV",
+      "statement": "create creates and update updates",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 7,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 6
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7"
+}

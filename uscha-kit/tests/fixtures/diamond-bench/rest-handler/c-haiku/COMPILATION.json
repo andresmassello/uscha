@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure stdlib only (no external dependencies)",
+    "Python 3.8+ compatible",
+    "Reads entire stdin as JSON array in one pass",
+    "State persists across all requests in one input array",
+    "Each new process run starts with empty state",
+    "ID counter is monotonic and never reset (1, 2, 3...), even after deletion",
+    "Response array order matches request array order exactly",
+    "Single bad request does not abort batch processing"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "32351a914a59c0aeb9c7e0a812b967dfd4b399ba15a1b750271a335724a96663"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-RH-01",
+        "AC-RH-02",
+        "AC-RH-03",
+        "AC-RH-04",
+        "AC-RH-05",
+        "AC-RH-06",
+        "INV-RH-IDS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "<id>_validation",
+      "decision": "non_integer_or_non_positive_-_404",
+      "rationale": "Path segment parsing errors are resource-not-found (404), not bad-request (400), following REST convention where invalid resource identifiers indicate the path does not resolve to a valid resource"
+    },
+    {
+      "ir_region": "method_routing",
+      "decision": "POST_to_/items/<id>_-_405_not_404",
+      "rationale": "The path /items/<id> is a defined route; an unsupported method on a defined path yields 405 (method not allowed), distinct from 404 (path not found), per AC-RH-04"
+    },
+    {
+      "ir_region": "creation_order_tracking",
+      "decision": "separate_list_for_creation_order",
+      "rationale": "GET /items returns items in creation order; storing only in id-to-item dict would lose order information for deleted items. A separate list preserves insertion order while allowing O(1) id lookup and deletion"
+    },
+    {
+      "ir_region": "error_batch_handling",
+      "decision": "bad_request_does_not_abort",
+      "rationale": "Per AC-RH-05 and INV-RH-IDS-01, a POST/PUT with malformed body returns 400 but does not stop batch processing. Each request is independent; responses are always in request order"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "c49125e9fbee76c5d8fd235069351a07e36239fed02ce474a484a58691361279"
+}

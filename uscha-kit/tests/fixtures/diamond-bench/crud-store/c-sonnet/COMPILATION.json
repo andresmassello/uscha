@@ -1,0 +1,68 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib only (json, sys)",
+    "reads entire stdin at once via sys.stdin.read()",
+    "single in-memory dict store per run, starts empty",
+    "always exits 0, even on ERROR path"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "e97af55d2adf0abcc2bae237d62585a153991a72edb859e8443b58589350b035"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-CS-01",
+        "AC-CS-02",
+        "AC-CS-03",
+        "AC-CS-04",
+        "AC-CS-05",
+        "AC-CS-06",
+        "INV-CS-STRICT-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "top-level-input-shape",
+      "decision": "ERROR is emitted only when the parsed JSON is not a list at all (parse failure or non-array root); once it's a list, each element is validated independently as an operation",
+      "rationale": "spec's ERROR clause reads as a whole-payload shape check ('not a JSON array of operation objects'); treating a malformed element as a global ERROR would let one bad element abort the whole batch, contradicting 'a failed operation never aborts the batch'"
+    },
+    {
+      "ir_region": "element-not-an-object",
+      "decision": "a list element that is not a JSON object (e.g. a string, number, or array) yields {\"ok\": false, \"error\": \"bad op\"} for that slot rather than escalating to top-level ERROR",
+      "rationale": "keeps a single one-result-per-operation invariant and the never-abort-the-batch rule intact; only 'op' being unrecognized or fields being absent is otherwise specified as 'bad op', so this generalizes that same bucket"
+    },
+    {
+      "ir_region": "key-type-validation",
+      "decision": "a present but non-string 'key' (e.g. key: 5 or key: null) is treated as 'bad op', not coerced or accepted",
+      "rationale": "spec states 'keys are strings' as a store-wide invariant; since it doesn't define behavior for a non-string key on input, rejecting it as malformed is safer than silently stringifying or crashing"
+    },
+    {
+      "ir_region": "missing-value-vs-null-value",
+      "decision": "presence of the 'value' field is checked with the 'value' in op membership test, so an explicit JSON null value is a valid create/update value and is stored/compared normally; only an absent 'value' key triggers 'bad op'",
+      "rationale": "JSON null is a legitimate arbitrary value per the spec ('values arbitrary JSON'); distinguishing 'field absent' from 'field present with null' is necessary to avoid wrongly rejecting create/update calls that intentionally store null"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "0e18f0bdc7e49fe4e2e437a4127233c88f400e3d7d4b7caefe3eb9c3e9a5ce82"
+}

@@ -1,0 +1,67 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib only (sys, json, re); reads entire stdin, prints one JSON array (decode) or one JSON array of frame strings (encode) to stdout, exits 0 even on ERROR",
+    "batch is atomic: first malformed frame/message aborts the whole decode/encode and prints exactly the literal text ERROR (no JSON) instead of partial output",
+    "frame validity check order: reject empty string, then require TYPE segment to fully match ^[A-Z]+$, then each subsequent segment must contain '=' with key matching ^[a-z]+$ and the extracted value containing no further '=' (multiple '=' in one segment is malformed, not swallowed into the value)"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "67880368e404c39bae039a6dd470a9814aa676ca94bb56b3a70f67a24127c6ab"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PA-01",
+        "AC-PA-02",
+        "AC-PA-03",
+        "AC-PA-04",
+        "AC-PA-05",
+        "AC-PA-06",
+        "INV-PA-ATOMIC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "field value containing '='",
+      "decision": "a segment with more than one '=' (e.g. a=b=c) is treated as malformed, not as key='a', value='b=c'",
+      "rationale": "spec states a value cannot contain '=' at all; splitting on the FIRST '=' then re-checking the tail for '=' enforces that literally rather than silently accepting it as part of the value"
+    },
+    {
+      "ir_region": "decode input frame that is not a JSON string (e.g. number/null in the frames array)",
+      "decision": "treated as a malformed frame, aborting the whole batch with ERROR, same as a structurally bad frame string",
+      "rationale": "spec only defines frame validity for strings; any non-string array element can't have been produced by a legal encode, so it falls under 'malformed frame' rather than a separate top-level-shape error"
+    },
+    {
+      "ir_region": "duplicate keys within one message/frame's field list",
+      "decision": "duplicates are allowed and preserved as-is in order; no deduplication or last-wins merging",
+      "rationale": "the spec only requires ORDER to be preserved and never mentions key uniqueness, so inventing a dedup rule would be adding behavior not in the contract"
+    },
+    {
+      "ir_region": "zero-field frame (bare TYPE, e.g. PING)",
+      "decision": "legal: type-only frames decode to fields: [] and encode back to just the type string with no trailing '|'",
+      "rationale": "spec explicitly gives PING as an example of a valid frame with zero fields"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "0a396a0cbd4f316296f646e7be587b07d2087ed0e97f073012beb593246d4f6b"
+}

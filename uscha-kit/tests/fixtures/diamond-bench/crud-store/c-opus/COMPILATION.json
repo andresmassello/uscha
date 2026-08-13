@@ -1,0 +1,75 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only (json, sys); no third-party packages, no filesystem or network access",
+    "Single file `source/impl.py` executed as `python impl.py`; reads the entirety of stdin, prints one line to stdout, always exits 0 (no non-zero exit, no stderr contract)",
+    "State is one in-memory dict per process run, starting empty and persisting across the batch; no persistence, transactions, TTLs, or nested-key paths",
+    "Every operation produces exactly one result object in input order; a failed operation records its error and the batch continues",
+    "Malformed top-level input (non-JSON, or JSON that is not an array of objects) prints exactly `ERROR` and nothing else",
+    "create/update mutate only after the existence check, so a rejected create never overwrites and a rejected update never inserts (INV-CS-STRICT-01)"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "84bca8e65489e9b9fcbf8791a58f0895cb13743786a81a785294a60864f2eb77"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-CS-01",
+        "AC-CS-02",
+        "AC-CS-03",
+        "AC-CS-04",
+        "AC-CS-05",
+        "AC-CS-06",
+        "INV-CS-STRICT-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "non-array-input-detection",
+      "decision": "Print `ERROR` for unparseable JSON, for any JSON value that is not an array, and for an array whose elements are not all objects; the check runs before any operation executes, so nothing partial is emitted",
+      "rationale": "The spec says `If input is not a JSON array of operation objects, print exactly ERROR` — the phrase `of operation objects` makes element type part of the top-level validity test, distinct from the per-operation `bad op` path which covers well-formed objects with a wrong/missing `op` field. Validating up front keeps `ERROR` and the results array mutually exclusive outputs."
+    },
+    {
+      "ir_region": "missing-value-field-vs-null-value",
+      "decision": "Required-field presence is tested with `in` (key membership), not truthiness or None-checks, so `{\"op\":\"create\",\"key\":\"a\",\"value\":null}` is a valid create storing JSON null, while omitting `value` entirely is `bad op`",
+      "rationale": "The spec says values are arbitrary JSON, and JSON null is a legitimate value. Only an absent field is `missing a required field for its op`; conflating null with absent would make a legal value unstorable and would make a later `read` ambiguous."
+    },
+    {
+      "ir_region": "non-string-key-type",
+      "decision": "A present but non-string `key` (number, null, object, array) yields `bad op` rather than being coerced to a string or used as-is",
+      "rationale": "The spec states flatly that `keys are strings`. Coercion would let `1` and `\"1\"` collide and would corrupt lexicographic `list` ordering; treating the type violation as `bad op` reuses the existing malformed-operation channel instead of inventing a new error string not present in the contract."
+    },
+    {
+      "ir_region": "extra-fields-and-list-payload",
+      "decision": "Unrecognized extra fields on an operation are ignored, and `list` requires no fields at all (a `list` carrying a stray `key` still succeeds)",
+      "rationale": "The contract enumerates required fields per op and puts value validation explicitly out of scope; rejecting unknown extras would be validation the spec did not ask for and would make the format brittle against harmless caller additions. `list` has no required field, so nothing about it can be missing."
+    },
+    {
+      "ir_region": "output-serialization-shape",
+      "decision": "Emit the whole results array as a single compact `json.dumps` line, with `list` results as a JSON array of key strings sorted by Python's default string ordering (code-point/lexicographic)",
+      "rationale": "The spec declares output formatting free but structure and values fixed, so a single canonical line is the least surprising machine-readable choice. Python's default `sorted` on `str` is code-point order, which is the lexicographic ordering AC-CS-05 asks for without introducing locale-dependent collation."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-020 bench growth blind compilation"
+  },
+  "_integrity": "fd83deaf267baaf5ea00e698db29851ab815f8a047f816654fe9b6285f9fa2e8"
+}

@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-RH-01",
+      "type": "AC",
+      "statement": "POST /items creates an item with a monotonic id (1, 2, 3, ...) and returns 201",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-RH-02",
+      "type": "AC",
+      "statement": "GET /items returns all current items in creation order; GET /items/<id> returns",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 5
+      }
+    },
+    {
+      "id": "AC-RH-03",
+      "type": "AC",
+      "statement": "PUT /items/<id> updates the name and returns 200 with the item, or 404 when the",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 7
+      }
+    },
+    {
+      "id": "AC-RH-04",
+      "type": "AC",
+      "statement": "a defined path with an unsupported method returns 405 {\"error\": \"method not",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 9
+      }
+    },
+    {
+      "id": "AC-RH-05",
+      "type": "AC",
+      "statement": "a POST/PUT body that is missing, not an object, or lacks a name string returns",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 11
+      }
+    },
+    {
+      "id": "AC-RH-06",
+      "type": "AC",
+      "statement": "state persists across the requests of one input array and starts empty each run;",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 13
+      }
+    },
+    {
+      "id": "INV-RH-IDS-01",
+      "type": "INV",
+      "statement": "ids are history, not slots",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 7,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 6
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130"
+}
