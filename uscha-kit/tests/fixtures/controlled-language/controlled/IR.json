@@ -1,0 +1,92 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-GH-01",
+      "type": "AC",
+      "statement": "the guard shall read one JSON object from standard input and shall report its",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-GH-02",
+      "type": "AC",
+      "statement": "when a tool call creates, edits, renames, or deletes a file whose name contains",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 6
+      }
+    },
+    {
+      "id": "AC-GH-03",
+      "type": "AC",
+      "statement": "when a tool call only reads a file whose name contains the marker, the guard shall",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 9
+      }
+    },
+    {
+      "id": "AC-GH-04",
+      "type": "AC",
+      "statement": "while the named tool is a recognised read-only tool, the guard shall allow the",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 11
+      }
+    },
+    {
+      "id": "AC-GH-05",
+      "type": "AC",
+      "statement": "while the named tool is a shell or command tool, the guard shall apply default-deny:",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 14
+      }
+    },
+    {
+      "id": "AC-GH-06",
+      "type": "AC",
+      "statement": "if the named tool is any other tool and the marker appears at any depth in the",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 18
+      }
+    },
+    {
+      "id": "AC-GH-07",
+      "type": "AC",
+      "statement": "the guard shall fail closed: if the input is not valid JSON, or the input is not",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 20
+      }
+    },
+    {
+      "id": "INV-GOLDEN-01",
+      "type": "INV",
+      "statement": "a human is the sole author of an approved golden",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 8,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 7
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "6db30354c996d1a68d753beceb244ab4cfc5ee7a627b30b97bc75da805931162"
+}

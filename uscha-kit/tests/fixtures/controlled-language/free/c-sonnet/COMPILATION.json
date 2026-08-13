@@ -1,0 +1,73 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "verdict only via exit code (0 allow, 2 block)",
+    "no filesystem/symlink resolution, no execution, no subprocess"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "3b54ff240d76b05ca820500267e1ce85186534a1b172af203c6c04c921020066"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-GH-04",
+      "decision": "read-only tools = read,grep,glob,ls,webfetch,websearch,notebookread (case-insensitive)",
+      "rationale": "spec names categories not identifiers; chose the smallest literal set matching them"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "shell tools = bash,shell,exec,terminal; only 'command' field inspected",
+      "rationale": "spec gives Bash as 'e.g.'; added a small synonym set for portability"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "pipeline read-only iff no redirection (fd-dup aware), no in-place/write flags, and every stage's leading verb (after stripping env prefixes and sudo) is on a reader allowlist",
+      "rationale": "built a conservative default-deny classifier from the three named failure modes"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "general interpreters and shells (python,node,perl,ruby,bash,sh,powershell) and known writers (cp,mv,rm,git,curl,npm,xargs,tee) always treated as not-provable-read-only",
+      "rationale": "their real effect depends on script content the guard cannot see; 'when in doubt block' makes blind interpreter dispatch unsafe"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "shell tool_input with no string 'command' field falls back to recursive marker scan instead of allowing",
+      "rationale": "an unparseable/missing command must fail closed, not default-allow"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "all constraints honored"
+  },
+  "_integrity": "55a607343f872b71345c913fcfeb138bb42ebb87ad3eb8a8fdfcd4b1d440a32a"
+}

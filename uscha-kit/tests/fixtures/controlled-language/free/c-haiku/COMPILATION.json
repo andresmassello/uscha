@@ -1,0 +1,73 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure stdlib, Python 3.8+",
+    "read one JSON object from stdin, exit only via code (0 or 2) and stderr",
+    "fail-closed: block on invalid input, unprovable safety, uncertainty"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "bdd4f2538928152678ac94646133b9164351e558ed91a80813e92c636cd4b5e4"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-GH-04",
+      "decision": "read-only tools = {read,grep,glob,monitor,webfetch,websearch}",
+      "rationale": "spec requires recognising read-only tools by name but does not enumerate; chose intrinsically safe readers"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "shell write indicators: redirection '>', in-place flags (-i,--in-place), pipes '|'",
+      "rationale": "spec lists these as write patterns; conservative: any in a command mentioning the marker is a write"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "safe shell verbs = {cat,grep,rg,head,tail,less,more,sort,uniq,wc,file,stat,od,hexdump,strings,ls,eza,fd,find,locate,which,type,command,whereis,git}",
+      "rationale": "chose utilities that output to stdout only; excluded editors, writers, shells (and interpreters)"
+    },
+    {
+      "ir_region": "AC-GH-06",
+      "decision": "recursive depth limit 50 for nested argument inspection",
+      "rationale": "'at any depth' vs infinite-recursion DoS risk; 50 is deep enough while guarding pathological inputs"
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "pipelines are blocked when the marker is mentioned, not parsed",
+      "rationale": "full pipeline parsing equals execution, which is out of scope; conservative: block all pipes"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-12T00:00:00+00:00",
+      "finished": "2026-08-12T00:00:00+00:00"
+    },
+    "constraint_handling": "all constraints honored"
+  },
+  "_integrity": "5bdcd696232f3ed2565973a1052d57e0e1b20ffb3e75d4bd403de0a2794897dd"
+}

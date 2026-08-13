@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "6db30354c996d1a68d753beceb244ab4cfc5ee7a627b30b97bc75da805931162",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON object from stdin, exits 0/2, reason to stderr"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "6ab029a2279cccb769dd5a34f9e0a8bf06854730d74bb159620afed807bfa2e6"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "read-only tools enumeration",
+      "decision": "read, grep, glob, ls, notebookread, webfetch, websearch (case-insensitive on tool_name)",
+      "rationale": "SPEC names read-only categories but not concrete identifiers; chose the smallest literal set matching them"
+    },
+    {
+      "ir_region": "shell/command tool enumeration",
+      "decision": "bash, shell, sh, cmd, powershell, exec, execute, terminal, command, runcommand, run_command",
+      "rationale": "SPEC describes the category generically; picked common cross-host names so the default-deny path is reachable"
+    },
+    {
+      "ir_region": "shell reader proof (visible signal)",
+      "decision": "proven reader only if no redirection (> excluding fd-dup), no write/in-place/output flag, and every pipeline/sequence stage's leading command is in a fixed reader set",
+      "rationale": "SPEC requires proof by visible signal but does not enumerate reader commands or flags; conservative allowlist, unrecognised defaults to writer/block"
+    },
+    {
+      "ir_region": "unknown-tool marker search depth",
+      "decision": "for any tool that is neither read-only nor shell, search every string in tool_input recursively at any depth for the marker; golden protection for writers folded into the same deep scan",
+      "rationale": "SPEC checks the marker 'at any depth' for unknown tools without naming a golden-path field, so no field name is guessed"
+    },
+    {
+      "ir_region": "input shape validation",
+      "decision": "require top-level object with tool_name a string and tool_input an object (empty allowed); anything else is wrong-shape and blocked",
+      "rationale": "the minimal typed contract that lets AC-GH-07 be tested deterministically"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "2a32870c4ed8cd6ced000eb18d7a01ecd74dd6eb74901c6a4887b002ac927e62"
+}

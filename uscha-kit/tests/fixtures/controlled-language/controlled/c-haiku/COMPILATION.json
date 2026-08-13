@@ -1,0 +1,67 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "6db30354c996d1a68d753beceb244ab4cfc5ee7a627b30b97bc75da805931162",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON object from stdin, exits 0/2, reason to stderr"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "1be8cf9cdeedb5208e78f01742340f6c6096541b7d47c52c34f1015fc1c69397"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "READ_ONLY_TOOLS registry",
+      "decision": "seed with known readers (Read, Glob, Grep, WebFetch, ...); maintain at call site",
+      "rationale": "the MCP ecosystem grows; the registry is not authoritative, so the caller/harness appends new read-only tools"
+    },
+    {
+      "ir_region": "Shell write-signal heuristics",
+      "decision": "regex-based pattern matching for redirection, flags, pipeline structure",
+      "rationale": "the guard cannot execute commands; heuristics detect visible signals; indirect writes remain out of scope"
+    },
+    {
+      "ir_region": "Golden file write operations",
+      "decision": "infer from tool name patterns (write, edit, agent) and file_path presence",
+      "rationale": "tool invocation is declarative; the guard inspects static text only; write-intent tools detected by name"
+    },
+    {
+      "ir_region": "Approved marker case-folding",
+      "decision": "case-insensitive matching throughout; the marker in any case equals a violation",
+      "rationale": "normalizes all comparisons to lowercase to prevent accidental bypass"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "190ef5a03bb32d39a86aaa6bd19d2e4d6156278bd36088f8c8590b8d34f22b85"
+}

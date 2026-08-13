@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "6db30354c996d1a68d753beceb244ab4cfc5ee7a627b30b97bc75da805931162",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON object from stdin, exits 0/2, reason to stderr"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "f351b4e0f8efe2dd824ac0c27cc086ec7f11529358f287fc5c1fe226258af6bb"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "Read-only tools",
+      "decision": "Fixed case-insensitive allowlist of tool names (read, view, glob, grep, ls, notebookread, webfetch, websearch) rather than inferring capability at runtime",
+      "rationale": "SPEC names capabilities, not concrete tool identifiers; a host cannot report read-only-ness generically, so an explicit conservative allowlist is the only measurable signal"
+    },
+    {
+      "ir_region": "Shell recognised-reader proof",
+      "decision": "A command is proven-reader only if it parses, contains no '>' redirection, and every stage's command basename is on a display/search allowlist (cat, head, tail, grep, rg, less, diff, ...); sed/awk/perl/tee/dd/cp/mv/rm and all interpreters are excluded",
+      "rationale": "excluding editors and interpreters from the reader set makes writer-stage, in-place edit and tee fall to block without per-flag semantics"
+    },
+    {
+      "ir_region": "in-place/output write flag",
+      "decision": "Only '--in-place'/'--in-place=...' and any '>' redirection are write signals; generic '-i'/'-o' are NOT",
+      "rationale": "'-i' (grep ignore-case) and '-o' (grep only-matching) are reader flags; a blanket flag block would falsely deny legitimate reads"
+    },
+    {
+      "ir_region": "Shell tool identity and command extraction",
+      "decision": "Case-insensitive shell/command tool-name set (bash, sh, zsh, cmd, powershell, pwsh, exec, run, terminal, ...); command read from tool_input['command']",
+      "rationale": "SPEC says a shell tool carries the command under 'command' but does not name the tools; a missing/non-string command with a golden present blocks (fail-closed)"
+    },
+    {
+      "ir_region": "Expected object shape",
+      "decision": "Top-level JSON object with a string 'tool_name' and an object 'tool_input'; any other top-level or field type blocks",
+      "rationale": "the two carried fields are the minimal contract every downstream rule depends on"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "7099593b825f2ea94e18e5d2eba372c28292a6649579d85cffaa49e5d6919650"
+}

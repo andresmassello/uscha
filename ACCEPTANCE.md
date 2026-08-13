@@ -301,6 +301,22 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - [x] AC-DB-06 - no compiler input references any oracle; the maker≠checker wall holds across
   every bench entry.
 
+## Diamond controlled-language (ADR-019) - free prose vs EARS+STE, same withheld oracle
+
+- [x] AC-CL-01 - `lang-compare` over the two arms emits `CONTROLLED-LANGUAGE-REPORT.md` with
+  per-arm oracle/variance/unresolved_intent and the three deltas; every number traces to a run.
+- [x] AC-CL-02 - the oracle-identity invariant holds: two arms with differing oracle files are
+  refused (`exit 2`), naming the mismatch — the comparison is apples-to-apples by construction.
+- [x] AC-CL-03 - both arms' three compilations `compile-validate` against their pinned IR; no
+  compiler input references the oracle (the maker≠checker wall holds across both arms).
+- [x] AC-CL-04 - the verdict is behaviour-first: reduced variance WITH a behavioural regression
+  (a lost all-green or a mean pass-rate drop) is `MIXED`, never `REDUCED`; a zero delta is
+  `NO EFFECT` — the regression cannot be masked as a win.
+- [x] AC-CL-05 - the `unresolved_intent` specificity proxy is deterministic and per-arm
+  (distinct `ir_region`s + mean rationale length), reproducible across runs.
+- [x] AC-CL-06 - the reference guard passes the shared oracle unchanged, and arm-B's IR differs
+  from arm-A's while the oracle is byte-identical (authoring changed, behaviour held fixed).
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

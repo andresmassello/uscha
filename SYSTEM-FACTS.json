@@ -20,7 +20,7 @@
     ]
   },
   "subcommands": {
-    "count": 47,
+    "count": 48,
     "list": [
       "bench",
       "bootstrap-oracle",
@@ -48,6 +48,7 @@
       "init",
       "ir-extract",
       "ir-render",
+      "lang-compare",
       "log-gate",
       "log-step",
       "oscillation",
@@ -71,5 +72,5 @@
       "waste-check"
     ]
   },
-  "version": "1.75.1"
+  "version": "1.76.0"
 }

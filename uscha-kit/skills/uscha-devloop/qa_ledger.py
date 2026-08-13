@@ -5660,6 +5660,209 @@ def cmd_bench(args):
 
 
 # --------------------------------------------------------------------------- #
+# lang-compare  (Diamond controlled-language arm: the SAME canonical package in
+# free prose vs EARS+STE, judged by the SAME withheld oracle, compiled by the
+# same models. Measures whether controlled authoring reduces inter-compiler
+# variance and/or unresolved_intent. The language is demonstrated or discarded
+# by the delta, never decreed. Deterministic, no LLM. ADR-019.)
+# --------------------------------------------------------------------------- #
+_LANG_MARGIN = 0.05                                 # variance delta below this is NO EFFECT
+_LANG_PR_MARGIN = 0.02                              # mean oracle pass-rate drop counted a regression
+
+
+def _lang_arm_metrics(arm_dir):
+    """Measure ONE arm: per-compiler oracle green + unresolved_intent, and inter-compiler
+    variance over the arm's compilations. Reuses the M4/M5 organs unchanged."""
+    ir_graph, ir_errors = _load_ir_at(os.path.join(arm_dir, IR_FILE))
+    try:
+        with open(os.path.join(arm_dir, "oracle", "ORACLE.json"), encoding="utf-8-sig") as fh:
+            cases = (json.load(fh) or {}).get("cases") or []
+    except (OSError, ValueError):
+        cases = []
+    rec = {"arm": os.path.basename(arm_dir), "ir_ok": ir_graph is not None and not ir_errors,
+           "compilations": [], "greens": 0, "n": 0, "variance_score": None,
+           "mean_passrate": None, "ui_count": 0.0, "ui_distinct_regions": 0.0,
+           "ui_rationale_len": 0.0}
+    if ir_graph is None or ir_errors or not cases:
+        return rec, ["arm incomplete (missing/invalid IR or oracle)"]
+    comp_dirs = sorted(d for d in os.listdir(arm_dir)
+                       if d.startswith("c-") and
+                       os.path.isfile(os.path.join(arm_dir, d, "COMPILATION.json")))
+    impl_paths, ui_counts, ui_regions, ui_lens = [], [], [], []
+    for d in comp_dirs:
+        cd = os.path.join(arm_dir, d)
+        cj = os.path.join(cd, "COMPILATION.json")
+        errors, _adv = _validate_compilation(cj, ir_graph)
+        unit, model, uis = None, None, []
+        try:
+            with open(cj, encoding="utf-8-sig") as fh:
+                c = json.load(fh)
+            src = c.get("source") or []
+            unit = src[0].get("unit") if src else None
+            model = (c.get("compilation_report") or {}).get("model")
+            uis = c.get("unresolved_intent") or []
+        except (OSError, ValueError, AttributeError, IndexError):
+            pass
+        impl = os.path.join(cd, unit.replace("/", os.sep)) if unit else None
+        ores = (_bench_oracle_all(impl, cases) if impl and os.path.isfile(impl)
+                else {"passed": 0, "total": len(cases), "green": False})
+        if impl and os.path.isfile(impl):
+            impl_paths.append(impl)
+        ui_counts.append(len(uis))
+        ui_regions.append(len({(u.get("ir_region") or "") for u in uis}))
+        ui_lens.append((sum(len(u.get("rationale") or "") for u in uis) / len(uis))
+                       if uis else 0.0)
+        rec["compilations"].append({"dir": d, "model": model, "compile_valid": not errors,
+                                    "oracle": ores, "ui_count": len(uis)})
+    rec["n"] = len(rec["compilations"])
+    rec["greens"] = sum(1 for i in rec["compilations"] if i["oracle"]["green"])
+    # mean oracle pass-RATE (not just the binary all-green flag): a per-compiler regression that
+    # never reaches all-green is invisible in `greens` but real in the pass-rate, and lower
+    # variance toward a WORSE behaviour must not read as a clean win (the M4 convergence lesson).
+    rates = [(i["oracle"]["passed"] / i["oracle"]["total"]) if i["oracle"]["total"] else 0.0
+             for i in rec["compilations"]]
+    rec["mean_passrate"] = round(sum(rates) / len(rates), 4) if rates else None
+    rec["ui_count"] = round(sum(ui_counts) / len(ui_counts), 3) if ui_counts else 0.0
+    rec["ui_distinct_regions"] = round(sum(ui_regions) / len(ui_regions), 3) if ui_regions else 0.0
+    rec["ui_rationale_len"] = round(sum(ui_lens) / len(ui_lens), 1) if ui_lens else 0.0
+    # inter-compiler variance: mean pairwise normalized structural distance (0 = identical)
+    metrics = [_impl_metrics(p) for p in impl_paths]
+    good = [m for m in metrics if "error" not in m]
+    dists = []
+    for i in range(len(good)):
+        for j in range(i + 1, len(good)):
+            a, b = good[i], good[j]
+            ia, ib = set(a["imports"]), set(b["imports"])
+            jac = (len(ia & ib) / len(ia | ib)) if (ia or ib) else 1.0
+            dloc = abs(a["loc"] - b["loc"]) / max(a["loc"], b["loc"], 1)
+            dast = abs(a["ast_nodes"] - b["ast_nodes"]) / max(a["ast_nodes"], b["ast_nodes"], 1)
+            dists.append((dloc + dast + (1.0 - jac)) / 3.0)
+    rec["variance_score"] = round(sum(dists) / len(dists), 4) if dists else None
+    return rec, []
+
+
+def _oracle_hash(arm_dir):
+    try:
+        with open(os.path.join(arm_dir, "oracle", "ORACLE.json"), "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def cmd_lang_compare(args):
+    """Compare a FREE-prose arm and a CONTROLLED (EARS+STE) arm of the same canonical package
+    (ADR-019). The two arms MUST share one withheld oracle -- a differing oracle is a mechanical
+    refusal, because the whole comparison rests on the arms targeting the same behaviour. Emits
+    the per-arm metrics, the delta, and a COMPUTED verdict (REDUCED / NO EFFECT / WORSE); a null
+    is a first-class result. Consults no model."""
+    hf, hc = _oracle_hash(args.free), _oracle_hash(args.controlled)
+    if hf is None or hc is None:
+        print("[qa_ledger] lang-compare: an arm has no oracle/ORACLE.json", file=sys.stderr)
+        sys.exit(2)
+    if hf != hc:
+        print("[qa_ledger] lang-compare: the two arms have DIFFERENT oracles (%s.. vs %s..) -- "
+              "the comparison requires the SAME withheld oracle; behaviour must be held fixed "
+              "while only the authoring changes." % (hf[:12], hc[:12]), file=sys.stderr)
+        sys.exit(2)
+    free, ef = _lang_arm_metrics(args.free)
+    ctrl, ec = _lang_arm_metrics(args.controlled)
+    if ef or ec:
+        for e in ef + ec:
+            print("[qa_ledger] lang-compare: %s" % e, file=sys.stderr)
+        sys.exit(2)
+    vf, vc = free["variance_score"], ctrl["variance_score"]
+    d_var = (vc - vf) if (vf is not None and vc is not None) else None
+    d_ui = ctrl["ui_count"] - free["ui_count"]
+    d_green = ctrl["greens"] - free["greens"]
+    pf, pc = free["mean_passrate"], ctrl["mean_passrate"]
+    d_pass = (pc - pf) if (pf is not None and pc is not None) else None
+    # Verdict is BEHAVIOUR-FIRST (the M4 lesson: lower variance toward a WORSE answer is not a
+    # win). A regression is a lost all-green OR a mean pass-rate drop beyond the pass-rate margin.
+    variance_reduced = d_var is not None and d_var <= -_LANG_MARGIN
+    variance_worse = d_var is not None and d_var >= _LANG_MARGIN
+    regressed = (d_green < 0) or (d_pass is not None and d_pass <= -_LANG_PR_MARGIN)
+    if variance_reduced and regressed:
+        verdict = "MIXED"                           # variance down but behaviour regressed
+    elif variance_reduced:
+        verdict = "REDUCED"                         # variance down, behaviour held
+    elif variance_worse or regressed:
+        verdict = "WORSE"
+    else:
+        verdict = "NO EFFECT"
+    delta = {"variance_score": round(d_var, 4) if d_var is not None else None,
+             "unresolved_intent_count": round(d_ui, 3), "oracle_green": d_green,
+             "mean_passrate": round(d_pass, 4) if d_pass is not None else None}
+    report = {"free": free, "controlled": ctrl, "delta": delta, "verdict": verdict,
+              "margin": _LANG_MARGIN, "passrate_margin": _LANG_PR_MARGIN, "oracle_shared": True}
+    if args.out:
+        with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(_render_lang_md(report))
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        for a in (free, ctrl):
+            print("LANG %-11s: oracle-green %d/%d · pass-rate %s · variance %s · "
+                  "unresolved_intent %.2f (regions %.2f, rationale %.0f chars)"
+                  % (a["arm"], a["greens"], a["n"],
+                     "%.3f" % a["mean_passrate"] if a["mean_passrate"] is not None else "n/a",
+                     "%.4f" % a["variance_score"] if a["variance_score"] is not None else "n/a",
+                     a["ui_count"], a["ui_distinct_regions"], a["ui_rationale_len"]))
+        print("DELTA (controlled - free): variance %s · pass-rate %s · unresolved_intent %+.2f "
+              "· green %+d"
+              % ("%+.4f" % delta["variance_score"] if delta["variance_score"] is not None
+                 else "n/a",
+                 "%+.4f" % delta["mean_passrate"] if delta["mean_passrate"] is not None else "n/a",
+                 delta["unresolved_intent_count"], delta["oracle_green"]))
+        print("VERDICT: %s (variance margin %.2f, pass-rate margin %.2f) -- behaviour-first, "
+              "computed from the delta, never decreed" % (verdict, _LANG_MARGIN, _LANG_PR_MARGIN))
+        if args.out:
+            print("  -> %s" % args.out)
+    sys.exit(0)
+
+
+def _render_lang_md(r):
+    d = r["delta"]
+    lines = ["<!-- GENERATED by qa_ledger.py lang-compare (ADR-019) -- measured run; do not "
+             "hand-edit. -->", "", "# CONTROLLED-LANGUAGE-REPORT", "",
+             "The same canonical package compiled by the same models from **free prose** (arm A) "
+             "and an **EARS+STE rewrite** (arm B), judged by one **shared withheld oracle** "
+             "(behaviour held fixed; only the authoring changes). The verdict is computed from "
+             "the delta.", "",
+             "| Arm | Oracle-green | Mean pass-rate | Inter-compiler variance | unresolved_intent (count · regions · rationale chars) |",
+             "|-----|--------------|----------------|-------------------------|-------------------------------------------------------|"]
+    for a in (r["free"], r["controlled"]):
+        vs = "%.4f" % a["variance_score"] if a["variance_score"] is not None else "n/a"
+        pr = "%.3f" % a["mean_passrate"] if a["mean_passrate"] is not None else "n/a"
+        lines.append("| %s | %d/%d | %s | %s | %.2f · %.2f · %.0f |"
+                     % (a["arm"], a["greens"], a["n"], pr, vs, a["ui_count"],
+                        a["ui_distinct_regions"], a["ui_rationale_len"]))
+    dv = "%+.4f" % d["variance_score"] if d["variance_score"] is not None else "n/a"
+    dp = "%+.4f" % d["mean_passrate"] if d.get("mean_passrate") is not None else "n/a"
+    lines += ["", "**Delta (controlled − free):** variance %s · mean pass-rate %s · "
+              "unresolved_intent %+.2f · oracle-green %+d."
+              % (dv, dp, d["unresolved_intent_count"], d["oracle_green"]), "",
+              "## Verdict: %s" % r["verdict"], "",
+              {"REDUCED": "Controlled authoring reduced inter-compiler variance beyond the %.2f "
+                          "margin WITHOUT a behavioural regression — for this subsystem, at this "
+                          "sample size." % r["margin"],
+               "MIXED": "Controlled authoring reduced inter-compiler variance beyond the %.2f "
+                        "margin, BUT mean oracle pass-rate regressed beyond the %.2f pass-rate "
+                        "margin (or an all-green was lost): the compilers agreed MORE, on a "
+                        "marginally WORSE behaviour. Lower variance is not a win when it converges "
+                        "toward a worse answer — the honest, two-part finding."
+                        % (r["margin"], r.get("passrate_margin", 0.02)),
+               "NO EFFECT": "Within the margins: controlled authoring did not measurably change "
+                            "the delta here. A null result, reported as a null — not a failure.",
+               "WORSE": "Controlled authoring increased variance, or regressed behaviour (lost an "
+                        "all-green or dropped mean pass-rate) beyond the margins — reported "
+                        "honestly."}[r["verdict"]],
+              "", "*The oracle is byte-identical across both arms, so behaviour is held fixed; "
+              "the only variable is the authoring discipline. The judgement of \"same semantic "
+              "content\" between the two canonical packages is human — a stated limitation.*", ""]
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
 # facts  (T0 / SYSTEM-FACTS: public claims become compiled artifacts of repo
 # facts -- Diamond applied to Diamond. ADR-012.)
 # --------------------------------------------------------------------------- #
@@ -9781,6 +9984,17 @@ def build_parser():
     pbn.add_argument("--out", default=None, help="write DIAMOND-BENCH.md here")
     pbn.add_argument("--json", action="store_true")
     pbn.set_defaults(func=cmd_bench)
+
+    plc = sub.add_parser(
+        "lang-compare",
+        help="controlled-language arm (ADR-019): compare a FREE-prose arm and an EARS+STE arm of "
+             "the same canonical package, judged by the SAME withheld oracle; the delta on "
+             "variance/unresolved_intent gives a computed REDUCED/NO EFFECT/WORSE verdict")
+    plc.add_argument("--free", required=True, help="the free-prose arm directory")
+    plc.add_argument("--controlled", required=True, help="the EARS+STE arm directory")
+    plc.add_argument("--out", default=None, help="write CONTROLLED-LANGUAGE-REPORT.md here")
+    plc.add_argument("--json", action="store_true")
+    plc.set_defaults(func=cmd_lang_compare)
 
     pcr = sub.add_parser("cleanroom",
                          help="run a command against a CLEAN checkout of one commit in a throwaway worktree (ADR-008)")

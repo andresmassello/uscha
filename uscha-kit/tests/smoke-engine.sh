@@ -3428,6 +3428,7 @@ rm -f "$KIT/reports/junit/.ir-cases.json"         # same rule for T125
 rm -f "$KIT/reports/junit/.compile-cases.json"    # same rule for T126
 rm -f "$KIT/reports/junit/.bootstrap-cases.json"  # same rule for T127
 rm -f "$KIT/reports/junit/.bench-cases.json"      # same rule for T128
+rm -f "$KIT/reports/junit/.lang-cases.json"       # same rule for T129
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -5367,6 +5368,176 @@ case "$T128" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T128";;
 esac
 
+echo "== T129 (1.76.0): the controlled-language arm -- free prose vs EARS+STE, same withheld oracle (ADR-019) =="
+T129=$("$PY" - "$KIT" <<'PY'
+import hashlib, importlib.util, io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
+FREE = os.path.join(CL, "free")
+CTRL = os.path.join(CL, "controlled")
+res = {}
+spec = importlib.util.spec_from_file_location("qa_ledger_t129", ENG)
+q = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(q)
+
+def lc(free, ctrl):
+    r = subprocess.run([sys.executable, ENG, "lang-compare", "--free", free,
+                        "--controlled", ctrl, "--json"], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    try:
+        return r.returncode, json.loads(r.stdout)
+    except ValueError:
+        return r.returncode, {}
+
+# AC-CL-01: lang-compare over the two committed arms emits report + per-arm + delta + verdict
+outp = os.path.join(tempfile.mkdtemp(), "CL.md")
+r = subprocess.run([sys.executable, ENG, "lang-compare", "--free", FREE, "--controlled", CTRL,
+                    "--out", outp, "--json"], capture_output=True, text=True, encoding="utf-8",
+                   errors="replace")
+try:
+    rep = json.loads(r.stdout)
+except ValueError:
+    rep = {}
+res["AC-CL-01"] = (r.returncode == 0 and "free" in rep and "controlled" in rep
+                   and "delta" in rep and rep.get("verdict") in ("REDUCED", "MIXED", "NO EFFECT", "WORSE")
+                   and os.path.isfile(outp) and os.path.getsize(outp) > 0)
+
+# AC-CL-02: two arms with DIFFERENT oracles are refused (exit 2); committed arms share the oracle
+w = tempfile.mkdtemp()
+a1 = os.path.join(w, "a1")
+a2 = os.path.join(w, "a2")
+for a, txt in ((a1, json.dumps({"cases": [{"name": "x", "raw_stdin": "a", "expected_exit": 0}]})),
+               (a2, json.dumps({"cases": [{"name": "x", "raw_stdin": "b", "expected_exit": 2}]}))):
+    os.makedirs(os.path.join(a, "oracle"))
+    io.open(os.path.join(a, "oracle", "ORACLE.json"), "w").write(txt)
+rc_mm = subprocess.run([sys.executable, ENG, "lang-compare", "--free", a1, "--controlled", a2],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+shared = (q._oracle_hash(FREE) == q._oracle_hash(CTRL))
+res["AC-CL-02"] = (rc_mm.returncode == 2 and "DIFFERENT oracles" in rc_mm.stderr and shared)
+
+# AC-CL-03: both arms' 3 compilations compile-validate against their pinned IR; no leakage
+def cv(arm, m):
+    r = subprocess.run([sys.executable, ENG, "compile-validate", "--ir",
+                        os.path.join(arm, "IR.json"), "--compilation",
+                        os.path.join(arm, "c-" + m, "COMPILATION.json"), "--json"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        return json.loads(r.stdout).get("valid")
+    except ValueError:
+        return False
+
+def refs(p):
+    try:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            t = fh.read().lower()
+        return "oracle" in t or "expected_exit" in t
+    except OSError:
+        return True
+
+allvalid = all(cv(arm, m) is True for arm in (FREE, CTRL) for m in ("opus", "sonnet", "haiku"))
+noleak = all(not refs(os.path.join(arm, "c-" + m, "source", "guard.py"))
+             for arm in (FREE, CTRL) for m in ("opus", "sonnet", "haiku"))
+res["AC-CL-03"] = allvalid and noleak
+
+# AC-CL-04: the verdict is behaviour-first. A zero delta is NO EFFECT (a null, first-class); and
+# reduced variance WITH a behavioural regression (a lost all-green) is MIXED, never REDUCED -- the
+# regression cannot be masked as a win (the M4 convergence-toward-worse lesson).
+def mk_arm(entry, bodies, cases):
+    cdir = os.path.join(entry, "canonical")
+    os.makedirs(cdir)
+    io.open(os.path.join(cdir, "ACCEPTANCE.md"), "w").write("- [ ] AC-X-01 do the thing\n")
+    io.open(os.path.join(cdir, "CONSTITUTION.md"), "w").write("- **INV-X-01 — an inv.** b\n")
+    g = q._extract_ir(cdir, {})
+    io.open(os.path.join(entry, "IR.json"), "w", encoding="utf-8").write(json.dumps(g))
+    os.makedirs(os.path.join(entry, "oracle"))
+    io.open(os.path.join(entry, "oracle", "ORACLE.json"), "w").write(json.dumps({"cases": cases}))
+    ids = [n["id"] for n in g["nodes"]]
+    for m, body in bodies.items():
+        sdir = os.path.join(entry, "c-" + m, "source")
+        os.makedirs(sdir)
+        p = os.path.join(sdir, "impl.py")
+        io.open(p, "w", newline="\n").write(body)
+        sha = hashlib.sha256(io.open(p, "rb").read()).hexdigest()
+        c = {"schema_version": q.COMPILE_SCHEMA,
+             "canonical_ir": {"ir_hash": g["_integrity"], "schema_version": q.IR_SCHEMA},
+             "target_stack": "python", "implementation_constraints": ["x"],
+             "source": [{"unit": "source/impl.py", "sha256": sha}], "tests": [],
+             "trace_manifest": [{"unit": "source/impl.py", "implements": ids}],
+             "unresolved_intent": [{"ir_region": "AC-X-01", "decision": "d", "rationale": "r"}],
+             "compilation_report": {"stack": "python", "model": m, "model_version": m,
+                                    "timestamps": {}, "constraint_handling": "x"}}
+        c["_integrity"] = q._compile_seal(c)
+        io.open(os.path.join(entry, "c-" + m, "COMPILATION.json"), "w",
+                encoding="utf-8").write(json.dumps(c))
+
+EXIT0 = "import sys\nsys.exit(0)\n"
+ONE = [{"name": "c", "raw_stdin": "x", "expected_exit": 0}]
+TWO = [{"name": "a", "raw_stdin": "x", "expected_exit": 0},
+       {"name": "b", "raw_stdin": "y", "expected_exit": 0}]
+bodies = {"opus": "# a\n" + EXIT0, "sonnet": "# bb\n" + EXIT0, "haiku": "# ccc\n" + EXIT0}
+ne_free = os.path.join(w, "nef")
+os.makedirs(ne_free)
+ne_ctrl = os.path.join(w, "nec")
+os.makedirs(ne_ctrl)
+mk_arm(ne_free, bodies, ONE)
+mk_arm(ne_ctrl, bodies, ONE)
+rc_ne, rep_ne = lc(ne_free, ne_ctrl)
+# MIXED: free = 3 varied impls, all oracle-green (high variance); controlled = 3 near-identical
+# impls that pass only case a (lost the all-green, low variance) -> MIXED, not REDUCED
+BAD = "import sys\nsys.exit(0 if 'x' in sys.stdin.read() else 2)\n"
+mx_free = os.path.join(w, "mxf")
+os.makedirs(mx_free)
+mx_ctrl = os.path.join(w, "mxc")
+os.makedirs(mx_ctrl)
+mk_arm(mx_free, {"opus": "# aaaa\nimport json\n" + EXIT0, "sonnet": "# b\n" + EXIT0,
+                 "haiku": "# ccccccc\nimport re\n" + EXIT0}, TWO)
+mk_arm(mx_ctrl, {"opus": "# a\n" + BAD, "sonnet": "# a\n" + BAD + " \n",
+                 "haiku": "# a\n" + BAD + "  \n"}, TWO)
+rc_mx, rep_mx = lc(mx_free, mx_ctrl)
+res["AC-CL-04"] = (rc_ne == 0 and rep_ne.get("verdict") == "NO EFFECT"
+                   and rep_ne["delta"]["variance_score"] == 0.0
+                   and rc_mx == 0 and rep_mx.get("verdict") == "MIXED"
+                   and rep_mx["delta"]["variance_score"] < 0
+                   and rep_mx["delta"]["oracle_green"] < 0)
+
+# AC-CL-05: the unresolved_intent proxy is deterministic and per-arm
+rc_a, rep_a = lc(FREE, CTRL)
+rc_b, rep_b = lc(FREE, CTRL)
+def proxy(a):
+    return (a["ui_count"], a["ui_distinct_regions"], a["ui_rationale_len"])
+res["AC-CL-05"] = (all(k in rep_a["free"] for k in ("ui_count", "ui_distinct_regions",
+                                                    "ui_rationale_len"))
+                   and proxy(rep_a["free"]) == proxy(rep_b["free"])
+                   and proxy(rep_a["controlled"]) == proxy(rep_b["controlled"]))
+
+# AC-CL-06: the reference guard passes the shared oracle; controlled IR differs from free IR
+# while the oracle is byte-identical
+rg = subprocess.run([sys.executable, ENG, "bootstrap-oracle", "--impl",
+                     os.path.join(kit, "hooks", "block-approved-writes.py"),
+                     "--oracle", os.path.join(FREE, "oracle", "ORACLE.json"), "--json"],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace")
+try:
+    ref_green = json.loads(rg.stdout).get("oracle_green")
+except ValueError:
+    ref_green = None
+free_ir = json.load(io.open(os.path.join(FREE, "IR.json"), encoding="utf-8"))["_integrity"]
+ctrl_ir = json.load(io.open(os.path.join(CTRL, "IR.json"), encoding="utf-8"))["_integrity"]
+res["AC-CL-06"] = (ref_green is True and free_ir != ctrl_ir
+                   and q._oracle_hash(FREE) == q._oracle_hash(CTRL))
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".lang-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T129" in
+  OK*) PASS=$((PASS+1)); echo "  ok   lang: $T129";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T129";;
+esac
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -6596,6 +6767,23 @@ for _dbid in ("AC-DB-01", "AC-DB-02", "AC-DB-03", "AC-DB-04", "AC-DB-05", "AC-DB
         results.append((_dbid, "bench", None))
     else:
         results.append((_dbid, "bench", "T128 case failed or missing"))
+
+# Controlled-language criteria (Diamond, ADR-019): measured by T129, same sidecar contract.
+def _lang_cases():
+    p = os.path.join(kit, "reports", "junit", ".lang-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_lcc = _lang_cases()
+for _lid in ("AC-CL-01", "AC-CL-02", "AC-CL-03", "AC-CL-04", "AC-CL-05", "AC-CL-06"):
+    if _lcc is None or _lcc.get(_lid) is None:
+        results.append((_lid, "controlled-language", SKIP))
+    elif _lcc.get(_lid) is True:
+        results.append((_lid, "controlled-language", None))
+    else:
+        results.append((_lid, "controlled-language", "T129 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)
