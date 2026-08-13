@@ -15,6 +15,9 @@
     {"name": "missing-last", "payload": [{"first": "A", "age": 30}], "expected_stdout": "ERROR"},
     {"name": "age-not-integer", "payload": [{"first": "A", "last": "B", "age": "old"}], "expected_stdout": "ERROR"},
     {"name": "record-not-object", "payload": ["nope"], "expected_stdout": "ERROR"},
-    {"name": "not-json", "raw_stdin": "first,last,age", "expected_stdout": "ERROR"}
+    {"name": "not-json", "raw_stdin": "first,last,age", "expected_stdout": "ERROR"},
+    {"name": "age-boolean-rejected", "payload": [{"first": "A", "last": "B", "age": true}], "expected_stdout": "ERROR"},
+    {"name": "age-float-rejected", "payload": [{"first": "A", "last": "B", "age": 18.0}], "expected_stdout": "ERROR"},
+    {"name": "extra-field-tolerated", "payload": [{"first": "A", "last": "B", "age": 18, "extra": 1}], "expected_json": [{"name": "A B", "adult": true}]}
   ]
 }

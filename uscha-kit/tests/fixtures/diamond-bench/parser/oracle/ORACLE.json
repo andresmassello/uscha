@@ -17,6 +17,10 @@
     {"name": "div-by-zero", "raw_stdin": "1 / 0", "expected_stdout": "ERROR"},
     {"name": "not-an-expression", "raw_stdin": "abc", "expected_stdout": "ERROR"},
     {"name": "unmatched-paren", "raw_stdin": "(1 + 2", "expected_stdout": "ERROR"},
-    {"name": "two-numbers", "raw_stdin": "1 2", "expected_stdout": "ERROR"}
+    {"name": "two-numbers", "raw_stdin": "1 2", "expected_stdout": "ERROR"},
+    {"name": "exponentiation-rejected", "raw_stdin": "2**3", "expected_stdout": "ERROR"},
+    {"name": "bitwise-and-rejected", "raw_stdin": "5 & 3", "expected_stdout": "ERROR"},
+    {"name": "bitwise-or-rejected", "raw_stdin": "5 | 3", "expected_stdout": "ERROR"},
+    {"name": "trunc-toward-zero-2", "raw_stdin": "-9 / 4", "expected_stdout": "-2"}
   ]
 }

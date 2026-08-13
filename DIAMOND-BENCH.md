@@ -7,9 +7,9 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 | Archetype | Verdict | Compilers (oracle pass / total) | Distinct | Oracle cases |
 |-----------|---------|--------------------------------|----------|--------------|
 | guard | PARTIAL | M1 19/23, M2 21/23, M3 21/23 | yes | 23 |
-| parser | PASS | M1 17/17, M2 17/17, M3 17/17 | yes | 17 |
+| parser | PASS | M1 21/21, M2 21/21, M3 21/21 | yes | 21 |
 | state-machine | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
-| transformer | PASS | M1 11/11, M2 11/11, M3 11/11 | yes | 11 |
+| transformer | PASS | M1 14/14, M2 14/14, M3 14/14 | yes | 14 |
 
 **Coverage:** 1 PARTIAL, 3 PASS (of 4 entries).
 
@@ -26,10 +26,10 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 
 ### parser — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 17/17 GREEN
-- `c-opus` (M2): oracle 17/17 GREEN
-- `c-sonnet` (M3): oracle 17/17 GREEN
-- discrimination stub: 6/17 (oracle rejects the stub)
+- `c-haiku` (M1): oracle 21/21 GREEN
+- `c-opus` (M2): oracle 21/21 GREEN
+- `c-sonnet` (M3): oracle 21/21 GREEN
+- discrimination stub: 9/21 (oracle rejects the stub)
 
 ### state-machine — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
@@ -40,7 +40,7 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 
 ### transformer — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 11/11 GREEN
-- `c-opus` (M2): oracle 11/11 GREEN
-- `c-sonnet` (M3): oracle 11/11 GREEN
-- discrimination stub: 1/11 (oracle rejects the stub)
+- `c-haiku` (M1): oracle 14/14 GREEN
+- `c-opus` (M2): oracle 14/14 GREEN
+- `c-sonnet` (M3): oracle 14/14 GREEN
+- discrimination stub: 1/14 (oracle rejects the stub)

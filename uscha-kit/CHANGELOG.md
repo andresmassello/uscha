@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.75.1** — [the independent blind reviews earn their keep (2026-08-13)](CHANGELOG-1.75.1.md)
 - **1.75.0** — [Diamond M5: the Diamond Bench, regeneration fidelity across archetypes (2026-08-12)](CHANGELOG-1.75.0.md)
 - **1.74.0** — [Diamond M4: bootstrap, the identity of a bounded subsystem (2026-08-12)](CHANGELOG-1.74.0.md)
 - **1.73.0** — [Diamond M3: the LLM is a compiler with a validated output contract (2026-08-12)](CHANGELOG-1.73.0.md)

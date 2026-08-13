@@ -49,17 +49,16 @@ grow to the full 8–12 — but the four rows are real, measured, and reproducib
 
 ## What the review caught
 
-As in 1.74.0, the adversarial pass was an inline self-review (independent blind judges were held
-back to conserve capacity after the eleven blind compilations this milestone ran) — stated
-plainly, not the usual independent one. It reproduced: every number in `DIAMOND-BENCH.md` and the
-table above matches a fresh `bench` run (guard 19/21/21 PARTIAL; parser/state-machine/transformer
-17/12/11 all-green PASS; all entries `all_distinct`); the extended oracle runner did not regress
-M4 — the guard's exit-only oracle is still 23/23; every entry's oracle discriminates not only
-against a trivial stub (1–11 of cases) but against a *plausible-but-wrong* implementation — an
-`eval`-based parser (floor division, over-permissive) scores 14/17 and is correctly **not**
-green, so a `PASS` is earned behaviour, not an easy oracle; and `facts --check` is clean (no
-truth-pass drift). No defect surfaced. An independent blind review of the bench remains worth
-running when capacity is comfortable.
+The release cut with an inline self-review (independent blind judges were held back to conserve
+capacity after the eleven blind compilations this milestone ran); it verified report-vs-data,
+backward-compat (guard oracle still 23/23), and truth-pass, and spot-checked oracle
+discrimination for the parser with one bug class (an `eval`-based, floor-division parser scored
+14/17, not green). **That spot-check was too narrow.** The subsequent independent blind review
+found a real coverage gap in the parser and transformer oracles — corrected in **1.75.1** (see
+`CHANGELOG-1.75.1.md`): the real compiled implementations were always correct, but the withheld
+oracles were thinner than this section's "every entry discriminates against a plausible-but-wrong
+implementation" claim. Read that claim as it was actually earned at 1.75.0 — spot-checked once —
+not as the stronger statement 1.75.1 makes true.
 
 `AC-DB-01..06` measured green (T128). Suite: 414 checks; acceptance **104/104** where
 `coverage.py` is installed.

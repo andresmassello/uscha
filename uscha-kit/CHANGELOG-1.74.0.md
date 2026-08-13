@@ -44,17 +44,22 @@ and the gap points at *more* safety, not less.
 **The S-gap loop (N=2).** The unanimous gap was closed by clarifying the canonical package —
 principled, not teaching-to-the-test: the out-of-scope note was made operational (out of scope
 = not blocked = allowed), and the pipeline rule was disambiguated. Recompiled blind from the
-improved package: **Sonnet converged to 23/23 (oracle green)**; **Opus did not** — it refined
-the gap to a subtler boundary (an inline `-c`/`-e` expression treated as a visible write, while
-a `python script.py` invocation is allowed), which the clarification still did not pin down. The
-trajectory — 3/3 diverge → one clarification → 1/2 converge, 1/2 diverge on a narrower point —
-is reported, not chased. N=2 stops here and names the residual gap as the input a round 3 would
-take.
+improved package: **Sonnet converged to 23/23 (oracle green)** — its source grew from 220 to
+305 LOC to carry the interpreter-reader logic, the measured cost of closing the S-gap. **Opus's
+residual two red cases are a tokenizer artifact, not a semantic gap** (this correction was made
+by the independent blind review of `f10b9d1`, which caught a mischaracterization the release
+self-review had shipped): Opus-r2 *intends* interpreters as readers, but its shell splitter
+treats a bare `(`/`)` as a stage separator, so `shlex` on the oracle's exact quoting isolates a
+pseudo-stage whose "verb" is not a known reader and default-deny blocks it — re-quoting the
+identical command (outer double quotes) flips the verdict to allow, and Sonnet-r2 is robust to
+the same re-quoting. So the semantic gap closed for *both* round-2 compilers; Opus's residual is
+a **compiler implementation bug**, not a canonical-package divergence. N=2 stops here.
 
 **Verdict for this subsystem: PARTIAL, boundary drawn.** Three substantially different
-implementations behave identically on the core (21–23 of 23 cases); the divergence is isolated
-to interpreter-inline-code handling; closing the authoring gap made one independent compiler
-reconstruct the exact system, and refined — not removed — the other's divergence. The gap was
+implementations behave identically on the core (19–23 of 23 cases); the one semantic divergence
+(interpreter handling) closed after the canonical clarification, leaving only Opus-r2's
+tokenizer artifact; closing the authoring gap made an independent compiler reconstruct the exact
+system. The gap was
 **authoring-level, not IR-schema-level**: the IR schema stayed `0.1` (the fix was to the SPEC
 prose the compilers read, not to the typed graph). The expected program boundary — functional
 identity yes, the rest underdetermined — is borne out and sharpened. And the bootstrap surfaced
@@ -77,6 +82,15 @@ the 21–23 the real compilers reach, so "same system" has teeth); the oracle is
 inaccuracy was caught and fixed: the implementations' LOC range was stated as 110–264 where the
 three round-1 impls are 110–220 (the 264 was a stale figure; the variance table was always
 correct). An independent blind review remains worth running once capacity resets.
+
+**Follow-up (corrected in 1.75.1):** that independent blind review was run against `f10b9d1`. It
+confirmed the oracle faithfulness, discrimination (degenerates 11–12/23, a plausible-but-wrong
+guard 14/23), report-vs-data, path-traversal containment, and withholding — but caught two
+report-honesty defects the inline self-review had missed, both now corrected above: (1) Opus-r2's
+residual divergence was described as a designed `-c`/`-e` boundary when it is a **tokenizer
+artifact** (re-quoting the same command flips it; Sonnet-r2 is robust); (2) the round-2 winner
+(Sonnet-r2) is **305 LOC** — the cost of closing the S-gap — which the report never stated. The
+lesson: an inline self-review is not a substitute for an independent one.
 
 `AC-BS-01..06` measured green (T127). Suite: 413 checks; acceptance **98/98** where
 `coverage.py` is installed.

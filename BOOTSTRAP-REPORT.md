@@ -71,12 +71,15 @@ improved package:
 
 | Compiler (round 2) | Oracle | Outcome |
 |--------------------|--------|---------|
-| Sonnet | **23 / 23 — GREEN** | the gap **closed**: an independent compiler reconstructed the exact system |
-| Opus   | **21 / 23** | the gap **refined, not closed**: Opus now treats a `python -c`/`node -e` *inline expression* as a visible write while allowing `python script.py` — a subtler boundary the clarification still did not pin down |
+| Sonnet | **23 / 23 — GREEN** | the gap **closed**: an independent compiler reconstructed the exact system (its source grew from 220 to 305 LOC to carry the interpreter-reader logic — the measured cost of closing the S-gap) |
+| Opus   | **21 / 23** | the S-gap **closed semantically** — Opus-r2 intends interpreters as readers — but a **tokenizer artifact** leaves the same two cases red: its shell splitter treats a bare `(`/`)` as a stage separator, so `shlex` on the oracle's exact quoting isolates a pseudo-stage whose "verb" is not a known reader and default-deny blocks it. It is **not** a designed `-c`/`-e` boundary: re-quoting the identical command (`python -c "open('x.approved','w')…"` with outer double quotes) flips the verdict to allow. Sonnet-r2 is robust to the same re-quoting |
 
-**Trajectory:** 3/3 diverge → one clarification → 1/2 converge, 1/2 diverge on a narrower point.
-Bounded at N=2, the residual (inline `-c`/`-e` expression vs script-file opacity) is named as the
-input a round 3 would take, not chased.
+**Trajectory (corrected by the independent blind review of `f10b9d1`, which caught the
+mischaracterization the release self-review had shipped):** 3/3 diverge → one clarification →
+the semantic gap closes for both round-2 compilers; Sonnet is oracle-green, Opus's residual two
+cases are a punctuation-tokenizer artifact in its own shell splitter (trivially flipped by
+re-quoting), not a semantic divergence. Bounded at N=2, the residual is a **compiler
+implementation bug**, not a canonical-package gap — reported, not chased.
 
 **IR schema impact:** none. The S-gap was **authoring-level** — the fix was to the SPEC prose
 the compilers read, not to the typed graph. The IR schema stayed `0.1` (the AC/INV node set was
@@ -85,13 +88,16 @@ this subsystem's gap did not force IR v0.2.
 
 ## Verdict
 
-**PARTIAL — boundary drawn.** Three substantially different implementations (110–220 LOC,
-different dependency sets) behave **identically on 21–23 of 23** behavioural cases — functional
-identity on the core of a security-relevant guard, certified by evidence the compilers never
-saw. The divergence is isolated to **interpreter-inline-code handling**; closing the authoring
-gap made one independent compiler reconstruct the exact system and refined the other's
-divergence to a narrower, named residual. The expected program boundary — functional identity
-yes, the rest underdetermined — is borne out and sharpened.
+**PARTIAL — boundary drawn.** Three substantially different implementations (round 1: 110–220
+LOC; the round-2 winner that reached 23/23 is 305 LOC — different dependency sets throughout)
+behave **identically on 19–23 of 23** behavioural cases — functional identity on the core of a
+security-relevant guard, certified by evidence the compilers never saw. The one semantic
+divergence — interpreter handling — **closed** for both round-2 compilers after the canonical
+clarification; Sonnet-r2 is oracle-green, and Opus-r2's residual two red cases are a
+punctuation-tokenizer artifact in its own shell splitter (not a semantic gap — re-quoting the
+identical command flips them). The expected program boundary — functional identity yes, the rest
+underdetermined — is borne out, and the one residual is now correctly attributed to a compiler
+bug rather than to the canonical package.
 
 Two program-level results fall out, both honest, both publishable:
 

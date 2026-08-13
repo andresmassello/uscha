@@ -5551,7 +5551,9 @@ def _bench_entry(entry_dir, name):
     greens = sum(1 for i in impls if i["oracle"]["green"])
     min_rate = min((i["oracle"]["passed"] / i["oracle"]["total"]) if i["oracle"]["total"]
                    else 0.0 for i in impls)
-    distinct = rec["variance"]["all_distinct"] if rec["variance"] else (n == 1)
+    # distinct is None when variance could not be computed (fewer than 2 resolvable impl files),
+    # which is NOT the same as a byte-identical convergence -- keep the two reasons apart.
+    distinct = rec["variance"]["all_distinct"] if rec["variance"] else None
     if stub_green:
         rec["verdict"], rec["reason"] = "FAIL", ("oracle satisfied by a degenerate stub -- not "
                                                  "discriminating; the entry proves nothing")
@@ -5559,6 +5561,9 @@ def _bench_entry(entry_dir, name):
         rec["verdict"], rec["reason"] = "FAIL", "a compilation does not validate against the pinned IR"
     elif n < 3:
         rec["verdict"], rec["reason"] = "PENDING", "fewer than 3 compilations (have %d)" % n
+    elif distinct is None:
+        rec["verdict"], rec["reason"] = "FAIL", ("cannot assess distinctness -- fewer than 2 "
+                                                 "resolvable implementation files on disk")
     elif not distinct:
         rec["verdict"], rec["reason"] = "FAIL", ("implementations converged to a byte-identical "
                                                  "pair -- a disguised implementation")
