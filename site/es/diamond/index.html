@@ -250,7 +250,7 @@
     <h2>05 · Truth-pass — qué es real hoy, qué sigue siendo visión</h2>
     <p>El pitch es hermoso, y justamente por eso hay que tenerle desconfianza. La regla de la
     casa: <em>under-claim, luego cablear, luego re-claim</em>. Estado al día de hoy
-    (kit&nbsp;1.65.0):</p>
+    (kit&nbsp;1.75.1):</p>
     <table>
       <thead><tr><th>Afirmación</th><th>Estado</th><th>Dónde</th></tr></thead>
       <tbody>
@@ -262,8 +262,10 @@
             <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
         <tr><td>Round-trip semántico (¿el código <em>dice lo mismo</em> que la spec?)</td>
             <td><span class="chip vision">VISIÓN</span></td><td>diferido con condiciones · ADR-011</td></tr>
-        <tr><td>«El código es totalmente regenerable desde las specs»</td>
-            <td><span class="chip vision">VISIÓN</span></td><td>el bootstrap test es el experimento pendiente</td></tr>
+        <tr><td>Reemplazabilidad de implementación, demostrada en sistemas acotados — modelos independientes regeneran el mismo sistema desde el paquete canónico, y un oráculo oculto lo certifica</td>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 3/4 arquetipos PASS · 1.74–1.75 · ADR-017/018</td></tr>
+        <tr><td>«El código es <em>totalmente</em> regenerable desde las specs» (sistemas arbitrarios)</td>
+            <td><span class="chip vision">VISIÓN</span></td><td>el bootstrap test corrió (M4/M5): 3 de 4 arquetipos acotados regeneran al mismo sistema, certificado mecánicamente · la regenerabilidad total de sistemas arbitrarios es la frontera abierta</td></tr>
         <tr><td>«Drift = reverse discovery incremental, mismo motor»</td>
             <td><span class="chip vision">VISIÓN</span></td><td>idea válida, arquitectura rechazada · ADR-011</td></tr>
       </tbody>
@@ -281,8 +283,9 @@
     registradas — son lo único que vale la pena migrar.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      Estado verificado contra kit 1.65.0 · fuentes: ADR-009, ADR-010, ADR-011,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0 · los estados REAL/VISIÓN siguen la regla
+      Estado verificado contra kit 1.75.1 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016,
+      ADR-017, ADR-018, CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.75.1 · los
+      estados REAL/VISIÓN siguen la regla
       INV-TRUTH-01 del repo.
     </p>
 
@@ -303,7 +306,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../../diamond/index.html">English version</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.65.0</p>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.75.1</p>
   </div>
 </footer>
 

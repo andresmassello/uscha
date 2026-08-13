@@ -36,9 +36,12 @@ The underlying thesis ("the diamond"): specs are the source code, the LLM is the
 compiler, reverse discovery is the decompiler — and code becomes a regenerable build
 artifact, so the spec package + behavior ledger is the canonical asset of a system.
 Truth-pass status: the human-judgment layer (curation, oracle, id-level roundtrip) is
-real and shipped; semantic round-trip, full code regenerability and a shared
-drift/discovery engine are explicitly VISION, deferred until they can be measured
-(ADR-011). The framing is positioning, not a description of an engine mechanism.
+real and shipped; implementation replaceability is now demonstrated for bounded systems
+(the Diamond Bench, kit 1.74–1.75: 3 of 4 archetypes regenerate to the same system,
+mechanically certified by a withheld oracle — ADR-017/018); semantic round-trip, full
+code regenerability of arbitrary systems, and a shared drift/discovery engine remain
+VISION, deferred until they can be measured (ADR-011). The framing is positioning where
+it says VISION and a measured mechanism where it says REAL.
 
 The kit (v1.75.1, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil) —

@@ -250,7 +250,7 @@
     <h2>05 · Truth-pass — what is real today, what is still vision</h2>
     <p>The pitch is beautiful, and precisely for that reason it deserves distrust. The house
     rule: <em>under-claim, then wire, then re-claim</em>. State as of today
-    (kit&nbsp;1.65.0):</p>
+    (kit&nbsp;1.75.1):</p>
     <table>
       <thead><tr><th>Claim</th><th>Status</th><th>Where</th></tr></thead>
       <tbody>
@@ -262,8 +262,10 @@
             <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
         <tr><td>Semantic round-trip (does the code <em>say the same thing</em> as the spec?)</td>
             <td><span class="chip vision">VISION</span></td><td>deferred with conditions · ADR-011</td></tr>
-        <tr><td>"The code is fully regenerable from the specs"</td>
-            <td><span class="chip vision">VISION</span></td><td>the bootstrap test is the pending experiment</td></tr>
+        <tr><td>Implementation replaceability, demonstrated on bounded systems — independent models regenerate the same system from the canonical package, a withheld oracle certifies it</td>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 3/4 archetypes PASS · 1.74–1.75 · ADR-017/018</td></tr>
+        <tr><td>"The code is <em>fully</em> regenerable from the specs" (arbitrary systems)</td>
+            <td><span class="chip vision">VISION</span></td><td>the bootstrap test ran (M4/M5): 3 of 4 bounded archetypes regenerate to the same system, mechanically certified · full regenerability of arbitrary systems is the open frontier</td></tr>
         <tr><td>"Drift = incremental reverse discovery, same engine"</td>
             <td><span class="chip vision">VISION</span></td><td>valid idea, rejected as architecture · ADR-011</td></tr>
       </tbody>
@@ -281,9 +283,9 @@
     the only thing worth migrating.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      State verified against kit 1.65.0 · sources: ADR-009, ADR-010, ADR-011,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0 · the REAL/VISION labels follow the repo's
-      INV-TRUTH-01 rule.
+      State verified against kit 1.75.1 · sources: ADR-009, ADR-010, ADR-011, ADR-016, ADR-017,
+      ADR-018, CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.75.1 · the REAL/VISION
+      labels follow the repo's INV-TRUTH-01 rule.
     </p>
 
     <div class="backlinks">
@@ -303,7 +305,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../es/diamond/index.html">Versión en español</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.65.0</p>
+    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.75.1</p>
   </div>
 </footer>
 
