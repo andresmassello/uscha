@@ -1,0 +1,92 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-GH-01",
+      "type": "AC",
+      "statement": "the guard reads one JSON object from stdin and signals its verdict only through",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 6
+      }
+    },
+    {
+      "id": "AC-GH-02",
+      "type": "AC",
+      "statement": "a call whose effect is to create, edit, rename or delete a file whose name",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 8
+      }
+    },
+    {
+      "id": "AC-GH-03",
+      "type": "AC",
+      "statement": "a call that only reads a `.approved` file is allowed — reading field truth is",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 10
+      }
+    },
+    {
+      "id": "AC-GH-04",
+      "type": "AC",
+      "statement": "read-only tools (a file reader, text search, directory listing, notebook",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 12
+      }
+    },
+    {
+      "id": "AC-GH-05",
+      "type": "AC",
+      "statement": "for a shell/command tool the rule is default-deny: a command that names a",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 15
+      }
+    },
+    {
+      "id": "AC-GH-06",
+      "type": "AC",
+      "statement": "for any other (including unknown, write-capable) tool, the marker `.approved`",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 18
+      }
+    },
+    {
+      "id": "AC-GH-07",
+      "type": "AC",
+      "statement": "the guard is fail-closed: input that is not valid JSON, or not the expected",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 20
+      }
+    },
+    {
+      "id": "INV-GOLDEN-01",
+      "type": "INV",
+      "statement": "a human is the sole author of an approved golden",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 8,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 7
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f"
+}

@@ -1,0 +1,68 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "360f4b0867ca0311132c3634240a71f7d6762f0cbfc64601bb10402b75306ff2",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, single file, Python 3.8+",
+    "reads entire stdin as one expression, tolerates leading/trailing whitespace and trailing newline",
+    "exits 0 on every input path",
+    "prints exactly the integer value or exactly ERROR, no other output"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "91329fab848d96ff6c148018d35c5a0516928e7a489af041294ff0c423ed26c7"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "division-by-zero-error-text",
+      "decision": "zero-divisor is folded into the same ERROR path as parse errors (raised as ParseError and caught by the same handler)",
+      "rationale": "spec only requires printing exactly ERROR for a zero divisor; it does not require distinguishing it from other unevaluable cases in the output, so a single error channel satisfies AC-PR-04/AC-PR-05 without added surface"
+    },
+    {
+      "ir_region": "tokenizer-unrecognized-character",
+      "decision": "any character outside digits, whitespace, and + - * / ( ) is treated as a stray token and forces ERROR at the tokenize stage",
+      "rationale": "spec defines the grammar as integers, + - * /, unary minus, and parentheses only; anything else has no defined meaning, so rejecting it satisfies the 'stray token -> ERROR' requirement (AC-PR-05) without guessing at unstated syntax"
+    },
+    {
+      "ir_region": "multi-digit-integer-literal",
+      "decision": "a NUMBER token is a maximal run of ASCII digits (no sign, no leading-zero restriction, no size limit beyond Python's arbitrary-precision ints)",
+      "rationale": "spec defines 'a non-negative integer literal' without further constraints; unary minus is a separate grammar rule applied to the parsed primary, so the tokenizer itself never consumes a sign, keeping negation and literals orthogonal as the spec's structure implies"
+    },
+    {
+      "ir_region": "empty-input-detection",
+      "decision": "empty/whitespace-only input is detected after tokenization (zero tokens) rather than by checking the raw string length before tokenizing",
+      "rationale": "this correctly classifies inputs that are only whitespace/newline as empty too (legal per spec's whitespace-tolerance rule), rather than treating them as some other kind of malformed input"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-021 controlled-language v0.2 blind compilation"
+  },
+  "_integrity": "729a95e6ebe3a183917f3b81284760b7bcfdb692d604c7e3986013adb8d077b2"
+}

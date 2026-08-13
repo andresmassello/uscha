@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib only (json, re, sys); Python 3.8+ syntax; single file source/guard.py; verdict communicated only via exit code 0/2, no stdout protocol"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "5d623efacfafad832cb167ea16a24cc35368023cfb10e562699b611f9aa72368"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "read-only tool name whitelist",
+      "decision": "matched a best-effort generic name set (read, grep, glob, ls/list, websearch/webfetch, notebookread, etc.) normalized case/underscore/hyphen-insensitively, since the spec names categories not an exhaustive list",
+      "rationale": "spec says 'the guard recognises this family of read-only tools by name' but gives only illustrative examples, not a closed list"
+    },
+    {
+      "ir_region": "shell/command tool identification",
+      "decision": "treated 'bash' plus common aliases (shell, sh, exec, terminal, cmd, powershell, runcommand) as the shell-tool family, all matched case-insensitively",
+      "rationale": "spec gives only 'Bash' as an example of 'a shell / command tool'; aliasing is a judgment call to keep the guard useful beyond one literal name"
+    },
+    {
+      "ir_region": "find command in shell pipelines",
+      "decision": "excluded 'find' from READ_ONLY_COMMANDS even though it can be read-only, because it also supports -delete/-exec which write",
+      "rationale": "cannot distinguish safe 'find -name' listing from '-delete'/'-exec rm' without deeper flag parsing; fail-closed default blocks all find invocations naming a golden"
+    },
+    {
+      "ir_region": "write-flag detection for shell commands",
+      "decision": "used a fixed token/prefix list (-i, --in-place, -w, --write, -o, --output, --fix, --overwrite, --save) checked against whitespace-split tokens, not a real shell tokenizer",
+      "rationale": "spec explicitly scopes this to text/structure inspection, not real command semantics; a fixed heuristic list is the best-effort match to 'the flags editors and formatters use to write their result back out'"
+    },
+    {
+      "ir_region": "output-redirection regex",
+      "decision": "detect '>' / '>>' via regex excluding '=>' and '->' arrows, without full shell-quote/escaping awareness",
+      "rationale": "spec says parsing is text/structure only and indirect effects are explicitly out of scope; a simple redirection regex satisfies AC-GH-05's requirement without overreaching into real shell parsing"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-021 controlled-language v0.2 blind compilation"
+  },
+  "_integrity": "f589404b4e133122da3eea84316fa556aacad8ec2023a3443e3c876848e29839"
+}

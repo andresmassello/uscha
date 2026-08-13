@@ -1,0 +1,86 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only (json, re, shlex, sys); no third-party dependencies and no filesystem or network access.",
+    "Verdict is communicated exclusively via process exit code (0 allow / 2 block); stdout is never used for the verdict, and a block writes one short reason line to stderr.",
+    "Fail-closed everywhere: unreadable stdin, invalid JSON, a non-object payload, a missing/non-string tool_name, a non-object tool_input, and any unexpected internal exception all exit 2.",
+    "Marker detection is a case-insensitive substring test on the whole string; tool names are lowercased before family lookup.",
+    "Three-way dispatch on tool family: a name-based read-only allowlist always allows; a shell allowlist gets command-text analysis; everything else blocks when the marker appears anywhere in tool_input.",
+    "Shell analysis is default-deny per stage: the command line is split on pipes, sequencing operators and newlines with quote/escape awareness, and EVERY stage must be provably read-only or the call blocks.",
+    "A stage is proven read-only only if it has no unquoted redirection, no command substitution, its resolved argv0 basename is on a read-only command allowlist, and it carries no in-place/output-write flag (including --flag=value forms and bundled short flags).",
+    "git is on the read-only command list but narrowed by subcommand; git config with a value argument is treated as a write.",
+    "Unknown-tool argument scanning walks nested dicts, lists and strings iteratively, inspects dict keys as well as values, and treats a pathological/oversized structure as a block.",
+    "Deliberately no execution, symlink resolution, or script-content inspection.",
+    "Exactly one self-contained file at source/guard.py runnable as python guard.py."
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "2272ead1c68dfe11d946e6c56ea7ce51bf374147c967ea3af65062c143e50080"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "read-only tool family membership",
+      "decision": "Named a fixed case-insensitive allowlist (read/readfile/view/cat, grep/search/glob/find, ls/list/listdir, notebookread, webfetch/websearch plus snake_case and underscore aliases) rather than inferring intent from the tool name.",
+      "rationale": "SPEC says the guard 'recognises this family of read-only tools by name' but never enumerates the names, and host tool naming varies. An allowlist is the fail-closed reading: an unrecognised reader falls through to the conservative unknown-tool branch and blocks only if it actually names a golden — a false block on a reader, never a false allow on a writer."
+    },
+    {
+      "ir_region": "shell tool family membership",
+      "decision": "Treated bash/sh/shell/zsh/cmd/powershell/pwsh/run/exec/execute/terminal (case-insensitive) as the shell family that receives command-text analysis; everything else outside the read-only list falls to the marker-anywhere rule.",
+      "rationale": "SPEC names only 'e.g. Bash'. Misclassifying a shell as 'other' is safe (marker anywhere blocks, which is stricter); misclassifying a writer as a shell would let the read-only-command proof open a door, so the shell list is kept small and explicit."
+    },
+    {
+      "ir_region": "read-only shell command vocabulary",
+      "decision": "Enumerated a closed allowlist of reader commands (cat/bat/head/tail/less/grep/rg/ls/find/fd/diff/wc/sort/cut/jq/sha256sum/echo/pwd/git...) and treated every unlisted command — including sed, awk, tee, cp, mv, rm, python — as a writer.",
+      "rationale": "SPEC mandates 'treat the command as a WRITE unless every part of it is a recognised read-only operation' but gives no vocabulary. A closed allowlist is the only formulation where an unknown command blocks; a denylist of writers would allow anything not yet imagined, which is exactly the failure the fail-closed posture forbids."
+    },
+    {
+      "ir_region": "git as a read-only command",
+      "decision": "Included git in the reader allowlist but gated it on a read-only subcommand list, and additionally treated git config with a value argument as a write.",
+      "rationale": "git is both the most common way to read a golden (git show/diff/log) and a way to rewrite one (git mv/checkout/restore/apply). Excluding git entirely would block legitimate golden reads (AC-GH-03); including it wholesale would allow git mv on goldens. Subcommand gating is the narrowest cut that satisfies both."
+    },
+    {
+      "ir_region": "in-place / output-write flag detection",
+      "decision": "Blocked on a fixed flag set (-i, --in-place, -w, --write, --fix, -o, --output/--out-file, -O, --save, --overwrite, --replace, -p), matched on exact tokens, on --flag=value heads, and on each character of bundled short flags such as -ni.",
+      "rationale": "SPEC describes the flags semantically without listing them, and short-flag bundling means a literal token match alone would miss sed -ni. Expanding bundles risks false positives on readers that use -i as ignore-case (grep -i), which is an over-block: acceptable under 'when in doubt, block', and it only triggers when the command already names a golden."
+    },
+    {
+      "ir_region": "shell call whose command field is absent or unparsable",
+      "decision": "When a shell tool's arguments contain no readable command string, allow only if the marker appears nowhere in the arguments; block if it does. Unbalanced quoting in a present command makes stage splitting return no stages, which fails the read-only proof and blocks.",
+      "rationale": "SPEC's fail-closed rule targets calls that touch a golden; a shell call with no command field and no marker anywhere cannot name a golden by text, so blocking it would break unrelated tool use without protecting anything. The moment the marker appears, the unprovable call blocks."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-021 controlled-language v0.2 blind compilation"
+  },
+  "_integrity": "36589e5d7ba7ad8bc65c1aec92d0d4b0ff58b78a8b06c95fa45135ff38cacad7"
+}

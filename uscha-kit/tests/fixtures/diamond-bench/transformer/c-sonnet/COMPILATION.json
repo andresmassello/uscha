@@ -33,13 +33,23 @@
   "unresolved_intent": [
     {
       "ir_region": "AC-TR-05",
-      "decision": "a JSON boolean age is rejected (bool is not a JSON integer)",
-      "rationale": "Python bool subclasses int; explicit exclusion honors spec intent"
+      "decision": "Extra/unexpected fields on a record beyond first/last/age do not trigger ERROR; only missing or wrong-typed first/last/age do.",
+      "rationale": "ACCEPTANCE.md's error list only names missing fields and wrong types; SPEC's out-of-scope section says other fields are not read or preserved, implying they're tolerated, not fatal."
     },
     {
-      "ir_region": "AC-TR-06",
-      "decision": "default json.dumps formatting (spec fixes structure/values, not whitespace/key order)",
-      "rationale": "AC-TR-06 leaves formatting free"
+      "ir_region": "AC-TR-05",
+      "decision": "age given as a JSON boolean (true/false) is rejected as not-an-integer.",
+      "rationale": "Python's json module maps JSON booleans to bool, a subclass of int, so isinstance(age,int) alone would wrongly accept true/false; explicit bool exclusion honors the spec's JSON-type intent (age must be a JSON integer, not a JSON boolean)."
+    },
+    {
+      "ir_region": "Contract",
+      "decision": "Syntactically invalid JSON (json.loads raises) is treated the same as 'not a JSON array' and prints ERROR.",
+      "rationale": "Spec only enumerates 'not a JSON array' and per-record errors explicitly, but unparsable input is a strict subset of 'not a JSON array' semantically, and ERROR is the only defined failure output."
+    },
+    {
+      "ir_region": "Contract",
+      "decision": "The ERROR path exits with code 0, same as the success path.",
+      "rationale": "The prompt's top-level contract states the program should 'exit 0' unconditionally after printing its result to stdout; SPEC.md does not mention a distinct nonzero exit code for errors."
     }
   ],
   "compilation_report": {
@@ -52,5 +62,5 @@
     },
     "constraint_handling": "M5 bench blind compilation"
   },
-  "_integrity": "ef3d3e7a20b36208d7c4e9d291de000dfc404e748c1bf156c3714a350c892488"
+  "_integrity": "7d39f3ad487d8f65c6a2a61192693179ee30368c8ac17ac0053050d74dda4ef3"
 }

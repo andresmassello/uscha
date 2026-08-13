@@ -32,14 +32,24 @@
   ],
   "unresolved_intent": [
     {
-      "ir_region": "AC-SM-05",
-      "decision": "a non-string element (incl. JSON bool/null) is rejected as ERROR, not coerced",
-      "rationale": "bool is an int subclass; explicit isinstance(str) guard"
+      "ir_region": "error-output-format",
+      "decision": "Print exactly the token 'ERROR' with a trailing newline (via print) and exit 0 rather than a nonzero exit code",
+      "rationale": "SPEC says print exactly ERROR and the contract mandates exit 0 for all inputs; it does not specify a distinct error exit status, so success exit is kept uniform"
     },
     {
-      "ir_region": "AC-SM-06",
-      "decision": "invalid JSON and well-formed-but-non-array are both ERROR",
-      "rationale": "'not a JSON array' covers both"
+      "ir_region": "empty-or-whitespace-stdin",
+      "decision": "Treat empty or whitespace-only stdin as invalid JSON, caught by the json.loads try/except, yielding ERROR",
+      "rationale": "An empty stream is not a JSON array; SPEC classifies non-array/invalid-JSON input as ERROR (AC-SM-06)"
+    },
+    {
+      "ir_region": "json-array-with-extra-whitespace-or-trailing-data",
+      "decision": "Rely on json.loads strictness: trailing non-whitespace data after the array raises ValueError and becomes ERROR",
+      "rationale": "SPEC treats invalid JSON as ERROR; json.loads rejects trailing garbage, matching the total-error stance without adding custom parsing"
+    },
+    {
+      "ir_region": "boolean-and-null-elements",
+      "decision": "Non-string elements (numbers, booleans, null, nested arrays/objects) are rejected as ERROR via the isinstance(event,str) guard before the known-event check",
+      "rationale": "SPEC AC-SM-05 rejects non-string events; explicit isinstance guard ensures bool (an int subclass) and null are not mistaken for events"
     }
   ],
   "compilation_report": {
@@ -52,5 +62,5 @@
     },
     "constraint_handling": "M5 bench blind compilation"
   },
-  "_integrity": "7b0af165ef68dd58dac456967f271076a56567ba8cdc421836e59494ddbfe6f0"
+  "_integrity": "3456265dd9e5112b25db7a69e5539c0cb042804fd87c08a92d4803aab6ed05f4"
 }

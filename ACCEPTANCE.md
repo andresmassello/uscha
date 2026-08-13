@@ -332,6 +332,19 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   plausible-wrong implementation under each new entry's wrong/ scores below oracle-green, run
   by the suite itself — a red run of a committed fixture, not a prose note.
 
+## Controlled-language v0.2 (ADR-021) - the control arm and the confound kill
+
+- [x] AC-CL2-01 - parser-controlled is an EARS+STE re-expression with its own IR (differs from
+  parser-free's) while the oracle is byte-identical; all six new compilations compile-validate;
+  no compiler input references any oracle.
+- [x] AC-CL2-02 - the control comparison (parser-free vs parser-controlled) measures NO EFFECT
+  with both arms 3/3 oracle-green — the instrument can show nothing where nothing is expected.
+- [x] AC-CL2-03 - the de-confounded comparison (guard-free-r2, byte-matched scaffolding, vs
+  controlled) measures REDUCED with the variance delta beyond the margin — v0.1's signal
+  survived its confound.
+- [x] AC-CL2-04 - the three generated reports exist (v0.1, control, de-confounded); every
+  number traces to a run.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

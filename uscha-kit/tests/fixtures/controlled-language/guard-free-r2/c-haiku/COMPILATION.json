@@ -1,0 +1,68 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ stdlib only",
+    "Must exit 0 to allow, exit 2 to block",
+    "Reason written to stderr on block"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "8b7b5ede7fe2990b973049c0388ad88f7bbfed12993378162c5ba6d856c67314"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "IR-PIPE",
+      "decision": "block any pipe (|)",
+      "rationale": "Spec forbids 'pipeline in which any stage is a writer'. To avoid inspecting every possible pipeline stage, default-deny: any pipe + .approved = block. This catches cat|tee without needing a tee whitelist."
+    },
+    {
+      "ir_region": "IR-ROSTER",
+      "decision": "whitelist: grep,rg,cat,head,tail,wc,sort,uniq,ls,find,pwd,stat,file,git,awk,sed",
+      "rationale": "Spec requires 'recognized read-only operation' but does not enumerate them. Chose commands whose only side-effect is stdout/exit-code. Awk and sed included because -i check runs first."
+    },
+    {
+      "ir_region": "IR-UNKNOWN",
+      "decision": "block commands starting with unknown tools",
+      "rationale": "Spec: 'Treat the command as a WRITE unless every part of it is a recognised read-only operation.' Unknown tool -> cannot prove safe -> block (fail-closed)."
+    },
+    {
+      "ir_region": "IR-REDIR",
+      "decision": "block > and >>, check for | and > only (not 2>, 1>)",
+      "rationale": "Spec examples focus on stdout/pipe; stderr redirect (2>) is out of scope per fail-closed stance. If a command redirects stdout or pipes, block; complex redirect patterns left as edge case."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-021 controlled-language v0.2 blind compilation"
+  },
+  "_integrity": "c578e494acccfe7b010875238f951b8116497f195a2d899bb0e0fafe92fa2a55"
+}

@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-PR-01",
+      "type": "AC",
+      "statement": "a well-formed expression evaluates to its integer value on stdout, exit 0.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-PR-02",
+      "type": "AC",
+      "statement": "precedence and left-associativity hold: `*`/`/` bind tighter than `+`/`-`, and",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 4
+      }
+    },
+    {
+      "id": "AC-PR-03",
+      "type": "AC",
+      "statement": "parentheses override precedence; unary minus negates.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 6
+      }
+    },
+    {
+      "id": "AC-PR-04",
+      "type": "AC",
+      "statement": "division is integer division truncating toward zero; division by zero prints",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 7
+      }
+    },
+    {
+      "id": "AC-PR-05",
+      "type": "AC",
+      "statement": "any input the grammar cannot parse (stray token, unmatched paren, empty, trailing",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 9
+      }
+    },
+    {
+      "id": "AC-PR-06",
+      "type": "AC",
+      "statement": "the program prints only the value or `ERROR` — no prompts, no extra text.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 11
+      }
+    },
+    {
+      "id": "INV-PARSE-DETERMINISM-01",
+      "type": "INV",
+      "statement": "one expression, one value",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 7,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 6
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "87a1fb592f34dc31209436f0ea035945b4b463de13d285bef26f46eba4121ba0"
+}

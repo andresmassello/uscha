@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "360f4b0867ca0311132c3634240a71f7d6762f0cbfc64601bb10402b75306ff2",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python standard library only (sys); no third-party packages; targets Python 3.8+",
+    "Single file `source/impl.py` executed as `python impl.py`; reads all of stdin via sys.stdin.read()",
+    "Recursive-descent parser over a hand-written tokenizer; grammar expr/term/unary/atom encodes precedence (parens > unary minus > * / > + -) and left-associativity via iterative while-loops",
+    "All parse and evaluation failures funnel through a single ParseError exception so every malformed case prints exactly ERROR",
+    "Division uses explicit truncate-toward-zero arithmetic (abs floor-div plus sign correction) instead of Python's floor `//`, so -7/2 == -3",
+    "Process exits with code 0 on every input path, including ERROR",
+    "Output is deterministic and depends only on the input string: no clock, randomness, environment, filesystem, or locale reads (INV-PARSE-DETERMINISM-01)"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "f412234eb0b8865581822f8b78e07b3e20acb326196c2f95a938722f60fa77c9"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "output-line-termination",
+      "decision": "Print the value or ERROR followed by a single trailing newline, never CRLF.",
+      "rationale": "The spec says 'print one line' and 'no other text' but does not state whether a terminator is emitted. A line is conventionally newline-terminated and print-style output is the stated intent, so a single newline is written explicitly via sys.stdout.write to avoid platform-dependent CRLF translation that would break byte-exact comparison on Windows."
+    },
+    {
+      "ir_region": "number-token-charset",
+      "decision": "Only ASCII digits 0-9 form a number literal; Unicode decimal digits (e.g. Arabic-Indic, fullwidth) are treated as stray tokens -> ERROR.",
+      "rationale": "The spec defines a number as a 'non-negative integer literal' without naming a charset. Python's str.isdigit() accepts many Unicode digits and int() would silently convert them, making output depend on Unicode tables rather than the stated grammar. Restricting to ASCII keeps the accepted language minimal and the behavior stable across Python versions."
+    },
+    {
+      "ir_region": "integer-magnitude-and-recursion-limits",
+      "decision": "No cap on integer magnitude (Python arbitrary-precision ints are used as-is); deeply nested parentheses that exhaust the recursion limit raise RecursionError, which is NOT caught and would surface as a crash rather than ERROR.",
+      "rationale": "The spec fixes neither a value range nor a nesting depth, and adding limits would invent requirements not asked for. Catching RecursionError was considered but rejected: it is an implementation resource limit, not a grammar failure. Flagged because it is the one input class where exit code 0 is not guaranteed."
+    },
+    {
+      "ir_region": "whitespace-inside-and-adjacent-to-numbers",
+      "decision": "Whitespace is skipped only between tokens, so `1 2` tokenizes as two numbers and fails as a stray/trailing token -> ERROR; `- 5` is a valid unary minus applied to 5; `+5` at the start is ERROR (no unary plus).",
+      "rationale": "The spec says whitespace between tokens is insignificant and lists only unary minus among the unary operators. Juxtaposed numbers have no grammar production, and unary plus is absent from the enumerated operator set, so both are rejected rather than silently accepted."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-021 controlled-language v0.2 blind compilation"
+  },
+  "_integrity": "c12040808ccd41dd42b5df6b36d04217675f6f8c107eb519b4ebd0c305c34ea1"
+}

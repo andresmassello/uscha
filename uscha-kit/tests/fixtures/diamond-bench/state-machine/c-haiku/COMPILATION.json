@@ -32,14 +32,24 @@
   ],
   "unresolved_intent": [
     {
-      "ir_region": "AC-SM-05",
-      "decision": "a non-string element (incl. JSON bool/null) is rejected as ERROR, not coerced",
-      "rationale": "bool is an int subclass; explicit isinstance(str) guard"
+      "ir_region": "error-handling-structure",
+      "decision": "exception-based: json.JSONDecodeError caught at top level, early returns for validation failures",
+      "rationale": "Centralizes malformed-JSON handling; early exits on non-array, non-string, unknown-event prevent invalid state transitions and simplify control flow"
     },
     {
-      "ir_region": "AC-SM-06",
-      "decision": "invalid JSON and well-formed-but-non-array are both ERROR",
-      "rationale": "'not a JSON array' covers both"
+      "ir_region": "state-transition-totality",
+      "decision": "explicit branching (if/elif/else) per event, nested state checks within each event arm",
+      "rationale": "Every (state, event) pair listed in spec is handled explicitly; unknown events rejected before any state update; this structure enforces the closed-machine invariant"
+    },
+    {
+      "ir_region": "state-representation",
+      "decision": "string literals 'locked' and 'unlocked' for state names",
+      "rationale": "Direct match to spec terminology; trivial output formatting (print state name)"
+    },
+    {
+      "ir_region": "event-validation-order",
+      "decision": "JSON parse -> isinstance(list) -> loop: isinstance(str) -> event in {'coin','push'}",
+      "rationale": "Fail fast on structure (not array) before content; reject non-strings and unknown events immediately; order matches acceptance criteria flow"
     }
   ],
   "compilation_report": {
@@ -52,5 +62,5 @@
     },
     "constraint_handling": "M5 bench blind compilation"
   },
-  "_integrity": "4e3b25236bd14f8c464bf604b0de1a1416e77e466e30a05aec4a1d3f63e1d290"
+  "_integrity": "218478c70b4b2b6378ce6d7a265173f99f20d51e43a66ee820a9013f5c4d6282"
 }

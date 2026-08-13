@@ -32,14 +32,24 @@
   ],
   "unresolved_intent": [
     {
-      "ir_region": "AC-TR-05",
-      "decision": "a JSON boolean age is rejected (bool is not a JSON integer)",
-      "rationale": "Python bool subclasses int; explicit exclusion honors spec intent"
+      "ir_region": "error-exit-code",
+      "decision": "Exit 0 even on ERROR",
+      "rationale": "SPEC says 'print exactly ERROR' and 'exit 0' for the success path but does not specify an exit code for errors; the harness contract in the prompt says exit 0, so ERROR is printed and the process still exits 0."
     },
     {
-      "ir_region": "AC-TR-06",
-      "decision": "default json.dumps formatting (spec fixes structure/values, not whitespace/key order)",
-      "rationale": "AC-TR-06 leaves formatting free"
+      "ir_region": "age-bool-typing",
+      "decision": "Reject Python bool for age",
+      "rationale": "JSON true/false parse to Python bool which is an int subclass; spec requires age to be an integer, and a boolean is semantically not an integer age, so isinstance(age,bool) is rejected."
+    },
+    {
+      "ir_region": "age-float-typing",
+      "decision": "Reject non-integer numbers (e.g. 18.0) for age",
+      "rationale": "Spec says age is an integer and 'age is not an integer -> ERROR'; JSON 18.0 parses to float, which fails isinstance(int), so it is rejected rather than coerced."
+    },
+    {
+      "ir_region": "output-json-formatting",
+      "decision": "Use json.dumps default formatting (compact-ish, insertion key order name then adult)",
+      "rationale": "AC-TR-06/SPEC fix only structure and values, not whitespace or key order, so default serialization is acceptable."
     }
   ],
   "compilation_report": {
@@ -52,5 +62,5 @@
     },
     "constraint_handling": "M5 bench blind compilation"
   },
-  "_integrity": "505d5b3448ecb368e656bd35822578b4492ecf40e7ff055f7d63c12d89e78a0a"
+  "_integrity": "725494fbad455b32be1adcb2f92b3cdc8975dab0aee59f107865140f89cf77c7"
 }

@@ -1,0 +1,68 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "360f4b0867ca0311132c3634240a71f7d6762f0cbfc64601bb10402b75306ff2",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure stdlib only, Python 3.8+",
+    "Read entire stdin as single expression string",
+    "Exit code 0 on all inputs",
+    "Print only integer value or 'ERROR'"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "9034fcb8d1adee3ed1196abc49cc4963a6eac4316f839d13e2a9e5f240128603"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "division-truncation",
+      "decision": "truncate-toward-zero-via-int-division",
+      "rationale": "Spec requires -7/2=-3 not -4; Python's floor division (//) truncates toward negative infinity; using int(a/b) achieves required truncation toward zero"
+    },
+    {
+      "ir_region": "unary-minus-associativity",
+      "decision": "right-associative-via-recursion",
+      "rationale": "Unary operators are inherently right-associative; recursive parse_factor handles chains like -- 3 correctly as -(-(3))"
+    },
+    {
+      "ir_region": "whitespace-treatment",
+      "decision": "strip-and-tokenize-insignificant",
+      "rationale": "Spec permits leading/trailing/newline whitespace and requires internal whitespace be insignificant; input.strip() before parsing and whitespace-skipping during tokenization satisfy both requirements"
+    },
+    {
+      "ir_region": "error-recovery-strategy",
+      "decision": "fail-fast-then-report-error",
+      "rationale": "Recursive descent parser returns None on first parse error; evaluation shortcuts to ERROR output; this ensures single-pass parsing with deterministic error reporting"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-13T00:00:00+00:00",
+      "finished": "2026-08-13T00:00:00+00:00"
+    },
+    "constraint_handling": "ADR-021 controlled-language v0.2 blind compilation"
+  },
+  "_integrity": "e58feae4eb565721f059df89fe9393a3cbfefc47979e5ddb36cbb483345c801a"
+}

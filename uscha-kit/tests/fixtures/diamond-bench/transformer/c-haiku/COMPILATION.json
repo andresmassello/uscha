@@ -32,14 +32,19 @@
   ],
   "unresolved_intent": [
     {
-      "ir_region": "AC-TR-05",
-      "decision": "a JSON boolean age is rejected (bool is not a JSON integer)",
-      "rationale": "Python bool subclasses int; explicit exclusion honors spec intent"
+      "ir_region": "extra-fields-in-records",
+      "decision": "allow-silently-no-error",
+      "rationale": "Spec says 'no other fields read/preserved' — interpreted as fields beyond first/last/age are simply not processed per the constraint, not flagged as schema violations; validation checks required fields only"
     },
     {
-      "ir_region": "AC-TR-06",
-      "decision": "default json.dumps formatting (spec fixes structure/values, not whitespace/key order)",
-      "rationale": "AC-TR-06 leaves formatting free"
+      "ir_region": "boolean-integer-subclass-handling",
+      "decision": "explicit-bool-rejection-via-isinstance",
+      "rationale": "Python json.loads() returns JSON true/false as bool which is int subclass; explicit isinstance(age, bool) check maintains JSON type semantics—booleans and integers are distinct at the JSON schema level"
+    },
+    {
+      "ir_region": "floating-point-numeric-types",
+      "decision": "reject-float-accept-int-only",
+      "rationale": "Spec explicitly requires 'age not an integer', implying strict integer type requirement; JSON distinguishes integer (42) from float (42.0) literals; strict isinstance(age, int) rejects both bool and float for type fidelity"
     }
   ],
   "compilation_report": {
@@ -52,5 +57,5 @@
     },
     "constraint_handling": "M5 bench blind compilation"
   },
-  "_integrity": "c83cad7479abb458065d277d226885b27e2b1caff05aee7a399704eae0ab0c86"
+  "_integrity": "f33bc7bc310ebe0a9ee9982cda445a2cb9b7c53b451df826d01a82d4df2bcd0e"
 }

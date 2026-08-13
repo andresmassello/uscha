@@ -32,14 +32,24 @@
   ],
   "unresolved_intent": [
     {
-      "ir_region": "AC-SM-05",
-      "decision": "a non-string element (incl. JSON bool/null) is rejected as ERROR, not coerced",
-      "rationale": "bool is an int subclass; explicit isinstance(str) guard"
+      "ir_region": "AC-SM-06",
+      "decision": "any json.JSONDecodeError/ValueError from json.loads, and any non-list top-level value (dict, number, string, bool, null), is treated identically as ERROR",
+      "rationale": "spec says 'not a JSON array' covers both malformed JSON and well-formed-but-wrong-shape JSON; no distinct error messages requested"
     },
     {
-      "ir_region": "AC-SM-06",
-      "decision": "invalid JSON and well-formed-but-non-array are both ERROR",
-      "rationale": "'not a JSON array' covers both"
+      "ir_region": "AC-SM-05",
+      "decision": "a non-string array element (e.g. 42, null, {}) is ERROR, not coerced to string or skipped",
+      "rationale": "spec explicitly lists 'a non-string element' alongside unknown event strings as an ERROR case"
+    },
+    {
+      "ir_region": "INV-SM-TOTAL-01",
+      "decision": "transitions modeled as an explicit 4-entry dict keyed by (state,event) rather than nested if/else, and lookup misses trigger ERROR rather than a default state",
+      "rationale": "makes totality visually auditable (all 2x2 combinations present) and keeps 'never silently ignored' true by construction — a KeyError-equivalent (dict miss) is checked and always redirected to ERROR"
+    },
+    {
+      "ir_region": "SPEC.md#Contract",
+      "decision": "stray leading/trailing whitespace or a trailing newline in stdin is tolerated because json.loads already ignores it; no manual trim/strip added",
+      "rationale": "spec doesn't mention whitespace handling; relying on the standard JSON parser's built-in tolerance avoids adding unrequested logic"
     }
   ],
   "compilation_report": {
@@ -52,5 +62,5 @@
     },
     "constraint_handling": "M5 bench blind compilation"
   },
-  "_integrity": "d6d21a8cda606f6da61228ae96b0587ba31b69f586744800eb23ff5581d1417c"
+  "_integrity": "6643e49e72d6bfa207e3845416d56954b65e6d9f366010aa7739784fad18e78e"
 }

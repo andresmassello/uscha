@@ -5583,6 +5583,37 @@ ctrl_ir = json.load(io.open(os.path.join(CTRL, "IR.json"), encoding="utf-8"))["_
 res["AC-CL-06"] = (ref_green is True and free_ir != ctrl_ir
                    and q._oracle_hash(FREE) == q._oracle_hash(CTRL))
 
+# Controlled-language v0.2 criteria (ADR-021): the control arm and the de-confounded re-run,
+# measured live and pinned to the recorded verdicts.
+PF = os.path.join(CL, "parser-free")
+PC = os.path.join(CL, "parser-controlled")
+GR2 = os.path.join(CL, "guard-free-r2")
+def cv2(arm, m, unit):
+    r = subprocess.run([sys.executable, ENG, "compile-validate", "--ir",
+                        os.path.join(arm, "IR.json"), "--compilation",
+                        os.path.join(arm, "c-" + m, "COMPILATION.json"), "--json"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        ok = json.loads(r.stdout).get("valid") is True
+    except ValueError:
+        return False
+    return ok and not refs(os.path.join(arm, "c-" + m, unit.replace("/", os.sep)))
+pf_ir = json.load(io.open(os.path.join(PF, "IR.json"), encoding="utf-8"))["_integrity"]
+pc_ir = json.load(io.open(os.path.join(PC, "IR.json"), encoding="utf-8"))["_integrity"]
+res["AC-CL2-01"] = (pf_ir != pc_ir and q._oracle_hash(PF) == q._oracle_hash(PC)
+                    and all(cv2(PC, m, "source/impl.py") for m in ("opus", "sonnet", "haiku"))
+                    and all(cv2(GR2, m, "source/guard.py") for m in ("opus", "sonnet", "haiku")))
+rc_ctl, rep_ctl = lc(PF, PC)
+res["AC-CL2-02"] = (rc_ctl == 0 and rep_ctl.get("verdict") == "NO EFFECT"
+                    and rep_ctl["free"]["greens"] == 3 and rep_ctl["controlled"]["greens"] == 3)
+rc_dc, rep_dc = lc(GR2, os.path.join(CL, "controlled"))
+res["AC-CL2-03"] = (rc_dc == 0 and rep_dc.get("verdict") == "REDUCED"
+                    and rep_dc["delta"]["variance_score"] < -0.05
+                    and q._oracle_hash(GR2) == q._oracle_hash(os.path.join(CL, "controlled")))
+res["AC-CL2-04"] = all(os.path.isfile(os.path.join(kit, "..", f)) for f in
+                       ("CONTROLLED-LANGUAGE-REPORT.md", "CONTROLLED-LANGUAGE-CONTROL.md",
+                        "CONTROLLED-LANGUAGE-DECONFOUNDED.md"))
+
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 io.open(os.path.join(side, ".lang-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
@@ -6835,7 +6866,8 @@ def _lang_cases():
     except (OSError, ValueError):
         return None
 _lcc = _lang_cases()
-for _lid in ("AC-CL-01", "AC-CL-02", "AC-CL-03", "AC-CL-04", "AC-CL-05", "AC-CL-06"):
+for _lid in ("AC-CL-01", "AC-CL-02", "AC-CL-03", "AC-CL-04", "AC-CL-05", "AC-CL-06",
+             "AC-CL2-01", "AC-CL2-02", "AC-CL2-03", "AC-CL2-04"):
     if _lcc is None or _lcc.get(_lid) is None:
         results.append((_lid, "controlled-language", SKIP))
     elif _lcc.get(_lid) is True:
