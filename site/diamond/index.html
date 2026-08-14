@@ -250,7 +250,7 @@
     <h2>05 · Truth-pass — what is real today, what is still vision</h2>
     <p>The pitch is beautiful, and precisely for that reason it deserves distrust. The house
     rule: <em>under-claim, then wire, then re-claim</em>. State as of today
-    (kit&nbsp;1.77.0):</p>
+    (kit&nbsp;1.81.0):</p>
     <table>
       <thead><tr><th>Claim</th><th>Status</th><th>Where</th></tr></thead>
       <tbody>
@@ -264,6 +264,10 @@
             <td><span class="chip vision">VISION</span></td><td>deferred with conditions · ADR-011</td></tr>
         <tr><td>Implementation replaceability, demonstrated on bounded systems — independent models regenerate the same system from the canonical package, a withheld oracle certifies it</td>
             <td><span class="chip real">REAL</span></td><td>Diamond Bench: 7/9 archetypes PASS, 2 PARTIAL · 1.74–1.77 · ADR-017/018/020</td></tr>
+        <tr><td>Per-compiler fidelity (reverse discovery over each compiled artifact) + human curation of machine-generated code, one verdict per observation</td>
+            <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED stays literal where no verdict exists</td></tr>
+        <tr><td>Controlled authoring (EARS+STE) reduces inter-compiler variance</td>
+            <td><span class="chip real">REAL</span> (measured, mostly null)</td><td>deconfounded across 4 archetypes: REDUCED in 1 of 4 (guard −61%), two nulls, one WORSE · 1.76–1.81 · ADR-019/021/024</td></tr>
         <tr><td>"The code is <em>fully</em> regenerable from the specs" (arbitrary systems)</td>
             <td><span class="chip vision">VISION</span></td><td>the bootstrap test ran (M4/M5): 3 of 4 bounded archetypes regenerate to the same system, mechanically certified · full regenerability of arbitrary systems is the open frontier</td></tr>
         <tr><td>"Drift = incremental reverse discovery, same engine"</td>
@@ -283,10 +287,37 @@
     the only thing worth migrating.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      State verified against kit 1.77.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016, ADR-017,
-      ADR-018, ADR-020, CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.77.0 · the REAL/VISION
+      State verified against kit 1.81.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016–ADR-024,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.81.0 · the REAL/VISION
       labels follow the repo's INV-TRUTH-01 rule.
     </p>
+
+    <h2>07 · The program, measured — T0 → 1.81.0</h2>
+    <p>The Diamond program ran as eight releases of the kit measuring itself. Every number
+    below comes from a committed, regenerable report in the repo — none is narrated:</p>
+    <table>
+      <thead><tr><th>Instrument</th><th>Measured result</th><th>Releases</th></tr></thead>
+      <tbody>
+        <tr><td>Diamond Bench — 9 bounded archetypes × 3 blind compilers, each judged by a withheld oracle</td>
+            <td>7 PASS · 2 PARTIAL. The oracle also caught a convergent aliasing bug two independent compilers shared — a defect no code review of either would have flagged as suspicious.</td>
+            <td>1.74–1.77</td></tr>
+        <tr><td>Controlled language, deconfounded — free prose vs EARS+STE, same generation, shared oracle, 4 archetypes</td>
+            <td>REDUCED in 1 of 4: the decision-dense guard dropped variance −61%; the control and the state-machine read null; the transformer read WORSE — the rewrite sharpened a latent ambiguity ("exactly the fields") into a commitment the oracle rejects.</td>
+            <td>1.76–1.81</td></tr>
+        <tr><td>Fidelity per compiler — the M1 static extractor applied to each compiled artifact</td>
+            <td>Behaviourally near-identical compilers expose visibly different surfaces: 19–21/23 on the same oracle through 5, 4 and 8 public functions.</td>
+            <td>1.79</td></tr>
+        <tr><td>Curation of machine-generated code — one human verdict per observation, append-only, fail-closed store</td>
+            <td>Closure is measured where a human judged and stays the literal UNMEASURED where none did — absence named, never faked.</td>
+            <td>1.80</td></tr>
+        <tr><td>The method on itself — every milestone shipped through an independent blind review before release</td>
+            <td>The reviews caught real defects in eight releases of the program (each recorded in that release's changelog); the ninth review came back clean.</td>
+            <td>1.73–1.81</td></tr>
+      </tbody>
+    </table>
+    <p>The emerging hypothesis — stated as hypothesis, not conclusion: <em>controlled
+    authoring pays where the prose had slack, and does nothing or harms where it had
+    none.</em> The instrument to test it further is already in the repo.</p>
 
     <div class="backlinks">
       <a href="../how/index.html">See the mechanism: how it works →</a>
