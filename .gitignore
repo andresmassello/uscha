@@ -50,3 +50,13 @@ chat-*.md
 .fidelity-cases.json
 .ir-cases.json
 ir/
+
+# wrangler cache (site dev, regenerated)
+.wrangler/
+
+# engine run artifacts when the suite runs from inside the kit (sidecars + junit, regenerated)
+uscha-kit/reports/
+
+# approval-testing residue: a green run leaves a .received identical to the golden;
+# a red run fails the harness itself, so git status is not the signal
+tests/golden/*.received.json
