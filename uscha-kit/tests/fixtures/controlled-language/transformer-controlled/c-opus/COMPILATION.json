@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e80f25e8c69314db3f4f950667b0486d6c957e1bee06d9beff1f8c1c01f38c04",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "0cbe597bbe5edc28c087a32d4dc63f3f0a5b747933b1e5047ed579ceddb08b9e"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "record-definition-exact-fields",
+      "decision": "Treat a JSON object carrying fields beyond first/last/age as a malformed input (ERROR), rather than ignoring the extras.",
+      "rationale": "The Definitions say a record has 'exactly the fields first, last, and age', and Out of scope says the program shall not read or preserve other fields. 'Exactly' is the stronger, checkable reading; the error list does not enumerate extra fields, so the two readings conflict. Chose strict equality of the key set because it makes the definition enforceable and cannot silently accept data the spec never described."
+    },
+    {
+      "ir_region": "age-type-boolean-edge",
+      "decision": "Reject JSON `true`/`false` in the `age` field as a non-integer, printing ERROR.",
+      "rationale": "The spec says 'If the field age is not an integer, then the program shall print exactly ERROR', but in Python `bool` is a subclass of `int`, so a naive `isinstance(age, int)` would accept `true` as age 1 and map it to adult=false. The JSON type system distinguishes booleans from numbers, so the spec's 'integer' means the JSON integer type. Added an explicit `isinstance(age, bool)` rejection."
+    },
+    {
+      "ir_region": "malformed-input-non-json",
+      "decision": "Input that is not parseable JSON at all is treated as a malformed input: print exactly ERROR and exit 0.",
+      "rationale": "The Definitions define malformed input only as 'not a JSON array' or 'an array containing a non-record'; unparseable bytes fall in neither branch literally. But the contract requires reading one JSON value, printing one line, and exiting 0 unconditionally, and an unparseable input is a fortiori not a JSON array. Chose ERROR over a traceback so the exit-0 / one-line contract holds for every input."
+    },
+    {
+      "ir_region": "output-line-termination",
+      "decision": "Terminate the single output line with a trailing newline character (`\\n`).",
+      "rationale": "The spec says 'print one line' and 'print exactly ERROR' without fixing the line terminator, and AC-TR-06 explicitly declines to fix formatting. A line is conventionally newline-terminated (Python's `print` does this), so the trailing newline matches the ordinary reading of 'print one line' while the token on that line is exactly `ERROR` with no surrounding characters."
+    },
+    {
+      "ir_region": "json-output-formatting",
+      "decision": "Emit `json.dumps(result)` with library defaults: compact-ish separators (`, ` / `: `), insertion key order (`name` then `adult`), and no indentation.",
+      "rationale": "The spec fixes the structure and values of the JSON output but explicitly does not fix whitespace or key order. Rather than invent a canonical form (sorted keys, no spaces), chose the stdlib default so the output is stable, deterministic across runs, and obviously not an implied requirement."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "eeeaa7c951c5bae7dfe56bcc05e1a8197a3f002c8536b210e73e842dae96622f"
+}

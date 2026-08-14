@@ -1,0 +1,66 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "1fd52956f83b755c5a6cc2f133ea8eb3a2c7f6d1351f9babf20aaf357040341f"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "age field type check",
+      "decision": "JSON true/false (Python bool) is rejected as an invalid age even though bool is a Python int subclass",
+      "rationale": "spec says age is 'an integer'; a boolean is semantically not an integer, so isinstance(age, bool) is explicitly excluded before the isinstance(age, int) check"
+    },
+    {
+      "ir_region": "record field set",
+      "decision": "extra/unknown fields beyond first/last/age are silently ignored, not treated as an error",
+      "rationale": "the spec's error list only names missing/wrong-typed first/last/age; it never says the record's field set must match exactly, so presence of extras is out of scope rather than a defect"
+    },
+    {
+      "ir_region": "age numeric type",
+      "decision": "a JSON float age (e.g. 18.0) is rejected as ERROR even though its value is integral",
+      "rationale": "AC-TR-05 fails on 'age is not an integer'; JSON distinguishes number kinds and Python's json module parses 18.0 as float, so strict type(age) is int semantics (via isinstance excluding bool) is used rather than a value-based integrality check"
+    },
+    {
+      "ir_region": "output JSON formatting",
+      "decision": "use json.dumps with default separators/no indent, single-line",
+      "rationale": "AC-TR-06 states only structure and values are fixed, not formatting, so the simplest compact serialization satisfies the contract without inventing an unrequested formatting guarantee"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled)"
+  },
+  "_integrity": "86655533f5b8fb9fc492c01df2e492236b31a122ffece4ff2fe4847f78eed6ff"
+}

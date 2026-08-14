@@ -1,0 +1,66 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "a3b743d2d5a32cc19ef2c3d5c5301f640e875a1a87c8d323c1bc33693f5fb7c9"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "IR-AGE-TYPE-VALIDATION",
+      "decision": "Reject boolean values for age field (use isinstance(age, int) and not isinstance(age, bool))",
+      "rationale": "JSON distinguishes true/false from numbers; Python's bool subclass of int requires explicit filtering to enforce schema intent"
+    },
+    {
+      "ir_region": "IR-MAJORITY-THRESHOLD",
+      "decision": "Use age >= 18 for adult status (18-year-olds are adults)",
+      "rationale": "Spec explicitly states '18 is an adult, 17 is not'; aligns with common legal convention"
+    },
+    {
+      "ir_region": "IR-EXTRA-FIELD-HANDLING",
+      "decision": "Silently drop any fields beyond first/last/age in input records",
+      "rationale": "Spec says 'No other fields are read or preserved'; only extract the three required fields, ignore the rest"
+    },
+    {
+      "ir_region": "IR-ERROR-STRATEGY",
+      "decision": "Fail-fast on first validation error: print ERROR and return immediately, never emit partial output",
+      "rationale": "Spec requires 'fail the batch; do not emit a partial result' — atomic all-or-nothing is simplest compliance"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled)"
+  },
+  "_integrity": "a2423bd424c7bbc8911439e6de6474121c6f793b453493c8c37ebdf429d540d8"
+}

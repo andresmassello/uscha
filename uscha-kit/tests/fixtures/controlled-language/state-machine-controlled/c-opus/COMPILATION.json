@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "a17680cedb10259c76976e3f06826acc9242c094255b02c95dc2f5c35137cbbe",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "bb3d5a5ad72c48b5bab86863544fbd2be6e104083410b9550a1f646bc38bbd2d"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "Errors — top-level JSON scalars other than object/number",
+      "decision": "Treat every non-array JSON value (string, boolean, null, object, number) as ERROR, not just the three the spec enumerates",
+      "rationale": "The contract says `when the input is not a JSON array of known event strings, print exactly ERROR`, which is the general rule; the Errors section lists object/number/invalid-JSON as examples rather than an exhaustive set. Rejecting all non-arrays is the only reading consistent with the ubiquitous requirement."
+    },
+    {
+      "ir_region": "Errors — JSON booleans as array elements",
+      "decision": "A boolean element is rejected as `not a string` via isinstance(element, str); no special-casing of bool-as-int is needed",
+      "rationale": "The spec defines an unknown event as an element that is not the string `coin` and not the string `push`, and separately requires ERROR for non-string elements. Python's bool subclasses int, not str, so the isinstance check already rejects it; noting it here because the bool/int subclass trap is the usual source of divergence in this shape of validator."
+    },
+    {
+      "ir_region": "Errors — fail-fast vs. fold-to-completion on a bad element",
+      "decision": "Abort the fold at the first invalid element and print ERROR, discarding any state accumulated so far",
+      "rationale": "The spec requires exactly one output line and gives ERROR precedence for any invalid element, but never states whether validation precedes the fold or is interleaved. Both orders produce identical observable output because ERROR wins regardless of position, so fail-fast was chosen for simplicity; recorded because it is an unstated ordering decision."
+    },
+    {
+      "ir_region": "Contract — trailing newline and whitespace tolerance on stdin",
+      "decision": "Emit the output line with a trailing `\\n`, and pass raw stdin (including surrounding whitespace/newlines) straight to json.loads, which tolerates leading/trailing whitespace",
+      "rationale": "`print one line` does not specify whether the line is newline-terminated, and the spec is silent on input whitespace. A trailing newline is the conventional meaning of a line on stdout, and json.loads' native whitespace tolerance avoids inventing a stripping rule the spec never asked for. An empty stdin therefore becomes invalid JSON and prints ERROR."
+    },
+    {
+      "ir_region": "Contract — stdin read failure",
+      "decision": "Treat an unreadable/absent stdin as empty text, which flows into the invalid-JSON path and prints ERROR with exit 0",
+      "rationale": "The spec mandates exit 0 and one output line unconditionally, so a decode error on the input stream must not surface as a traceback. This preserves the ubiquitous requirements without adding a behaviour the spec does not describe."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "c3526dd5b9f824b89dad2ac01d3900873ad23e1890d1acddac722e3c8bb3af8a"
+}

@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-SM-01",
+      "type": "AC",
+      "statement": "when the input array is empty, the program shall print the start state `locked`.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-SM-02",
+      "type": "AC",
+      "statement": "while the state is `locked`, when the program folds `coin`, the program shall",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 4
+      }
+    },
+    {
+      "id": "AC-SM-03",
+      "type": "AC",
+      "statement": "while the state is `unlocked`, when the program folds `coin`, the program shall",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 7
+      }
+    },
+    {
+      "id": "AC-SM-04",
+      "type": "AC",
+      "statement": "the program shall fold the events from left to right, shall start the fold in",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 10
+      }
+    },
+    {
+      "id": "AC-SM-05",
+      "type": "AC",
+      "statement": "if an array element is an unknown event or is not a string, then the program",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 12
+      }
+    },
+    {
+      "id": "AC-SM-06",
+      "type": "AC",
+      "statement": "if the input is not a JSON array, then the program shall print exactly `ERROR`.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 14
+      }
+    },
+    {
+      "id": "INV-SM-TOTAL-01",
+      "type": "INV",
+      "statement": "the machine is total and closed",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 7,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 6
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "a17680cedb10259c76976e3f06826acc9242c094255b02c95dc2f5c35137cbbe"
+}

@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-TR-01",
+      "type": "AC",
+      "statement": "each record maps to `{name, adult}` with `name` = first + space + last.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-TR-02",
+      "type": "AC",
+      "statement": "`adult` is `age >= 18` (18 is an adult, 17 is not).",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 4
+      }
+    },
+    {
+      "id": "AC-TR-03",
+      "type": "AC",
+      "statement": "output order equals input order; an empty array maps to an empty array.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 5
+      }
+    },
+    {
+      "id": "AC-TR-04",
+      "type": "AC",
+      "statement": "input that is not a JSON array prints exactly `ERROR`.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 6
+      }
+    },
+    {
+      "id": "AC-TR-05",
+      "type": "AC",
+      "statement": "a record missing any of first/last/age, or with a wrong-typed field, prints",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 7
+      }
+    },
+    {
+      "id": "AC-TR-06",
+      "type": "AC",
+      "statement": "only the structure and values of the output are fixed, not its JSON formatting.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 9
+      }
+    },
+    {
+      "id": "INV-TR-ORDER-01",
+      "type": "INV",
+      "statement": "order is preserved",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 7,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 6
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0"
+}

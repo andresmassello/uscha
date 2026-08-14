@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e80f25e8c69314db3f4f950667b0486d6c957e1bee06d9beff1f8c1c01f38c04",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "a5ae9baaaf807437423cf4c22266f13520dae24d320a0141c6121d47f6ff5570"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "record-shape:age-type-check",
+      "decision": "bool is rejected as a valid age even though Python's isinstance(True, int) is True",
+      "rationale": "spec says age must be 'an integer'; STE vocabulary treats boolean and integer as distinct types, and a JSON true/false is never intended to represent an age"
+    },
+    {
+      "ir_region": "record-shape:extra-fields",
+      "decision": "extra/unexpected fields on a record element do not trigger ERROR, only missing or mistyped first/last/age do",
+      "rationale": "the Errors section only lists missing fields and wrong types as failure triggers; the Out-of-scope section says the program shall not preserve other fields but does not say their mere presence is malformed input"
+    },
+    {
+      "ir_region": "contract:malformed-json-text",
+      "decision": "input text that fails to parse as JSON at all (not just wrong shape) is treated as a malformed input and produces ERROR rather than a crash",
+      "rationale": "the contract requires exit code 0 and exactly one output line in all cases, and 'malformed input' is defined broadly enough to cover unparsable text, not only well-formed JSON of the wrong shape"
+    },
+    {
+      "ir_region": "mapping:name-concatenation",
+      "decision": "name is built as first + single space + last with no trimming or normalization of the input strings",
+      "rationale": "the spec gives an exact STE mapping rule (first, one space, last, concatenated in that order) with no mention of whitespace normalization, so any transformation beyond literal concatenation would be unrequested behavior"
+    },
+    {
+      "ir_region": "errors:partial-result-guarantee",
+      "decision": "validation runs to completion in a single pass building a results list only returned after all elements pass; on any failure the function returns None before printing anything, so no partial JSON is ever written to stdout",
+      "rationale": "INV-TR-ORDER-01 and AC-TR-05 both require the whole batch to fail atomically with no partial output, which rules out streaming or eager printing per element"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "86acc5900cc296c4639968d4aeb537a342739fa03274efc2cb9dca54aa8aed0b"
+}

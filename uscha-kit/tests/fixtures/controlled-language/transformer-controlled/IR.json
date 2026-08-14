@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-TR-01",
+      "type": "AC",
+      "statement": "when the program maps a record, the program shall emit an output object with",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-TR-02",
+      "type": "AC",
+      "statement": "the program shall set `adult` to the value of `age >= 18`; the age 18 shall map",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 5
+      }
+    },
+    {
+      "id": "AC-TR-03",
+      "type": "AC",
+      "statement": "the program shall keep the output order equal to the input order; when the input",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 7
+      }
+    },
+    {
+      "id": "AC-TR-04",
+      "type": "AC",
+      "statement": "if the input is not a JSON array, then the program shall print exactly `ERROR`.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 9
+      }
+    },
+    {
+      "id": "AC-TR-05",
+      "type": "AC",
+      "statement": "if a record misses any of the fields first/last/age, or a field carries a wrong",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 10
+      }
+    },
+    {
+      "id": "AC-TR-06",
+      "type": "AC",
+      "statement": "this spec fixes the structure and the values of the output; this spec does not",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 13
+      }
+    },
+    {
+      "id": "INV-TR-ORDER-01",
+      "type": "INV",
+      "statement": "order is preserved",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 7,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 6
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "e80f25e8c69314db3f4f950667b0486d6c957e1bee06d9beff1f8c1c01f38c04"
+}

@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "a17680cedb10259c76976e3f06826acc9242c094255b02c95dc2f5c35137cbbe",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "7876b2d6c06febcb588639b72a2499ff11fd08cbe7e2ffca8f24f832b0684e81"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "json-input-mechanism",
+      "decision": "Use json.load(sys.stdin) to read entire JSON value at once",
+      "rationale": "Spec says 'read one JSON value from standard input'. Full-load approach is simpler than streaming/tokenizing parser and sufficient for a single small JSON array. Catches invalid JSON uniformly."
+    },
+    {
+      "ir_region": "output-line-format",
+      "decision": "Use Python print() which adds implicit newline",
+      "rationale": "Spec requires 'print one line'. Standard practice for line-based output; print() appends newline. Spec does not explicitly forbid trailing newline and 'one line' conventionally implies newline terminator."
+    },
+    {
+      "ir_region": "undefined-transitions-totality",
+      "decision": "State stays unchanged for undefined state-event pairs",
+      "rationale": "Spec defines 4 explicit transitions but requires machine be 'total over the two events' with 'exactly one defined next state' per pair. For undefined pairs (locked+push, unlocked+coin), keeping state unchanged makes machine total—every pair maps to exactly one next state—and aligns with typical FSM semantics where unspecified transitions are reflexive."
+    },
+    {
+      "ir_region": "empty-stdin-handling",
+      "decision": "Empty or malformed stdin raises JSONDecodeError, caught and converted to ERROR",
+      "rationale": "Spec requires reading 'one JSON value'. json.load() on empty stdin or EOF raises JSONDecodeError. Treating as invalid JSON (error case) is consistent with contract requirement 'when input is not a JSON array of known event strings, print ERROR'."
+    },
+    {
+      "ir_region": "error-reporting-granularity",
+      "decision": "All error conditions print 'ERROR' without type differentiation",
+      "rationale": "Spec requires 'print exactly ERROR' for invalid JSON, non-array input, non-string array elements, and unknown events. No requirement to distinguish error types or emit structured diagnostics. Single message satisfies all four error cases uniformly."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "b7f8245c77b1a11d6046b1d4c7a6b266369cc1679253b90c30d73a7fad3ebc5e"
+}

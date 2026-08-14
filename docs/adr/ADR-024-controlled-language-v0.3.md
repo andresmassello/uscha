@@ -22,7 +22,12 @@ archetypes.
 
 ## Decision
 - **Replicate the deconfounded protocol on two more bench archetypes** (chosen for contrast
-  with the guard: one state-heavy, one text-heavy — `state-machine` and `parser`):
+  with the guard: one state-heavy, one data-heavy — `state-machine` and `transformer`).
+  *Amended before implementation:* the first draft named `parser`, overlooking that parser
+  ALREADY IS a deconfounded datapoint — it served as the v0.2 control (same-generation, both
+  arms, NO EFFECT). Re-running it would duplicate an existing measurement, not replicate the
+  guard's positive. The parser control instead enters the v0.3 summary as the existing row it
+  is. For each new archetype:
   - For each: author an **EARS+STE rewrite** of the canonical package (arm B). The human
     confirms "same semantic content" between arms — the stated limitation of the protocol,
     unchanged from v0.1/v0.2.
@@ -34,7 +39,8 @@ archetypes.
     existing `lang-compare` — one verdict per archetype.
 - **Report**: one generated report per archetype (existing renderer), plus a hand-written
   `CONTROLLED-LANGUAGE-V03.md` summary table: archetype · verdict · variance delta ·
-  pass-rate delta, with the guard's v0.2 result included for the full picture. The program
+  pass-rate delta, with the guard's v0.2 REDUCED and the parser control's NO EFFECT included
+  as the existing rows they are — the aggregate counts every deconfounded archetype once. The program
   claim updates to "REDUCED in k of n deconfounded archetypes" — whatever k turns out to be.
   **A WORSE or NO EFFECT result publishes with the same prominence as a REDUCED.**
 - **Tests**: smoke pins each archetype's verdict and deltas over the committed fixtures

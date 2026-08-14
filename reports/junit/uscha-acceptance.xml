@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="125" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="128" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -249,5 +249,11 @@
   <testcase classname="uscha.acceptance" name="AC-CL2-03_controlled-language">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-CL2-04_controlled-language">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CL3-01_controlled-language-v03">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CL3-02_controlled-language-v03">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CL3-03_controlled-language-v03">
   </testcase>
 </testsuite>

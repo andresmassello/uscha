@@ -3430,6 +3430,7 @@ rm -f "$KIT/reports/junit/.bootstrap-cases.json"  # same rule for T127
 rm -f "$KIT/reports/junit/.bench-cases.json"      # same rule for T128
 rm -f "$KIT/reports/junit/.lang-cases.json"       # same rule for T129
 rm -f "$KIT/reports/junit/.bench-curate-cases.json"  # same rule for T130
+rm -f "$KIT/reports/junit/.lang3-cases.json"      # same rule for T131
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -5794,6 +5795,100 @@ case "$T130" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T130";;
 esac
 
+echo "== T131 (1.81.0): controlled-language v0.3 -- replication across archetypes; the aggregate is 1 of 4 (ADR-024) =="
+T131=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import io, json, os, subprocess, sys
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
+res = {}
+PAIRS = [("state-machine-free-r2", "state-machine-controlled"),
+         ("transformer-free-r2", "transformer-controlled")]
+def readb(p):
+    with io.open(p, "rb") as fh:
+        return fh.read()
+def run(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+# AC-CL3-01: oracle byte-identical across each pair; every compilation validates against its
+# arm's IR and carries a NON-EMPTY unresolved_intent, distinct across the three models
+ok1 = True
+for free, ctrl in PAIRS:
+    if readb(os.path.join(CL, free, "oracle", "ORACLE.json")) != readb(
+            os.path.join(CL, ctrl, "oracle", "ORACLE.json")):
+        ok1 = False
+    for arm in (free, ctrl):
+        fps = []
+        for m in ("c-opus", "c-sonnet", "c-haiku"):
+            cj = os.path.join(CL, arm, m, "COMPILATION.json")
+            rv = run("compile-validate", "--ir", os.path.join(CL, arm, "IR.json"),
+                     "--compilation", cj)
+            if rv.returncode != 0:
+                ok1 = False
+            c = json.load(io.open(cj, encoding="utf-8-sig"))
+            ui = c.get("unresolved_intent") or []
+            if not (2 <= len(ui) <= 5):
+                ok1 = False
+            fps.append(json.dumps(ui, sort_keys=True))
+        if len(set(fps)) != 3:
+            ok1 = False                    # identical UI across models = synthesized, not returned
+res["AC-CL3-01"] = ok1
+# AC-CL3-02: computed verdicts pinned -- state-machine NO EFFECT (deltas inside the margins),
+# transformer WORSE (an oracle-green lost); the divergence is the extra-field-tolerated case
+# on the controlled opus compilation. Interpreter-stable (verified 3.8 + 3.13 before pinning).
+def compare(free, ctrl):
+    r = run("lang-compare", "--free", os.path.join(CL, free),
+            "--controlled", os.path.join(CL, ctrl), "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+sm = compare(*PAIRS[0])
+tf = compare(*PAIRS[1])
+sm_ok = (sm.get("verdict") == "NO EFFECT"
+         and abs(sm.get("delta", {}).get("variance_score", 9)) <= sm.get("margin", 0)
+         and sm.get("delta", {}).get("mean_passrate") == 0.0
+         and sm.get("delta", {}).get("oracle_green") == 0)
+tf_ok = (tf.get("verdict") == "WORSE"
+         and tf.get("delta", {}).get("oracle_green") == -1
+         and tf.get("delta", {}).get("mean_passrate", 0) < 0)
+ro = run("bootstrap-oracle", "--impl",
+         os.path.join(CL, "transformer-controlled", "c-opus", "source", "impl.py"),
+         "--oracle", os.path.join(CL, "transformer-controlled", "oracle", "ORACLE.json"),
+         "--json")
+try:
+    od = json.loads(ro.stdout)
+except ValueError:
+    od = {}
+red = [r.get("name") for r in od.get("results") or [] if not r.get("ok")]
+case_ok = (od.get("passed") == 13 and od.get("total") == 14
+           and red == ["extra-field-tolerated"])
+res["AC-CL3-02"] = sm_ok and tf_ok and case_ok
+# AC-CL3-03: the v0.3 summary states the aggregate as 1 of 4 with per-archetype rows; the
+# negative row is present with the same prominence as the positive
+v3 = os.path.join(root, "CONTROLLED-LANGUAGE-V03.md")
+try:
+    body = io.open(v3, encoding="utf-8").read()
+except OSError:
+    body = ""
+res["AC-CL3-03"] = ("1 of 4" in body
+                    and "| guard |" in body and "**REDUCED**" in body
+                    and "| parser |" in body and "| state-machine |" in body
+                    and "| transformer |" in body and "**WORSE**" in body
+                    and body.count("**NO EFFECT**") >= 2)
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".lang3-cases.json"), "w",
+        encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T131" in
+  OK*) PASS=$((PASS+1)); echo "  ok   lang-v03: $T131";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T131";;
+esac
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -7060,6 +7155,23 @@ for _lid in ("AC-CL-01", "AC-CL-02", "AC-CL-03", "AC-CL-04", "AC-CL-05", "AC-CL-
         results.append((_lid, "controlled-language", None))
     else:
         results.append((_lid, "controlled-language", "T129 case failed or missing"))
+
+# Controlled-language v0.3 criteria (ADR-024): measured by T131, same sidecar contract.
+def _lang3_cases():
+    p = os.path.join(kit, "reports", "junit", ".lang3-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_l3c = _lang3_cases()
+for _l3id in ("AC-CL3-01", "AC-CL3-02", "AC-CL3-03"):
+    if _l3c is None or _l3c.get(_l3id) is None:
+        results.append((_l3id, "controlled-language-v03", SKIP))
+    elif _l3c.get(_l3id) is True:
+        results.append((_l3id, "controlled-language-v03", None))
+    else:
+        results.append((_l3id, "controlled-language-v03", "T131 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

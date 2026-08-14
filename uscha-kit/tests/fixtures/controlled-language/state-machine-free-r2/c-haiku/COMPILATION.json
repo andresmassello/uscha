@@ -1,0 +1,66 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e3754924dc80a7dbdfa6ee98c6aa82a06ecc57b577e930f3f2370248cbeea69c",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "41d2798272bdba210409dcb76735ea4db17dad4a3c952d8819d377c351afe7a2"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "output-format-newline",
+      "decision": "print() includes newline; output is 'locked\\n', 'unlocked\\n', or 'ERROR\\n'",
+      "rationale": "Spec says 'print exactly' but does not specify whether newline is included. Unix convention and Python's print() default both add newline. Matches expected golden test format for line-oriented output."
+    },
+    {
+      "ir_region": "exception-handling-scope",
+      "decision": "Catch json.JSONDecodeError and ValueError during parse; treat all other exceptions as program failure (stderr, exit 1)",
+      "rationale": "Spec requires ERROR only for 'input not JSON array' and 'unknown/non-string events'. Parse exceptions satisfy that; uncaught exceptions (e.g., OOM) should propagate to signal program failure, not be masked as ERROR."
+    },
+    {
+      "ir_region": "state-machine-total-representation",
+      "decision": "State transitions implemented as explicit if-elif-else chains; no lookup table or state object",
+      "rationale": "Spec says machine is 'total and closed' — every (state, event) pair defined, no undefined transitions. Explicit conditionals make totality obvious in code; early return on unknown event ensures closure property is enforceable."
+    },
+    {
+      "ir_region": "json-parse-error-semantics",
+      "decision": "Invalid JSON (malformed, non-array, non-string elements) all yield ERROR; no distinction between parse failure and type mismatch",
+      "rationale": "Spec bundles all invalid inputs under single ERROR output. Treating 'not a JSON array' and 'non-string event' identically simplifies contract: one error channel for all invalid input."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled)"
+  },
+  "_integrity": "ece0e4697a56f645762947a9b2615fb41bb81a91927ec179bae9d31772b4c24b"
+}

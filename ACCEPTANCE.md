@@ -356,6 +356,18 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   and exactly judged/total where one does (never any other shape, never a fabricated 0.0);
   the descriptor never changes any verdict.
 
+## Controlled language v0.3 (ADR-024) - replication across archetypes
+
+- [x] AC-CL3-01 - both new archetype pairs: arms compiled blind, same generation, oracle
+  byte-identical across arms; every compilation validates against its arm's IR and carries a
+  non-empty `unresolved_intent`, distinct across the three models.
+- [x] AC-CL3-02 - `lang-compare` verdicts pinned over the committed fixtures: state-machine
+  NO EFFECT (deltas inside the margins), transformer WORSE (an oracle-green lost; the
+  divergence is the withheld `extra-field-tolerated` case on the controlled opus
+  compilation); interpreter-stable across 3.8 and 3.13.
+- [x] AC-CL3-03 - the v0.3 summary states the aggregate as "1 of 4" with per-archetype rows;
+  the WORSE row publishes with the same prominence as the REDUCED.
+
 ## Bench curation (ADR-023) - the human verdict extended to machine-generated code
 
 - [x] AC-BC-01 - `bench-curate` records one verdict per call and appends (a superseding

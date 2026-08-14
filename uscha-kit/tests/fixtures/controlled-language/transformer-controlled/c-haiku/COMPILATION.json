@@ -1,0 +1,66 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e80f25e8c69314db3f4f950667b0486d6c957e1bee06d9beff1f8c1c01f38c04",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "42cac49eabf86ae5cdc9318e1ed714105f3688f1039fc7877937a1397b355f74"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "output-formatting",
+      "decision": "compact JSON with no indentation",
+      "rationale": "spec explicitly excludes whitespace from contract; json.dumps() default is compact and minimal"
+    },
+    {
+      "ir_region": "key-order",
+      "decision": "insertion order: name, then adult",
+      "rationale": "spec explicitly excludes key order from contract; Python 3.8+ guarantees insertion order, so name comes before adult as constructed"
+    },
+    {
+      "ir_region": "extra-fields",
+      "decision": "silently ignore fields outside first/last/age",
+      "rationale": "spec says 'program shall not read other fields' — out-of-scope statement, not an error condition; ignoring is safe and clean"
+    },
+    {
+      "ir_region": "age-domain",
+      "decision": "allow any integer, including negative and arbitrarily large",
+      "rationale": "spec defines comparison 'age >= 18' but does not restrict age domain; negative ages are logically coherent under the rule (e.g., -5 >= 18 is false, adult is false)"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "c56d632e3260152c37aaf84861276d0c19671a7b295c9e459b98e0e5d432b573"
+}

@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.81.0** — [controlled-language v0.3: the REDUCED does not generalize, and that ships (2026-08-14)](CHANGELOG-1.81.0.md)
 - **1.80.0** — [bench-curation: the human verdict extended to machine-generated code (2026-08-14)](CHANGELOG-1.80.0.md)
 - **1.79.0** — [fidelity per compiler: reverse discovery applied to each compiled artifact (2026-08-13)](CHANGELOG-1.79.0.md)
 - **1.78.0** — [controlled-language v0.2: the control shows nothing, the confound kill shows the signal was real (2026-08-13)](CHANGELOG-1.78.0.md)

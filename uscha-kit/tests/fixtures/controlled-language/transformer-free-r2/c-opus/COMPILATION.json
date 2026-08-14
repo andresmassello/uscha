@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "331d30973acaaa528081c8bccd587cb6508908bcedda56d6a4ebf3835554b455"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "errors/age-is-not-an-integer — JSON booleans",
+      "decision": "Reject `true`/`false` as an age: `isinstance(age, bool)` is excluded before the int check.",
+      "rationale": "JSON booleans decode to Python bool, a subclass of int, so a naive `isinstance(age, int)` would silently accept `{\"age\": true}` as age 1 and emit `\"adult\": false`. The spec says age is an integer and lists a wrong-typed field as an ERROR case; a boolean is a wrong-typed field, so the batch fails."
+    },
+    {
+      "ir_region": "errors/age-is-not-an-integer — JSON floats",
+      "decision": "Reject any JSON float, including integral-valued ones like `18.0`, as ERROR.",
+      "rationale": "The spec types `age` as integer and does not mention numeric coercion. Accepting 18.0 would require a rounding/truncation rule the spec never gives, so the stricter reading (float is not an integer) was taken."
+    },
+    {
+      "ir_region": "input/extra-fields-on-a-record",
+      "decision": "Extra unknown fields on a record are ignored, not an error; only the three named fields are read.",
+      "rationale": "The Errors section enumerates ERROR causes as missing fields and wrong-typed fields — an unexpected extra field is neither. Out of scope also says no other fields are read or preserved, which reads as ignore, not reject."
+    },
+    {
+      "ir_region": "input/empty-or-whitespace-only-stdin",
+      "decision": "Empty or blank standard input prints ERROR (it fails json.loads before any array check).",
+      "rationale": "The spec guarantees stdin is a JSON array and defines ERROR for input that is not a JSON array. Nothing is not a JSON array, so it takes the ERROR path rather than being treated as an empty array."
+    },
+    {
+      "ir_region": "output/formatting and trailing newline",
+      "decision": "Emit `json.dumps(result)` via `print` — compact-ish default separators, insertion key order (`name` then `adult`), and a trailing newline.",
+      "rationale": "AC-TR-06 explicitly frees whitespace and key order, and the contract says one line, so `print` supplies the line terminator. No pretty-printing was added since nothing in the spec calls for human-readable output."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled)"
+  },
+  "_integrity": "3de3da38071699a1a78a5a1361185aed97fd541959c9f9763a95f17d635a0370"
+}

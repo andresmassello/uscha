@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "a17680cedb10259c76976e3f06826acc9242c094255b02c95dc2f5c35137cbbe",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "41d9241c1fa93be1c3a844c9a656ac9f39e4aa5a43385b3bdaebdcd438da7d7a"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "Contract — 'JSON array of known event strings'",
+      "decision": "validation is per-element and short-circuits: the fold stops and prints ERROR at the first invalid element rather than scanning the whole array first",
+      "rationale": "the spec states the error condition per-element ('if an array element is...') without mandating whole-array pre-validation before folding; short-circuit is the simpler reading and matches 'fold from left to right'"
+    },
+    {
+      "ir_region": "Errors — 'is not a JSON object, a bare number, or invalid JSON'",
+      "decision": "treated JSON true/false/null as also erroring (falls under 'not a JSON array'), even though the spec's error list names object/number/invalid-JSON explicitly but not boolean/null",
+      "rationale": "the Contract clause is the controlling rule ('when the input is not a JSON array... print ERROR'); the Errors bullet's enumeration reads as illustrative examples, not an exhaustive type list, so any non-array top-level value is treated the same"
+    },
+    {
+      "ir_region": "Errors — 'not a string' element",
+      "decision": "a JSON boolean (true/false) or null or nested array/object as an array element is treated as 'not a string' and prints ERROR, not specially distinguished from other non-string types",
+      "rationale": "spec only distinguishes 'unknown event' (wrong string) from 'not a string' (wrong type); both paths in the code print the same literal ERROR so no further type discrimination is needed"
+    },
+    {
+      "ir_region": "Transitions — self-loop wording ('the program shall keep the state')",
+      "decision": "implemented as an explicit if/else assignment to the same value (state = 'unlocked' when already 'unlocked') rather than a no-op/pass, to keep the total 2x2 transition table visually explicit in code",
+      "rationale": "the constitution (INV-SM-TOTAL-01) demands the machine be visibly total and closed; writing all four transitions explicitly (even where redundant) makes totality auditable in the source rather than relying on an implicit fallthrough"
+    },
+    {
+      "ir_region": "Contract — 'read one JSON value from standard input'",
+      "decision": "read the ENTIRE stdin stream with sys.stdin.read() and parse it as a single JSON document, rather than reading only the first line or first JSON token",
+      "rationale": "spec says 'one JSON value', which may be pretty-printed/multi-line; reading all of stdin and parsing once is the standard way to accept a single JSON value regardless of formatting"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "e7854432e2e1a05c8524223db391cd833f872c97088762d938fee54939b1fa6f"
+}

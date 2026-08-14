@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e3754924dc80a7dbdfa6ee98c6aa82a06ecc57b577e930f3f2370248cbeea69c",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "d2ac0a25c96f4c1d559bb77a9dbf05ba41a23f02cd159d230f908400b9d37014"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "error-detection-order",
+      "decision": "Validate lazily during the left-to-right fold and return ERROR on the first bad element, rather than pre-validating the whole array",
+      "rationale": "The spec fixes the output for a bad event but not whether later elements are inspected; since the only output is one line, both orders are externally indistinguishable, and folding once is the simpler program."
+    },
+    {
+      "ir_region": "json-scalar-vs-array-check",
+      "decision": "Accept only a Python `list` after json.loads; every other parsed type (object, number, string, bool, null) yields ERROR",
+      "rationale": "The spec names object, bare number and invalid JSON as errors but does not enumerate top-level JSON strings, booleans or null; the contract says 'a JSON array of known event strings', so the closed check is `isinstance(parsed, list)`."
+    },
+    {
+      "ir_region": "stdin-consumption",
+      "decision": "Read all of standard input and parse it as one JSON value; trailing whitespace or a trailing newline is tolerated by json.loads, trailing non-whitespace text is a parse error and prints ERROR",
+      "rationale": "The contract says 'one JSON value' without stating framing; whole-stream parsing is the only reading that makes an empty or garbage stream deterministically ERROR instead of hanging or partially consuming."
+    },
+    {
+      "ir_region": "boolean-event-elements",
+      "decision": "JSON `true`/`false` are treated as non-string elements and print ERROR",
+      "rationale": "Python's bool is a subclass of int, not of str, so the isinstance guard already excludes them; making the choice explicit because a membership-only check against the event set would have behaved identically here but not for other numeric aliasing."
+    },
+    {
+      "ir_region": "output-trailing-newline",
+      "decision": "Use `print`, emitting the state name or ERROR followed by a single platform newline",
+      "rationale": "The spec says 'prints one line' without pinning line-ending bytes; `print` is the idiomatic reading of 'one line' and keeps the stdout shape uniform across the success and ERROR paths."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled)"
+  },
+  "_integrity": "7d48b18027a448156cd3593980eeb207add0abbb16f1822c31ce9cccc1c6f0b9"
+}

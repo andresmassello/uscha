@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e3754924dc80a7dbdfa6ee98c6aa82a06ecc57b577e930f3f2370248cbeea69c",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "1d4bc6a1e717ce796ba8ac7d950c7b3cf4af952913c83fb1772caecbea2e581d"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "input-parse-failure",
+      "decision": "treat any json.loads ValueError (malformed JSON, e.g. bare invalid text) as the same ERROR outcome as a well-formed-but-wrong-shape value",
+      "rationale": "spec's 'invalid JSON' example is listed alongside 'not a JSON array' under the same ERROR bucket, so both are folded into one catch-and-print-ERROR path rather than distinguished"
+    },
+    {
+      "ir_region": "non-string-element-check",
+      "decision": "check isinstance(event, str) before comparing to 'coin'/'push', so numbers/booleans/null/nested arrays inside the event list are rejected as ERROR rather than causing a comparison mismatch that also happens to fall to ERROR",
+      "rationale": "spec explicitly calls out 'a non-string element' as an error case; making the type check explicit keeps that requirement visible in the code rather than relying on accidental equality-comparison behavior"
+    },
+    {
+      "ir_region": "early-return-on-first-bad-event",
+      "decision": "stop folding and print ERROR as soon as the first unknown/non-string event is found, rather than scanning the whole array first",
+      "rationale": "spec doesn't say whether to short-circuit or validate-then-fold; short-circuiting is the simpler single-pass implementation and the observable output (ERROR) is identical either way"
+    },
+    {
+      "ir_region": "top-level-json-type-check",
+      "decision": "use isinstance(events, list) to reject JSON objects, numbers, strings, booleans, and null uniformly as 'not a JSON array'",
+      "rationale": "spec names 'a JSON object, a bare number' as examples but the contract says 'not a JSON array' generally, so the check is written against the general shape rather than enumerating each disallowed JSON type"
+    },
+    {
+      "ir_region": "trailing-whitespace-in-stdin",
+      "decision": "pass raw sys.stdin.read() directly to json.loads without stripping, relying on json.loads to tolerate surrounding whitespace",
+      "rationale": "spec doesn't mention trailing newlines from piped input; json.loads already ignores leading/trailing whitespace per the JSON grammar, so no extra stripping logic was added"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-14T00:00:00+00:00",
+      "finished": "2026-08-14T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled)"
+  },
+  "_integrity": "fb116c50d9d1bd763c3f75270b2ea60053da7a2c8a88d843572d191f8494ac05"
+}
