@@ -352,8 +352,20 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - [x] AC-FC-02 - `static_surface` comes from the M1 static extractor over the compiled source
   and is deterministic across runs; `oracle_passrate` and `trace_coverage` match independent
   recomputation from the bench's own artifacts.
-- [x] AC-FC-03 - `curation_closure` is the literal UNMEASURED (absence named, never faked);
+- [x] AC-FC-03 - `curation_closure` is the literal UNMEASURED where no human verdict exists,
+  and exactly judged/total where one does (never any other shape, never a fabricated 0.0);
   the descriptor never changes any verdict.
+
+## Bench curation (ADR-023) - the human verdict extended to machine-generated code
+
+- [x] AC-BC-01 - `bench-curate` records one verdict per call and appends (a superseding
+  verdict keeps the earlier record); batch input, an unknown observation and a malformed
+  store are refused with exit 2 (fail-closed, never degrade).
+- [x] AC-BC-02 - `bench --fidelity` reports measured `curation_closure` (judged/total) for
+  compilations with at least one verdict and the literal UNMEASURED for the rest; verdicts
+  never change.
+- [x] AC-BC-03 - a fixture edit after curation invalidates the stale observation id:
+  `bench-curate` refuses the verdict and `--list` shows the divergence as STALE.
 
 ## Out of scope for measurement here
 

@@ -5480,6 +5480,52 @@ def cmd_bootstrap_variance(args):
 # --------------------------------------------------------------------------- #
 # min oracle pass-rate for a non-green compilation to still count as PARTIAL (core identity).
 _BENCH_PARTIAL_FLOOR = 0.8
+_BENCH_CURATION_FILE = "BENCH-CURATION.json"
+_BENCH_CURATION_VERDICTS = ("preserve", "fix", "undefined")
+
+
+def _load_bench_curation(bench_dir):
+    """Load the append-only bench curation store. Returns (records, errors): a missing
+    file is a legitimate absence ([], None); a malformed one is (None, errors) and every
+    caller fails closed on it -- a broken verdict store must never silently degrade to
+    UNMEASURED, which would hide tampering behind the honest word (ADR-023)."""
+    path = os.path.join(bench_dir, _BENCH_CURATION_FILE)
+    if os.path.exists(path) and not os.path.isfile(path):
+        # a directory (editor swap, broken merge) occupying the store's path must not
+        # read as "no curation exists" -- that is the silent-degrade this loader forbids
+        return None, ["%s exists but is not a regular file" % _BENCH_CURATION_FILE]
+    if not os.path.isfile(path):
+        return [], None
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as exc:
+        return None, ["%s unreadable or not JSON: %s" % (_BENCH_CURATION_FILE, exc)]
+    recs = data.get("records") if isinstance(data, dict) else None
+    if not isinstance(recs, list):
+        return None, ["%s has no 'records' list" % _BENCH_CURATION_FILE]
+    errs = []
+    for i, r in enumerate(recs):
+        if not isinstance(r, dict) or any(
+                not (isinstance(r.get(k), str) and r.get(k))
+                for k in ("obs_id", "verdict", "human", "at", "entry", "dir")):
+            errs.append("record %d malformed (obs_id/verdict/human/at/entry/dir "
+                        "must be non-empty strings)" % i)
+        elif r["verdict"] not in _BENCH_CURATION_VERDICTS:
+            errs.append("record %d: verdict %r is not one of %s"
+                        % (i, r["verdict"], "|".join(_BENCH_CURATION_VERDICTS)))
+    if errs:
+        return None, errs
+    return recs, None
+
+
+def _bench_curation_map(records):
+    """(entry, dir, obs_id) -> latest verdict. Append-only store: the LAST record for a
+    key wins, earlier ones stay in the file as history (same discipline as `curate`)."""
+    m = {}
+    for r in records:
+        m[(r["entry"], r["dir"], r["obs_id"])] = r["verdict"]
+    return m
 
 
 def _bench_oracle_all(impl_path, cases):
@@ -5489,7 +5535,7 @@ def _bench_oracle_all(impl_path, cases):
             "failing": [r["name"] for r in results if not r["ok"]]}
 
 
-def _bench_entry(entry_dir, name, fidelity=False):
+def _bench_entry(entry_dir, name, fidelity=False, curation=None):
     """Run compile-validate + the withheld oracle + variance over ONE bench entry and compute
     its verdict. Reuses the M3/M4 organs unchanged; consults no model. A PASS is >=3 oracle-green
     compilations that genuinely differ; PARTIAL is core identity with the divergence isolated;
@@ -5530,8 +5576,9 @@ def _bench_entry(entry_dir, name, fidelity=False):
         if fidelity and impl and os.path.isfile(impl) and unit:
             # the per-compiler fidelity descriptor (ADR-022): the M1 static extractor applied
             # to the compiled artifact -- reverse discovery per compiler. Advisory by
-            # construction; curation_closure is UNMEASURED (no human curates fixture code --
-            # absence named, never faked).
+            # construction; curation_closure is UNMEASURED unless a human has judged at least
+            # one of this compilation's observations via bench-curate (ADR-023) -- absence
+            # named, never faked, and zero verdicts is an absence, not a 0.0.
             node_ids_f = {nd["id"] for nd in ir_graph.get("nodes") or []}
             covered_f = set()
             units_f, traced_f = set(), set()
@@ -5567,6 +5614,14 @@ def _bench_entry(entry_dir, name, fidelity=False):
                                     if ores["total"] else None),
                 "unexplained_share": round(len(unex) / max(len(units_f), 1), 3),
                 "curation_closure": "UNMEASURED"}
+            if curation:
+                obs_ids_f = [o2["id"] for o2 in sobs]
+                judged_f = sum(1 for oid in obs_ids_f if (name, d, oid) in curation)
+                if judged_f:
+                    comp_rec["fidelity"]["curation_closure"] = round(
+                        judged_f / max(len(obs_ids_f), 1), 3)
+                    comp_rec["fidelity"]["curation"] = {"judged": judged_f,
+                                                        "total": len(obs_ids_f)}
         rec["compilations"].append(comp_rec)
     impls = rec["compilations"]
     impl_paths = [i["impl"] for i in impls if i["impl"] and os.path.isfile(i["impl"])]
@@ -5660,6 +5715,10 @@ def _render_bench_md(table, anon, recs):
         for i in r["compilations"]:
             fd = i.get("fidelity")
             if fd:
+                cur_v = fd["curation_closure"]
+                if isinstance(cur_v, float):
+                    cur_v = "%.3f (judged %d/%d)" % (cur_v, fd["curation"]["judged"],
+                                                     fd["curation"]["total"])
                 lines.append("- fidelity `%s` (%s): trace %.2f · surface %d fn / %d cls · "
                              "oracle %s · unexplained %.2f · curation %s" % (
                                  i["dir"], anon.get(i["model"], i["model"] or "?"),
@@ -5667,7 +5726,7 @@ def _render_bench_md(table, anon, recs):
                                  fd["static_surface"]["classes"],
                                  ("%.3f" % fd["oracle_passrate"])
                                  if fd["oracle_passrate"] is not None else "n/a",
-                                 fd["unexplained_share"], fd["curation_closure"]))
+                                 fd["unexplained_share"], cur_v))
         lines.append("")
     return "\n".join(lines)
 
@@ -5682,7 +5741,22 @@ def cmd_bench(args):
         print("[qa_ledger] bench: no entries under %s (an entry is a subdir with %s)"
               % (args.dir, IR_FILE), file=sys.stderr)
         sys.exit(2)
-    recs = [_bench_entry(os.path.join(args.dir, e), e, fidelity=getattr(args, "fidelity", False)) for e in entries]
+    # the store is only ever consumed by the fidelity descriptor (ADR-023): a plain bench
+    # run must not be blocked by a stray/corrupt store it was never going to read
+    cur_map = {}
+    if getattr(args, "fidelity", False):
+        cur_recs, cur_errs = _load_bench_curation(args.dir)
+        if cur_errs:
+            for e in cur_errs:
+                print("[qa_ledger] bench: %s" % e, file=sys.stderr)
+            print("[qa_ledger] bench: a malformed verdict store must not silently degrade "
+                  "to UNMEASURED -- fix or remove %s." % _BENCH_CURATION_FILE,
+                  file=sys.stderr)
+            sys.exit(2)
+        cur_map = _bench_curation_map(cur_recs)
+    recs = [_bench_entry(os.path.join(args.dir, e), e,
+                         fidelity=getattr(args, "fidelity", False), curation=cur_map)
+            for e in entries]
     models = sorted({i["model"] for r in recs for i in r["compilations"] if i.get("model")})
     anon = {m: "M%d" % (k + 1) for k, m in enumerate(models)}
     table = []
@@ -5708,6 +5782,102 @@ def cmd_bench(args):
             print("  %-14s %-8s | %s%s" % (t["archetype"], t["verdict"], t["compilers"], dist))
         if args.out:
             print("  -> %s" % args.out)
+    sys.exit(0)
+
+
+def _bench_curable_obs(bench_dir, entry, cdir):
+    """The curable set for one compilation: the SAME observations the M1 static extractor
+    produces for the descriptor's static_surface, re-extracted at call time -- a verdict
+    must judge a real observation, and a fixture edited since --list invalidates the old
+    content-addressed id instead of silently carrying the stale judgment (ADR-023).
+    Returns (obs_list, error_string)."""
+    cd = os.path.join(bench_dir, entry, cdir)
+    cj = os.path.join(cd, "COMPILATION.json")
+    if not os.path.isdir(os.path.join(bench_dir, entry)):
+        return None, "entry %r is not a directory under %s" % (entry, bench_dir)
+    if not os.path.isfile(cj):
+        return None, "%s/%s has no COMPILATION.json -- not a compilation" % (entry, cdir)
+    try:
+        with open(cj, encoding="utf-8-sig") as fh:
+            c = json.load(fh)
+        src = c.get("source") or []
+        unit = src[0].get("unit") if src else None
+    except (OSError, ValueError, AttributeError, IndexError):
+        unit = None
+    if not unit or not os.path.isfile(os.path.join(cd, unit.replace("/", os.sep))):
+        return None, ("%s/%s: no resolvable source unit -- nothing to extract a surface "
+                      "from" % (entry, cdir))
+    sobs, _uns = _extract_static_py(cd, [unit])
+    return sobs, None
+
+
+def cmd_bench_curate(args):
+    """ONE human verdict for ONE observation of ONE bench compilation, appended to the
+    bench-root store (ADR-023). Inherits cmd_curate's refusals verbatim: no batch path
+    exists and will not; an unknown observation is refused, never recorded."""
+    if not os.path.isdir(args.bench):
+        print("[qa_ledger] bench-curate: no directory %s" % args.bench, file=sys.stderr)
+        sys.exit(2)
+    obs_list, err = _bench_curable_obs(args.bench, args.entry, args.dir)
+    if err:
+        print("[qa_ledger] bench-curate: %s" % err, file=sys.stderr)
+        sys.exit(2)
+    records, errors = _load_bench_curation(args.bench)
+    if errors:
+        for e in errors:
+            print("[qa_ledger] bench-curate: %s" % e, file=sys.stderr)
+        sys.exit(2)                                # fail-closed, never degrade
+    cur_map = _bench_curation_map(records)
+    known = {o["id"] for o in obs_list}
+    if args.list:
+        print("BENCH-CURATE %s/%s: %d curable observation(s)"
+              % (args.entry, args.dir, len(obs_list)))
+        for o in obs_list:
+            v = cur_map.get((args.entry, args.dir, o["id"]))
+            print("  %s  %-9s  %s" % (o["id"], v or "unjudged", o["statement"]))
+        stale = sorted(r["obs_id"] for r in records
+                       if r["entry"] == args.entry and r["dir"] == args.dir
+                       and r["obs_id"] not in known)
+        for sid in stale:
+            print("  %s  STALE      no longer in the extracted surface -- the fixture "
+                  "changed after this verdict" % sid)
+        sys.exit(0)
+    if not args.obs or not args.verdict:
+        print("[qa_ledger] bench-curate: --obs and --verdict are required (or --list to "
+              "see what awaits judgment).", file=sys.stderr)
+        sys.exit(2)
+    if args.obs != args.obs.strip() and not re.search(r"[,\s*]", args.obs.strip()):
+        print("[qa_ledger] bench-curate: %r has leading/trailing whitespace -- pass the "
+              "bare OBS id." % args.obs, file=sys.stderr)
+        sys.exit(2)
+    if re.search(r"[,\s*]", args.obs) or args.obs.lower() in ("all", "*"):
+        print("[qa_ledger] bench-curate: %r -- one OBS, one human verdict. A batch-accept "
+              "path does not exist and will not (ADR-023, INV-CURATION-01)." % args.obs,
+              file=sys.stderr)
+        sys.exit(2)
+    if args.obs not in known:
+        print("[qa_ledger] bench-curate: %s is not in the current extracted surface of "
+              "%s/%s -- a verdict must judge a real observation (if the fixture changed, "
+              "re-run --list)." % (args.obs, args.entry, args.dir), file=sys.stderr)
+        sys.exit(2)
+    prev = cur_map.get((args.entry, args.dir, args.obs))
+    human = args.human or os.environ.get("USERNAME") or os.environ.get("USER") or "unknown"
+    records.append({"obs_id": args.obs, "verdict": args.verdict, "human": human,
+                    "at": _now(), "note": args.note, "entry": args.entry, "dir": args.dir})
+    store = {"_generated_by": "qa_ledger.py bench-curate (ADR-023) -- append-only human "
+                              "verdicts over bench compilations; the LAST record per "
+                              "(entry, dir, obs) wins, earlier ones stay as history",
+             "records": records}
+    with open(os.path.join(args.bench, _BENCH_CURATION_FILE), "w", encoding="utf-8",
+              newline="\n") as fh:
+        fh.write(json.dumps(store, indent=2, ensure_ascii=False) + "\n")
+    if prev and prev != args.verdict:
+        print("[qa_ledger] bench-curate: %s/%s %s = %s (supersedes %r -- the earlier "
+              "record stays; append-only, never deleted)"
+              % (args.entry, args.dir, args.obs, args.verdict, prev))
+    else:
+        print("[qa_ledger] bench-curate: %s/%s %s = %s (by %s)"
+              % (args.entry, args.dir, args.obs, args.verdict, human))
     sys.exit(0)
 
 
@@ -10038,6 +10208,24 @@ def build_parser():
                      help="append the per-compiler fidelity descriptor (ADR-022): the M1 static extractor over each compiled source; advisory, never changes a verdict")
     pbn.add_argument("--json", action="store_true")
     pbn.set_defaults(func=cmd_bench)
+
+    pbc = sub.add_parser(
+        "bench-curate",
+        help="record ONE human verdict (preserve|fix|undefined) for ONE observation of ONE "
+             "bench compilation, appended to BENCH-CURATION.json; no batch path exists "
+             "(ADR-023, INV-CURATION-01)")
+    pbc.add_argument("--bench", required=True,
+                     help="the bench directory (the store lives at its root)")
+    pbc.add_argument("--entry", required=True, help="the archetype entry")
+    pbc.add_argument("--dir", required=True, help="the compilation dir (e.g. c-opus)")
+    pbc.add_argument("--obs", default=None, help="a single OBS id from --list")
+    pbc.add_argument("--verdict", default=None, choices=_BENCH_CURATION_VERDICTS)
+    pbc.add_argument("--note", default=None)
+    pbc.add_argument("--human", default=None, help="who judged (default: the OS user)")
+    pbc.add_argument("--list", action="store_true",
+                     help="print the curable observations with their current verdicts "
+                          "(read-only), including stale verdicts whose obs no longer exists")
+    pbc.set_defaults(func=cmd_bench_curate)
 
     plc = sub.add_parser(
         "lang-compare",

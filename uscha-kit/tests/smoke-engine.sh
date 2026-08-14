@@ -3429,6 +3429,7 @@ rm -f "$KIT/reports/junit/.compile-cases.json"    # same rule for T126
 rm -f "$KIT/reports/junit/.bootstrap-cases.json"  # same rule for T127
 rm -f "$KIT/reports/junit/.bench-cases.json"      # same rule for T128
 rm -f "$KIT/reports/junit/.lang-cases.json"       # same rule for T129
+rm -f "$KIT/reports/junit/.bench-curate-cases.json"  # same rule for T130
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -5461,8 +5462,16 @@ res["AC-FC-02"] = (fid_ok(g1) and all(
     for a, b in zip(g1["compilations"], g2["compilations"])))
 v_flag = dict((r["archetype"], r["verdict"]) for r in df1.get("raw", []))
 v_none = dict((r["archetype"], r["verdict"]) for r in d.get("raw", []))
-res["AC-FC-03"] = (all(c["fidelity"]["curation_closure"] == "UNMEASURED" for c in allc1)
-                   and v_flag == v_none)
+# closure is the literal UNMEASURED where no human verdict exists, and exactly
+# judged/total where one does (ADR-023) -- never any other shape, never a fabricated 0.0
+def closure_ok(c):
+    cl = c["fidelity"]["curation_closure"]
+    if cl == "UNMEASURED":
+        return "curation" not in c["fidelity"]
+    cu = c["fidelity"].get("curation") or {}
+    return (isinstance(cl, float) and cu.get("judged", 0) >= 1
+            and cl == round(float(cu["judged"]) / max(cu.get("total", 1), 1), 3))
+res["AC-FC-03"] = (all(closure_ok(c) for c in allc1) and v_flag == v_none)
 
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
@@ -5683,6 +5692,106 @@ PY
 case "$T129" in
   OK*) PASS=$((PASS+1)); echo "  ok   lang: $T129";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T129";;
+esac
+
+echo "== T130 (1.80.0): bench-curate -- ONE human verdict per observation, measured closure, fail-closed store (ADR-023) =="
+T130=$("$PY" - "$KIT" <<'PY'
+import io, json, os, re, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+res = {}
+w = tempfile.mkdtemp(prefix="uscha-bc-")
+try:
+    shutil.copytree(os.path.join(BENCH, "guard"), os.path.join(w, "guard"))
+    def run(*a):
+        return subprocess.run([sys.executable, ENG] + list(a), capture_output=True,
+                              text=True, encoding="utf-8", errors="replace")
+    def bc(*a):
+        return run("bench-curate", "--bench", w, "--entry", "guard", *a)
+    lst = bc("--dir", "c-opus", "--list")
+    obs_lines = [ln for ln in lst.stdout.splitlines() if ln.strip().startswith("OBS-")]
+    ids = [ln.split()[0] for ln in obs_lines]
+    if len(ids) < 2 or lst.returncode != 0:
+        raise RuntimeError("no curable observations listed")
+    r1 = bc("--dir", "c-opus", "--obs", ids[0], "--verdict", "preserve", "--human", "smoke")
+    r2 = bc("--dir", "c-opus", "--obs", ids[1], "--verdict", "fix", "--human", "smoke")
+    rb = bc("--dir", "c-opus", "--obs", "OBS-a,OBS-b", "--verdict", "preserve")
+    ru = bc("--dir", "c-opus", "--obs", "OBS-000000000000", "--verdict", "preserve")
+    store_p = os.path.join(w, "BENCH-CURATION.json")
+    def nrec():
+        with io.open(store_p, encoding="utf-8") as fh:
+            return len(json.load(fh)["records"])
+    n2 = nrec()
+    rs = bc("--dir", "c-opus", "--obs", ids[1], "--verdict", "preserve", "--human", "smoke")
+    n3 = nrec()
+    good = io.open(store_p, encoding="utf-8").read()
+    io.open(store_p, "w", encoding="utf-8").write(json.dumps({"records": "nope"}))
+    rml = bc("--dir", "c-opus", "--list")
+    rmb = run("bench", "--dir", w, "--fidelity", "--json")
+    # a plain bench run never reads the store: a corrupt store must not block it (the
+    # review caught the unconditional load exceeding what ADR-023 promises)
+    rplain = run("bench", "--dir", w, "--json")
+    # a directory occupying the store path is malformed, not absent: exit 2 everywhere,
+    # never a silent UNMEASURED read or an unhandled traceback on write (review catch)
+    os.remove(store_p)
+    os.makedirs(store_p)
+    rdl = bc("--dir", "c-opus", "--list")
+    rdf = run("bench", "--dir", w, "--fidelity", "--json")
+    rdw = bc("--dir", "c-opus", "--obs", ids[0], "--verdict", "preserve")
+    os.rmdir(store_p)
+    rws = bc("--dir", "c-opus", "--obs", " " + ids[0] + " ", "--verdict", "preserve")
+    io.open(store_p, "w", encoding="utf-8").write(good)
+    res["AC-BC-01"] = (r1.returncode == 0 and r2.returncode == 0
+                       and rb.returncode == 2 and ru.returncode == 2
+                       and n2 == 2 and rs.returncode == 0 and n3 == 3
+                       and "supersedes" in rs.stdout
+                       and rml.returncode == 2 and rmb.returncode == 2
+                       and rplain.returncode == 0
+                       and rdl.returncode == 2 and rdf.returncode == 2
+                       and rdw.returncode == 2 and "Traceback" not in rdw.stderr
+                       and rws.returncode == 2 and "whitespace" in rws.stderr)
+    rf = run("bench", "--dir", w, "--fidelity", "--json")
+    raw = json.loads(rf.stdout)["raw"]
+    comps = dict((c["dir"], c) for r in raw for c in r["compilations"])
+    op = comps["c-opus"].get("fidelity") or {}
+    others_un = all((comps[x].get("fidelity") or {}).get("curation_closure") == "UNMEASURED"
+                    and "curation" not in (comps[x].get("fidelity") or {})
+                    for x in ("c-sonnet", "c-haiku"))
+    cl, cu = op.get("curation_closure"), op.get("curation") or {}
+    verd_store = dict((r["archetype"], r["verdict"]) for r in raw)
+    os.remove(store_p)
+    rf0 = run("bench", "--dir", w, "--fidelity", "--json")
+    verd_none = dict((r["archetype"], r["verdict"]) for r in json.loads(rf0.stdout)["raw"])
+    io.open(store_p, "w", encoding="utf-8").write(good)
+    res["AC-BC-02"] = (isinstance(cl, float) and cu.get("judged") == 2
+                       and cl == round(2.0 / max(cu.get("total", 1), 1), 3)
+                       and others_un and verd_store == verd_none)
+    m = re.search(r"defines function (\w+)", obs_lines[0])
+    if not m:
+        raise RuntimeError("first observation is not a function definition")
+    fname = m.group(1)
+    gp = os.path.join(w, "guard", "c-opus", "source", "guard.py")
+    src = io.open(gp, encoding="utf-8").read()
+    io.open(gp, "w", encoding="utf-8").write(
+        src.replace("def " + fname + "(", "def " + fname + "_zz(", 1))
+    r3 = bc("--dir", "c-opus", "--obs", ids[0], "--verdict", "preserve")
+    lst2 = bc("--dir", "c-opus", "--list")
+    res["AC-BC-03"] = (r3.returncode == 2 and lst2.returncode == 0
+                       and "STALE" in lst2.stdout)
+finally:
+    shutil.rmtree(w, ignore_errors=True)
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".bench-curate-cases.json"), "w",
+        encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T130" in
+  OK*) PASS=$((PASS+1)); echo "  ok   bench-curate: $T130";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T130";;
 esac
 
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
@@ -6916,6 +7025,23 @@ for _dbid in ("AC-DB-01", "AC-DB-02", "AC-DB-03", "AC-DB-04", "AC-DB-05", "AC-DB
         results.append((_dbid, "bench", None))
     else:
         results.append((_dbid, "bench", "T128 case failed or missing"))
+
+# Bench-curation criteria (ADR-023): measured by T130, same sidecar contract.
+def _bench_curate_cases():
+    p = os.path.join(kit, "reports", "junit", ".bench-curate-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_bcc = _bench_curate_cases()
+for _bcid in ("AC-BC-01", "AC-BC-02", "AC-BC-03"):
+    if _bcc is None or _bcc.get(_bcid) is None:
+        results.append((_bcid, "bench-curation", SKIP))
+    elif _bcc.get(_bcid) is True:
+        results.append((_bcid, "bench-curation", None))
+    else:
+        results.append((_bcid, "bench-curation", "T130 case failed or missing"))
 
 # Controlled-language criteria (Diamond, ADR-019): measured by T129, same sidecar contract.
 def _lang_cases():
