@@ -5489,7 +5489,7 @@ def _bench_oracle_all(impl_path, cases):
             "failing": [r["name"] for r in results if not r["ok"]]}
 
 
-def _bench_entry(entry_dir, name):
+def _bench_entry(entry_dir, name, fidelity=False):
     """Run compile-validate + the withheld oracle + variance over ONE bench entry and compute
     its verdict. Reuses the M3/M4 organs unchanged; consults no model. A PASS is >=3 oracle-green
     compilations that genuinely differ; PARTIAL is core identity with the divergence isolated;
@@ -5525,8 +5525,49 @@ def _bench_entry(entry_dir, name):
         impl = os.path.join(cd, unit.replace("/", os.sep)) if unit else None
         ores = (_bench_oracle_all(impl, cases) if impl and os.path.isfile(impl)
                 else {"passed": 0, "total": len(cases), "green": False, "failing": ["<no impl>"]})
-        rec["compilations"].append({"dir": d, "model": model, "impl": impl,
-                                    "compile_valid": not errors, "oracle": ores})
+        comp_rec = {"dir": d, "model": model, "impl": impl,
+                    "compile_valid": not errors, "oracle": ores}
+        if fidelity and impl and os.path.isfile(impl) and unit:
+            # the per-compiler fidelity descriptor (ADR-022): the M1 static extractor applied
+            # to the compiled artifact -- reverse discovery per compiler. Advisory by
+            # construction; curation_closure is UNMEASURED (no human curates fixture code --
+            # absence named, never faked).
+            node_ids_f = {nd["id"] for nd in ir_graph.get("nodes") or []}
+            covered_f = set()
+            units_f, traced_f = set(), set()
+            try:
+                with open(cj, encoding="utf-8-sig") as fh2:
+                    c2 = json.load(fh2)
+                for e2 in c2.get("trace_manifest") or []:
+                    traced_f.add(e2.get("unit"))
+                    for nid in e2.get("implements") or []:
+                        if nid in node_ids_f:
+                            covered_f.add(nid)
+                for sec in ("source", "tests"):
+                    for u2 in c2.get(sec) or []:
+                        if u2.get("unit"):
+                            units_f.add(u2["unit"])
+            except (OSError, ValueError, AttributeError):
+                pass
+            sobs, _uns = _extract_static_py(cd, [unit])
+            fn_names, cls_names = [], []
+            for o2 in sobs:
+                m2 = re.search(r"defines function (\w+)", o2.get("statement", ""))
+                if m2:
+                    fn_names.append(m2.group(1))
+                m2 = re.search(r"defines class (\w+)", o2.get("statement", ""))
+                if m2:
+                    cls_names.append(m2.group(1))
+            unex = sorted(u for u in units_f if u not in traced_f)
+            comp_rec["fidelity"] = {
+                "trace_coverage": round(len(covered_f) / max(len(node_ids_f), 1), 3),
+                "static_surface": {"functions": len(fn_names), "classes": len(cls_names),
+                                   "names": sorted(fn_names + cls_names)},
+                "oracle_passrate": (round(ores["passed"] / ores["total"], 3)
+                                    if ores["total"] else None),
+                "unexplained_share": round(len(unex) / max(len(units_f), 1), 3),
+                "curation_closure": "UNMEASURED"}
+        rec["compilations"].append(comp_rec)
     impls = rec["compilations"]
     impl_paths = [i["impl"] for i in impls if i["impl"] and os.path.isfile(i["impl"])]
     if len(impl_paths) >= 2:
@@ -5616,6 +5657,17 @@ def _render_bench_md(table, anon, recs):
             lines.append("- discrimination stub: %d/%d (%s)" % (
                 dsc["stub_passed"], dsc["total"],
                 "NON-DISCRIMINATING" if dsc["stub_green"] else "oracle rejects the stub"))
+        for i in r["compilations"]:
+            fd = i.get("fidelity")
+            if fd:
+                lines.append("- fidelity `%s` (%s): trace %.2f · surface %d fn / %d cls · "
+                             "oracle %s · unexplained %.2f · curation %s" % (
+                                 i["dir"], anon.get(i["model"], i["model"] or "?"),
+                                 fd["trace_coverage"], fd["static_surface"]["functions"],
+                                 fd["static_surface"]["classes"],
+                                 ("%.3f" % fd["oracle_passrate"])
+                                 if fd["oracle_passrate"] is not None else "n/a",
+                                 fd["unexplained_share"], fd["curation_closure"]))
         lines.append("")
     return "\n".join(lines)
 
@@ -5630,7 +5682,7 @@ def cmd_bench(args):
         print("[qa_ledger] bench: no entries under %s (an entry is a subdir with %s)"
               % (args.dir, IR_FILE), file=sys.stderr)
         sys.exit(2)
-    recs = [_bench_entry(os.path.join(args.dir, e), e) for e in entries]
+    recs = [_bench_entry(os.path.join(args.dir, e), e, fidelity=getattr(args, "fidelity", False)) for e in entries]
     models = sorted({i["model"] for r in recs for i in r["compilations"] if i.get("model")})
     anon = {m: "M%d" % (k + 1) for k, m in enumerate(models)}
     table = []
@@ -9982,6 +10034,8 @@ def build_parser():
     pbn.add_argument("--dir", required=True,
                      help="the bench directory; each subdir with an IR.json is an entry")
     pbn.add_argument("--out", default=None, help="write DIAMOND-BENCH.md here")
+    pbn.add_argument("--fidelity", action="store_true",
+                     help="append the per-compiler fidelity descriptor (ADR-022): the M1 static extractor over each compiled source; advisory, never changes a verdict")
     pbn.add_argument("--json", action="store_true")
     pbn.set_defaults(func=cmd_bench)
 

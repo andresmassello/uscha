@@ -345,6 +345,16 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - [x] AC-CL2-04 - the three generated reports exist (v0.1, control, de-confounded); every
   number traces to a run.
 
+## Fidelity per compiler (ADR-022) - reverse discovery applied to each compiled artifact
+
+- [x] AC-FC-01 - `bench --fidelity` emits the descriptor for every compilation; without the
+  flag, no descriptor appears and output is unchanged.
+- [x] AC-FC-02 - `static_surface` comes from the M1 static extractor over the compiled source
+  and is deterministic across runs; `oracle_passrate` and `trace_coverage` match independent
+  recomputation from the bench's own artifacts.
+- [x] AC-FC-03 - `curation_closure` is the literal UNMEASURED (absence named, never faked);
+  the descriptor never changes any verdict.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

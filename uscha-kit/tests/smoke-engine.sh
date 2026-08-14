@@ -5219,7 +5219,7 @@ esac
 
 echo "== T128 (1.75.0): the Diamond Bench -- regeneration fidelity across archetypes; PASS/PARTIAL/FAIL/PENDING (M5, ADR-018) =="
 T128=$("$PY" - "$KIT" <<'PY'
-import hashlib, importlib.util, io, json, os, subprocess, sys, tempfile
+import hashlib, importlib.util, io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
@@ -5412,6 +5412,57 @@ def wrongs_red(e):
             return False
     return True
 res["AC-BG-05"] = d.get("entries") == 9 and all(wrongs_red(e) for e in NEW5)
+
+# Fidelity-per-compiler criteria (ADR-022): advisory descriptor, opt-in, UNMEASURED named.
+def bench_fid():
+    r = subprocess.run([sys.executable, ENG, "bench", "--dir", BENCH, "--fidelity", "--json"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+df1 = bench_fid()
+# determinism re-run over the guard entry ONLY (a full second 27-compilation bench pass is
+# minutes of subprocess launches on Windows; one entry proves determinism at 1/9 the cost)
+gdir = os.path.join(w, "fidsub")
+os.makedirs(gdir)
+shutil.copytree(os.path.join(BENCH, "guard"), os.path.join(gdir, "guard"))
+rf2 = subprocess.run([sys.executable, ENG, "bench", "--dir", gdir, "--fidelity", "--json"],
+                     capture_output=True, text=True, encoding="utf-8", errors="replace")
+try:
+    df2 = json.loads(rf2.stdout)
+except ValueError:
+    df2 = {}
+allc1 = [c for r in df1.get("raw", []) for c in r["compilations"]]
+allc0 = [c for r in d.get("raw", []) for c in r["compilations"]]
+res["AC-FC-01"] = (bool(allc1) and all("fidelity" in c for c in allc1)
+                   and all("fidelity" not in c for c in allc0))
+def fid_ok(rec):
+    ir_g = json.load(io.open(os.path.join(BENCH, rec["archetype"], "IR.json"),
+                             encoding="utf-8"))
+    node_ids_g = set(nd["id"] for nd in ir_g["nodes"])
+    for c in rec["compilations"]:
+        fd = c["fidelity"]
+        want = (round(c["oracle"]["passed"] / c["oracle"]["total"], 3)
+                if c["oracle"]["total"] else None)
+        if fd["oracle_passrate"] != want:
+            return False
+        cj_g = json.load(io.open(os.path.join(BENCH, rec["archetype"], c["dir"],
+                                              "COMPILATION.json"), encoding="utf-8-sig"))
+        cov = set(nid for e3 in cj_g.get("trace_manifest") or []
+                  for nid in (e3.get("implements") or []) if nid in node_ids_g)
+        if fd["trace_coverage"] != round(len(cov) / max(len(node_ids_g), 1), 3):
+            return False
+    return True
+g1 = [r for r in df1.get("raw", []) if r["archetype"] == "guard"][0]
+g2 = [r for r in df2.get("raw", []) if r["archetype"] == "guard"][0]
+res["AC-FC-02"] = (fid_ok(g1) and all(
+    a["fidelity"]["static_surface"] == b["fidelity"]["static_surface"]
+    for a, b in zip(g1["compilations"], g2["compilations"])))
+v_flag = dict((r["archetype"], r["verdict"]) for r in df1.get("raw", []))
+v_none = dict((r["archetype"], r["verdict"]) for r in d.get("raw", []))
+res["AC-FC-03"] = (all(c["fidelity"]["curation_closure"] == "UNMEASURED" for c in allc1)
+                   and v_flag == v_none)
 
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
@@ -6857,7 +6908,8 @@ def _bench_cases():
         return None
 _dbc = _bench_cases()
 for _dbid in ("AC-DB-01", "AC-DB-02", "AC-DB-03", "AC-DB-04", "AC-DB-05", "AC-DB-06",
-              "AC-BG-01", "AC-BG-02", "AC-BG-03", "AC-BG-04", "AC-BG-05"):
+              "AC-BG-01", "AC-BG-02", "AC-BG-03", "AC-BG-04", "AC-BG-05",
+              "AC-FC-01", "AC-FC-02", "AC-FC-03"):
     if _dbc is None or _dbc.get(_dbid) is None:
         results.append((_dbid, "bench", SKIP))
     elif _dbc.get(_dbid) is True:

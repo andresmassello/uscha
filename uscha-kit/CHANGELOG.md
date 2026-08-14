@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.79.0** — [fidelity per compiler: reverse discovery applied to each compiled artifact (2026-08-13)](CHANGELOG-1.79.0.md)
 - **1.78.0** — [controlled-language v0.2: the control shows nothing, the confound kill shows the signal was real (2026-08-13)](CHANGELOG-1.78.0.md)
 - **1.77.0** — [Diamond Bench v0.2: nine archetypes, the aliasing bug the oracle caught (2026-08-13)](CHANGELOG-1.77.0.md)
 - **1.76.0** — [Diamond controlled-language arm: free prose vs EARS+STE, the same withheld oracle (2026-08-13)](CHANGELOG-1.76.0.md)
