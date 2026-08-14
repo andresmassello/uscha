@@ -70,6 +70,18 @@ law. `unresolved_intent` remains the weaker proxy (an exact null in the control,
   are not replayable; the template plus output fingerprints are what the repo can evidence.
 - LOW — the generated reports' banner cites ADR-019 (the command's origin) for ADR-021
   experiments; noted, left as-is (the engine was deliberately untouched this milestone).
+- **And one more, caught by the CI matrix itself (the py3.8 cells went red where local py3.13
+  was green):** `controlled/c-haiku`'s EARS guard — shipped at 1.76.0 — declares "Python 3.8+"
+  in its own constraints but uses a `tuple[bool, str]` function annotation, which is evaluated
+  at definition time on 3.8 and crashes the guard on every input (0/23 there; 21/23 on ≥3.9).
+  A **portability defect of that blind compilation, lying about its own compatibility claim**
+  — latent since 1.76.0, exposed only when this release pinned the de-confounded verdict. The
+  compiled artifact stays untouched (editing a blind compilation would fabricate the
+  experiment); instead the pin now states the measured, version-dependent truth: the variance
+  signal (−0.263) is identical on 3.8 and 3.13 and is the pin, while the verdict is REDUCED on
+  ≥3.9 (the experiment's stated runtime) and MIXED on 3.8, where that one artifact is broken.
+  The matrix cell is the instrument — this repo's oldest lesson, now measured against a
+  compiled artifact's own claims.
 
 `AC-CL2-01..04` measured green (T129 extended). Suite: 415 checks; acceptance **119/119** where
 `coverage.py` is installed.

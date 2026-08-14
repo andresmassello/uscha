@@ -5607,7 +5607,15 @@ rc_ctl, rep_ctl = lc(PF, PC)
 res["AC-CL2-02"] = (rc_ctl == 0 and rep_ctl.get("verdict") == "NO EFFECT"
                     and rep_ctl["free"]["greens"] == 3 and rep_ctl["controlled"]["greens"] == 3)
 rc_dc, rep_dc = lc(GR2, os.path.join(CL, "controlled"))
-res["AC-CL2-03"] = (rc_dc == 0 and rep_dc.get("verdict") == "REDUCED"
+# The variance signal is version-stable (-0.263 on 3.8 and 3.13 alike) and is the pin. The
+# VERDICT is runtime-dependent by a measured fact: controlled/c-haiku's guard declares
+# "Python 3.8+" but uses a `tuple[bool, str]` annotation, which crashes at def-time on 3.8
+# (0/23 there) -- a real portability defect OF THAT BLIND COMPILATION, caught by the matrix
+# cell and recorded here; the artifact stays untouched (editing a blind compilation would
+# fabricate the experiment). Expected verdict: REDUCED on >=3.9 (the experiment's stated
+# runtime), MIXED on 3.8 where that one artifact is broken.
+expected_dc = "REDUCED" if sys.version_info >= (3, 9) else "MIXED"
+res["AC-CL2-03"] = (rc_dc == 0 and rep_dc.get("verdict") == expected_dc
                     and rep_dc["delta"]["variance_score"] < -0.05
                     and q._oracle_hash(GR2) == q._oracle_hash(os.path.join(CL, "controlled")))
 res["AC-CL2-04"] = all(os.path.isfile(os.path.join(kit, "..", f)) for f in
