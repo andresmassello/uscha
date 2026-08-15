@@ -30,9 +30,17 @@ pre-QA" both render as `active` with `iters: 0`. The full value is computed one 
 - **Not gated because:** the coarse badge is not WRONG, only lossy; `iters` already
   distinguishes a virgin repo from one mid-loop. Found by the `improve` pass, cycle 3.
 
-### D-02 (LOW) — `.claude/uscha-progress.json` has no schema marker
+### D-02 (LOW) — `.claude/uscha-progress.json` has no schema marker — **RESOLVED in 1.82.0**
 `uscha-kit/templates/scripts/uscha_progress.py` (producer) ·
 `uscha_statusline.py` + the `uscha-status` skill (consumers)
+
+> **Resolution (kit 1.82.0):** `uscha_progress.py::main()` now writes `"schema":
+> "uscha/progress@1"` as the first key of the state dict, mirroring `QA-LEDGER.json`'s own
+> `schema` marker. Verified both consumers tolerate the new key without change:
+> `uscha_statusline.py` reads only named fields via `.get()`/`s["..."]`-on-known-keys, and the
+> `uscha-status` skill's contract (`SKILL.md`) likewise names only specific fields — neither
+> asserts the key set. No smoke assertion checks the exact key set of
+> `.claude/uscha-progress.json` either, so none needed extending. Entry kept for the record.
 
 The file grew from a handful of flat fields to ~17, including the nested `repos` map, with no
 `schema` field — unlike `QA-LEDGER.json`, which carries `"schema": "dev-loop/qa-ledger@1"` for
@@ -46,8 +54,23 @@ exactly this reason.
 - **Not gated because:** no current failure mode; all reads already degrade. Found by the
   `improve` pass, cycle 3.
 
-### D-03 (LOW) — coverage measures the engine, not the auxiliary scripts
+### D-03 (LOW) — coverage measures the engine, not the auxiliary scripts — **RESOLVED in 1.82.0**
 `uscha-kit/tests/smoke-engine.sh` (the `USCHA_COVERAGE=1` seam)
+
+> **Resolution (kit 1.82.0):** a second choke point, `runpy()`, mirrors `run()` but takes the
+> script path as its own first argument and derives `--source` from that script's own
+> directory (`dirname`) at call time — one absolute path per call, never a fixed multi-root
+> constant. Two things ruled out a fixed `COV_SRC2`/`COV_SRC3` pair: `coverage.py`'s `--source`
+> flag is NOT additive across repeated occurrences (measured empirically — the SECOND flag
+> silently wins and the first is dropped, which the first attempt at this fix got wrong before
+> the auxiliary scripts turned up absent from the report and the bug was caught), and a
+> comma-joined multi-path list hits the same git-bash/MSYS hazard as `$COV_SRC` above.
+> Routed through `runpy()`: the direct `uscha_progress.py`/`uscha_statusline.py` invocations in
+> T88/T90/T91/T93, and the mirador renderer invocation in T80. Measured result: the auxiliary
+> scripts are no longer absent from the report — `uscha_progress.py` 86%, `uscha_statusline.py`
+> 88%, `mirador-render.py` 53% (see `ACCEPTANCE.md`, "Out of scope for measurement here", for
+> the full breakdown and the `qa_ledger.py` re-measurement this also triggered). Entry kept for
+> the record.
 
 Coverage wraps `run()`, the choke point the suite drives the engine through (~370 subprocess
 calls) — that yields 84.2% on `qa_ledger.py`. The statusline scripts (`templates/scripts/*`)
@@ -98,3 +121,23 @@ silently lost:
 - **`fidelity --config` default resolves against cwd**: running from another directory
   silently means no gate declared (unnamed absence). Consider resolving relative to the
   ledger, or naming the miss.
+
+## 1.82.0 hygiene block — measured debt (open, decided by the human)
+
+- **Engine coverage is 58% against a declared threshold of 60** (`qa_ledger.py`, 6266
+  statements, 2656 missed — re-measured through the D-03 seam). The previously committed
+  `reports/coverage.xml` read 84.2% but dated from 2026-07-23 (3788 valid lines) and was never
+  re-measured across 24 releases while the engine grew: bench, bench-curate, the whole
+  controlled-language subsystem shipped with their smoke checks but without the coverage
+  report being regenerated. **Decision (2026-08-15, human):** ship the honest number, do not
+  paper it over with hurried tests; open "raise engine coverage to >= 60" as backlog work,
+  targeting the newest subsystems first (bench/lang-compare/curation branches the suite drives
+  only through their happy paths). The threshold stays at 60 — lowering it to match would be
+  the narrated fix.
+- **`USCHA_COVERAGE=1` over the full suite makes `AC-GM-08` fail**: `coverage.py`'s
+  `COVERAGE_FILE` environment variable unconditionally overrides `cmd_golden_coverage`'s own
+  isolated `data_file`, so the golden-coverage capture collides with the suite's data file.
+  Reproduces on the unmodified 1.81.0 baseline (pre-existing, surfaced by D-03, not caused by
+  it). Fix candidate: `cmd_golden_coverage` should `os.environ.pop("COVERAGE_FILE")` (or set
+  it explicitly) for its child process. Until then the acceptance number under
+  `USCHA_COVERAGE=1` reads 128/129, and the plain suite is the gate.

@@ -1,5 +1,5 @@
 {
-  "version": "1.81.0",
+  "version": "1.82.0",
   "project": "uscha (self-applied)",
   "defaults": {
     "acceptance_file": "ACCEPTANCE.md",
@@ -16,7 +16,7 @@
     "tools_per_cycle": 3,
     "max_iterations": 5,
     "coverage_threshold": 60,
-    "_coverage_scope": "measured on the ENGINE (qa_ledger.py) -- the ~370 subprocess calls the smoke drives through its run() choke point. That is what the seam EXECUTES; the auxiliary scripts (templates/scripts, mirador render) are exercised by the suite but invoked outside it, and coverage.py does not report never-imported files, so they are absent from the number rather than counted as 0. Regenerate: USCHA_COVERAGE=1 bash uscha-kit/tests/smoke-engine.sh, then coverage combine && coverage xml -o reports/coverage.xml",
+    "_coverage_scope": "measured on the ENGINE (qa_ledger.py) through the smoke run() choke point (~370 subprocess calls) AND, since 1.82.0 (D-03), on the auxiliary scripts (templates/scripts, mirador render) through the runpy() choke point -- each --source derived from the script own dirname because coverage.py --source is last-wins, not additive. Regenerate: USCHA_COVERAGE=1 bash uscha-kit/tests/smoke-engine.sh, then coverage combine && coverage xml --ignore-errors -o reports/coverage.xml (--ignore-errors is required: a golden-coverage capture leaves a sitecustomize.py from an already-deleted temp dir in the shared data file; without the flag coverage xml exits 1 and writes nothing). Under USCHA_COVERAGE=1 the suite reads two red criteria -- AC-GM-08 (COVERAGE_FILE overrides golden-coverage isolated data_file, pre-existing, see ISSUES-DEFERRED) and AC-06 which cascades from it; the plain suite is the gate.",
     "fast_path": {
       "enabled": true,
       "forbid_when_golden_touched": true

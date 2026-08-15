@@ -272,8 +272,22 @@ if [ "${USCHA_COVERAGE:-0}" = "1" ]; then
   COV_SRC="$KIT/.claude/skills/uscha-devloop"
   run() { PYTHONIOENCODING=utf-8 "$PY" -m coverage run --parallel-mode \
             --source="$COV_SRC" "$QL" "$@"; }
+  # Second choke point (D-03, 1.82.0): the statusline scripts and the mirador renderer
+  # are invoked directly as "$PY" "$SCRIPT" ... (not through $QL), so run()'s --source
+  # never sees them and coverage.py reports them as absent, not scored 0. runpy() mirrors
+  # run() but takes the script path as its first argument and derives --source from that
+  # SAME script's own directory (dirname), one absolute path per call -- not a fixed
+  # multi-root constant. Two things ruled that out: coverage.py's --source is NOT
+  # additive across repeated flags (the SECOND flag silently wins, dropping the first --
+  # measured empirically, not assumed), and a comma-joined list has the same git-bash/MSYS
+  # hazard as $COV_SRC above (only the FIRST embedded POSIX path gets rewritten). Deriving
+  # the root from the script itself sidesteps both: every call is single-source.
+  runpy() { local script="$1"; shift
+            PYTHONIOENCODING=utf-8 "$PY" -m coverage run --parallel-mode \
+              --source="$(dirname "$script")" "$script" "$@"; }
 else
   run() { PYTHONIOENCODING=utf-8 "$PY" "$QL" "$@"; }
+  runpy() { local script="$1"; shift; PYTHONIOENCODING=utf-8 "$PY" "$script" "$@"; }
 fi
 
 cat > uscha.config.json <<'EOF'
@@ -2760,7 +2774,7 @@ echo "== T80 (1.42.0): mirador status story (como viene/que lo traba/que sigue) 
 printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > status-cfg.json
 run init --config status-cfg.json --out L-status.json >/dev/null 2>&1
 run log-gate --repo solo --iteration 1 --kind simplicity --verdict fail --count 3 --ledger L-status.json >/dev/null 2>&1
-"$PY" "$KIT/.claude/skills/uscha-mirador/mirador-render.py" --engine "$QL" --ledger L-status.json \
+runpy "$KIT/.claude/skills/uscha-mirador/mirador-render.py" --engine "$QL" --ledger L-status.json \
   --template "$KIT/.claude/skills/uscha-mirador/mirador.template.html" --out status-mir.html --no-open >/dev/null 2>&1
 "$PY" - status-mir.html <<'PYIN'
 import json, re, sys
@@ -2949,8 +2963,8 @@ JSON
 printf -- "# ACCEPTANCE\n\n- [X] **AC-01** hecho\n- [ ] ac-02 — build the API\n" > "$T88/ACCEPTANCE.md"  # [X] mayus + ac minus: ejercita el IGNORECASE (debe seguir contando 1/2)
 "$PY" -c "print('x'*300)" > "$T88/src/core.py"   # >200 bytes -> built ; src/api.py absent -> not built
 echo '{"repos":{"myproj":{"snapshots":[{"tests":{"report_found":true,"passed":7},"coverage":{"report_found":true,"pct":55.0}}]}}}' > "$T88/QA-LEDGER.json"
-CLAUDE_PROJECT_DIR="$T88" "$PY" "$KIT/templates/scripts/uscha_progress.py"
-T88_RENDER=$(echo '{}' | CLAUDE_PROJECT_DIR="$T88" "$PY" "$KIT/templates/scripts/uscha_statusline.py" | sed 's/\x1b\[[0-9;]*m//g')
+CLAUDE_PROJECT_DIR="$T88" runpy "$KIT/templates/scripts/uscha_progress.py"
+T88_RENDER=$(echo '{}' | CLAUDE_PROJECT_DIR="$T88" runpy "$KIT/templates/scripts/uscha_statusline.py" | sed 's/\x1b\[[0-9;]*m//g')
 T88_HOME="$T88" "$PY" -c "
 import json, os, sys
 s = json.load(open(os.path.join(os.environ['T88_HOME'], '.claude', 'uscha-progress.json'), encoding='utf-8'))
@@ -2962,7 +2976,7 @@ sys.exit(0 if ok else 1)"
 T88_JSON=$?
 # degradation: remove the progress file -> statusline prints an EMPTY (hidden) line
 rm -f "$T88/.claude/uscha-progress.json"
-T88_EMPTY=$(echo '{}' | CLAUDE_PROJECT_DIR="$T88" "$PY" "$KIT/templates/scripts/uscha_statusline.py")
+T88_EMPTY=$(echo '{}' | CLAUDE_PROJECT_DIR="$T88" runpy "$KIT/templates/scripts/uscha_statusline.py")
 rm -rf "$T88"
 if [ "$T88_JSON" -eq 0 ] && echo "$T88_RENDER" | grep -q "MY PROJECT" \
    && ! echo "$T88_RENDER" | grep -qi "ANTI" && [ -z "$T88_EMPTY" ]; then
@@ -3013,10 +3027,10 @@ T90="$(mktemp -d)"
   run init --config uscha.config.json --out QA-LEDGER.json >/dev/null 2>&1
   run snapshot --ledger QA-LEDGER.json --repo p >/dev/null 2>&1
   # BEFORE record: no measured summary -> falls back to checkbox (0/2)
-  CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_progress.py"
+  CLAUDE_PROJECT_DIR="$(pwd)" runpy "$KIT/templates/scripts/uscha_progress.py"
   before=$("$PY" -c "import json;s=json.load(open('.claude/uscha-progress.json'));print('%s/%s'%(s['done'],s['total']))")
   run readiness --ledger QA-LEDGER.json --record >/dev/null 2>&1   # persist ledger['measured']
-  CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_progress.py"
+  CLAUDE_PROJECT_DIR="$(pwd)" runpy "$KIT/templates/scripts/uscha_progress.py"
   after=$("$PY" -c "import json;s=json.load(open('.claude/uscha-progress.json'));print('%s/%s'%(s['done'],s['total']))")
   echo "$before $after" > result.txt )
 read T90_BEFORE T90_AFTER < "$T90/result.txt"
@@ -3044,9 +3058,9 @@ T91="$(mktemp -d)"
   # 2) mirador trail: the 'qa' node badge shows the measured pass count
   badge=$(run dashboard --ledger QA-LEDGER.json --json 2>/dev/null | "$PY" -c "import json,sys;d=json.load(sys.stdin);print(next(p['count'] for p in d['phases'] if p['key']=='qa'))")
   # 3) statusline: the phase token comes from measured, rendered as 'qa×2'
-  CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_progress.py"
+  CLAUDE_PROJECT_DIR="$(pwd)" runpy "$KIT/templates/scripts/uscha_progress.py"
   tok=$("$PY" -c "import json;s=json.load(open('.claude/uscha-progress.json'));print('%s/%s'%(s['phase'],s['loops']))")
-  line=$(CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_statusline.py" < /dev/null)
+  line=$(CLAUDE_PROJECT_DIR="$(pwd)" runpy "$KIT/templates/scripts/uscha_statusline.py" < /dev/null)
   echo "$odo|$badge|$tok|$line" > result.txt )
 T91_RES="$(cat "$T91/result.txt")"
 rm -rf "$T91"
@@ -3091,9 +3105,9 @@ T93="$(mktemp -d)"
   run init --config uscha.config.json --out QA-LEDGER.json >/dev/null 2>&1
   run snapshot --ledger QA-LEDGER.json --repo p >/dev/null 2>&1
   # (a) no measurement recorded -> the checkbox fallback must be MARKED as narrated
-  CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_progress.py"
+  CLAUDE_PROJECT_DIR="$(pwd)" runpy "$KIT/templates/scripts/uscha_progress.py"
   src=$("$PY" -c "import json;print(json.load(open('.claude/uscha-progress.json'))['acceptance_source'])")
-  line=$(CLAUDE_PROJECT_DIR="$(pwd)" "$PY" "$KIT/templates/scripts/uscha_statusline.py" < /dev/null)
+  line=$(CLAUDE_PROJECT_DIR="$(pwd)" runpy "$KIT/templates/scripts/uscha_statusline.py" < /dev/null)
   # (b) NARRATED tests (agent-reported, no measured snapshot) must NEVER read as
   # 'converged' on the mirador while the odometer withholds readiness: same ledger,
   # same derivation. This is the view a human reads before deciding a merge.
@@ -5715,6 +5729,12 @@ try:
     ids = [ln.split()[0] for ln in obs_lines]
     if len(ids) < 2 or lst.returncode != 0:
         raise RuntimeError("no curable observations listed")
+    # --dir and its --compilation alias must behave identically (1.82.0): bench --dir means
+    # the bench root, bench-curate --dir means the compilation subdir -- a copy-paste hazard
+    # the 1.80.0 review flagged; --compilation disambiguates without breaking --dir.
+    lst_alias = bc("--compilation", "c-opus", "--list")
+    res["AC-BC-04"] = (lst_alias.returncode == lst.returncode
+                       and lst_alias.stdout == lst.stdout)
     r1 = bc("--dir", "c-opus", "--obs", ids[0], "--verdict", "preserve", "--human", "smoke")
     r2 = bc("--dir", "c-opus", "--obs", ids[1], "--verdict", "fix", "--human", "smoke")
     rb = bc("--dir", "c-opus", "--obs", "OBS-a,OBS-b", "--verdict", "preserve")
@@ -7130,7 +7150,7 @@ def _bench_curate_cases():
     except (OSError, ValueError):
         return None
 _bcc = _bench_curate_cases()
-for _bcid in ("AC-BC-01", "AC-BC-02", "AC-BC-03"):
+for _bcid in ("AC-BC-01", "AC-BC-02", "AC-BC-03", "AC-BC-04"):
     if _bcc is None or _bcc.get(_bcid) is None:
         results.append((_bcid, "bench-curation", SKIP))
     elif _bcc.get(_bcid) is True:

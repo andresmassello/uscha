@@ -5582,19 +5582,20 @@ def _bench_entry(entry_dir, name, fidelity=False, curation=None):
             node_ids_f = {nd["id"] for nd in ir_graph.get("nodes") or []}
             covered_f = set()
             units_f, traced_f = set(), set()
+            # `c` was already parsed above for this same COMPILATION.json; reaching this
+            # block requires `unit` to be set, which only happens after that parse
+            # succeeded -- so `c` is guaranteed defined here, no need to re-open/re-parse.
             try:
-                with open(cj, encoding="utf-8-sig") as fh2:
-                    c2 = json.load(fh2)
-                for e2 in c2.get("trace_manifest") or []:
+                for e2 in c.get("trace_manifest") or []:
                     traced_f.add(e2.get("unit"))
                     for nid in e2.get("implements") or []:
                         if nid in node_ids_f:
                             covered_f.add(nid)
                 for sec in ("source", "tests"):
-                    for u2 in c2.get(sec) or []:
+                    for u2 in c.get(sec) or []:
                         if u2.get("unit"):
                             units_f.add(u2["unit"])
-            except (OSError, ValueError, AttributeError):
+            except AttributeError:
                 pass
             sobs, _uns = _extract_static_py(cd, [unit])
             fn_names, cls_names = [], []
@@ -10217,7 +10218,9 @@ def build_parser():
     pbc.add_argument("--bench", required=True,
                      help="the bench directory (the store lives at its root)")
     pbc.add_argument("--entry", required=True, help="the archetype entry")
-    pbc.add_argument("--dir", required=True, help="the compilation dir (e.g. c-opus)")
+    pbc.add_argument("--dir", "--compilation", dest="dir", required=True,
+                     help="the compilation dir (e.g. c-opus); --compilation is an alias "
+                          "(bench --dir means the bench root -- a copy-paste hazard)")
     pbc.add_argument("--obs", default=None, help="a single OBS id from --list")
     pbc.add_argument("--verdict", default=None, choices=_BENCH_CURATION_VERDICTS)
     pbc.add_argument("--note", default=None)

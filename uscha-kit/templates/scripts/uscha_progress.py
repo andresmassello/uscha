@@ -152,7 +152,8 @@ def main():
     repo = _statusline_repo(cfg)
     if not repo:
         return
-    state = {"label": repo.get("label") or str(repo.get("name", "uscha")).upper(),
+    state = {"schema": "uscha/progress@1",
+             "label": repo.get("label") or str(repo.get("name", "uscha")).upper(),
              "pct": None, "done": None, "total": None, "tests": None, "coverage": None,
              "next": None, "phase": None, "loops": None, "stalled": None,
              "acceptance_source": None, "measured_at": None, "score": None, "band": None,

@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.82.0** — [hygiene block: schema marker, a dead re-parse, a copy-paste hazard closed, coverage widened (2026-08-15)](CHANGELOG-1.82.0.md)
 - **1.81.0** — [controlled-language v0.3: the REDUCED does not generalize, and that ships (2026-08-14)](CHANGELOG-1.81.0.md)
 - **1.80.0** — [bench-curation: the human verdict extended to machine-generated code (2026-08-14)](CHANGELOG-1.80.0.md)
 - **1.79.0** — [fidelity per compiler: reverse discovery applied to each compiled artifact (2026-08-13)](CHANGELOG-1.79.0.md)

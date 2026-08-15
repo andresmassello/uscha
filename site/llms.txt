@@ -43,7 +43,7 @@ code regenerability of arbitrary systems, and a shared drift/discovery engine re
 VISION, deferred until they can be measured (ADR-011). The framing is positioning where
 it says VISION and a measured mechanism where it says REAL.
 
-The kit (v1.81.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+The kit (v1.82.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil) —
 plus a pure-Python engine (qa_ledger.py, 49 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux

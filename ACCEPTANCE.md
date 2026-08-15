@@ -378,6 +378,9 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   never change.
 - [x] AC-BC-03 - a fixture edit after curation invalidates the stale observation id:
   `bench-curate` refuses the verdict and `--list` shows the divergence as STALE.
+- [x] AC-BC-04 - `bench-curate --compilation` is a backward-compatible alias of `--dir`
+  (both resolve to the same `dest`): `--compilation c-opus --list` produces byte-identical
+  stdout and exit code to `--dir c-opus --list`.
 
 ## Out of scope for measurement here
 
@@ -389,14 +392,32 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - **Coverage** of the engine is **instrumented** (the fork this file used to leave open was
   resolved by measuring, not by declaring an exemption). `USCHA_COVERAGE=1` wraps the one
   choke point the suite drives the engine through — ~370 subprocess calls — and the combined
-  Cobertura report lands in `reports/coverage.xml`: **84.2%** against a declared threshold of
-  60. Opt-in, so the default suite stays fast and needs no `coverage.py`.
-  Honest limit, recorded in `uscha.config.json` as `defaults._coverage_scope`: the number
-  covers the **engine** (`qa_ledger.py`) — what the seam actually executes. The auxiliary
-  scripts (`templates/scripts`, the mirador renderer) are exercised by the suite but invoked
-  outside it, and coverage.py does not report never-imported files, so they are **absent from
-  the number, not counted as 0**. Widening the seam is deferred work (`ISSUES-DEFERRED.md`
-  D-03), not a silent omission.
+  Cobertura report lands in `reports/coverage.xml`. Opt-in, so the default suite stays fast
+  and needs no `coverage.py`.
+  **Re-measured for 1.82.0** (D-03 widened the seam — see below): `qa_ledger.py` is **58%**
+  (6266 statements, 2656 missed) against a declared threshold of 60 — down from the **84.2%**
+  recorded on 2026-07-23, and genuinely so: the committed `reports/coverage.xml` from that date
+  shows only 3788 valid lines total, against 6266 statements in `qa_ledger.py` alone today —
+  the engine has grown faster than its smoke coverage since (bench, bench-curate, the
+  controlled-language subsystem). Not a regression this change caused, and not silently
+  patched over: the number now reflects the file as it stands.
+  Since D-03 (kit 1.82.0), the auxiliary scripts route through the same seam via a second
+  choke point (`runpy()`, `uscha-kit/tests/smoke-engine.sh`) and are measured for the first
+  time: `templates/scripts/uscha_progress.py` **86%** (114 stmts, 16 missed),
+  `templates/scripts/uscha_statusline.py` **88%** (65 stmts, 8 missed), and
+  `.claude/skills/uscha-mirador/mirador-render.py` **53%** (91 stmts, 43 missed).
+  `telemetry-extract.py`, in the same skill directory, reports **0%**: present in the seam's
+  `--source` root but never invoked by the suite — D-03 named only the mirador renderer, not
+  this script, so its absence of exercise is unchanged, only now visible instead of silently
+  absent from the report.
+  Measuring this surfaced one unrelated pre-existing issue, flagged separately (not part of
+  this change): `USCHA_COVERAGE=1` for the full suite makes `AC-GM-08` fail, because
+  `coverage.py`'s `COVERAGE_FILE` environment variable unconditionally overrides the isolated
+  `data_file` the golden-coverage capture (`cmd_golden_coverage`) sets for itself — confirmed
+  in `coverage/config.py`, reproduced on the unmodified 1.81.0 baseline. It costs ~5 harmless
+  lines of test-fixture noise in the combined total and two red criteria under this
+  specific combination; it does not corrupt the `qa_ledger.py` or auxiliary-script figures
+  above, which come from separate data files untouched by that collision.
 
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
