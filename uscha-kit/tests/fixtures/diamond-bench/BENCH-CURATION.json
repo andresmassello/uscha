@@ -1,0 +1,158 @@
+{
+  "_generated_by": "qa_ledger.py bench-curate (ADR-023) -- append-only human verdicts over bench compilations; the LAST record per (entry, dir, obs) wins, earlier ones stay as history",
+  "records": [
+    {
+      "obs_id": "OBS-3205b03c67b4",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:41:39+00:00",
+      "note": "human verdict given interactively in session 2026-08-14; git-as-readonly noted as an accepted nuance, not a surface defect",
+      "entry": "guard",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-777f5e4bc72f",
+      "verdict": "fix",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:42:19+00:00",
+      "note": "human verdict given interactively in session 2026-08-14; invents 'monitor' and omits ls/notebookread that the spec implies",
+      "entry": "guard",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-9163e6815975",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:45:00+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-5e698e348eb5",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:45:01+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-00300b6d8cec",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:45:01+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-1d1b41850121",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:47:19+00:00",
+      "note": "human verdict given interactively in session 2026-08-14; sed/awk as readers with the -i/--in-place write flag covered is accepted design",
+      "entry": "guard",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-9df6be6eb77c",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:47:19+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-9172c4b058c1",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:47:20+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-bd210b8beb95",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:47:20+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-20d6edcf9b82",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:48:21+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-430a9a793812",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:48:21+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-c4c0c96688d5",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:48:21+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-b3197ea5f3d4",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:48:22+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-a120ec7f9c62",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:48:22+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-c8201c34254b",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:48:22+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-988064076771",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:48:22+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-49816a576dab",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-15T13:48:23+00:00",
+      "note": "human verdict given interactively in session 2026-08-14",
+      "entry": "guard",
+      "dir": "c-sonnet"
+    }
+  ]
+}

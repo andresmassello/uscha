@@ -38,9 +38,9 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 21/23
 - `c-sonnet` (M3): oracle 21/23
 - discrimination stub: 11/23 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 5 fn / 0 cls · oracle 0.826 · unexplained 0.00 · curation UNMEASURED
-- fidelity `c-opus` (M2): trace 1.00 · surface 4 fn / 0 cls · oracle 0.913 · unexplained 0.00 · curation UNMEASURED
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 8 fn / 0 cls · oracle 0.913 · unexplained 0.00 · curation UNMEASURED
+- fidelity `c-haiku` (M1): trace 1.00 · surface 5 fn / 0 cls · oracle 0.826 · unexplained 0.00 · curation 1.000 (judged 5/5)
+- fidelity `c-opus` (M2): trace 1.00 · surface 4 fn / 0 cls · oracle 0.913 · unexplained 0.00 · curation 1.000 (judged 4/4)
+- fidelity `c-sonnet` (M3): trace 1.00 · surface 8 fn / 0 cls · oracle 0.913 · unexplained 0.00 · curation 1.000 (judged 8/8)
 
 ### parser — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
