@@ -1,0 +1,92 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-SC-01",
+      "type": "AC",
+      "statement": "when a job's `arrival` equals the current tick, the program shall make the job",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-SC-02",
+      "type": "AC",
+      "statement": "at each tick the program shall run the ready job with the highest `priority`;",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 6
+      }
+    },
+    {
+      "id": "AC-SC-03",
+      "type": "AC",
+      "statement": "when a higher-priority job arrives, the program shall preempt the running job",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 8
+      }
+    },
+    {
+      "id": "AC-SC-04",
+      "type": "AC",
+      "statement": "when a job's `deadline` is less than or equal to the current tick and the job",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 11
+      }
+    },
+    {
+      "id": "AC-SC-05",
+      "type": "AC",
+      "statement": "when a job's `duration` is 0, the program shall emit `start` and `complete` at",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 14
+      }
+    },
+    {
+      "id": "AC-SC-06",
+      "type": "AC",
+      "statement": "the program shall print `events` in tick order, `completed` in completion order",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 16
+      }
+    },
+    {
+      "id": "AC-SC-07",
+      "type": "AC",
+      "statement": "if the input is malformed (not an array, missing or mistyped fields, a boolean",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 18
+      }
+    },
+    {
+      "id": "INV-SC-PROGRESS-01",
+      "type": "INV",
+      "statement": "preemption never loses work",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 8,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 7
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "471b8ea865169e3d483b62cdb8280fb28d79bb18cd2d4cb204cd14a38a0fc0b7"
+}

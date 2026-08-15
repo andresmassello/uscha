@@ -382,6 +382,32 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   (both resolve to the same `dest`): `--compilation c-opus --list` produces byte-identical
   stdout and exit code to `--dir c-opus --list`.
 
+## Slack hypothesis (ADR-025) + lang-compare IMPROVED verdict (ADR-026)
+
+- [x] AC-SH-01 - the `scheduler` bench oracle discriminates: the degenerate stub is red, EVERY
+  `wrong/` implementation (each breaking exactly one rule) is red, and the bench's own
+  discrimination gate over the entry agrees; the reference passing 100% is evidenced by the
+  `c-opus` compilation, 30/30 (no separate reference implementation is committed).
+- [x] AC-SH-02 - the three blind `scheduler` compilations `compile-validate` against the pinned
+  IR; each `unresolved_intent` is non-empty, bounded (2-5 entries), and model-distinct
+  (verbatim, not synthesized); the bench verdict for `scheduler` is `PARTIAL` with the pinned
+  per-compiler oracle counts (opus 30/30, sonnet 26/30, haiku 25/30 of 30); the bench now
+  reports 10 entries.
+- [x] AC-LI-01 - the `lang-compare` verdict rule (REDUCED / IMPROVED / MIXED / NO EFFECT /
+  WORSE, ADR-026) is reachable and correct across the five committed same-generation pairs;
+  every JSON report carries the `improved`/`regressed` booleans.
+- [x] AC-LI-02 - the four pre-existing pinned verdicts are unchanged by the ADR-026 rule
+  addition: guard `REDUCED`, parser `NO EFFECT`, state-machine `NO EFFECT`, transformer
+  `WORSE`.
+- [x] AC-SH-03 - `lang-compare` over `scheduler-free` vs `scheduler-controlled` (oracle
+  byte-identical across both arms and to the bench entry's own oracle) yields the pinned
+  `IMPROVED` verdict (`improved` true, `regressed` false, oracle-green delta +1, mean pass-rate
+  delta > 0.02, variance delta > 0.05); `CONTROLLED-LANGUAGE-V03.md` states "5 deconfounded
+  archetypes" with the `scheduler` `IMPROVED`, `transformer` `WORSE` and `REDUCED` rows present.
+- [x] AC-LI-03 - the rendered `CONTROLLED-LANGUAGE-SCHED.md` states `## Verdict: IMPROVED` and
+  names the "convergence on a shared error" reading, both in the committed file and in a fresh
+  regeneration.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

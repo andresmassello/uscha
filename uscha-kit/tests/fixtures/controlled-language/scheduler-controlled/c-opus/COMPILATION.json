@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "471b8ea865169e3d483b62cdb8280fb28d79bb18cd2d4cb204cd14a38a0fc0b7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "b8b79803f6a306b0f08e8b52c6ea1accc82665b620d92dfeaed806b86fba56ce"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "malformed-input/unknown-fields",
+      "decision": "A job object carrying any key outside {id, priority, arrival, duration, deadline} is treated as malformed input and the program prints ERROR.",
+      "rationale": "The definition says a job has 'exactly the fields' listed, but the malformed-input clause only enumerates missing/mistyped fields. Read the definition strictly rather than silently ignoring extra keys, so an unexpected payload fails loudly instead of being half-interpreted."
+    },
+    {
+      "ir_region": "malformed-input/numeric-typing",
+      "decision": "A JSON number with a fractional representation (e.g. 3.0) is not an integer and yields ERROR; only Python ints that are not bools are accepted.",
+      "rationale": "The spec explicitly excludes booleans but is silent about floats. Accepting 3.0 would require inventing a coercion rule and would make tick arithmetic float-tainted, so the stricter reading was chosen and applied uniformly to id, priority, arrival, duration and deadline."
+    },
+    {
+      "ir_region": "job-fields/deadline-sign",
+      "decision": "A negative `deadline` is accepted (only `arrival` and `duration` are validated as non-negative); such a job arrives and is missed at its arrival tick via step 2.",
+      "rationale": "The malformed-input definition names only negative arrival and duration. Rejecting a negative deadline would add a validation rule the spec does not state, and the existing step-2 rule (`deadline <= current tick`) already gives it well-defined behaviour."
+    },
+    {
+      "ir_region": "output/serialization",
+      "decision": "Output is `json.dumps` of `{\"events\", \"completed\", \"missed\"}` in that key order with default separators, followed by a single newline.",
+      "rationale": "The spec fixes structure and values but explicitly leaves whitespace and key order free. Declaring one stable, deterministic serialization keeps runs byte-comparable without over-claiming a format the spec does not require."
+    },
+    {
+      "ir_region": "selection/previous-running-job",
+      "decision": "After a job completes or after an idle tick, the 'previous running job' is reset to none, so the next tick's selection emits start/resume and never emits a preempt for a job that is no longer ready.",
+      "rationale": "The spec conditions preempt on the previous running job 'still being ready', which a completed or missed job never is. Resetting the pointer makes that condition structurally impossible to violate instead of relying on a membership check against a removed record."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-15T00:00:00+00:00",
+      "finished": "2026-08-15T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "6f6357fd8c084cc662bcb7cc92695d0ec56cce43314084ec58f0bf0a985f72ad"
+}

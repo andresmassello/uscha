@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "471b8ea865169e3d483b62cdb8280fb28d79bb18cd2d4cb204cd14a38a0fc0b7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "05e2cdca817152b3fe64fcd5b8d6a3648390cf32b303a81327035f559b1080d4"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "preemption-notification",
+      "decision": "Emit preempt only if previous running job is still active (in active_jobs), not if it completed or was missed",
+      "rationale": "Spec step 3 requires 'if the previous running job is still ready'; we interpret ready as remaining in the active set; step 4 removes completed jobs before the next tick's preemption check"
+    },
+    {
+      "ir_region": "tie-breaking-order",
+      "decision": "When multiple jobs share highest priority, select by earliest arrival, then by lowest id as secondary and tertiary tiebreakers",
+      "rationale": "Step 3 explicitly specifies this tiebreaking order; deterministic selection is essential for reproducibility; implemented as sort key tuple: (-priority, arrival, id)"
+    },
+    {
+      "ir_region": "duration-zero-semantics",
+      "decision": "Jobs with duration 0 never decrement remaining (already 0), emit start and complete in same tick",
+      "rationale": "Spec step 4 says 'decrease by one unless already zero'; duration 0 means immediate completion; start and complete both occur in the tick of selection with no execution work"
+    },
+    {
+      "ir_region": "idle-emission-condition",
+      "decision": "Emit idle only when no jobs are active (ready) AND at least one job has future arrival (pending)",
+      "rationale": "Spec prohibits idle 'when no job is ready and no job is pending'; idle signals waiting for future arrival; if no pending exists, simulation ends instead"
+    },
+    {
+      "ir_region": "simulation-termination",
+      "decision": "Break main loop when active_jobs is empty and no pending jobs exist, after completing the current tick",
+      "rationale": "Spec: 'end after the tick in which last job completes or is missed' and 'shall not emit idle when...no pending'; loop structure ensures step 4 executes before termination check"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-15T00:00:00+00:00",
+      "finished": "2026-08-15T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "606b662eaeba4486e3d49382cfbc18f328ffef86adc3d6650afdd2fe93260e3c"
+}

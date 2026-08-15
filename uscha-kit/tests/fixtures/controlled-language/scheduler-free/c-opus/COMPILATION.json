@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "23875659f87ac2fbc87f33fa11ad4001d8f8e94cace2a01c133836f09ca8f510"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "deadline-null-vs-absent",
+      "decision": "Treat an explicit `\"deadline\": null` as equivalent to the field being absent (no deadline) rather than as a mistyped field that errors",
+      "rationale": "The spec says `deadline` is optional and errors only when it 'is not an integer', but JSON null is the idiomatic way to express absence; erroring on it would reject a natural encoding of the same intent. Accepting null is the narrower behavioural change since no acceptance criterion exercises it."
+    },
+    {
+      "ir_region": "last-run-id-after-completion-or-miss",
+      "decision": "Clear the 'ran last tick' marker when the job completes or is dropped by deadline, so the following tick emits neither a preempt for it nor treats the next pick as a continuation",
+      "rationale": "The spec conditions `preempt` on 'last tick's job is still ready', and a completed/missed job is removed from the ready set. Clearing the marker makes that condition structurally impossible to violate, and guarantees the next selected job emits start/resume rather than silently continuing."
+    },
+    {
+      "ir_region": "selection-arrival-tiebreak-semantics",
+      "decision": "Tie-break on the job's declared `arrival` field, not on the tick it (re)entered the ready set",
+      "rationale": "The spec names the field `arrival` and the input carries it as static data; using a dynamic 'time became ready' value would make a preempted job's tiebreak drift over time. The static reading also keeps ordering deterministic and independent of preemption history, consistent with INV-SC-PROGRESS-01's spirit that preemption changes nothing but who holds the CPU."
+    },
+    {
+      "ir_region": "zero-duration-completion-path",
+      "decision": "Route duration-0 jobs through the ordinary execution step: decrement to -1 and test `remaining <= 0` rather than `== 0`",
+      "rationale": "The spec requires a duration-0 job to emit `start` then `complete` at the same tick, which only happens if it is selected and executed normally. Using `<= 0` instead of `== 0` avoids a special-case branch and prevents a zero-duration job from ever surviving its own tick."
+    },
+    {
+      "ir_region": "output-serialization-format",
+      "decision": "Emit compact `json.dumps` default formatting followed by a trailing newline, and print `ERROR` with a trailing newline as well",
+      "rationale": "The spec fixes structure and values but explicitly leaves formatting unfixed, and says 'prints one line'. A trailing newline is the conventional line terminator and keeps both output modes symmetric for a line-oriented reader."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-15T00:00:00+00:00",
+      "finished": "2026-08-15T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled; same compilations as the bench entry)"
+  },
+  "_integrity": "efc81568fa3f1add595a86b9c4bf5f5249cd01af11e9b4ac515883ccc9ca7690"
+}

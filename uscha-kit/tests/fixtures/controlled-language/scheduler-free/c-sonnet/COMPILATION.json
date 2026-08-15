@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "a5fe816e3c508692e4fd4d7823951e27b069fee8fa436f830621405c481667d7"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "deadline-boundary-step2",
+      "decision": "drop a job at step 2 only when deadline < current tick (strict), not deadline <= tick",
+      "rationale": "the literal <= reading would drop a job at tick == deadline before it gets a chance to run/complete that same tick, contradicting the explicit rule that completing exactly at the deadline tick is NOT missed; strict < resolves the contradiction without lookahead into this tick's selection outcome"
+    },
+    {
+      "ir_region": "job-object-extra-fields",
+      "decision": "reject any job object containing keys outside {id,priority,arrival,duration,deadline} with ERROR",
+      "rationale": "the contract states a job is an object with 'exactly' those fields, but the Errors section doesn't explicitly restate this as a failure mode; chose the stricter contract wording over the possibly non-exhaustive error list"
+    },
+    {
+      "ir_region": "deadline-null-value",
+      "decision": "treat an explicit JSON null for deadline as a type violation (ERROR), not as equivalent to omitting the field",
+      "rationale": "spec describes deadline as 'optionally... (integer tick)', implying presence means it must be an integer; null is neither absent nor an integer"
+    },
+    {
+      "ir_region": "output-json-formatting",
+      "decision": "emit compact json.dumps with key order events/completed/missed and idle's id as null",
+      "rationale": "spec explicitly states output formatting is not fixed, only structure and values, so any consistent stdlib serialization satisfies the contract"
+    },
+    {
+      "ir_region": "idle-tick-last-run-tracking",
+      "decision": "reset the 'last running job' tracker to None on an idle tick",
+      "rationale": "an idle tick can only occur when ready is empty, meaning any previously running job already completed or was missed and is no longer eligible for preempt/resume comparisons, so this is a documented no-op for clarity rather than a behavioral choice"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-15T00:00:00+00:00",
+      "finished": "2026-08-15T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled; same compilations as the bench entry)"
+  },
+  "_integrity": "0dfd32e18ff82304f48af6bdfd8929461e2e8af73896653b6e01ad46f69d86a6"
+}

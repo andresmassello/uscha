@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="129" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="135" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -257,5 +257,17 @@
   <testcase classname="uscha.acceptance" name="AC-CL3-02_controlled-language-v03">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-CL3-03_controlled-language-v03">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SH-01_slack-hypothesis">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SH-02_slack-hypothesis">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SH-03_slack-hypothesis">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-LI-01_slack-hypothesis">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-LI-02_slack-hypothesis">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-LI-03_slack-hypothesis">
   </testcase>
 </testsuite>

@@ -3445,6 +3445,7 @@ rm -f "$KIT/reports/junit/.bench-cases.json"      # same rule for T128
 rm -f "$KIT/reports/junit/.lang-cases.json"       # same rule for T129
 rm -f "$KIT/reports/junit/.bench-curate-cases.json"  # same rule for T130
 rm -f "$KIT/reports/junit/.lang3-cases.json"      # same rule for T131
+rm -f "$KIT/reports/junit/.sched-cases.json"      # same rule for T132
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -5264,7 +5265,7 @@ direct = json.loads(rr.stdout)["passed"]
 outp = os.path.join(tempfile.mkdtemp(), "DIAMOND-BENCH.md")
 subprocess.run([sys.executable, ENG, "bench", "--dir", BENCH, "--out", outp],
                capture_output=True, text=True, encoding="utf-8", errors="replace")
-res["AC-DB-01"] = (d.get("entries") == 9 and byarch.get("parser", {}).get("verdict") == "PASS"
+res["AC-DB-01"] = (d.get("entries") == 10 and byarch.get("parser", {}).get("verdict") == "PASS"
                    and byarch.get("crud-store", {}).get("verdict") == "PASS"
                    and all(r["verdict"] != "PENDING" for r in d.get("raw", []))
                    and any(c["oracle"]["passed"] == direct
@@ -5382,7 +5383,7 @@ def entry_complete(e):
         ("canonical", "SPEC.md"), ("canonical", "ACCEPTANCE.md"),
         ("canonical", "CONSTITUTION.md"), ("IR.json",), ("oracle", "ORACLE.json"),
         ("stub", "stub.py")))
-res["AC-BG-01"] = (d.get("entries") == 9 and all(entry_complete(e) for e in NEW5)
+res["AC-BG-01"] = (d.get("entries") == 10 and all(entry_complete(e) for e in NEW5)
                    and all(r["verdict"] != "PENDING" for r in d.get("raw", [])))
 res["AC-BG-02"] = all((byarch.get(e, {}).get("discrimination") or {}).get("stub_green") is False
                       for e in NEW5)
@@ -5427,7 +5428,7 @@ def wrongs_red(e):
         except ValueError:
             return False
     return True
-res["AC-BG-05"] = d.get("entries") == 9 and all(wrongs_red(e) for e in NEW5)
+res["AC-BG-05"] = d.get("entries") == 10 and all(wrongs_red(e) for e in NEW5)
 
 # Fidelity-per-compiler criteria (ADR-022): advisory descriptor, opt-in, UNMEASURED named.
 def bench_fid():
@@ -5884,14 +5885,16 @@ red = [r.get("name") for r in od.get("results") or [] if not r.get("ok")]
 case_ok = (od.get("passed") == 13 and od.get("total") == 14
            and red == ["extra-field-tolerated"])
 res["AC-CL3-02"] = sm_ok and tf_ok and case_ok
-# AC-CL3-03: the v0.3 summary states the aggregate as 1 of 4 with per-archetype rows; the
-# negative row is present with the same prominence as the positive
+# AC-CL3-03: the v0.3 summary states the aggregate (now 5 deconfounded archetypes after
+# ADR-025) with per-archetype rows; the negative row is present with the same prominence as
+# the positive. The "1 of 4" phrasing was superseded when the scheduler's IMPROVED row landed
+# (ADR-025/1.83.0) and the aggregate doc was rewritten -- this pin follows the live document.
 v3 = os.path.join(root, "CONTROLLED-LANGUAGE-V03.md")
 try:
     body = io.open(v3, encoding="utf-8").read()
 except OSError:
     body = ""
-res["AC-CL3-03"] = ("1 of 4" in body
+res["AC-CL3-03"] = ("5 deconfounded archetypes" in body
                     and "| guard |" in body and "**REDUCED**" in body
                     and "| parser |" in body and "| state-machine |" in body
                     and "| transformer |" in body and "**WORSE**" in body
@@ -5907,6 +5910,164 @@ PY
 case "$T131" in
   OK*) PASS=$((PASS+1)); echo "  ok   lang-v03: $T131";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T131";;
+esac
+
+echo "== T132 (1.83.0): the slack hypothesis, tested -- scheduler enters the bench + controlled-language, IMPROVED is a named verdict (ADR-025, ADR-026) =="
+T132=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import io, json, os, subprocess, sys
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
+SCHED = os.path.join(BENCH, "scheduler")
+res = {}
+def readb(p):
+    with io.open(p, "rb") as fh:
+        return fh.read()
+def run(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+def oracle(impl):
+    r = run("bootstrap-oracle", "--impl", impl, "--oracle",
+            os.path.join(SCHED, "oracle", "ORACLE.json"), "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+def bench(dirpath):
+    r = run("bench", "--dir", dirpath, "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+# AC-SH-01: the scheduler oracle discriminates -- the degenerate stub is red, EVERY wrong/
+# implementation is red (each breaks exactly one rule), and the bench's own discrimination
+# gate over the entry agrees. No reference impl is committed here (the "reference passes 100%"
+# half of the discrimination gate is evidenced by c-opus 30/30 under AC-SH-02).
+stub_ok = oracle(os.path.join(SCHED, "stub", "stub.py")).get("oracle_green") is False
+wd = os.path.join(SCHED, "wrong")
+wrongs = sorted(f for f in os.listdir(wd) if f.endswith(".py"))
+wrong_ok = bool(wrongs) and all(oracle(os.path.join(wd, f)).get("oracle_green") is False
+                                for f in wrongs)
+d0 = bench(BENCH)
+sched_raw = [r for r in d0.get("raw", []) if r["archetype"] == "scheduler"]
+disc_ok = (bool(sched_raw)
+           and (sched_raw[0].get("discrimination") or {}).get("stub_green") is False)
+res["AC-SH-01"] = stub_ok and wrong_ok and disc_ok and len(wrongs) == 9
+
+# AC-SH-02: the three blind compilations validate against the pinned IR; unresolved_intent is
+# non-empty, bounded, and model-distinct (verbatim, not synthesized); the bench verdict for
+# scheduler is PARTIAL with the pinned per-compiler oracle counts; entries == 10 (the ninth
+# archetype landed).
+cv_ok = True
+ui_fps = []
+for m in ("opus", "sonnet", "haiku"):
+    rv = run("compile-validate", "--ir", os.path.join(SCHED, "IR.json"), "--compilation",
+             os.path.join(SCHED, "c-" + m, "COMPILATION.json"))
+    if rv.returncode != 0:
+        cv_ok = False
+    c = json.load(io.open(os.path.join(SCHED, "c-" + m, "COMPILATION.json"),
+                          encoding="utf-8-sig"))
+    ui = c.get("unresolved_intent") or []
+    if not (2 <= len(ui) <= 5):
+        cv_ok = False
+    ui_fps.append(json.dumps(ui, sort_keys=True))
+distinct_ok = len(set(ui_fps)) == 3
+sched_entry = sched_raw[0] if sched_raw else {}
+per_comp = dict((c["model"], c["oracle"]["passed"]) for c in sched_entry.get("compilations", []))
+counts_ok = (per_comp == {"opus": 30, "sonnet": 26, "haiku": 25}
+            and all(c["oracle"]["total"] == 30 for c in sched_entry.get("compilations", [])))
+res["AC-SH-02"] = (cv_ok and distinct_ok and sched_entry.get("verdict") == "PARTIAL"
+                   and counts_ok and d0.get("entries") == 10)
+
+# AC-SH-03: lang-compare over scheduler-free vs scheduler-controlled (shared byte-identical
+# oracle, also byte-identical to the bench entry's own oracle -- one dispatch feeds both
+# instruments) yields the pinned IMPROVED verdict; the aggregate doc states 5 archetypes with
+# the full row set.
+FREE = os.path.join(CL, "scheduler-free")
+CTRL = os.path.join(CL, "scheduler-controlled")
+rc_sh = run("lang-compare", "--free", FREE, "--controlled", CTRL, "--json")
+try:
+    rep_sh = json.loads(rc_sh.stdout)
+except ValueError:
+    rep_sh = {}
+oracle_shared = (readb(os.path.join(FREE, "oracle", "ORACLE.json"))
+                 == readb(os.path.join(CTRL, "oracle", "ORACLE.json"))
+                 == readb(os.path.join(SCHED, "oracle", "ORACLE.json")))
+v03 = os.path.join(root, "CONTROLLED-LANGUAGE-V03.md")
+try:
+    v03_body = io.open(v03, encoding="utf-8").read()
+except OSError:
+    v03_body = ""
+res["AC-SH-03"] = (rc_sh.returncode == 0 and rep_sh.get("verdict") == "IMPROVED"
+                   and rep_sh.get("improved") is True and rep_sh.get("regressed") is False
+                   and rep_sh.get("delta", {}).get("oracle_green") == 1
+                   and rep_sh.get("delta", {}).get("mean_passrate", 0) > 0.02
+                   and rep_sh.get("delta", {}).get("variance_score", 0) > 0.05
+                   and oracle_shared
+                   and "5 deconfounded archetypes" in v03_body
+                   and "| scheduler |" in v03_body and "**IMPROVED**" in v03_body
+                   and "| transformer |" in v03_body and "**WORSE**" in v03_body
+                   and "**REDUCED**" in v03_body)
+
+# AC-LI-01 / AC-LI-02: the IMPROVED/MIXED symmetric rule (ADR-026), exercised via every
+# committed pair that reaches a distinct branch -- no synthetic arms needed, the five
+# same-generation pairs already on disk cover REDUCED, NO EFFECT (x2), WORSE and IMPROVED.
+# Every JSON report now carries the "improved"/"regressed" booleans.
+PAIRS5 = [("guard-free-r2", "controlled", "REDUCED"),
+          ("parser-free", "parser-controlled", "NO EFFECT"),
+          ("state-machine-free-r2", "state-machine-controlled", "NO EFFECT"),
+          ("transformer-free-r2", "transformer-controlled", "WORSE"),
+          ("scheduler-free", "scheduler-controlled", "IMPROVED")]
+rule_ok = True
+bools_ok = True
+verdicts = {}
+for free, ctrl, want in PAIRS5:
+    r = run("lang-compare", "--free", os.path.join(CL, free), "--controlled",
+            os.path.join(CL, ctrl), "--json")
+    try:
+        rp = json.loads(r.stdout)
+    except ValueError:
+        rp = {}
+    verdicts[free] = rp.get("verdict")
+    if rp.get("verdict") != want:
+        rule_ok = False
+    if not (isinstance(rp.get("improved"), bool) and isinstance(rp.get("regressed"), bool)):
+        bools_ok = False
+res["AC-LI-01"] = rule_ok and bools_ok
+res["AC-LI-02"] = (verdicts.get("guard-free-r2") == "REDUCED"
+                   and verdicts.get("parser-free") == "NO EFFECT"
+                   and verdicts.get("state-machine-free-r2") == "NO EFFECT"
+                   and verdicts.get("transformer-free-r2") == "WORSE")
+
+# AC-LI-03: the rendered scheduler report states the IMPROVED verdict in prose and names the
+# convergence-on-a-shared-error failure mode. Regenerated fresh via --out and compared against
+# the committed CONTROLLED-LANGUAGE-SCHED.md.
+import tempfile
+outp = os.path.join(tempfile.mkdtemp(), "SCHED.md")
+run("lang-compare", "--free", FREE, "--controlled", CTRL, "--out", outp)
+fresh = io.open(outp, encoding="utf-8").read() if os.path.isfile(outp) else ""
+committed = os.path.join(root, "CONTROLLED-LANGUAGE-SCHED.md")
+try:
+    committed_body = io.open(committed, encoding="utf-8").read()
+except OSError:
+    committed_body = ""
+res["AC-LI-03"] = ("## Verdict: IMPROVED" in fresh and "convergence on a shared reading" in fresh
+                   and "## Verdict: IMPROVED" in committed_body
+                   and "convergence on a shared reading" in committed_body)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".sched-cases.json"), "w",
+        encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T132" in
+  OK*) PASS=$((PASS+1)); echo "  ok   slack-hypothesis: $T132";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T132";;
 esac
 
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
@@ -7192,6 +7353,23 @@ for _l3id in ("AC-CL3-01", "AC-CL3-02", "AC-CL3-03"):
         results.append((_l3id, "controlled-language-v03", None))
     else:
         results.append((_l3id, "controlled-language-v03", "T131 case failed or missing"))
+
+# Slack hypothesis criteria (ADR-025, ADR-026): measured by T132, same sidecar contract.
+def _sched_cases():
+    p = os.path.join(kit, "reports", "junit", ".sched-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_shc = _sched_cases()
+for _shid in ("AC-SH-01", "AC-SH-02", "AC-SH-03", "AC-LI-01", "AC-LI-02", "AC-LI-03"):
+    if _shc is None or _shc.get(_shid) is None:
+        results.append((_shid, "slack-hypothesis", SKIP))
+    elif _shc.get(_shid) is True:
+        results.append((_shid, "slack-hypothesis", None))
+    else:
+        results.append((_shid, "slack-hypothesis", "T132 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

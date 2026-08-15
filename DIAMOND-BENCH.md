@@ -11,12 +11,13 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 | parser | PASS | M1 21/21, M2 21/21, M3 21/21 | yes | 21 |
 | protocol-adapter | PASS | M1 15/15, M2 15/15, M3 15/15 | yes | 15 |
 | rest-handler | PARTIAL | M1 14/15, M2 14/15, M3 15/15 | yes | 15 |
+| scheduler | PARTIAL | M1 25/30, M2 30/30, M3 26/30 | yes | 30 |
 | state-machine | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
 | transformer | PASS | M1 14/14, M2 14/14, M3 14/14 | yes | 14 |
 | ui-render | PASS | M1 13/13, M2 13/13, M3 13/13 | yes | 13 |
 | worker | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
 
-**Coverage:** 2 PARTIAL, 7 PASS (of 9 entries).
+**Coverage:** 3 PARTIAL, 7 PASS (of 10 entries).
 
 **Model map (published, not the headline):** M1 = haiku, M2 = opus, M3 = sonnet.
 
@@ -71,6 +72,16 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - fidelity `c-haiku` (M1): trace 1.00 · surface 2 fn / 0 cls · oracle 0.933 · unexplained 0.00 · curation 1.000 (judged 2/2)
 - fidelity `c-opus` (M2): trace 1.00 · surface 5 fn / 1 cls · oracle 0.933 · unexplained 0.00 · curation 1.000 (judged 6/6)
 - fidelity `c-sonnet` (M3): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
+
+### scheduler — PARTIAL
+*core identity (min 83% of cases); divergence isolated*
+- `c-haiku` (M1): oracle 25/30
+- `c-opus` (M2): oracle 30/30 GREEN
+- `c-sonnet` (M3): oracle 26/30
+- discrimination stub: 1/30 (oracle rejects the stub)
+- fidelity `c-haiku` (M1): trace 1.00 · surface 1 fn / 0 cls · oracle 0.833 · unexplained 0.00 · curation UNMEASURED
+- fidelity `c-opus` (M2): trace 1.00 · surface 4 fn / 1 cls · oracle 1.000 · unexplained 0.00 · curation UNMEASURED
+- fidelity `c-sonnet` (M3): trace 1.00 · surface 1 fn / 0 cls · oracle 0.867 · unexplained 0.00 · curation UNMEASURED
 
 ### state-machine — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*

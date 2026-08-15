@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "81cb4d2f5cbf55de3387e8c89dd1f4b72e34455918376be42fceca8d384c37ec"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "deadline-check-boundary",
+      "decision": "use `deadline < tick` instead of spec's `deadline <= tick`",
+      "rationale": "AC-SC-04 states 'a job completing at exactly its deadline tick is NOT missed', which requires allowing execution at the deadline tick. Using `< ` not `<=` at step 2 lets the job run to completion at step 4 of the same tick before the next deadline check fires."
+    },
+    {
+      "ir_region": "preemption-readiness-check",
+      "decision": "emit preempt only if running job is in candidates set (not missed/completed)",
+      "rationale": "Spec says preempt if 'last tick's job is still ready'. Running jobs that were missed at step 2 are removed from both ready and running, so they are neither in candidates nor 'still ready', thus preempt is not emitted."
+    },
+    {
+      "ir_region": "state-model-running-vs-ready",
+      "decision": "remove job from ready when selected to run; add back to ready if preempted",
+      "rationale": "Simplifies state: a job is either waiting (ready), running, completed, or missed. Avoids double-counting in termination check and makes preemption reversal explicit."
+    },
+    {
+      "ir_region": "tiebreaker-sort-order",
+      "decision": "break ties first by `arrival` (earliest), then by `id` (lowest); use min() with negated priority",
+      "rationale": "Spec prescribes exact order. min() with key `(-priority, arrival, id)` gives correct ordering: highest priority (negated), then earliest arrival, then lowest id."
+    },
+    {
+      "ir_region": "termination-idleness",
+      "decision": "check termination after execution; do not emit idle on the tick a job completes",
+      "rationale": "Spec says 'no idle event is emitted once no job is ready and no job is still to arrive'. Idle appears only when nothing is ready but a job will eventually arrive. Termination after step 4 ensures completion happens before loop exits."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-15T00:00:00+00:00",
+      "finished": "2026-08-15T00:00:00+00:00"
+    },
+    "constraint_handling": "free-prose arm (same generation as controlled; same compilations as the bench entry)"
+  },
+  "_integrity": "d2aadd09fdbb15070593519c541797287907515a1ebf4f11f03439c85ed5ebb9"
+}

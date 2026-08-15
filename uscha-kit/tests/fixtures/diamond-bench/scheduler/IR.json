@@ -1,0 +1,92 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-SC-01",
+      "type": "AC",
+      "statement": "jobs become ready at their `arrival` tick (an `arrive` event each, ascending id).",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-SC-02",
+      "type": "AC",
+      "statement": "at each tick the ready job with the highest `priority` runs; ties break by",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 4
+      }
+    },
+    {
+      "id": "AC-SC-03",
+      "type": "AC",
+      "statement": "a higher-priority arrival preempts the running job (`preempt` event); the",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 6
+      }
+    },
+    {
+      "id": "AC-SC-04",
+      "type": "AC",
+      "statement": "a job whose `deadline` is ≤ the current tick and is not complete is dropped with",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 8
+      }
+    },
+    {
+      "id": "AC-SC-05",
+      "type": "AC",
+      "statement": "a job with `duration` 0 emits `start` and `complete` at the same tick; a tick",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 11
+      }
+    },
+    {
+      "id": "AC-SC-06",
+      "type": "AC",
+      "statement": "the output object carries `events` in tick order, `completed` in completion",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 13
+      }
+    },
+    {
+      "id": "AC-SC-07",
+      "type": "AC",
+      "statement": "malformed input (not an array, missing/mistyped fields, boolean where integer,",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 15
+      }
+    },
+    {
+      "id": "INV-SC-PROGRESS-01",
+      "type": "INV",
+      "statement": "preemption never loses work",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 8,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 7
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727"
+}

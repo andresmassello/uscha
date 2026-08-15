@@ -250,7 +250,7 @@
     <h2>05 · Truth-pass — qué es real hoy, qué sigue siendo visión</h2>
     <p>El pitch es hermoso, y justamente por eso hay que tenerle desconfianza. La regla de la
     casa: <em>under-claim, luego cablear, luego re-claim</em>. Estado al día de hoy
-    (kit&nbsp;1.81.0):</p>
+    (kit&nbsp;1.83.0):</p>
     <table>
       <thead><tr><th>Afirmación</th><th>Estado</th><th>Dónde</th></tr></thead>
       <tbody>
@@ -263,11 +263,11 @@
         <tr><td>Round-trip semántico (¿el código <em>dice lo mismo</em> que la spec?)</td>
             <td><span class="chip vision">VISIÓN</span></td><td>diferido con condiciones · ADR-011</td></tr>
         <tr><td>Reemplazabilidad de implementación, demostrada en sistemas acotados — modelos independientes regeneran el mismo sistema desde el paquete canónico, y un oráculo oculto lo certifica</td>
-            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 7/9 arquetipos PASS, 2 PARTIAL · 1.74–1.77 · ADR-017/018/020</td></tr>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 7/10 arquetipos PASS, 3 PARTIAL · 1.74–1.83 · ADR-017/018/020/025</td></tr>
         <tr><td>Fidelidad por compilador (reverse discovery sobre cada artefacto compilado) + curación humana de código generado por máquina, un veredicto por observación</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED queda literal donde no hay veredicto</td></tr>
         <tr><td>La autoría controlada (EARS+STE) reduce la varianza entre compiladores</td>
-            <td><span class="chip real">REAL</span> (medido, mayormente nulo)</td><td>deconfundido en 4 arquetipos: REDUCED en 1 de 4 (guard −61%), dos nulos, uno WORSE · 1.76–1.81 · ADR-019/021/024</td></tr>
+            <td><span class="chip real">REAL</span> (medido, mayormente nulo)</td><td>deconfundido en 5 arquetipos: REDUCED en 1 (guard −61%), IMPROVED en 1 (scheduler, +1 verde de oráculo), dos nulos, uno WORSE · 1.76–1.83 · ADR-019/021/024/025/026</td></tr>
         <tr><td>«El código es <em>totalmente</em> regenerable desde las specs» (sistemas arbitrarios)</td>
             <td><span class="chip vision">VISIÓN</span></td><td>el bootstrap test corrió (M4/M5): 3 de 4 arquetipos acotados regeneran al mismo sistema, certificado mecánicamente · la regenerabilidad total de sistemas arbitrarios es la frontera abierta</td></tr>
         <tr><td>«Drift = reverse discovery incremental, mismo motor»</td>
@@ -287,25 +287,25 @@
     registradas — son lo único que vale la pena migrar.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      Estado verificado contra kit 1.81.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-024,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.81.0 · los
+      Estado verificado contra kit 1.83.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-026,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.83.0 · los
       estados REAL/VISIÓN siguen la regla
       INV-TRUTH-01 del repo.
     </p>
 
-    <h2>07 · El programa, medido — T0 → 1.81.0</h2>
+    <h2>07 · El programa, medido — T0 → 1.83.0</h2>
     <p>El programa Diamond corrió como ocho releases del kit midiéndose a sí mismo. Cada
     número de abajo sale de un reporte commiteado y regenerable en el repo — ninguno es
     narrado:</p>
     <table>
       <thead><tr><th>Instrumento</th><th>Resultado medido</th><th>Releases</th></tr></thead>
       <tbody>
-        <tr><td>Diamond Bench — 9 arquetipos acotados × 3 compiladores ciegos, cada uno juzgado por un oráculo oculto</td>
-            <td>7 PASS · 2 PARTIAL. El oráculo además cazó un bug de aliasing convergente que dos compiladores independientes compartían — un defecto que ninguna revisión de código de uno solo habría marcado como sospechoso.</td>
-            <td>1.74–1.77</td></tr>
-        <tr><td>Lenguaje controlado, deconfundido — prosa libre vs EARS+STE, misma generación, oráculo compartido, 4 arquetipos</td>
-            <td>REDUCED en 1 de 4: el guard, denso en decisiones, bajó la varianza −61%; el control y la state-machine leyeron nulo; el transformer leyó WORSE — la reescritura afiló una ambigüedad latente («exactly the fields») hacia un compromiso que el oráculo rechaza.</td>
-            <td>1.76–1.81</td></tr>
+        <tr><td>Diamond Bench — 10 arquetipos acotados × 3 compiladores ciegos, cada uno juzgado por un oráculo oculto</td>
+            <td>7 PASS · 3 PARTIAL. El oráculo además cazó un bug de aliasing convergente que dos compiladores independientes compartían — un defecto que ninguna revisión de código de uno solo habría marcado como sospechoso.</td>
+            <td>1.74–1.83</td></tr>
+        <tr><td>Lenguaje controlado, deconfundido — prosa libre vs EARS+STE, misma generación, oráculo compartido, 5 arquetipos</td>
+            <td>REDUCED en 1, IMPROVED en 1: el guard, denso en decisiones, bajó la varianza −61%; el control y la state-machine leyeron nulo; el transformer leyó WORSE — la reescritura afiló una ambigüedad latente («exactly the fields») hacia un compromiso que el oráculo rechaza; el segundo arquetipo denso en decisiones (scheduler) ganó un verde de oráculo y subió el pass-rate medio mientras la varianza subía — dos compiladores habían convergido en el mismo error en prosa libre.</td>
+            <td>1.76–1.83</td></tr>
         <tr><td>Fidelidad por compilador — el extractor estático de M1 aplicado a cada artefacto compilado</td>
             <td>Compiladores casi idénticos en conducta exponen superficies visiblemente distintas: 19–21/23 sobre el mismo oráculo a través de 5, 4 y 8 funciones públicas.</td>
             <td>1.79</td></tr>

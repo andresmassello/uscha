@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "471b8ea865169e3d483b62cdb8280fb28d79bb18cd2d4cb204cd14a38a0fc0b7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "a899c8e388c5af7f2abbaf8ba9f990fb7ebb6f9669d610b91deba3fe9ca8ba48"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "job-shape-validation",
+      "decision": "a JSON object with any key outside {id,priority,arrival,duration,deadline}, or missing one of the four required keys, counts as 'an element that is not a job' and triggers ERROR",
+      "rationale": "the definitions section says a job has 'exactly' those fields; an object violating that shape does not meet the definition of a job"
+    },
+    {
+      "ir_region": "deadline-vs-completion-same-tick",
+      "decision": "within one tick, before the normal deadline sweep, any ready job whose deadline equals the tick and whose remaining duration is >1 (cannot possibly finish this tick) is removed as missed unconditionally; among the rest, the tick's selection winner is computed first, and any OTHER ready job whose deadline equals the tick and remaining <=1 (would have finished only if it ran) is then also marked missed, while the winner itself is exempted and left to complete normally in step 4",
+      "rationale": "the spec states step 2 (deadline check) runs before step 4 (execution) within a tick, yet also states a job completing at exactly its deadline tick must not be missed; the only way to satisfy both is to resolve deadline misses relative to that tick's actual selection outcome rather than the job's pre-decrement remaining alone"
+    },
+    {
+      "ir_region": "missed-event-ordering-within-tick",
+      "decision": "all missed ids computed in one tick (both the unconditional and the selection-dependent group) are merged into a single list and emitted in ascending id order together, before the preempt/start/resume/idle event of that tick",
+      "rationale": "the spec requires ascending-id ordering for 'the missed events of one tick' as one group, and requires the tick's step order (arrivals, missed, selection, execution) to hold for the emitted events regardless of the two-phase internal computation used to decide who is missed"
+    },
+    {
+      "ir_region": "prev-running-id-after-idle-or-completion",
+      "decision": "the previous-running-job tracker is reset to null whenever no job is selected in a tick (idle), and is set to the selected job's id whenever a job runs, even if that same job completes or was newly-missed-exempt in that same tick",
+      "rationale": "this keeps the preempt check ('previous running job is still ready') correct automatically: a job that completed or was removed for a missed deadline is no longer in the ready set on the next tick, so no spurious preempt event is emitted for it"
+    },
+    {
+      "ir_region": "malformed-input-scope",
+      "decision": "malformed input is detected purely by structural/type/uniqueness checks before any simulation runs; any unexpected exception during simulation itself (defensive-only, not expected to trigger on valid input) also falls back to printing ERROR rather than a partial result",
+      "rationale": "the spec requires ERROR for the whole input on malformed input and forbids partial results; wrapping simulation in a fallback preserves the 'no partial result' guarantee even against an unanticipated edge case in the algorithm"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-15T00:00:00+00:00",
+      "finished": "2026-08-15T00:00:00+00:00"
+    },
+    "constraint_handling": "controlled-language arm (EARS+STE)"
+  },
+  "_integrity": "2bb17039e1a9cbd7c729baf24f2e35e7ef3fe773adfa0471dc5ebdd8f3634039"
+}

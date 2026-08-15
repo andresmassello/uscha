@@ -5976,7 +5976,7 @@ def cmd_lang_compare(args):
     """Compare a FREE-prose arm and a CONTROLLED (EARS+STE) arm of the same canonical package
     (ADR-019). The two arms MUST share one withheld oracle -- a differing oracle is a mechanical
     refusal, because the whole comparison rests on the arms targeting the same behaviour. Emits
-    the per-arm metrics, the delta, and a COMPUTED verdict (REDUCED / NO EFFECT / WORSE); a null
+    the per-arm metrics, the delta, and a COMPUTED verdict (REDUCED / IMPROVED / MIXED / NO EFFECT / WORSE); a null
     is a first-class result. Consults no model."""
     hf, hc = _oracle_hash(args.free), _oracle_hash(args.controlled)
     if hf is None or hc is None:
@@ -5999,15 +5999,22 @@ def cmd_lang_compare(args):
     d_green = ctrl["greens"] - free["greens"]
     pf, pc = free["mean_passrate"], ctrl["mean_passrate"]
     d_pass = (pc - pf) if (pf is not None and pc is not None) else None
-    # Verdict is BEHAVIOUR-FIRST (the M4 lesson: lower variance toward a WORSE answer is not a
-    # win). A regression is a lost all-green OR a mean pass-rate drop beyond the pass-rate margin.
+    # Verdict is BEHAVIOUR-FIRST in BOTH directions. The M4 lesson: lower variance toward a
+    # WORSE answer is not a win (MIXED). Its mirror, the ADR-025 scheduler lesson: higher
+    # variance toward a BETTER answer is not a loss (IMPROVED) -- two compilers converging on
+    # the SAME bug reads as low variance, and a rewrite that separates them raises variance
+    # while fixing behaviour. A regression is a lost all-green OR a mean pass-rate drop beyond
+    # the pass-rate margin; an improvement is the exact mirror. ADR-019 + ADR-026.
     variance_reduced = d_var is not None and d_var <= -_LANG_MARGIN
     variance_worse = d_var is not None and d_var >= _LANG_MARGIN
     regressed = (d_green < 0) or (d_pass is not None and d_pass <= -_LANG_PR_MARGIN)
+    improved = (d_green > 0) or (d_pass is not None and d_pass >= _LANG_PR_MARGIN)
     if variance_reduced and regressed:
         verdict = "MIXED"                           # variance down but behaviour regressed
     elif variance_reduced:
-        verdict = "REDUCED"                         # variance down, behaviour held
+        verdict = "REDUCED"                         # variance down, behaviour held or better
+    elif improved and not regressed:
+        verdict = "IMPROVED"                        # behaviour up, variance not down
     elif variance_worse or regressed:
         verdict = "WORSE"
     else:
@@ -6016,6 +6023,7 @@ def cmd_lang_compare(args):
              "unresolved_intent_count": round(d_ui, 3), "oracle_green": d_green,
              "mean_passrate": round(d_pass, 4) if d_pass is not None else None}
     report = {"free": free, "controlled": ctrl, "delta": delta, "verdict": verdict,
+              "regressed": regressed, "improved": improved,
               "margin": _LANG_MARGIN, "passrate_margin": _LANG_PR_MARGIN, "oracle_shared": True}
     if args.out:
         with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
@@ -6078,7 +6086,15 @@ def _render_lang_md(r):
                             "the delta here. A null result, reported as a null — not a failure.",
                "WORSE": "Controlled authoring increased variance, or regressed behaviour (lost an "
                         "all-green or dropped mean pass-rate) beyond the margins — reported "
-                        "honestly."}[r["verdict"]],
+                        "honestly.",
+               "IMPROVED": "Controlled authoring IMPROVED behaviour (gained an all-green or raised "
+                           "mean pass-rate beyond the %.2f margin) while inter-compiler variance "
+                           "did not fall. Behaviour won; variance did not — check whether the free "
+                           "arm's low variance was convergence on a shared reading (right or "
+                           "wrong): two compilers resolving the same ambiguity the same way read "
+                           "as agreement, and a rewrite that separates them raises variance "
+                           "while moving behaviour."
+                           % r.get("passrate_margin", 0.02)}[r["verdict"]],
               "", "*The oracle is byte-identical across both arms, so behaviour is held fixed; "
               "the only variable is the authoring discipline. The judgement of \"same semantic "
               "content\" between the two canonical packages is human — a stated limitation.*", ""]
