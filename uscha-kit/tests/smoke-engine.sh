@@ -6312,8 +6312,11 @@ try:
 except ValueError:
     rep_sh = {}
 lang_ok = (rep_sh.get("verdict") == "IMPROVED"
-          and rep_sh.get("free", {}).get("variance_score") == 0.0195
-          and rep_sh.get("controlled", {}).get("variance_score") == 0.1879)
+          # variance_score is interpreter-sensitive (ADR-027: ast.walk counts differ on 3.8 vs
+          # 3.13 -- 0.0195 here reads 0.023 on 3.8); pin the VERDICT and the direction, never
+          # the decimal -- the same lesson the r2 ratios taught
+          and 0.015 <= (rep_sh.get("free", {}).get("variance_score") or 0) <= 0.03
+          and 0.17 <= (rep_sh.get("controlled", {}).get("variance_score") or 0) <= 0.20)
 guard_impl = os.path.join(BENCH, "guard", "c-opus", "source", "guard.py")
 gm = q._impl_metrics(guard_impl)
 guard_ok = isinstance(gm.get("ast_nodes"), int) and "error" not in gm
@@ -6486,8 +6489,11 @@ try:
 except ValueError:
     rep_sh = {}
 lang_ok = (rep_sh.get("verdict") == "IMPROVED"
-          and rep_sh.get("free", {}).get("variance_score") == 0.0195
-          and rep_sh.get("controlled", {}).get("variance_score") == 0.1879)
+          # variance_score is interpreter-sensitive (ADR-027: ast.walk counts differ on 3.8 vs
+          # 3.13 -- 0.0195 here reads 0.023 on 3.8); pin the VERDICT and the direction, never
+          # the decimal -- the same lesson the r2 ratios taught
+          and 0.015 <= (rep_sh.get("free", {}).get("variance_score") or 0) <= 0.03
+          and 0.17 <= (rep_sh.get("controlled", {}).get("variance_score") or 0) <= 0.20)
 r2d0 = bench_r2_json(BENCH)
 agg = r2d0.get("aggregate", {})
 r2_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 5
@@ -6645,8 +6651,11 @@ try:
 except ValueError:
     rep_sh = {}
 lang_ok = (rep_sh.get("verdict") == "IMPROVED"
-          and rep_sh.get("free", {}).get("variance_score") == 0.0195
-          and rep_sh.get("controlled", {}).get("variance_score") == 0.1879)
+          # variance_score is interpreter-sensitive (ADR-027: ast.walk counts differ on 3.8 vs
+          # 3.13 -- 0.0195 here reads 0.023 on 3.8); pin the VERDICT and the direction, never
+          # the decimal -- the same lesson the r2 ratios taught
+          and 0.015 <= (rep_sh.get("free", {}).get("variance_score") or 0) <= 0.03
+          and 0.17 <= (rep_sh.get("controlled", {}).get("variance_score") or 0) <= 0.20)
 
 WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "parser": "PASS",
                 "protocol-adapter": "PASS", "rest-handler": "PARTIAL",

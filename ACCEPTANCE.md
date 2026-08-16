@@ -437,7 +437,7 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   transformer PASS, ui-render PASS, worker PASS}`; `bench-r2 --json` aggregate stays `verdict`
   NOISY, signal 1, noisy 5, noise 4, with 10 measured and both `rate-limiter` and `ledger-lite`
   `has_r2` false; `lang-compare` on scheduler-free vs scheduler-controlled stays `IMPROVED` with
-  variance scores 0.0195/0.1879 (the refactor left Python metrics identical); `_impl_metrics` on
+  variance scores in their interpreter-stable ranges (free 0.015–0.03, controlled 0.17–0.20; the exact decimals move between 3.8 and 3.13 per ADR-027) (the refactor left Python metrics identical); `_impl_metrics` on
   a Python impl returns an `int` `ast_nodes`.
 - [x] AC-JS-02 - the JS entry plus discrimination and the node-absent path: `rate-limiter`
   verdict `PASS`, each compilation oracle passed 25/25 with `compile_valid` true;
@@ -461,7 +461,7 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   `{crud-store PASS, guard PARTIAL, parser PASS, protocol-adapter PASS, rate-limiter PASS,
   rest-handler PARTIAL, scheduler PARTIAL, state-machine PASS, transformer PASS, ui-render PASS,
   worker PASS}`; `lang-compare` on scheduler-free vs scheduler-controlled stays `IMPROVED` with
-  variance scores 0.0195/0.1879; `bench-r2 --json` aggregate stays `verdict` NOISY, signal 1,
+  variance scores in their interpreter-stable ranges (free 0.015–0.03, controlled 0.17–0.20; the exact decimals move between 3.8 and 3.13 per ADR-027); `bench-r2 --json` aggregate stays `verdict` NOISY, signal 1,
   noisy 5, noise 4, with 10 measured; a single-unit compilation (`guard`, `c-opus`) still reports
   `entry_unit` `source/guard.py` and `units` 1.
 - [x] AC-MU-02 - `ledger-lite`'s `IR.json` carries at least one `DECISION` node and at least 2
@@ -485,7 +485,7 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   "counts ONLY static + behaviour" footing, and that the manifest footing is "never counted as
   recovered"; running it regenerates no `IR*.json` or `*IR'*` file anywhere under the bench
   directory (a before/after file-tree snapshot is equal); `lang-compare` on the scheduler pair
-  still reads `IMPROVED` with variance scores 0.0195/0.1879, and `bench --json` still reports 12
+  still reads `IMPROVED` with variance scores in their interpreter-stable ranges (free 0.015–0.03, controlled 0.17–0.20; the exact decimals move between 3.8 and 3.13 per ADR-027), and `bench --json` still reports 12
   entries with the same verdict pins `{crud-store PASS, guard PARTIAL, ledger-lite PASS, parser
   PASS, protocol-adapter PASS, rate-limiter PASS, rest-handler PARTIAL, scheduler PARTIAL,
   state-machine PASS, transformer PASS, ui-render PASS, worker PASS}` - this instrument changes
