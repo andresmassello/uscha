@@ -5786,6 +5786,225 @@ def cmd_bench(args):
     sys.exit(0)
 
 
+_R2_DIR = "r2"
+_R2_SIGNAL = 0.5          # intra/inter below this: inter-compiler variance is real signal
+_R2_NOISE = 1.0           # intra/inter at/above this: same-model reruns differ as much as models
+
+
+def _r2_class(ratio):
+    if ratio is None:
+        return None
+    if ratio < _R2_SIGNAL:
+        return "SIGNAL"
+    if ratio < _R2_NOISE:
+        return "NOISY"
+    return "NOISE"
+
+
+def _r2_entry(entry_dir, name):
+    """Intra-model variance for ONE bench entry (ADR-027): for each model with a run-1 (top-level
+    c-<model>) AND a run-2 (r2/c-<model>), the structural distance between the two runs via the
+    SAME _struct_distance the bench uses between compilers, each run's oracle pass-rate, and
+    whether the two runs agree on every oracle case. Entries without r2/ report absent, never 0."""
+    ir_graph, ir_errors = _load_ir_at(os.path.join(entry_dir, IR_FILE))
+    try:
+        with open(os.path.join(entry_dir, "oracle", "ORACLE.json"), encoding="utf-8-sig") as fh:
+            cases = (json.load(fh) or {}).get("cases") or []
+    except (OSError, ValueError):
+        cases = []
+    rec = {"archetype": name, "has_r2": False, "models": [], "intra_mean": None,
+           "inter": None, "intra_over_inter": None, "class": None, "reason": None}
+    r2 = os.path.join(entry_dir, _R2_DIR)
+    if not os.path.isdir(r2):
+        rec["reason"] = "no r2/ directory -- intra-model variance not measured"
+        return rec
+    rec["has_r2"] = True
+    if ir_graph is None or ir_errors or not cases:
+        rec["reason"] = "entry incomplete (missing/invalid IR or oracle)"
+        return rec
+
+    def load_run(cd):
+        cj = os.path.join(cd, "COMPILATION.json")
+        if not os.path.isfile(cj):
+            return None
+        errors, _adv = _validate_compilation(cj, ir_graph)
+        try:
+            with open(cj, encoding="utf-8-sig") as fh:
+                c = json.load(fh)
+            unit = (c.get("source") or [{}])[0].get("unit")
+            model = (c.get("compilation_report") or {}).get("model")
+        except (OSError, ValueError, AttributeError, IndexError):
+            return None
+        impl = os.path.join(cd, unit.replace("/", os.sep)) if unit else None
+        if not impl or not os.path.isfile(impl):
+            return None
+        ores = _bench_oracle_all(impl, cases)
+        m = _impl_metrics(impl)
+        return {"model": model, "compile_valid": not errors, "oracle": ores,
+                "metrics": m if "error" not in m else None,
+                "case_vector": tuple(sorted(ores.get("failing") or []))}
+
+    def rate(o):
+        return round(o["passed"] / o["total"], 3) if o["total"] else None
+
+    intra = []
+    run1_metrics = []
+    for d in sorted(os.listdir(entry_dir)):
+        if not d.startswith("c-") or not os.path.isdir(os.path.join(entry_dir, d)):
+            continue
+        r1 = load_run(os.path.join(entry_dir, d))
+        if r1 is None:
+            continue
+        if r1["metrics"]:
+            run1_metrics.append(r1["metrics"])
+        r2run = load_run(os.path.join(r2, d))
+        if r2run is None:
+            rec["models"].append({"dir": d, "model": r1["model"], "r2": "absent"})
+            continue
+        dist = (_struct_distance(r1["metrics"], r2run["metrics"])
+                if r1["metrics"] and r2run["metrics"] else None)
+        stable = r1["case_vector"] == r2run["case_vector"]
+        rec["models"].append({"dir": d, "model": r1["model"],
+                              "intra_distance": round(dist, 4) if dist is not None else None,
+                              "run1_passrate": rate(r1["oracle"]),
+                              "run2_passrate": rate(r2run["oracle"]),
+                              "run2_compile_valid": r2run["compile_valid"],
+                              "behaviour_stable": stable})
+        if dist is not None:
+            intra.append(dist)
+    if intra:
+        rec["intra_mean"] = round(sum(intra) / len(intra), 4)
+    inter = []
+    for i in range(len(run1_metrics)):
+        for j in range(i + 1, len(run1_metrics)):
+            inter.append(_struct_distance(run1_metrics[i], run1_metrics[j]))
+    if inter:
+        rec["inter"] = round(sum(inter) / len(inter), 4)
+    if rec["intra_mean"] is not None and rec["inter"]:
+        # 2 dp on purpose: the ratio moves by up to ~0.26 between interpreters (ast.walk
+        # counts nodes differently on 3.8 vs 3.13 -- the 1.84.0 review measured it); more
+        # decimals would print precision the measurement does not have (ADR-027).
+        rec["intra_over_inter"] = round(rec["intra_mean"] / rec["inter"], 2)
+        rec["class"] = _r2_class(rec["intra_over_inter"])
+    elif rec["intra_mean"] is not None and rec["inter"] == 0.0:
+        rec["reason"] = "inter-compiler distance is 0 (converged run-1) -- ratio undefined"
+    elif rec["intra_mean"] is None:
+        # r2/ exists but no model pair yielded a computable distance (unparseable source,
+        # missing COMPILATION.json in every r2 model): absent, named -- never a silent None
+        rec["reason"] = ("r2/ present but no model pair measurable (no parseable run-1+run-2 "
+                         "source for any model) -- intra-model variance not measured")
+    return rec
+
+
+_R2_VERDICT_TEXT = {
+    "SIGNAL": "Across the measured entries, same-model reruns differ far less than different "
+              "models do: the inter-compiler variance the program reports is signal, not sampling "
+              "noise -- for these archetypes, at n=2 per model.",
+    "NOISY": "Same-model reruns differ by a sizeable fraction of the inter-compiler distance: "
+             "inter-compiler variance carries information, but a delta smaller than the noise "
+             "floor should not be read as an effect.",
+    "NOISE": "Same-model reruns differ as much as different models do: the inter-compiler "
+             "variance the program reports is dominated by sampling noise for these archetypes -- "
+             "variance-based claims must be re-read.",
+    "UNMEASURED": "No entry carries a second run; the noise floor is absent, not zero.",
+}
+
+
+def _render_r2_md(recs, agg):
+    lines = ["<!-- GENERATED by qa_ledger.py bench-r2 (ADR-027) -- measured run; do not hand-edit. -->",
+             "", "# DIAMOND-BENCH-R2 -- intra-model variance, the noise floor under the bench", "",
+             "For every archetype with a second blind run (`r2/`) of the SAME model on the SAME "
+             "canonical package: the structural distance between run 1 and run 2 (the same "
+             "function the bench uses BETWEEN compilers), each run's oracle pass-rate, and "
+             "whether both runs fail the same oracle cases. `intra/inter` below 0.5 reads SIGNAL "
+             "(inter-compiler variance is at least twice the noise floor), 0.5-1.0 NOISY, at or "
+             "above 1.0 NOISE (same-model reruns differ as much as different models). Advisory: "
+             "no bench verdict changes; this qualifies every variance claim the program makes.", "",
+             "| Archetype | intra (mean) | inter | intra/inter | class | per model (run1 -> run2 pass-rate, stable) |",
+             "|-----------|--------------|-------|-------------|-------|--------------------------------------------|"]
+    for r in recs:
+        if not r["has_r2"]:
+            lines.append("| %s | -- | -- | -- | (no r2) | %s |" % (r["archetype"], r["reason"] or ""))
+            continue
+        pm = "; ".join(("%s %s->%s %s" % (m["dir"], m.get("run1_passrate"), m.get("run2_passrate"),
+                                         "stable" if m.get("behaviour_stable") else "DIFFERS"))
+                       if m.get("r2") != "absent" else ("%s (r2 absent)" % m["dir"])
+                       for m in r["models"])
+        lines.append("| %s | %s | %s | %s | %s | %s |" % (
+            r["archetype"],
+            "%.4f" % r["intra_mean"] if r["intra_mean"] is not None else "--",
+            "%.4f" % r["inter"] if r["inter"] is not None else "--",
+            "%.2f" % r["intra_over_inter"] if r["intra_over_inter"] is not None else "--",
+            r["class"] or (r["reason"] or "--"), pm))
+    lines += ["", "**Aggregate:** %d entries measured -- SIGNAL %d · NOISY %d · NOISE %d · mean "
+              "intra/inter %s · behaviour-stable reruns %d/%d." % (
+                  agg["measured"], agg["signal"], agg["noisy"], agg["noise"],
+                  "%.3f" % agg["mean_ratio"] if agg["mean_ratio"] is not None else "n/a",
+                  agg["stable"], agg["reruns"]),
+              "", "## Verdict: %s" % agg["verdict"], "", _R2_VERDICT_TEXT[agg["verdict"]],
+              "", "*Structural distance = mean of normalized LOC delta, AST-node delta and "
+              "import-set Jaccard distance -- the one function shared by lang-compare, bench "
+              "and bench-r2. n=2 per model is the minimum that yields a floor at all; it is a "
+              "floor, not a distribution. The ratio is printed to 2 decimals on purpose: the "
+              "AST-node count differs between Python versions (ast.walk on 3.8 vs 3.13), so a "
+              "ratio can move by up to ~0.26 across interpreters without any code or model "
+              "changing -- classes are stable across 3.8/3.13 on this bench, ratios are not "
+              "point-precise, and an entry within ~0.25 of a threshold should be read as "
+              "borderline.*", ""]
+    return "\n".join(lines)
+
+
+def cmd_bench_r2(args):
+    if not os.path.isdir(args.dir):
+        print("[qa_ledger] bench-r2: no directory %s" % args.dir, file=sys.stderr)
+        sys.exit(2)
+    entries = sorted(d for d in os.listdir(args.dir)
+                     if os.path.isfile(os.path.join(args.dir, d, IR_FILE)))
+    if not entries:
+        print("[qa_ledger] bench-r2: no entries under %s" % args.dir, file=sys.stderr)
+        sys.exit(2)
+    recs = [_r2_entry(os.path.join(args.dir, e), e) for e in entries]
+    measured = [r for r in recs if r["class"] is not None]
+    ratios = [r["intra_over_inter"] for r in measured]
+    reruns = [m for r in recs if r["has_r2"] for m in r["models"] if m.get("r2") != "absent"]
+    agg = {"entries": len(recs), "with_r2": sum(1 for r in recs if r["has_r2"]),
+           "measured": len(measured),
+           "signal": sum(1 for r in measured if r["class"] == "SIGNAL"),
+           "noisy": sum(1 for r in measured if r["class"] == "NOISY"),
+           "noise": sum(1 for r in measured if r["class"] == "NOISE"),
+           "mean_ratio": round(sum(ratios) / len(ratios), 3) if ratios else None,
+           "reruns": len(reruns),
+           "stable": sum(1 for m in reruns if m.get("behaviour_stable"))}
+    if not measured:
+        agg["verdict"] = "UNMEASURED"
+    else:
+        counts = [(agg["signal"], "SIGNAL"), (agg["noisy"], "NOISY"), (agg["noise"], "NOISE")]
+        top = max(c for c, _ in counts)
+        # ties resolve toward the more cautious reading (NOISE > NOISY > SIGNAL)
+        agg["verdict"] = [n for c, n in reversed(counts) if c == top][0]
+    md = _render_r2_md(recs, agg)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(md)
+    if args.json:
+        print(json.dumps({"aggregate": agg, "raw": recs}, indent=2, ensure_ascii=False))
+    else:
+        print("BENCH-R2: %d entries, %d with r2, %d measured -- SIGNAL %d / NOISY %d / NOISE %d"
+              % (agg["entries"], agg["with_r2"], agg["measured"], agg["signal"], agg["noisy"],
+                 agg["noise"]))
+        for r in recs:
+            if r["class"]:
+                print("  %-17s intra %.4f  inter %.4f  ratio %.2f  %s"
+                      % (r["archetype"], r["intra_mean"], r["inter"], r["intra_over_inter"],
+                         r["class"]))
+            elif r["has_r2"]:
+                print("  %-17s %s" % (r["archetype"], r["reason"]))
+        print("VERDICT: %s%s" % (agg["verdict"], ("  -> %s" % args.out) if args.out else ""))
+        print("  (ratios are not point-precise: AST-node counts differ across Python versions; "
+              "classes stable, ratios +/-0.25 -- read borderline entries as borderline)")
+    sys.exit(0)
+
+
 def _bench_curable_obs(bench_dir, entry, cdir):
     """The curable set for one compilation: the SAME observations the M1 static extractor
     produces for the descriptor's static_surface, re-extracted at call time -- a verdict
@@ -5954,14 +6173,21 @@ def _lang_arm_metrics(arm_dir):
     dists = []
     for i in range(len(good)):
         for j in range(i + 1, len(good)):
-            a, b = good[i], good[j]
-            ia, ib = set(a["imports"]), set(b["imports"])
-            jac = (len(ia & ib) / len(ia | ib)) if (ia or ib) else 1.0
-            dloc = abs(a["loc"] - b["loc"]) / max(a["loc"], b["loc"], 1)
-            dast = abs(a["ast_nodes"] - b["ast_nodes"]) / max(a["ast_nodes"], b["ast_nodes"], 1)
-            dists.append((dloc + dast + (1.0 - jac)) / 3.0)
+            dists.append(_struct_distance(good[i], good[j]))
     rec["variance_score"] = round(sum(dists) / len(dists), 4) if dists else None
     return rec, []
+
+
+def _struct_distance(a, b):
+    """The ONE structural distance the program uses between two implementations -- mean of
+    normalized LOC delta, AST-node delta and import-set Jaccard distance (0 = identical). Shared
+    by the inter-compiler variance (lang-compare, bench) and the intra-model variance (bench-r2,
+    ADR-027) so their ratio is commensurable: same function, both sides."""
+    ia, ib = set(a["imports"]), set(b["imports"])
+    jac = (len(ia & ib) / len(ia | ib)) if (ia or ib) else 1.0
+    dloc = abs(a["loc"] - b["loc"]) / max(a["loc"], b["loc"], 1)
+    dast = abs(a["ast_nodes"] - b["ast_nodes"]) / max(a["ast_nodes"], b["ast_nodes"], 1)
+    return (dloc + dast + (1.0 - jac)) / 3.0
 
 
 def _oracle_hash(arm_dir):
@@ -6093,7 +6319,9 @@ def _render_lang_md(r):
                            "arm's low variance was convergence on a shared reading (right or "
                            "wrong): two compilers resolving the same ambiguity the same way read "
                            "as agreement, and a rewrite that separates them raises variance "
-                           "while moving behaviour."
+                           "while moving behaviour. Read any variance number here against the "
+                           "entry's intra-model noise floor (bench-r2, ADR-027): an inter-compiler "
+                           "distance below that floor is not evidence of convergence."
                            % r.get("passrate_margin", 0.02)}[r["verdict"]],
               "", "*The oracle is byte-identical across both arms, so behaviour is held fixed; "
               "the only variable is the authoring discipline. The judgement of \"same semantic "
@@ -10245,6 +10473,17 @@ def build_parser():
                      help="print the curable observations with their current verdicts "
                           "(read-only), including stale verdicts whose obs no longer exists")
     pbc.set_defaults(func=cmd_bench_curate)
+
+    pbr = sub.add_parser(
+        "bench-r2",
+        help="intra-model variance (ADR-027): for every bench entry with an r2/ second run of "
+             "the same models, the run1-vs-run2 structural distance via the SAME function the "
+             "bench uses between compilers, oracle stability, and a per-entry SIGNAL/NOISY/NOISE "
+             "class; the noise floor under every variance claim; advisory, deterministic, no LLM")
+    pbr.add_argument("--dir", required=True, help="the bench directory")
+    pbr.add_argument("--out", default=None, help="write DIAMOND-BENCH-R2.md here")
+    pbr.add_argument("--json", action="store_true")
+    pbr.set_defaults(func=cmd_bench_r2)
 
     plc = sub.add_parser(
         "lang-compare",

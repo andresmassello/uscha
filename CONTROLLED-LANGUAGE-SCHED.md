@@ -13,6 +13,6 @@ The same canonical package compiled by the same models from **free prose** (arm 
 
 ## Verdict: IMPROVED
 
-Controlled authoring IMPROVED behaviour (gained an all-green or raised mean pass-rate beyond the 0.02 margin) while inter-compiler variance did not fall. Behaviour won; variance did not — check whether the free arm's low variance was convergence on a shared reading (right or wrong): two compilers resolving the same ambiguity the same way read as agreement, and a rewrite that separates them raises variance while moving behaviour.
+Controlled authoring IMPROVED behaviour (gained an all-green or raised mean pass-rate beyond the 0.02 margin) while inter-compiler variance did not fall. Behaviour won; variance did not — check whether the free arm's low variance was convergence on a shared reading (right or wrong): two compilers resolving the same ambiguity the same way read as agreement, and a rewrite that separates them raises variance while moving behaviour. Read any variance number here against the entry's intra-model noise floor (bench-r2, ADR-027): an inter-compiler distance below that floor is not evidence of convergence.
 
 *The oracle is byte-identical across both arms, so behaviour is held fixed; the only variable is the authoring discipline. The judgement of "same semantic content" between the two canonical packages is human — a stated limitation.*

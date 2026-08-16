@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "c5e1e59daab756ce140af6cac6d6468f9b5d686258a6c51bcc47bc5afee1e883"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "read-only tool family membership (AC-GH-04)",
+      "decision": "Fixed allowlist of read-only tool names — read, glob, grep, ls, list, search, websearch, webfetch, fetch, notebookread, todoread — matched case-insensitively after trimming; everything else falls into the unknown-tool branch.",
+      "rationale": "The SPEC names the family by kind (file reader, text search, directory listing, notebook reader, web fetch/search) but never enumerates the host's actual tool names. An allowlist is the only fail-closed reading: an unrecognised name is treated as potentially write-capable, so a missing synonym costs a false BLOCK (safe) rather than a false ALLOW (the one failure the subsystem must never have)."
+    },
+    {
+      "ir_region": "shell read-only command vocabulary and subcommand handling (AC-GH-05)",
+      "decision": "Default-deny allowlist of reader programs (cat/head/grep/rg/ls/find/diff/jq/awk/sort/…); `git` is admitted only for a read-only subcommand set (show, log, diff, status, cat-file, ls-files, blame, …); `python`/`node` are admitted as programs but are still blocked by the redirection, write-flag and command-substitution checks whenever they touch a golden.",
+      "rationale": "The SPEC demands `treat the command as a WRITE unless every part of it is a recognised read-only operation` without giving a vocabulary. Multi-purpose programs like `git` read under one subcommand and write under another, so program-level allowlisting alone would leak `git checkout -- x.approved`; requiring a subcommand match keeps the default-deny posture intact at one more level."
+    },
+    {
+      "ir_region": "scope of the marker test for the shell tool — `command` string vs. the whole `tool_input`",
+      "decision": "A shell call is allowed early only when the marker appears neither in the `command` string nor anywhere else in `tool_input`; if the marker is present anywhere, the command must be proven read-only to pass. When `command` is present but is not a string, the call blocks if the marker appears anywhere in `tool_input`.",
+      "rationale": "The SPEC scopes the shell rule to the `command` string, but a host may also carry paths in sibling fields (cwd, description, files). Extending the trigger to the full argument object, while keeping the read-only proof on the command text, closes that gap without weakening AC-GH-03 (a genuine `cat x.approved` still passes)."
+    },
+    {
+      "ir_region": "redirection, substitution and pipeline detection in the absence of a real shell parser",
+      "decision": "A regex flags `&gt;`/`&gt;&gt;`/`n&gt;`/`&gt;|`/`&lt;&gt;` redirections and a literal check flags `$(`, backticks and `&gt;(`; the line is then tokenized with `shlex(punctuation_chars=True)` and split on `| || &amp;&amp; ; &amp; |&amp;`, and EVERY resulting stage must independently prove read-only. Any `shlex` ValueError (unbalanced quotes) blocks.",
+      "rationale": "Implementing a POSIX shell grammar is out of proportion for a text/structure guardrail, but `starts with a reader` is explicitly insufficient per AC-GH-05. Per-stage proof makes `cat g.approved | tee other.approved` block on the tee stage, and treating unparsable input as a block preserves fail-closed rather than degrading to a substring heuristic."
+    },
+    {
+      "ir_region": "`tool_input` absent, null, or non-object; leading env-assignments and wrapper commands",
+      "decision": "A missing or `null` `tool_input` is normalised to `{}` and allowed for a non-golden call, while a present-but-non-object `tool_input` blocks as an unexpected shape (AC-GH-07). Inside a stage, leading `VAR=value` assignments and wrappers (`env`, `command`, `sudo`, `nohup`, `time`, `exec`) are stripped before the program is identified, and a stage that is empty after stripping is treated as NOT read-only.",
+      "rationale": "The SPEC calls `tool_input` an object holding arguments but does not say whether omission is malformed; a tool with no arguments cannot name a golden, so blocking it would be noise, whereas a string or list in that slot is genuinely the wrong shape. Stripping wrappers prevents `env cat x.approved` from being misread as an unknown program (false block) while the empty-stage rule keeps a bare `sudo` from being misread as safe (false allow)."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "4b4efd5f76965fe0f3c732f36195a5dd1de3a3baced5b6fd2c61f49b90befd37"
+}

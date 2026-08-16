@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "7154ddd06b63d0121fa37b38e0f1ea8a1a969e57bb248e6525d306ff5adf8097"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-RH-01",
+        "AC-RH-02",
+        "AC-RH-03",
+        "AC-RH-04",
+        "AC-RH-05",
+        "AC-RH-06",
+        "INV-RH-IDS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "validation ordering for malformed request objects vs. batch execution",
+      "decision": "Validate the shape of every request element (object with string method and string path) BEFORE creating the Store or executing any request, so a malformed array yields exactly ERROR with no partial output",
+      "rationale": "The spec says input that is not a JSON array of request objects prints exactly ERROR, but places that rule alongside 'one bad request does not abort the batch'. Treating a non-conforming ELEMENT as malformed INPUT (whole-batch ERROR) and a semantically wrong request (bad body, unknown path) as a per-request error keeps both rules true; pre-validating avoids emitting a half-batch plus ERROR on the same run."
+    },
+    {
+      "ir_region": "<id> segment lexical form",
+      "decision": "Accept only ASCII digit strings with no leading zero, no sign, and no whitespace; everything else (e.g. '01', '+1', ' 1', '1.0', '一') routes to 404 not found",
+      "rationale": "The spec says a segment that is not a positive integer is 404 but does not fix the lexical form. Python's int() and str.isdigit() are both looser than intended (isdigit accepts unicode digits, int accepts signs and surrounding whitespace), so a strict canonical form was chosen to keep the id space one-to-one with its textual representation."
+    },
+    {
+      "ir_region": "trailing slash and empty-segment paths (e.g. '/items/', '//items')",
+      "decision": "Treated as undefined paths → 404 not found, rather than normalized onto /items",
+      "rationale": "The spec defines exactly two path shapes and says an undefined path is 404. Normalizing trailing slashes would be an unrequested transport-layer convenience, and the out-of-scope section explicitly bars transport concerns."
+    },
+    {
+      "ir_region": "body key on GET/DELETE and extra keys on POST/PUT bodies",
+      "decision": "Bodies are ignored entirely on GET and DELETE; extra keys beyond 'name' on POST/PUT are ignored rather than rejected",
+      "rationale": "The 400 rule is stated only for POST/PUT bodies and only for missing/non-object/no-name-string. Rejecting extra keys or non-empty GET bodies would add validation the spec did not request, violating the 'no fields besides id and name' scope in the strict direction rather than the permissive one."
+    },
+    {
+      "ir_region": "DELETE response body shape",
+      "decision": "Emit {\"status\": 204, \"body\": null} — a real JSON null, not an omitted 'body' key",
+      "rationale": "The response contract requires every response to be {\"status\", \"body\"} and the DELETE route is specified as '204 with body null'. Omitting the key would break the uniform response object shape that the contract mandates for all responses."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "64536911e816cb610f2481e1814b87f6a1238534d7fe7b78b4237a8661e9bdd8"
+}

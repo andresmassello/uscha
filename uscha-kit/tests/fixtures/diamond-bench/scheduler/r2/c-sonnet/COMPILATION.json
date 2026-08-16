@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "c83e49b9bb17e3aa8802306516a90471b73a981d9f5c589ba52a3169be4a5c11"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "job object field set",
+      "decision": "treat any key outside {id,priority,arrival,duration,deadline} as malformed input (whole input -> ERROR)",
+      "rationale": "the spec says a job is an object 'with exactly the fields' id/priority/arrival/duration and optionally deadline; 'exactly' reads as a closed field set, not merely 'at least these'"
+    },
+    {
+      "ir_region": "deadline validity range",
+      "decision": "accept any integer deadline, including values less than arrival or negative, with no extra range check",
+      "rationale": "the spec constrains only arrival and duration to be non-negative; it never states a bound on deadline, so a job can legitimately miss on its very own arrival tick if deadline <= arrival"
+    },
+    {
+      "ir_region": "selection tie-break scope ('including the one that was running last tick')",
+      "decision": "treat this clause as descriptive, not as an instruction to force-include an already-resolved job in the ready set — a still-ready previously-running job is already present in the ready set by construction",
+      "rationale": "only completed/missed jobs are ever removed from ready, so the previously-running job is automatically a selection candidate whenever it hasn't finished; no separate re-insertion logic is needed"
+    },
+    {
+      "ir_region": "duration-0 completion mechanics",
+      "decision": "implement completion as remaining <= 0 after decrementing (so remaining starts at 0, decrements to -1, and is treated as complete) rather than special-casing zero-duration jobs before the decrement",
+      "rationale": "keeps one uniform execution rule for all jobs while still satisfying 'a job with duration 0 emits start and complete at the same tick'"
+    },
+    {
+      "ir_region": "idle-tick vs simulation end",
+      "decision": "loop strictly while any job id remains unresolved (not completed, not missed); idle is emitted only when the ready set is empty on such a tick, which by construction always means at least one job has yet to arrive",
+      "rationale": "matches the spec's termination rule ('ends after the last job completes or is missed... no idle once no job is ready and none is left to arrive') without needing a separate lookahead check"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "d68425865bc667e0196887ccf87a5442e38fc30ed73c1d628a29e1a6447c0fb9"
+}

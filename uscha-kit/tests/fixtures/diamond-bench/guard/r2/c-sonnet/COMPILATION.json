@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "f83fbfd1e66a7a7bfd99cd40a4544c2721dc8e7464798bc0ea28e6612d5d91b1"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "read-only tool roster",
+      "decision": "Hard-coded a name set (read, grep, glob, ls/list_dir, webfetch, websearch, notebookread, find, and common variants) matched case-insensitively",
+      "rationale": "Spec says 'the guard recognises this family by name' but names no exhaustive list; picked the common Claude-Code-style tool names since the host's actual tool vocabulary is not given"
+    },
+    {
+      "ir_region": "shell-tool detection for unnamed shells",
+      "decision": "A tool counts as shell/command-type if its name is in a known shell-name set OR its tool_input carries a string 'command' field",
+      "rationale": "Spec's 'e.g. Bash' implies other shell tools exist; keying off a string 'command' field generalizes to shells the guard has never heard of without over-scoping non-shell tools"
+    },
+    {
+      "ir_region": "in-place/output write-flag detection",
+      "decision": "Treated -i/-o/-w/--write/--in-place (and -i<suffix>, --in-place=, --output*) as write flags on any reader command except grep-family tools, where -i/--ignore-case is exempted as case-insensitive matching",
+      "rationale": "Spec calls out 'in-place / output write flag on an otherwise-reading tool' without naming flags; sed/perl/awk's -i genuinely rewrites files while grep's -i does not, so a blanket rule would either miss real writes or falsely block routine case-insensitive greps"
+    },
+    {
+      "ir_region": "unknown/non-reader base command in a shell stage",
+      "decision": "Any pipeline stage whose base command is not in a fixed READERS whitelist is treated as a write and blocks the call outright",
+      "rationale": "Implements the spec's explicit default-deny instruction ('block ... unless every part of it is a recognised read-only operation'); an unrecognized command cannot be proven read-only so it must not be given the benefit of the doubt"
+    },
+    {
+      "ir_region": "shell-type tool call with a non-string or missing command field",
+      "decision": "Falls back to the generic recursive '.approved anywhere in arguments' scan rather than a separate error path",
+      "rationale": "Spec doesn't address this case directly; reusing the generic fail-closed scan keeps behavior conservative and consistent rather than inventing a new rule"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "829a51cb81ed1629c80240a568075c2cb99d064f7b6ebf1d076a33f2414bba82"
+}

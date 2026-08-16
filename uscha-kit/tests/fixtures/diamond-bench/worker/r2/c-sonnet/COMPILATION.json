@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "656d528a8b6ac2932c08a603349498656201b5fb74034f1cc8af59af2d95d5c7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "ab2a4351ee46f584aa743edd241a7f2af91b6c03eb1d6c098fa216d16c0d9bf4"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-WK-01",
+        "AC-WK-02",
+        "AC-WK-03",
+        "AC-WK-04",
+        "AC-WK-05",
+        "AC-WK-06",
+        "INV-WK-DET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "job.priority type",
+      "decision": "reject booleans as priority values even though bool is a Python int subclass",
+      "rationale": "spec says priority is <int>; silently accepting true/false as 1/0 would let malformed-looking input slip through as valid, so this compiler treats bool priority as malformed -> ERROR"
+    },
+    {
+      "ir_region": "needs: null vs absent",
+      "decision": "treat an explicit `needs: null` the same as an absent needs field (no dependencies)",
+      "rationale": "the spec only defines 'needs may be absent = no dependencies' and doesn't address explicit null; treating null as equivalent to absent is the least surprising reading and avoids spuriously rejecting otherwise well-formed jobs"
+    },
+    {
+      "ir_region": "termination / skip-propagation order",
+      "decision": "alternate between running all currently-ready jobs and, only when none are ready, cascading skipped status to jobs blocked by a failed/skipped dependency, repeating to a fixpoint",
+      "rationale": "the spec doesn't spell out the interleaving of execution vs. skip-propagation; this order guarantees every job ends decided (ok/failed/skipped) for any acyclic, validated graph and keeps 'order' exactly the executed jobs in run order"
+    },
+    {
+      "ir_region": "ready-set tie-break implementation",
+      "decision": "select the ready job via max() over the ready list built in original input order, using priority as the sole key",
+      "rationale": "Python's max() keeps the first maximal element on ties when iterating a stably-ordered list, which reproduces 'highest priority, then FIFO by input order' without a separate stable-sort step"
+    },
+    {
+      "ir_region": "output field ordering/formatting",
+      "decision": "emit a plain json.dumps of {\"order\":..., \"status\":...} with default separators/key order, no pretty-printing",
+      "rationale": "spec states output formatting is free and only structure/values are fixed, so no canonicalization beyond valid JSON is attempted"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "f03e3ec02bca34c05d7f82481425986ef0bca73734c9471f1b60228e879c38d8"
+}

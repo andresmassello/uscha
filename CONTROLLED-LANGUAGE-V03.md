@@ -7,13 +7,13 @@ per pair, zero engine change — on two more bench archetypes.
 
 ## The aggregate: 5 deconfounded archetypes — REDUCED in 1, IMPROVED in 1, NO EFFECT in 2, WORSE in 1
 
-| Archetype | Kind | Verdict | Variance delta | Pass-rate delta | Oracle-green | Source |
-|-----------|------|---------|----------------|-----------------|--------------|--------|
-| guard | logic-heavy validator | **REDUCED** | −0.2628 (−61%) | −0.015 (within margin) | 0/3 → 0/3 | CONTROLLED-LANGUAGE-DECONFOUNDED.md (v0.2) |
-| parser | text-heavy, simple (control) | **NO EFFECT** | −0.0477 (within margin) | 0.000 | 3/3 → 3/3 | CONTROLLED-LANGUAGE-CONTROL.md (v0.2) |
-| state-machine | state-heavy, simple | **NO EFFECT** | +0.0231 (within margin) | 0.000 | 3/3 → 3/3 | CONTROLLED-LANGUAGE-SM.md (v0.3) |
-| transformer | data-heavy, simple | **WORSE** | −0.0321 (within margin) | −0.0238 | 3/3 → **2/3** | CONTROLLED-LANGUAGE-TF.md (v0.3) |
-| scheduler | decision-dense (preemption, deadlines, tie-breaks) | **IMPROVED** | +0.1684 (rose) | **+0.0778** | 1/3 → **2/3** | CONTROLLED-LANGUAGE-SCHED.md (ADR-025, 1.83.0) |
+| Archetype | Kind | Verdict | Variance delta | Pass-rate delta | Oracle-green | r2 class (ADR-027) | Source |
+|-----------|------|---------|----------------|-----------------|--------------|---------------------|--------|
+| guard | logic-heavy validator | **REDUCED** | −0.2628 (−61%) | −0.015 (within margin) | 0/3 → 0/3 | NOISY 0.642 | CONTROLLED-LANGUAGE-DECONFOUNDED.md (v0.2) |
+| parser | text-heavy, simple (control) | **NO EFFECT** | −0.0477 (within margin) | 0.000 | 3/3 → 3/3 | NOISE 1.131 | CONTROLLED-LANGUAGE-CONTROL.md (v0.2) |
+| state-machine | state-heavy, simple | **NO EFFECT** | +0.0231 (within margin) | 0.000 | 3/3 → 3/3 | NOISE 1.119 | CONTROLLED-LANGUAGE-SM.md (v0.3) |
+| transformer | data-heavy, simple | **WORSE** | −0.0321 (within margin) | −0.0238 | 3/3 → **2/3** | NOISY 0.776 | CONTROLLED-LANGUAGE-TF.md (v0.3) |
+| scheduler | decision-dense (preemption, deadlines, tie-breaks) | **IMPROVED** | +0.1684 (rose) | **+0.0778** | 1/3 → **2/3** | NOISE 1.785 | CONTROLLED-LANGUAGE-SCHED.md (ADR-025, 1.83.0) |
 
 Every row is a same-generation pair: both arms compiled fresh by the same three models in the
 same session, judged by one byte-identical withheld oracle. The verdicts are computed by
@@ -62,8 +62,41 @@ downward. ADR-026 (same release) adds the symmetric verdict: **higher variance t
 answer is not a loss**. IMPROVED is now a named outcome, and "convergence on a shared reading"
 (right or wrong) a named phenomenon the report warns about.
 
+## The noise floor (ADR-027, 1.84.0)
+
+`bench-r2` measured intra-model structural variance across all 10 Diamond Bench archetypes: for
+every entry with a second blind run of the same model on the same canonical package, the
+structural distance between run 1 and run 2 (the SAME function the bench uses BETWEEN
+compilers). Aggregate verdict: **NOISY** — mean intra/inter 0.984, meaning same-model reruns
+differ structurally about as much as different models do, on average, across this bench. Behaviour
+is far more stable than structure: 26 of 30 reruns fail the exact same withheld-oracle cases as
+their first run.
+
+That changes what the table above is allowed to claim, plainly:
+
+- **(a) The scheduler's "convergence on a shared reading" narrative is retracted as a variance
+  claim.** The free arm's inter-compiler distance (0.0195) sits BELOW that entry's own
+  intra-model floor (0.0348) — two blind runs of the SAME model differ from each other more
+  than the two free-arm compilers differed from one another. Low inter-compiler variance here is
+  not evidence of a shared reading; it is inside the noise. What remains is the behavioural fact,
+  which is not a variance claim: two compilers made the same `<` choice, visible verbatim in
+  their own `unresolved_intent`, and the EARS rewrite moved one of them onto the oracle's
+  resolution (oracle-green 1/3 → 2/3).
+- **(b) The guard's REDUCED (−61% inter-compiler variance) keeps signal, but the margin is
+  thinner than the headline number suggested.** Its r2 class is NOISY, not SIGNAL: inter 0.347
+  against an intra-model floor of 0.223, ratio 0.642 — real, but the entry sits closer to the
+  noise floor than a clean −61% headline implies on its own.
+- **(c) The transformer's WORSE and the scheduler's IMPROVED both stand.** Neither rests on a
+  variance number — both are read directly off the withheld oracle (an oracle-green lost, an
+  oracle-green gained), and oracle deltas are not what `bench-r2` qualifies.
+
 ## Honest reading
 
+- **Structural variance alone no longer carries a claim in this program.** Every variance-based
+  statement here now carries its r2 qualifier (SIGNAL/NOISY/NOISE, above), and the controlled-
+  language conclusion is behaviour-first: the dense archetypes show behavioural help (guard
+  thin but real, scheduler clear — an oracle-green gained), the simple archetypes show null or
+  harm. Read the rest of this section with that qualifier already applied.
 - **The slack hypothesis strengthened — with two corrections.** Two of two decision-dense
   archetypes show controlled authoring helping (guard: variance −61%; scheduler: behaviour +1
   green, +7.8 pts pass-rate). Correction one: on the scheduler the help was partial (one of two

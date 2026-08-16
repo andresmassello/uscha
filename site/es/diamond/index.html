@@ -267,7 +267,7 @@
         <tr><td>Fidelidad por compilador (reverse discovery sobre cada artefacto compilado) + curación humana de código generado por máquina, un veredicto por observación</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED queda literal donde no hay veredicto</td></tr>
         <tr><td>La autoría controlada (EARS+STE) reduce la varianza entre compiladores</td>
-            <td><span class="chip real">REAL</span> (medido, mayormente nulo)</td><td>deconfundido en 5 arquetipos: REDUCED en 1 (guard −61%), IMPROVED en 1 (scheduler, +1 verde de oráculo), dos nulos, uno WORSE · 1.76–1.83 · ADR-019/021/024/025/026</td></tr>
+            <td><span class="chip real">REAL</span> (medido, comportamiento-primero: los arquetipos densos ayudaron, los simples dieron nulo/daño; la varianza estructural sola ya no sostiene una afirmación — ADR-027)</td><td>deconfundido en 5 arquetipos: REDUCED en 1 (guard −61%, NOISY 0.642), IMPROVED en 1 (scheduler, +1 verde de oráculo), dos nulos, uno WORSE · 1.76–1.84 · ADR-019/021/024/025/026/027</td></tr>
         <tr><td>«El código es <em>totalmente</em> regenerable desde las specs» (sistemas arbitrarios)</td>
             <td><span class="chip vision">VISIÓN</span></td><td>el bootstrap test corrió (M4/M5): 3 de 4 arquetipos acotados regeneran al mismo sistema, certificado mecánicamente · la regenerabilidad total de sistemas arbitrarios es la frontera abierta</td></tr>
         <tr><td>«Drift = reverse discovery incremental, mismo motor»</td>
@@ -287,13 +287,13 @@
     registradas — son lo único que vale la pena migrar.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      Estado verificado contra kit 1.83.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-026,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.83.0 · los
+      Estado verificado contra kit 1.84.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-027,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.84.0 · los
       estados REAL/VISIÓN siguen la regla
       INV-TRUTH-01 del repo.
     </p>
 
-    <h2>07 · El programa, medido — T0 → 1.83.0</h2>
+    <h2>07 · El programa, medido — T0 → 1.84.0</h2>
     <p>El programa Diamond corrió como ocho releases del kit midiéndose a sí mismo. Cada
     número de abajo sale de un reporte commiteado y regenerable en el repo — ninguno es
     narrado:</p>
@@ -306,6 +306,9 @@
         <tr><td>Lenguaje controlado, deconfundido — prosa libre vs EARS+STE, misma generación, oráculo compartido, 5 arquetipos</td>
             <td>REDUCED en 1, IMPROVED en 1: el guard, denso en decisiones, bajó la varianza −61%; el control y la state-machine leyeron nulo; el transformer leyó WORSE — la reescritura afiló una ambigüedad latente («exactly the fields») hacia un compromiso que el oráculo rechaza; el segundo arquetipo denso en decisiones (scheduler) ganó un verde de oráculo y subió el pass-rate medio mientras la varianza subía — dos compiladores habían convergido en el mismo error en prosa libre.</td>
             <td>1.76–1.83</td></tr>
+        <tr><td>Varianza intra-modelo, el piso de ruido — bench-r2 sobre 10 arquetipos × 3 modelos × 2 corridas</td>
+            <td>NOISY: las re-corridas del mismo modelo difieren estructuralmente casi tanto como modelos distintos (intra/inter medio 0.98), mientras el comportamiento se mantiene estable en 26 de 30 re-corridas. Toda afirmación de varianza del programa lleva ahora un calificador SIGNAL/NOISY/NOISE por arquetipo, y la lectura del lenguaje controlado de arriba es comportamiento-primero.</td>
+            <td>1.84</td></tr>
         <tr><td>Fidelidad por compilador — el extractor estático de M1 aplicado a cada artefacto compilado</td>
             <td>Compiladores casi idénticos en conducta exponen superficies visiblemente distintas: 19–21/23 sobre el mismo oráculo a través de 5, 4 y 8 funciones públicas.</td>
             <td>1.79</td></tr>

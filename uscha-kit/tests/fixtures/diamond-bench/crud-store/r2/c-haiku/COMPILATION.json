@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "286be4a32a1ccc47689057c23e090caed9db8fa152863cc5d6f0e4056ab7afa1"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-CS-01",
+        "AC-CS-02",
+        "AC-CS-03",
+        "AC-CS-04",
+        "AC-CS-05",
+        "AC-CS-06",
+        "INV-CS-STRICT-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "key-type-validation",
+      "decision": "keys accepted as-is from JSON; non-string keys (numbers, bools) stored in dict without coercion",
+      "rationale": "Spec says 'Keys are strings' but doesn't specify enforcement. Python dicts accept any hashable type. Implementation uses JSON values directly. If strict validation is required, non-string keys should return 'bad op'."
+    },
+    {
+      "ir_region": "non-dict-array-elements",
+      "decision": "non-dict array elements treated as 'bad op' per-element; batch continues",
+      "rationale": "Spec says operations are 'operation objects' and failed ops never abort batch. Ambiguous whether a non-dict (e.g., string, number) in the array causes ERROR for entire input or 'bad op' for that position. Implementation chooses per-element handling to honor 'never aborts'."
+    },
+    {
+      "ir_region": "null-value-semantics",
+      "decision": "null permitted as a JSON value; can be stored and retrieved",
+      "rationale": "Spec says 'values are arbitrary JSON' but doesn't explicitly allow null. Implementation stores null values. Unresolved whether null should be rejected, coerced, or permitted."
+    },
+    {
+      "ir_region": "list-key-sorting-mixed-types",
+      "decision": "list returns all keys in their native JSON types; sorted lexicographically (requires comparable types)",
+      "rationale": "Spec says sorted lexicographically but doesn't specify behavior if keys are non-strings. If key types are mixed (number + string), Python's sorted() may error on type comparison depending on Python version. Implementation assumes keys are strings (per spec intent) but will fail gracefully if mixed types exist."
+    },
+    {
+      "ir_region": "extra-operation-fields",
+      "decision": "operation objects with extra fields are ignored; only required fields checked",
+      "rationale": "Spec doesn't mandate strict field validation. Implementation permits and ignores extra fields, focusing on presence/absence of required ones. Unresolved whether this should be strict (extra fields cause 'bad op') or permissive (current)."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "a854c3ba41fa05e74b88ff769f8120e094c6cd2d9bf18acfe02ad662ab884596"
+}

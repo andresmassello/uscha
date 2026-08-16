@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e3754924dc80a7dbdfa6ee98c6aa82a06ecc57b577e930f3f2370248cbeea69c",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "113b6e197b6ef9179f5149aa795762aedb42421b2c14bc942d195d2968fa93ea"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "input-parsing",
+      "decision": "Strip whitespace from stdin before JSON parsing",
+      "rationale": "Spec does not mention handling trailing newlines or whitespace. sys.stdin.read().strip() is robust to common input patterns (echo, file redirection). Necessary because json.loads() is strict about extra whitespace."
+    },
+    {
+      "ir_region": "exception-handling-scope",
+      "decision": "Catch all exceptions in try-except, not just JSONDecodeError",
+      "rationale": "Spec requires printing ERROR 'on any input that is not a JSON array of known event strings'. Broader exception catching (beyond just decode errors) ensures unexpected failures also produce ERROR rather than crashing."
+    },
+    {
+      "ir_region": "event-case-sensitivity",
+      "decision": "Event names are case-sensitive; only lowercase 'coin' and 'push' are valid",
+      "rationale": "Spec examples and error criteria show lowercase event names. 'COIN' or 'Coin' are treated as unknown strings per AC-SM-05, not as aliases."
+    },
+    {
+      "ir_region": "exit-code-on-error",
+      "decision": "Always exit with code 0, even on ERROR output",
+      "rationale": "Spec says 'exit 0' for success. For error cases, spec says 'print exactly ERROR' but does not mandate non-zero exit. Caller detects error state via output content, not exit code."
+    },
+    {
+      "ir_region": "output-newline",
+      "decision": "print() adds newline to state name and ERROR",
+      "rationale": "Spec says 'print the final state name' and 'print exactly ERROR'. Python's print() adds newline; this is standard Unix practice and not explicitly forbidden."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "f23a74fe8577df1d831070f68d212aea557e0b66050f4277cbbed7fae0abf775"
+}

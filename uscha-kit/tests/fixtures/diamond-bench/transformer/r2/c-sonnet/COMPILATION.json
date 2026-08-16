@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "6f761d609b25770d777ebfc3a0a55a3204f34f615f9c3d84ea3dfa041b81ca52"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "age field typing",
+      "decision": "reject bool as a valid age even though bool is a subclass of int in Python",
+      "rationale": "spec says age must be an integer; a JSON true/false is not an integer value and admitting Python's bool-as-int subclassing would silently accept malformed input"
+    },
+    {
+      "ir_region": "non-object non-array top-level JSON",
+      "decision": "any JSON value that parses successfully but is not a list (e.g. an object, number, or string) is treated identically to a JSON parse failure and yields ERROR",
+      "rationale": "spec only requires the top-level value to be a JSON array; it does not distinguish parse failures from valid-but-wrong-shape JSON, so both collapse to the same ERROR path"
+    },
+    {
+      "ir_region": "unexpected/extra fields on a record",
+      "decision": "records with extra fields beyond first/last/age are accepted and the extra fields are silently ignored",
+      "rationale": "spec's out-of-scope section states no other fields are read or preserved, implying presence of extras is not itself an error condition"
+    },
+    {
+      "ir_region": "empty stdin",
+      "decision": "empty or whitespace-only stdin fails json.loads and is treated as malformed input, producing ERROR",
+      "rationale": "an empty input is not a valid JSON array literal, so it falls under the general malformed-input rule rather than being special-cased as an empty array"
+    },
+    {
+      "ir_region": "output JSON formatting",
+      "decision": "use json.dumps default compact-ish formatting (no indent, default separators) since key order/whitespace is explicitly unconstrained",
+      "rationale": "AC-TR-06 states only structure and values are fixed, so no extra effort is spent matching a particular formatting style"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "ef8f93f07949550ccaa2e978604ecfb73b7f9a916a811ba72c01d36e5495f590"
+}

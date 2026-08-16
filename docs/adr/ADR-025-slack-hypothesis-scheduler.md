@@ -49,6 +49,11 @@ fixtures, PARTIAL floor) holds when there is more to get wrong.
   was smaller than first written — the free-prose SPEC was self-contradictory on the deadline
   rule, two compilers converged on a defensible alternate reading, and the EARS rewrite moved
   one of them without removing the contradiction. The row is honest about that.
+  *Superseded on the variance point by ADR-027 (1.84.0):* the free arm's low inter-compiler
+  variance (0.0195) sits BELOW the scheduler entry's own intra-model noise floor (0.0348),
+  so "convergence on a shared reading" is RETRACTED as a variance claim; the behavioural
+  fact (two compilers made the same `<` choice, verbatim in their `unresolved_intent`; EARS
+  moved one, oracle 1/3 → 2/3) is what stands.
 - **Zero engine change.** Fixtures + smoke pins only.
 
 ## Reasons

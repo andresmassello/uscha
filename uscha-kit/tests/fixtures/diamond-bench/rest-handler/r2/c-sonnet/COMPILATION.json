@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "566e7b838457a048c72c6fdf70936fbd8151721ac77b0c74eff741be921ac7eb"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-RH-01",
+        "AC-RH-02",
+        "AC-RH-03",
+        "AC-RH-04",
+        "AC-RH-05",
+        "AC-RH-06",
+        "INV-RH-IDS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "path segment parsing for <id>",
+      "decision": "require a strictly positive integer with no leading zeros (except the literal value itself never being 0) and no sign/whitespace; anything else (e.g. \"01\", \"+1\", \"1.0\", \"-1\") is treated as a non-matching id and returns 404",
+      "rationale": "spec says '<id> that is not a positive integer' -> 404; leading-zero strings like \"01\" are ambiguous, so I chose the stricter canonical-integer-string reading to avoid two different string ids mapping to the same numeric id"
+    },
+    {
+      "ir_region": "trailing/empty path segments",
+      "decision": "split the path on '/' and drop empty segments, so \"/items/\" normalizes to [\"items\"] (same as \"/items\") and \"//items\" also normalizes to [\"items\"]",
+      "rationale": "the spec never defines trailing-slash or doubled-slash behavior; treating them as equivalent to the canonical path is the least surprising choice and avoids spurious 404s for cosmetic path variants"
+    },
+    {
+      "ir_region": "non-object items in the top-level request array",
+      "decision": "if the input is a JSON array but any element is not itself a JSON object, the whole run prints exactly ERROR (not a per-element 400)",
+      "rationale": "the contract defines ERROR as the response to input that is not a JSON array of request objects; a non-object element breaks that shape at the array level, distinct from a well-formed request object with a bad body (which does get a 400)"
+    },
+    {
+      "ir_region": "request object missing 'method' or 'path', or with wrong types for them",
+      "decision": "treat as a per-request 400 {\"error\": \"bad request\"} rather than aborting the whole batch with ERROR",
+      "rationale": "ERROR is reserved for the top-level shape (array of objects); once an element is a dict, malformed routing fields are closer to 'bad request' than to a batch-level parse failure, and this keeps 'one bad request does not abort the batch' meaningful for malformed requests too"
+    },
+    {
+      "ir_region": "body field present but not required for GET/DELETE",
+      "decision": "ignore any 'body' value on GET/DELETE requests entirely (no validation, no error) since only POST/PUT define body requirements",
+      "rationale": "the spec's body-validation rule (400 on missing/non-object/no-name-string) is scoped explicitly to POST /items and PUT /items/<id>; extending it to GET/DELETE isn't specified and would invent a new error path"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "7bca8095e5815aa06e146ac5afea25b0e80162ac2420ceab42e156826c0646e2"
+}

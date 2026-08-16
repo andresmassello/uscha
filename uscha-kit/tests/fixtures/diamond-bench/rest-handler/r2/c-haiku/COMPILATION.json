@@ -1,0 +1,66 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "bd440c610f3922ab82253b0c469505b7135506602152a56ec209d044e7cf2e72"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-RH-01",
+        "AC-RH-02",
+        "AC-RH-03",
+        "AC-RH-04",
+        "AC-RH-05",
+        "AC-RH-06",
+        "INV-RH-IDS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "positive integer validation for <id>",
+      "decision": "non-positive (0 and negative) integers return 404",
+      "rationale": "spec requires positive integers only; zero and negatives are invalid path segments, not missing items"
+    },
+    {
+      "ir_region": "extra path segments",
+      "decision": "paths like /items/1/extra return 404",
+      "rationale": "only /items and /items/<id> are defined routes; extra segments indicate undefined paths, not method errors"
+    },
+    {
+      "ir_region": "empty string as name value",
+      "decision": "accepted as valid name",
+      "rationale": "spec constrains name to be a string; empty string is a string; no minimum-length constraint stated"
+    },
+    {
+      "ir_region": "path normalization",
+      "decision": "no trailing-slash equivalence; /items and /items/ are distinct",
+      "rationale": "spec shows exact paths /items and /items/<id>; path parsing uses strip() only for split() convenience, not normalization"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "a14f5f28889189f180c3e5203c994f34f8703b570bc9747a938c4130a14394f0"
+}

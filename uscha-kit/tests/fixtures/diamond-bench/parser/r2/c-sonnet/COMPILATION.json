@@ -1,0 +1,66 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "87a1fb592f34dc31209436f0ea035945b4b463de13d285bef26f46eba4121ba0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "bae9338903938d5695642bc0e61ed5ceaf2b5aefb35473ecbd86eed38d59b9d0"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "grammar/unary-minus-chaining",
+      "decision": "allow multiple stacked unary minuses (e.g. \"--3\" evaluates to 3) via a recursive factor rule",
+      "rationale": "the grammar defines unary minus but does not forbid repetition; recursive descent naturally supports it and rejecting it would require an extra ad-hoc check not implied by the spec"
+    },
+    {
+      "ir_region": "grammar/unary-plus",
+      "decision": "unary plus is NOT accepted (e.g. \"+3\" is ERROR) -- only binary '+' and unary '-' are recognized",
+      "rationale": "the spec explicitly names 'unary minus' as the only unary operator; inventing unary plus would be adding grammar the spec didn't ask for"
+    },
+    {
+      "ir_region": "grammar/leading-zero-literals",
+      "decision": "integer literals with leading zeros (e.g. \"007\") are accepted and parsed as their numeric value (7)",
+      "rationale": "the spec says 'non-negative integer literals' with no digit-format restriction, so the tokenizer just reads a maximal digit run and converts via int(), which naturally strips leading zeros"
+    },
+    {
+      "ir_region": "contract/malformed-input-classes",
+      "decision": "tokenizer errors (unknown characters), parser errors (unmatched parens, stray tokens, empty input, trailing operators), and division-by-zero are all funneled through one broad except-and-print-ERROR at the top level rather than distinguishing error types in output",
+      "rationale": "the contract only specifies one error output ('ERROR') for every unparseable/invalid case, so collapsing all failure modes to a single catch-all keeps the implementation minimal and avoids inventing differentiated error messages the spec doesn't require"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "02c746846e816e63000e26793cc2be5f2bdcffb93d9751c0d4d33f50ae4c96f2"
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "b10b29245299e8908e5018ed6ca343262d5ab9bdfde24fbd1e73a003a532d115"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "deadline-boundary-at-exact-tick",
+      "decision": "check-running-job-remaining-equals-1",
+      "rationale": "Spec says 'job completing at exactly deadline tick is NOT missed' but deadline check (step 2) runs before execution (step 4). Chose to preserve job only if currently running with remaining==1, meaning it will complete this tick. Alternative: use strictly-less-than (<) for deadline check, allowing any job with deadline==current_tick to survive the check."
+    },
+    {
+      "ir_region": "ready-set-vs-running-state",
+      "decision": "disjoint-sets",
+      "rationale": "A job is in EITHER ready OR running, never both. When preempted, it re-enters ready. When selected from ready, it leaves ready and becomes running. Alternative: track ready as all unfinished jobs and separately track running, allowing overlap."
+    },
+    {
+      "ir_region": "started-flag-scope",
+      "decision": "first-selection-to-execution",
+      "rationale": "Mark started=True on first selection (step 3), before execution (step 4). Allows duration-0 jobs to emit 'start' then 'complete' in same tick. Alternative: mark started during execution step."
+    },
+    {
+      "ir_region": "idle-condition",
+      "decision": "jobs-dict-non-empty",
+      "rationale": "Emit idle only if jobs dict is non-empty (meaning at least one job exists that hasn't completed). Since completed jobs are deleted, non-empty jobs means some job is waiting to arrive, ready, or running. Alternative: track separately whether any job has not yet arrived."
+    },
+    {
+      "ir_region": "missed-event-ordering",
+      "decision": "sorted-id-ascending",
+      "rationale": "Emit missed events in ascending id order (sorted(to_miss)). Spec says 'ascending id order' for arrive, so applied same to missed. Alternative: emit in discovery order or deadline urgency order."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "efe3269350de8d78c621c84a9ed4aafe9b6f0bd8b220b296798ab2f6018785a1"
+}

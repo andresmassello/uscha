@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "048c2d424c02775e7c190c68402e4706a65b1152b1e1f779addd6cf12707b205"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PA-01",
+        "AC-PA-02",
+        "AC-PA-03",
+        "AC-PA-04",
+        "AC-PA-05",
+        "AC-PA-06",
+        "INV-PA-ATOMIC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "field-segment-with-multiple-equals",
+      "decision": "Split on the FIRST `=` and reject the remainder if it contains another `=`, rather than splitting on the last or rejecting the segment outright at scan time",
+      "rationale": "The spec bans `=` inside a value but does not say which `=` delimits. Partitioning on the first and then validating the value keeps decode the exact inverse of encode (which always writes exactly one `=`), so `a=b=c` is ERROR under either reading while the code path stays a single rule."
+    },
+    {
+      "ir_region": "json-output-encoding",
+      "decision": "Emit the array with json.dumps(..., ensure_ascii=False) on a single line, default separators, no trailing formatting",
+      "rationale": "The spec declares output formatting free for decode and fixes only structure and values; non-ASCII values are legal in the wire format (only `|` and `=` are banned), so preserving them literally avoids any lossy escaping while remaining valid JSON."
+    },
+    {
+      "ir_region": "stdin-json-parse-failure",
+      "decision": "Treat unparseable stdin as `ERROR` on stdout with exit code 0, not as a crash or nonzero exit",
+      "rationale": "The spec says malformed top-level shape prints ERROR and that the program exits 0; a parse failure is the degenerate case of a malformed top-level shape, so it takes the same path rather than leaking a traceback."
+    },
+    {
+      "ir_region": "extra-and-missing-keys-in-payload",
+      "decision": "Read only `direction` plus the direction-specific list; ignore unknown extra keys, but treat a missing or wrong-typed `frames`/`messages` as ERROR",
+      "rationale": "The spec enumerates the two legal shapes without forbidding extra keys, so tolerating them avoids inventing a rule; the required list is load-bearing, so its absence is a malformed top-level shape."
+    },
+    {
+      "ir_region": "message-field-pair-representation",
+      "decision": "Accept only JSON arrays of exactly two strings as field pairs (not objects, not 1- or 3-element arrays)",
+      "rationale": "The contract defines fields as an ARRAY of pairs precisely to preserve order; anything else could not have been produced by decoding a legal frame, which the spec classifies as a malformed message."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "4c4c0fe9effd687e3a750898e4b6b9e4e2e7f389cf4dc30e240d1e1a6b27a406"
+}

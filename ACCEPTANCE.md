@@ -408,6 +408,27 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   names the "convergence on a shared error" reading, both in the committed file and in a fresh
   regeneration.
 
+## Intra-model variance (ADR-027) - the noise floor under the bench
+
+- [x] AC-R2-01 - `bench --dir BENCH --json` output is byte-identical whether the `r2/` second-run
+  directories are present or removed; the real bench reports 10 entries with `PARTIAL` exactly
+  `{guard, rest-handler, scheduler}`.
+- [x] AC-R2-02 - `bench-r2 --dir BENCH --json` reports, for every entry, `has_r2` true, a `class`
+  in `{SIGNAL, NOISY, NOISE}` equal to the expected function of the ratio (`< 0.5` SIGNAL,
+  `< 1.0` NOISY, else NOISE), float `intra_mean`/`inter`/`intra_over_inter`, and exactly 3 models
+  each with a float `intra_distance` and a boolean `behaviour_stable`; an entry with its `r2/`
+  removed reports `has_r2` false, `class` null, and a non-empty `reason` (absent, never 0); an
+  entry whose `r2/` is present but holds no parseable source reports `has_r2` true, `class` null
+  and a non-empty `reason` (the review-found silent gap, now named);
+  `protocol-adapter`'s reported `inter` matches an independent recomputation of the mean pairwise
+  `_struct_distance` over its three run-1 implementations to 4 decimal places.
+- [x] AC-R2-03 - all 30 `r2/` `COMPILATION.json` files `compile-validate` exit 0 against their
+  entry's `IR.json`; each `unresolved_intent` has 2-6 entries and the three per entry are
+  pairwise distinct; the aggregate is pinned (`verdict` NOISY, signal 1, noisy 5, noise 4, stable
+  26, reruns 30) and every per-entry class is pinned exactly: SIGNAL `protocol-adapter`; NOISY
+  `crud-store`, `guard`, `rest-handler`, `transformer`, `ui-render`; NOISE `parser`, `scheduler`,
+  `state-machine`, `worker`.
+
 ## Out of scope for measurement here
 
 - **Conventional commits** and **INV-GOLDEN-01** (never author a `.approved`) are enforced

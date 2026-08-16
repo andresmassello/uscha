@@ -3446,6 +3446,7 @@ rm -f "$KIT/reports/junit/.lang-cases.json"       # same rule for T129
 rm -f "$KIT/reports/junit/.bench-curate-cases.json"  # same rule for T130
 rm -f "$KIT/reports/junit/.lang3-cases.json"      # same rule for T131
 rm -f "$KIT/reports/junit/.sched-cases.json"      # same rule for T132
+rm -f "$KIT/reports/junit/.r2-cases.json"         # same rule for T133
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -6074,6 +6075,179 @@ case "$T132" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T132";;
 esac
 
+echo "== T133 (1.84.0): the noise floor -- intra-model variance under the bench, bench-r2 (ADR-027) =="
+T133=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+res = {}
+spec = importlib.util.spec_from_file_location("qa_ledger_t133", ENG)
+q = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(q)
+
+def run(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+def bench_json(dirpath):
+    r = run("bench", "--dir", dirpath, "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+def bench_r2_json(dirpath):
+    r = run("bench-r2", "--dir", dirpath, "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+# AC-R2-01: bench --json is byte-identical with r2/ present vs r2/ hidden -- bench ignores the
+# second-run dirs entirely. The real bench still reports 10 entries, PARTIAL exactly
+# {guard, rest-handler, scheduler}.
+# byte-identity is proven over a ONE-entry copy (protocol-adapter: 3 run-1 + 3 r2
+# compilations) -- a full 10-entry double bench pass is minutes of subprocess launches on
+# Windows and proves nothing more; the real bench is run once below for the pins.
+tcopy = os.path.join(tempfile.mkdtemp(), "bench")
+os.makedirs(tcopy)
+shutil.copytree(os.path.join(BENCH, "protocol-adapter"), os.path.join(tcopy, "protocol-adapter"))
+with_r2 = run("bench", "--dir", tcopy, "--json")
+shutil.rmtree(os.path.join(tcopy, "protocol-adapter", "r2"))
+without_r2 = run("bench", "--dir", tcopy, "--json")
+d0 = bench_json(BENCH)
+partial = sorted(r["archetype"] for r in d0.get("raw", []) if r["verdict"] == "PARTIAL")
+res["AC-R2-01"] = (with_r2.stdout == without_r2.stdout and with_r2.returncode == 0
+                   and d0.get("entries") == 10
+                   and partial == ["guard", "rest-handler", "scheduler"])
+
+# AC-R2-02: bench-r2 --json shape and per-entry class-from-ratio recomputation; an entry with
+# its r2/ removed reports has_r2 False, class None, a non-empty reason (absent, never 0).
+r2d0 = bench_r2_json(BENCH)
+raw = r2d0.get("raw", [])
+def expect_class(ratio):
+    if ratio is None:
+        return None
+    if ratio < 0.5:
+        return "SIGNAL"
+    if ratio < 1.0:
+        return "NOISY"
+    return "NOISE"
+shape_ok = True
+for r in raw:
+    if not r.get("has_r2"):
+        shape_ok = False
+        continue
+    if r.get("class") not in ("SIGNAL", "NOISY", "NOISE"):
+        shape_ok = False
+    if not isinstance(r.get("intra_mean"), float):
+        shape_ok = False
+    if not isinstance(r.get("inter"), float):
+        shape_ok = False
+    if not isinstance(r.get("intra_over_inter"), float):
+        shape_ok = False
+    if r.get("class") != expect_class(r.get("intra_over_inter")):
+        shape_ok = False
+    models = r.get("models") or []
+    if len(models) != 3:
+        shape_ok = False
+    for m in models:
+        if not isinstance(m.get("intra_distance"), float):
+            shape_ok = False
+        if not isinstance(m.get("behaviour_stable"), bool):
+            shape_ok = False
+
+# absence is proven over the SAME one-entry copy (its r2/ is already removed above): the
+# instrument must report has_r2 False / class None / a reason -- absent, never 0.
+absent_dir = tcopy
+absd = bench_r2_json(absent_dir)
+absrec = next((r for r in absd.get("raw", []) if r["archetype"] == "protocol-adapter"), {})
+absent_ok = (absrec.get("has_r2") is False and absrec.get("class") is None
+            and bool(absrec.get("reason")))
+# the 1.84.0 review found the silent-gap case: r2/ PRESENT but no model pair measurable
+# (unparseable r2 sources) left class None AND reason None -- a silent absence. Rebuild the
+# r2/ dir on the copy with broken sources and demand a named reason.
+os.makedirs(os.path.join(tcopy, "protocol-adapter", "r2"))
+for m in ("c-opus", "c-sonnet", "c-haiku"):
+    shutil.copytree(os.path.join(BENCH, "protocol-adapter", "r2", m),
+                    os.path.join(tcopy, "protocol-adapter", "r2", m))
+    bad_src = os.path.join(tcopy, "protocol-adapter", "r2", m, "source", "impl.py")
+    io.open(bad_src, "w", encoding="utf-8").write("def (" + chr(10))
+gapd = bench_r2_json(tcopy)
+gaprec = next((r for r in gapd.get("raw", []) if r["archetype"] == "protocol-adapter"), {})
+gap_ok = (gaprec.get("has_r2") is True and gaprec.get("class") is None
+          and bool(gaprec.get("reason")))
+
+pa_dir = os.path.join(BENCH, "protocol-adapter")
+run1_metrics = []
+for m in ("c-opus", "c-sonnet", "c-haiku"):
+    cj = os.path.join(pa_dir, m, "COMPILATION.json")
+    with io.open(cj, encoding="utf-8-sig") as fh:
+        c = json.load(fh)
+    unit = (c.get("source") or [{}])[0].get("unit")
+    impl = os.path.join(pa_dir, m, unit.replace("/", os.sep))
+    run1_metrics.append(q._impl_metrics(impl))
+dists = []
+for i in range(len(run1_metrics)):
+    for j in range(i + 1, len(run1_metrics)):
+        dists.append(q._struct_distance(run1_metrics[i], run1_metrics[j]))
+inter_recomputed = round(sum(dists) / len(dists), 4)
+pa_rec = next((r for r in raw if r["archetype"] == "protocol-adapter"), {})
+commensurable_ok = round(pa_rec.get("inter", -1), 4) == round(inter_recomputed, 4)
+
+res["AC-R2-02"] = shape_ok and absent_ok and gap_ok and commensurable_ok
+
+# AC-R2-03: all 30 r2 COMPILATION.json compile-validate against their entry's IR; each
+# unresolved_intent has 2..6 entries, the three per entry are pairwise distinct; the aggregate
+# and every per-entry class are pinned exactly as measured for 1.84.0.
+cv_ok = True
+ui_bounds_ok = True
+entries = sorted(d for d in os.listdir(BENCH) if os.path.isdir(os.path.join(BENCH, d, "r2")))
+for e in entries:
+    r2 = os.path.join(BENCH, e, "r2")
+    ir = os.path.join(BENCH, e, "IR.json")
+    fps = []
+    for m in ("c-opus", "c-sonnet", "c-haiku"):
+        cj = os.path.join(r2, m, "COMPILATION.json")
+        rv = run("compile-validate", "--ir", ir, "--compilation", cj)
+        if rv.returncode != 0:
+            cv_ok = False
+        with io.open(cj, encoding="utf-8-sig") as fh:
+            c = json.load(fh)
+        ui = c.get("unresolved_intent") or []
+        if not (2 <= len(ui) <= 6):
+            ui_bounds_ok = False
+        fps.append(json.dumps(ui, sort_keys=True))
+    if len(set(fps)) != 3:
+        ui_bounds_ok = False
+res["AC-R2-03-compile"] = cv_ok and ui_bounds_ok and len(entries) == 10
+
+WANT_CLASS = {"crud-store": "NOISY", "guard": "NOISY", "parser": "NOISE",
+             "protocol-adapter": "SIGNAL", "rest-handler": "NOISY", "scheduler": "NOISE",
+             "state-machine": "NOISE", "transformer": "NOISY", "ui-render": "NOISY",
+             "worker": "NOISE"}
+classes_ok = all(next((r for r in raw if r["archetype"] == a), {}).get("class") == c
+                 for a, c in WANT_CLASS.items())
+agg = r2d0.get("aggregate", {})
+agg_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 5
+         and agg.get("noise") == 4 and agg.get("stable") == 26 and agg.get("reruns") == 30
+         and len(WANT_CLASS) == 10)
+res["AC-R2-03"] = res["AC-R2-03-compile"] and classes_ok and agg_ok
+del res["AC-R2-03-compile"]
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".r2-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T133" in
+  OK*) PASS=$((PASS+1)); echo "  ok   noise-floor: $T133";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T133";;
+esac
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -7374,6 +7548,23 @@ for _shid in ("AC-SH-01", "AC-SH-02", "AC-SH-03", "AC-LI-01", "AC-LI-02", "AC-LI
         results.append((_shid, "slack-hypothesis", None))
     else:
         results.append((_shid, "slack-hypothesis", "T132 case failed or missing"))
+
+# Intra-model variance criteria (ADR-027): measured by T133, same sidecar contract.
+def _r2_cases():
+    p = os.path.join(kit, "reports", "junit", ".r2-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_r2c = _r2_cases()
+for _r2id in ("AC-R2-01", "AC-R2-02", "AC-R2-03"):
+    if _r2c is None or _r2c.get(_r2id) is None:
+        results.append((_r2id, "intra-model-variance", SKIP))
+    elif _r2c.get(_r2id) is True:
+        results.append((_r2id, "intra-model-variance", None))
+    else:
+        results.append((_r2id, "intra-model-variance", "T133 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "87a1fb592f34dc31209436f0ea035945b4b463de13d285bef26f46eba4121ba0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "51dae75da284ee07d3aada217aa2bcc37017be6a0f467f23960d2ffa375a55aa"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "tokenizer_unary_plus",
+      "decision": "unary plus operator not supported",
+      "rationale": "spec mentions unary minus only; unary plus is mathematically redundant (a ≡ +a)"
+    },
+    {
+      "ir_region": "whitespace_normalization",
+      "decision": "all ASCII whitespace treated identically and stripped",
+      "rationale": "spec states whitespace between tokens is insignificant; implementation treats space, tab, newline uniformly"
+    },
+    {
+      "ir_region": "integer_bounds",
+      "decision": "no overflow checking; Python 3 arbitrary precision integers",
+      "rationale": "spec silent on bounds; Python 3 handles arbitrarily large integers, overflow never occurs"
+    },
+    {
+      "ir_region": "empty_input_case",
+      "decision": "empty input after tokenization returns ERROR",
+      "rationale": "spec states empty input is malformed; tokenizer produces empty list, caught by evaluate()"
+    },
+    {
+      "ir_region": "division_truncation_direction",
+      "decision": "int(a/b) truncates toward zero",
+      "rationale": "Python 3 float division then int() conversion achieves truncation toward zero as required (-7/2 → -3.5 → -3)"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "4f2f8282a5e5c3473189a1ae00f2dadf055e30dab7940241a55e3a547d9c37c5"
+}

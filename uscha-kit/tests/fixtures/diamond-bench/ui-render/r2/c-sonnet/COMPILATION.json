@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "073d8935a3aa14dfb844ed9d77e683c213f2e85d9e985cb4f7213a38b09d54af",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "87cb6b3e0c93c20b6d9976e885649fad41cb128a730c5bd7cc31be0c3ae230b6"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-UI-01",
+        "AC-UI-02",
+        "AC-UI-03",
+        "AC-UI-04",
+        "AC-UI-05",
+        "AC-UI-06",
+        "INV-UI-RESET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "event.input.value-type",
+      "decision": "reject an `input` event whose `value` is not a JSON string (treated as malformed shape -> ERROR) rather than silently coercing it",
+      "rationale": "spec defines string fields as holding string values; accepting non-string V would let a field's runtime type drift mid-session, which the spec never describes"
+    },
+    {
+      "ir_region": "submit.field-scope",
+      "decision": "submit's emptiness check applies only to fields whose INITIAL model value was a string (bool fields are exempt, since 'empty string' has no meaning for them)",
+      "rationale": "AC-UI-03/04 say 'every STRING field must be non-empty', so boolean fields are out of scope for validation by definition"
+    },
+    {
+      "ir_region": "top-level.shape",
+      "decision": "require both `model` and `events` keys to be present at the top level (missing either -> ERROR), and require `model.fields` and `events` to be JSON arrays",
+      "rationale": "the contract states input is exactly `{model, events}`; treating a missing key as an implicit empty default was rejected as under-specified and risks masking malformed callers"
+    },
+    {
+      "ir_region": "event.unknown-type",
+      "decision": "any event whose `type` is not one of input/toggle/reset/submit is treated as malformed shape -> ERROR, rather than being ignored",
+      "rationale": "the spec enumerates exactly four event types and gives no 'ignore unrecognized events' rule, so silently skipping would hide caller bugs"
+    },
+    {
+      "ir_region": "field.declaration-shape",
+      "decision": "each entry in `model.fields` must be an object with exactly a `name` (string) and `value` (string or bool); a field whose value is neither type, a non-string name, or a missing key -> ERROR",
+      "rationale": "the spec restricts field values to 'string or bool' and gives field names as strings; anything else is out of the described domain and safest treated as malformed"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "6e87396f90d7bdce8ada1a7a62e34f75112357ce2cd8a2dfe39d98d2e200df15"
+}

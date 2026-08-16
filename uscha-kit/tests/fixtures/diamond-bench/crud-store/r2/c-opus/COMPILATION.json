@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "dd34559f9cc75816578c8ff83653aedb622987f72d8592582eadc8d3790ec7db"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-CS-01",
+        "AC-CS-02",
+        "AC-CS-03",
+        "AC-CS-04",
+        "AC-CS-05",
+        "AC-CS-06",
+        "INV-CS-STRICT-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "create/update missing-value vs null-value",
+      "decision": "Presence of the \"value\" field is checked with `\"value\" in operation`, not truthiness or `.get()`; a create/update carrying an explicit \"value\": null` stores JSON null and succeeds, while an object with no \"value\" key at all is \"bad op\".",
+      "rationale": "The spec says values are arbitrary JSON (which includes null) but also that an op missing a required field is a bad op. Only membership testing satisfies both; `.get()` would conflate the two cases."
+    },
+    {
+      "ir_region": "non-string key type",
+      "decision": "A \"key\" that is present but not a JSON string (number, null, object, array) is treated as \"bad op\" rather than coerced to a string.",
+      "rationale": "The spec states keys are strings. Coercion would let `{\"op\":\"create\",\"key\":1}` and `{\"op\":\"create\",\"key\":\"1\"}` collide, silently violating the never-overwrite rule of AC-CS-01."
+    },
+    {
+      "ir_region": "malformed element inside a valid array",
+      "decision": "A non-object element (string, number, array, null) inside the top-level array yields `{\"ok\": false, \"error\": \"bad op\"}` for that position instead of aborting the batch with ERROR.",
+      "rationale": "ERROR is specified for input that is not a JSON array of operation objects, but AC-CS-06 requires one result per operation and no aborting. Per-element degradation preserves positional alignment; only a non-array top level is fatal."
+    },
+    {
+      "ir_region": "extra/unknown fields on an operation",
+      "decision": "Unrecognized fields are ignored (e.g. a `list` op carrying a stray \"key\", or a `read` carrying a \"value\"); only the fields required by the verb are inspected.",
+      "rationale": "The spec constrains required fields and says `list` needs \"no other fields required\" — it never declares extras illegal. Rejecting them would invent a validation rule the acceptance criteria do not measure."
+    },
+    {
+      "ir_region": "stdout serialization shape",
+      "decision": "Results are emitted as a single compact `json.dumps` line with dict insertion order `ok` then `result`/`error`, and `list` results use `sorted()` on the raw dict keys (Python's lexicographic code-point order).",
+      "rationale": "The spec declares output formatting free and fixes only structure and values; a single deterministic line is the simplest form a harness can diff. Code-point ordering is the plain reading of \"sorted lexicographically\" for JSON strings."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "9b50c48f6adfc117a35cdd1d7aab466e214d0e411df907f6641740fc69f75cd4"
+}

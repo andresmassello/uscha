@@ -267,7 +267,7 @@
         <tr><td>Per-compiler fidelity (reverse discovery over each compiled artifact) + human curation of machine-generated code, one verdict per observation</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED stays literal where no verdict exists</td></tr>
         <tr><td>Controlled authoring (EARS+STE) reduces inter-compiler variance</td>
-            <td><span class="chip real">REAL</span> (measured, mostly null)</td><td>deconfounded across 5 archetypes: REDUCED in 1 (guard −61%), IMPROVED in 1 (scheduler, +1 oracle-green), two nulls, one WORSE · 1.76–1.83 · ADR-019/021/024/025/026</td></tr>
+            <td><span class="chip real">REAL</span> (measured, behaviour-first: dense archetypes helped, simple ones null/harm; structural variance alone no longer carries a claim — ADR-027)</td><td>deconfounded across 5 archetypes: REDUCED in 1 (guard −61%, NOISY 0.642), IMPROVED in 1 (scheduler, +1 oracle-green), two nulls, one WORSE · 1.76–1.84 · ADR-019/021/024/025/026/027</td></tr>
         <tr><td>"The code is <em>fully</em> regenerable from the specs" (arbitrary systems)</td>
             <td><span class="chip vision">VISION</span></td><td>the bootstrap test ran (M4/M5): 3 of 4 bounded archetypes regenerate to the same system, mechanically certified · full regenerability of arbitrary systems is the open frontier</td></tr>
         <tr><td>"Drift = incremental reverse discovery, same engine"</td>
@@ -287,12 +287,12 @@
     the only thing worth migrating.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      State verified against kit 1.83.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016–ADR-026,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.83.0 · the REAL/VISION
+      State verified against kit 1.84.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016–ADR-027,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.84.0 · the REAL/VISION
       labels follow the repo's INV-TRUTH-01 rule.
     </p>
 
-    <h2>07 · The program, measured — T0 → 1.83.0</h2>
+    <h2>07 · The program, measured — T0 → 1.84.0</h2>
     <p>The Diamond program ran as eight releases of the kit measuring itself. Every number
     below comes from a committed, regenerable report in the repo — none is narrated:</p>
     <table>
@@ -304,6 +304,9 @@
         <tr><td>Controlled language, deconfounded — free prose vs EARS+STE, same generation, shared oracle, 5 archetypes</td>
             <td>REDUCED in 1, IMPROVED in 1: the decision-dense guard dropped variance −61%; the control and the state-machine read null; the transformer read WORSE — the rewrite sharpened a latent ambiguity ("exactly the fields") into a commitment the oracle rejects; the second decision-dense archetype (scheduler) gained an oracle-green and raised mean pass-rate while variance rose — two compilers had converged on the same bug in free prose.</td>
             <td>1.76–1.83</td></tr>
+        <tr><td>Intra-model variance, the noise floor — bench-r2 over 10 archetypes × 3 models × 2 runs</td>
+            <td>NOISY: same-model reruns differ structurally about as much as different models do (mean intra/inter 0.98), while behaviour stays stable on 26 of 30 reruns. Every variance claim the program makes now carries a per-entry SIGNAL/NOISY/NOISE qualifier, and the controlled-language reading above is behaviour-first.</td>
+            <td>1.84</td></tr>
         <tr><td>Fidelity per compiler — the M1 static extractor applied to each compiled artifact</td>
             <td>Behaviourally near-identical compilers expose visibly different surfaces: 19–21/23 on the same oracle through 5, 4 and 8 public functions.</td>
             <td>1.79</td></tr>

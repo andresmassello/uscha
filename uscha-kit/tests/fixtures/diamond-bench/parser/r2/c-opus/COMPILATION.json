@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "87a1fb592f34dc31209436f0ea035945b4b463de13d285bef26f46eba4121ba0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "734721b0f8c3983a776788aaaca87286aea4154545ea731c992efd290ed17b9f"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "output-line-termination",
+      "decision": "Print the value (or ERROR) followed by a single trailing newline",
+      "rationale": "The spec says 'prints one line' and 'no extra text' without stating whether a terminating newline counts as extra. A trailing newline is the POSIX definition of a line and is what a checker comparing stripped stdout tolerates either way; omitting it would leave the output not-a-line."
+    },
+    {
+      "ir_region": "double-unary-minus",
+      "decision": "Allow chained unary minus ('--3' evaluates to 3, '2 - -3' to 5) by making unary right-recursive",
+      "decision_note": "",
+      "rationale": "The grammar names 'unary minus' as an operator with a precedence slot but does not say whether it may repeat. Right-recursion is the standard reading and makes '2 - -3' — a natural consequence of 'whitespace is insignificant' — parse rather than error; rejecting it would require an ad-hoc extra rule the spec never states."
+    },
+    {
+      "ir_region": "integer-overflow-range",
+      "decision": "Use Python's arbitrary-precision int with no range check; no result is ever an overflow ERROR",
+      "rationale": "The spec says 'integers' with no width bound and lists the error cases exhaustively (stray token, unmatched paren, empty, trailing operator, division by zero). Adding a width limit would invent an error case the acceptance criteria do not contain."
+    },
+    {
+      "ir_region": "whitespace-inside-numeric-literal",
+      "decision": "Treat '1 2' as two adjacent number tokens and therefore ERROR (trailing input after a complete expression), not as the literal 12",
+      "rationale": "'Whitespace between tokens is insignificant' scopes the rule to between tokens, so whitespace terminates a literal rather than being absorbed into it. Two juxtaposed numbers have no grammar production, so the parser's trailing-input check rejects it."
+    },
+    {
+      "ir_region": "non-ascii-digits",
+      "decision": "Accept only ASCII 0-9 as digits (guarding str.isdigit with str.isascii), rejecting Unicode digit characters such as superscripts or Devanagari numerals as stray tokens",
+      "rationale": "Python's str.isdigit is true for many non-ASCII characters, and int() accepts a subset of them; leaving it unguarded would silently admit inputs the stated grammar ('non-negative integer literals') never describes and make some Unicode forms parse while others raise. ASCII-only keeps the token set closed and the ERROR boundary crisp."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "52aa0470d65891a84245137aba72c2e0bbeca3257171a6a0471565167ca15015"
+}

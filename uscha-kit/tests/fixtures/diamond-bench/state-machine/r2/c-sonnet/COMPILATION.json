@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e3754924dc80a7dbdfa6ee98c6aa82a06ecc57b577e930f3f2370248cbeea69c",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "94aa8d8ee1d79371a084d5446e52ab5795953cdbeb45df2ebc12a84668ae759c"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "input-shape",
+      "decision": "only a JSON array at the top level is valid; any other JSON type (object, number, string, bool, null) or invalid JSON text maps to ERROR via a single try/except around json.loads plus an isinstance(list) check",
+      "rationale": "spec says 'input that is not a JSON array' -> ERROR, so the type check must reject non-list JSON values, not just malformed JSON"
+    },
+    {
+      "ir_region": "event-element-type",
+      "decision": "a non-string element in the array (e.g. a number or nested object) is treated the same as an unknown event string, both routed to the same ERROR branch via an isinstance(event, str) guard before the transition lookup",
+      "rationale": "spec explicitly calls out 'a non-string element' as an error case alongside unknown event strings; unifying the check keeps the machine total and closed per INV-SM-TOTAL-01"
+    },
+    {
+      "ir_region": "transition-table-shape",
+      "decision": "model transitions as an explicit dict keyed by (state, event) tuples covering all 4 combinations, rather than nested if/elif chains",
+      "rationale": "makes totality visually verifiable (4 states x events = 4 entries) and makes an unrecognized (state, event) pair naturally fall into the ERROR branch via dict lookup miss"
+    },
+    {
+      "ir_region": "error-output-exit-code",
+      "decision": "ERROR is printed via print() and the function returns normally, so the process still exits 0 as required by the contract ('print exactly ERROR', with no separate exit-code requirement for errors)",
+      "rationale": "the contract only specifies stdout content for the error case, not a distinct exit code, and the general contract line says 'exit 0' unconditionally"
+    },
+    {
+      "ir_region": "whitespace-only-or-empty-stdin",
+      "decision": "empty or whitespace-only stdin is passed straight into json.loads, which raises ValueError/JSONDecodeError, caught by the same except clause and reported as ERROR",
+      "rationale": "treated as 'invalid JSON' per AC-SM-06 rather than as a special-cased empty-array shortcut, since the spec only calls an empty JSON array (not empty input) the locked-start case"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "bb6a5b17bf6bf3cdd63fba56690b18b9dc37d733ab122e9b77182f4d4b38dea9"
+}

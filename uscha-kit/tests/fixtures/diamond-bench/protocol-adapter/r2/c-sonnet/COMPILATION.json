@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "2191c401f25c46976f550cfb10798a123382e12b8125720e7dd05f8643db79de"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PA-01",
+        "AC-PA-02",
+        "AC-PA-03",
+        "AC-PA-04",
+        "AC-PA-05",
+        "AC-PA-06",
+        "INV-PA-ATOMIC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "field-segment-multiple-equals",
+      "decision": "a field segment is malformed unless it contains exactly one '=' character",
+      "rationale": "values cannot contain '=' per spec, so a second '=' in a segment cannot be a legal value; rejecting on count!=1 rather than splitting on the first '=' catches this case before it silently produces a value containing '='"
+    },
+    {
+      "ir_region": "message-shape-validation",
+      "decision": "encode validates each message strictly: type must be dict-present and match [A-Z]+, fields must be a list of exactly-2-element [key,value] lists, key must match [a-z]+, value must be a string free of '|' and '='",
+      "rationale": "the spec says a message that 'could not be produced by a legal frame' must error too, so encode needs its own full shape/charset validation independent of decode's parser"
+    },
+    {
+      "ir_region": "empty-frame-and-empty-segment",
+      "decision": "an empty frame string is always ERROR; an empty field segment (e.g. from consecutive '|' or a trailing '|') is ERROR because it contains zero '=' characters",
+      "rationale": "spec explicitly lists an empty string as a malformed frame, and a segment with no '=' cannot be a valid key=value field"
+    },
+    {
+      "ir_region": "top-level-shape-and-unknown-direction",
+      "decision": "any top-level JSON that is not an object, has a direction other than exactly 'decode'/'encode', or has frames/messages not typed as a list, is ERROR before any per-item processing begins",
+      "rationale": "keeps the atomicity guarantee uniform: structural failures fail the whole batch the same way a single bad frame does, per AC-PA-06"
+    },
+    {
+      "ir_region": "extra-message-keys",
+      "decision": "a message object is accepted as long as it has 'type' and 'fields' keys with valid values; extra unexpected keys are not rejected",
+      "rationale": "the spec only defines the message shape as {type, fields} but does not state that additional keys must cause an error, so the stricter reading (reject extras) was not chosen to avoid inventing an unstated constraint"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "ad7516b3c8ab05dbd9b29db9f34bd6ef6d4ae0d8426e0b4d9e41f041536709ff"
+}

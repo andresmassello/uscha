@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "19e8b0c83f12d02573fd8e416f2c3e41a265903821b4af30f774fedfb098dd7d"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-CS-01",
+        "AC-CS-02",
+        "AC-CS-03",
+        "AC-CS-04",
+        "AC-CS-05",
+        "AC-CS-06",
+        "INV-CS-STRICT-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "top-level-validation",
+      "decision": "ERROR is reserved for structural failures only: unparsable JSON, non-array top level, or any array element that is not a JSON object. A per-operation problem (unknown op, missing required field) never escalates to ERROR.",
+      "rationale": "the spec text 'input that is not a JSON array of operation objects' reads as a whole-input shape check, distinct from the op-level 'bad op' error which explicitly says a failed operation never aborts the batch — treating any bad op as ERROR would contradict that non-abort guarantee"
+    },
+    {
+      "ir_region": "key-type-validation",
+      "decision": "if a present \"key\" field is not a JSON string, treat the operation as bad op rather than coercing or crashing.",
+      "rationale": "spec states 'keys are strings' as a type contract; a non-string key has no defined store semantics, so it is safest classified as a malformed operation rather than silently stringified"
+    },
+    {
+      "ir_region": "missing-op-field",
+      "decision": "an operation object with no \"op\" field at all is treated the same as an unknown op value, producing {\"ok\": false, \"error\": \"bad op\"}.",
+      "rationale": "the spec only enumerates behavior for known op values plus 'unknown op', and a missing op is a degenerate case of unknown — no separate error code is defined"
+    },
+    {
+      "ir_region": "list-op-extra-fields",
+      "decision": "a \"list\" operation is accepted regardless of any extra fields present on the object, since the spec says list requires 'no other fields required' (not 'no other fields allowed').",
+      "rationale": "the spec's wording is permissive about extra fields on list; rejecting them would be an invented stricter requirement not stated in the contract"
+    },
+    {
+      "ir_region": "value-passthrough",
+      "decision": "the \"value\" field for create/update is stored and later returned as-is (any JSON type, including null, arrays, objects), with no validation of its shape.",
+      "rationale": "spec explicitly places 'value validation' out of scope and states values are 'arbitrary JSON'"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "8003dadd21e354e9f6a5d2dd76e2ec7307b7a4ff0113886b8ad2d6d3481f6211"
+}

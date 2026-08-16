@@ -22,6 +22,12 @@ every behavioural number said the discipline had helped.
 Low variance is only a virtue when it converges on the right answer. The instrument must say
 so in both directions.
 
+*Qualified by ADR-027 (1.84.0):* the scheduler example above is retracted AS A VARIANCE
+CLAIM — its free-arm inter-compiler distance (0.0195) is below that entry's intra-model
+noise floor (0.0348, `bench-r2`), so the low variance was not evidence of convergence. The
+IMPROVED verdict stands on the oracle delta (1/3 → 2/3 green), which is not a variance
+number, and the rendered IMPROVED text now points readers at the noise floor.
+
 ## Decision
 - **New verdict `IMPROVED`**: behaviour improved (an oracle-green gained, or mean pass-rate up
   by ≥ `_LANG_PR_MARGIN`) while variance is NOT reduced (rose or unchanged). Behaviour won;

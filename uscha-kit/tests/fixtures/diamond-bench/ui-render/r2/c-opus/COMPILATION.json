@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "073d8935a3aa14dfb844ed9d77e683c213f2e85d9e985cb4f7213a38b09d54af",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "4b9d668542c7a1456fee8f974e7aff689eafaa4e13f881c92757d8ee632a1f03"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-UI-01",
+        "AC-UI-02",
+        "AC-UI-03",
+        "AC-UI-04",
+        "AC-UI-05",
+        "AC-UI-06",
+        "INV-UI-RESET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "input-event-value-type",
+      "decision": "An `input` event whose `value` is not a string (number, null, bool, object) is treated as malformed -> ERROR, rather than coerced with str()",
+      "rationale": "The spec declares field values are string or bool and that `input` sets a STRING field to V; a non-string V has no defined coercion, and the constitution's purity requirement favors rejecting undefined input over inventing a conversion"
+    },
+    {
+      "ir_region": "unknown-event-type",
+      "decision": "An event object whose `type` is absent or not one of input/toggle/reset/submit is malformed -> ERROR, not silently ignored",
+      "rationale": "AC-UI-06 lists 'a malformed shape' as an ERROR case; silently skipping an unrecognized event would make the view diverge from the event sequence it claims to be a pure function of"
+    },
+    {
+      "ir_region": "extra-keys-tolerance",
+      "decision": "Unknown extra keys on the top-level object, on field objects, and on event objects are ignored rather than rejected; extra keys like `field` on a reset/submit event are also ignored",
+      "rationale": "The spec fixes structure and values but does not forbid additional properties; strictness is applied only to the keys the contract names, keeping the parser permissive at the edges and exact at the core"
+    },
+    {
+      "ir_region": "errors-content-on-reset-vs-later-events",
+      "decision": "After a failed submit, errors persists verbatim through subsequent input/toggle events and is only cleared by a reset or by a passing submit; it is NOT recomputed live as fields are edited",
+      "rationale": "The spec says errors reflects the state after the last event and that later events keep applying after a failed submit, but assigns error computation solely to submit; live revalidation would be behavior the spec never grants"
+    },
+    {
+      "ir_region": "empty-fields-list",
+      "decision": "A model with an empty `fields` list is valid; it renders `{\"fields\": {}, \"submitted\": false, \"errors\": []}` and a submit on it succeeds (vacuously all string fields non-empty)",
+      "rationale": "No rule forbids an empty form, and AC-UI-04's condition 'all string fields non-empty' is vacuously true over zero fields, so the natural reading is success rather than a special-cased error"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "35c3cdf2652a4ec1213ff6176fbcb1e8d8f3afa837a33f7acbc307ca3d44faef"
+}

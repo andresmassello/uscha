@@ -1,0 +1,72 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "3afbebe31d518fc887e8f10f3f7527c4e2abe84848ef3f48151fe16a49828f32"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "deadline-check-scope",
+      "decision": "Applied the deadline sweep only to jobs already in the ready set (which by construction includes the job that ran last tick), not to jobs still pending arrival",
+      "rationale": "The spec says 'every ready or running job whose deadline is <= the current tick'; a not-yet-arrived job is neither ready nor running, so a job with deadline <= arrival is never dropped before it arrives — it arrives at its tick and is then missed at that same tick by step 2 of that tick."
+    },
+    {
+      "ir_region": "preempt-event-on-deadline-drop",
+      "decision": "When the job that ran last tick is removed by the deadline sweep, last_run_id is cleared and no preempt event is emitted for it; the newly picked job emits start/resume normally",
+      "rationale": "The spec conditions preempt on 'last tick's job is still ready'. A job dropped at step 2 is no longer ready at selection time, so preempt would contradict the stated condition."
+    },
+    {
+      "ir_region": "zero-duration-completion",
+      "decision": "Execution decrements remaining then tests remaining <= 0, so a duration-0 job emits start and complete at the same tick and the tick still advances by one",
+      "rationale": "AC-SC-05 mandates start+complete at the same tick. Decrement-then-test makes remaining go to -1 for duration 0; the <= 0 test (rather than == 0) keeps that case on the completion path without a separate branch."
+    },
+    {
+      "ir_region": "idle-tick-and-last-run-state",
+      "decision": "On an idle tick last_run_id is reset to None, so a job that was preempted (or was running) before an idle gap emits resume — never a second start — when picked again, and no spurious preempt is emitted after the gap",
+      "rationale": "An idle tick means nothing was ready, so no job 'ran last tick'; the started flag is per-job and survives independently, which preserves INV-SC-PROGRESS-01 (remaining duration is never reset) while keeping the start/resume distinction correct."
+    },
+    {
+      "ir_region": "input-decoding-and-error-surface",
+      "decision": "json.loads failures and all contract violations are funneled through one except (ValueError, MalformedInput) branch that prints ERROR and returns exit code 0",
+      "rationale": "The spec requires exit 0 and the exact token ERROR on any malformed input; ValueError covers JSONDecodeError on Python 3.8+, and a dedicated exception type keeps validation failures distinct from genuine bugs in the simulation, which are left to surface as a crash rather than being masked as ERROR."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "6666403e166eb621b84e8db2e976af0c0e4fc0f5dfe34251f3d6a377a6095a85"
+}

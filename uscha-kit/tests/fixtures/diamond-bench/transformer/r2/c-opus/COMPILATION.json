@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "77352ff73ffcda3decec3b54b7894e5a418ef8cd0b79146b0a3e4d4814827f79"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "age-boolean-subtype",
+      "decision": "Reject JSON `true`/`false` as `age` (isinstance(age, bool) excluded) and print ERROR",
+      "rationale": "The spec says `age` must be an integer, but Python's bool is a subclass of int, so a naive isinstance check would silently accept `{\"age\": true}` and compute `adult` as False. JSON distinguishes booleans from numbers, so treating a boolean as a wrong-typed field is the reading faithful to AC-TR-05."
+    },
+    {
+      "ir_region": "age-float-representation",
+      "decision": "Reject any JSON float, including integral-valued ones like `36.0`, as a non-integer age",
+      "rationale": "The spec calls `age` an integer and json.loads decodes `36.0` to a Python float. The spec gives no rule for coercion, so the conservative reading of 'age is not an integer -> ERROR' is applied rather than inventing a rounding or truncation rule."
+    },
+    {
+      "ir_region": "extra-record-fields",
+      "decision": "Records carrying fields beyond first/last/age are accepted; the extras are ignored, not preserved and not an error",
+      "rationale": "The contract says each object has exactly those three fields, while Out of scope says no other fields are read or preserved. Strictness is defined only over missing and wrong-typed fields (AC-TR-05), which says nothing about extras, so extras are neither read nor rejected."
+    },
+    {
+      "ir_region": "empty-or-non-json-stdin",
+      "decision": "Empty standard input, whitespace only, or any text that fails JSON decoding prints ERROR (same path as a valid non-array JSON value)",
+      "rationale": "The spec only names 'input that is not a JSON array' (AC-TR-04). Undecodable bytes are not a JSON array either, so both decode failure and a well-formed non-array value converge on the single ERROR line rather than crashing with a traceback."
+    },
+    {
+      "ir_region": "trailing-content-and-multiple-values",
+      "decision": "A single json.loads over the entire stdin buffer; trailing content after the array (e.g. `[] junk`) fails to decode and yields ERROR",
+      "rationale": "The spec says the program 'reads one array'. Reading the whole stream and decoding it once enforces exactly-one-value semantics, instead of a stream decoder that would silently accept and ignore trailing data."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "d73912448123333dca6447b956c2547318eea29386fae2c27b714009db45bacb"
+}

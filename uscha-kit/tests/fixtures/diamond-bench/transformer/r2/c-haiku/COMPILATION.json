@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "6bd23e966eb5adbe1031a3d3d60939369f3fbdd1ba74ecfdc9afa0ec390b11e1"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "type_validation_boolean_exclusion",
+      "decision": "Explicitly reject bool values for age field via isinstance(age, bool) check",
+      "rationale": "Python's isinstance(True, int) returns True because bool is a subclass of int. The spec requires age to be 'an integer', not a boolean. Distinguishing bool from int requires explicit exclusion to match semantic intent."
+    },
+    {
+      "ir_region": "output_key_order",
+      "decision": "Emit output objects with keys in order: name, adult",
+      "rationale": "Spec defines the mapping structure as '{\"name\": <first> + \" \" + <last>, \"adult\": <age >= 18>}'. Python 3.7+ preserves dict insertion order. Spec says 'only its structure and values are fixed, not its JSON formatting', but structure implies the named fields in the documented order."
+    },
+    {
+      "ir_region": "batch_validation_strategy",
+      "decision": "Fail entire batch on first field validation error; do not emit partial output",
+      "rationale": "Spec states 'fail the batch; do not emit a partial result' for any record validation error (missing field, wrong type). This is enforced by returning immediately on validation failure, before adding any record to the result array."
+    },
+    {
+      "ir_region": "error_output_format",
+      "decision": "Print exactly 'ERROR' (no extra whitespace or newlines beyond what print() adds)",
+      "rationale": "Spec says 'print exactly `ERROR`'. Python's print() adds a newline per platform convention (stdout line-buffering). The word 'exactly' constrains the string content, not the line terminator."
+    },
+    {
+      "ir_region": "exception_scope",
+      "decision": "Catch json.JSONDecodeError, ValueError, KeyError, TypeError; treat all as ERROR",
+      "rationale": "json.JSONDecodeError covers invalid JSON; ValueError and TypeError cover edge cases in type checking; KeyError is defensive for dict access. Any malformed input → ERROR."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "cb3f2625697d2dfda3c962bfaf751bd8cae799dd719853a6fe37837ffd09e9bd"
+}

@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "656d528a8b6ac2932c08a603349498656201b5fb74034f1cc8af59af2d95d5c7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "5c098873fa8a9160d0eb5e54dace0769870515e0f66d1909d0f56c0d169d6cf2"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-WK-01",
+        "AC-WK-02",
+        "AC-WK-03",
+        "AC-WK-04",
+        "AC-WK-05",
+        "AC-WK-06",
+        "INV-WK-DET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "priority-numeric-direction",
+      "decision": "Higher numeric priority value executed before lower values",
+      "rationale": "Spec specifies 'HIGHEST priority' without numeric direction; ascending numeric convention implies higher numbers = higher priority"
+    },
+    {
+      "ir_region": "needs-array-duplicates",
+      "decision": "Duplicate entries in needs array treated as single dependency via set semantics",
+      "rationale": "Spec does not address duplicate dependency entries; set representation is mathematically correct for directed acyclic graphs"
+    },
+    {
+      "ir_region": "extra-json-fields",
+      "decision": "Extra fields in job objects and root object ignored; only required schema validated",
+      "rationale": "JSON is extensible by design; spec defines required structure but does not forbid additional properties"
+    },
+    {
+      "ir_region": "fifo-stable-ordering",
+      "decision": "Input array index preserved for stable FIFO tie-breaking on equal priority",
+      "rationale": "Spec requires deterministic scheduling 'appears FIRST in input array'; index tracking ensures scheduling is stable across multiple runs"
+    },
+    {
+      "ir_region": "partial-schedule-rejection",
+      "decision": "Any validation error (duplicate id, unknown dependency, cycle, malformed) rejects entire input; never emit partial schedule",
+      "rationale": "Spec mandates 'print exactly ERROR' and 'never a partial schedule' on structural errors; eager validation enforces this contract"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "0461522c5cbc3898ad6ff563a7a5097e1ddd9aa79e49ec0c0b5e8910807398ab"
+}

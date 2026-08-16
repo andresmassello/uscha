@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "d68f72dec4f1116fe03b4af024dd379c26ded95b690ba80800300a69f99c5ba2"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PA-01",
+        "AC-PA-02",
+        "AC-PA-03",
+        "AC-PA-04",
+        "AC-PA-05",
+        "AC-PA-06",
+        "INV-PA-ATOMIC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "type-validation-scope",
+      "decision": "ASCII-only A-Z, not Unicode uppercase",
+      "rationale": "Spec says 'A-Z only' ambiguously; strict ASCII is safer for wire protocols and avoids locale issues. Rejects Ä (uppercase-diaeresis) and Å even though they might be uppercase-letters in Unicode."
+    },
+    {
+      "ir_region": "json-output-format",
+      "decision": "Compact JSON (json.dumps default), no pretty-printing",
+      "rationale": "Spec says 'Output formatting is free' but encode frames have byte-exact contract; compact output is standard and preserves round-trip. Pretty-printing could violate byte-exactness for encoded frames."
+    },
+    {
+      "ir_region": "field-order-preservation",
+      "decision": "Fields as list-of-lists [[key, value], ...], not dict",
+      "rationale": "Guarantees order preservation (JSON objects lose order; Python 3.7+ dicts preserve it but are less reliable). List-of-lists is explicit about ordering and unambiguous for round-trip law."
+    },
+    {
+      "ir_region": "value-equals-split-semantics",
+      "decision": "split('=', 1) to split key and value; then reject if value contains '='",
+      "rationale": "Frame 'KEY=a=b' splits to key='KEY', value='a=b'; value contains '=' so frame is malformed. This is the only consistent interpretation of the constraint 'value...not containing...='."
+    },
+    {
+      "ir_region": "empty-frame-vs-frameless",
+      "decision": "Empty string '' is malformed; frame 'MSG' (no fields) is valid",
+      "rationale": "Spec: 'frame has zero or more fields' means MSG with zero fields is legal. But empty string has no type segment, so it's malformed. AC-PA-04 confirms empty value is legal; by symmetry, zero fields is legal."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "4ed537b3c5ea2c5e893a3781c272f8001b1a956934b55f42cd917e15d8b1f9a4"
+}

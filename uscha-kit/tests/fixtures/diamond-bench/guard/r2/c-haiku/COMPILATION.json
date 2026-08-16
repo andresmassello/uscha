@@ -1,0 +1,67 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "e925d02c42b2498f93edc82d6f99ee1bdb5b54d1aea533bcffe50984a4c5210f"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "bash-pipeline-analysis",
+      "decision": "all-pipes-conservatively-blocked",
+      "rationale": "Spec requires blocking pipelines where any later stage writes. Full analysis requires parsing each command in the pipeline, which introduces shell-syntax complexity and potential for bypass. Conservative approach: all pipes block when .approved is referenced, fail-closed."
+    },
+    {
+      "ir_region": "read-only-tool-registry-completeness",
+      "decision": "curated-common-tools-only",
+      "rationale": "Guard maintains a curated set of tools provably read-only (Read, Grep, Glob, browser read tools, etc.). Hundreds of MCP and browser tools exist; not all are included because tool-by-tool inspection is expensive and unknown tools correctly default-deny per AC-GH-06."
+    },
+    {
+      "ir_region": "bash-write-operation-detection",
+      "decision": "hardcoded-common-patterns",
+      "rationale": "is_read_only_command() checks hardcoded keywords and patterns (rm, mv, cp, sed, git, output redirection). Many other write operations exist (dd, tee, install, truncate, etc.). Completeness trades off against false negatives; conservative fail-closed approach flags doubt."
+    },
+    {
+      "ir_region": "indirect-write-paths",
+      "decision": "out-of-scope-per-specification",
+      "rationale": "Spec explicitly states symlinks, scripts with indirect effects, runtime-assembled filenames, and child processes are out of reach by design. Guard inspects text/structure only; measured byte-level control lives elsewhere."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "2d11bde9ec35d0476ca111f981716e7977936eca9a5299a7a6897243af135b9e"
+}

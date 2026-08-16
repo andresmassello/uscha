@@ -20,10 +20,11 @@
     ]
   },
   "subcommands": {
-    "count": 49,
+    "count": 50,
     "list": [
       "bench",
       "bench-curate",
+      "bench-r2",
       "bootstrap-oracle",
       "bootstrap-variance",
       "check-coverage",
@@ -73,5 +74,5 @@
       "waste-check"
     ]
   },
-  "version": "1.83.0"
+  "version": "1.84.0"
 }

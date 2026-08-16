@@ -1,0 +1,76 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "656d528a8b6ac2932c08a603349498656201b5fb74034f1cc8af59af2d95d5c7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "723743daf207bc0f49793ebdac4e816dca391ed6e5657af6ea25a7608671899c"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-WK-01",
+        "AC-WK-02",
+        "AC-WK-03",
+        "AC-WK-04",
+        "AC-WK-05",
+        "AC-WK-06",
+        "INV-WK-DET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "job field typing — priority",
+      "decision": "priority must be a true int; booleans are rejected (bool is an int subclass in Python) and floats such as 3.0 are rejected, both yielding ERROR",
+      "rationale": "The contract types priority as <int>. Python would silently accept True as 1 and 3.0 as a comparable number, which would let a malformed input produce a schedule; AC-WK-06 demands rejection of malformed input, so the stricter reading was chosen."
+    },
+    {
+      "ir_region": "job object — unrecognized extra keys",
+      "decision": "extra keys on a job object (and extra keys alongside \"jobs\" at top level) are ignored rather than treated as malformed",
+      "rationale": "The spec enumerates the fields a job has but never declares the object closed. Ignoring unknown keys is the forgiving reading and keeps ERROR reserved for defects the spec names explicitly; a closed-object reading was the alternative and is a one-line change if the intent was strict."
+    },
+    {
+      "ir_region": "absent vs explicit-null optional fields",
+      "decision": "\"needs\": null and \"fails\": null are treated as the documented absent case (no dependencies / false); any other wrong type for those fields is ERROR",
+      "rationale": "The contract says only that the fields may be absent. JSON producers commonly emit null for an omitted optional field, and treating that as absent preserves the stated default without widening the type contract for real values."
+    },
+    {
+      "ir_region": "self-dependency (a job whose needs contains its own id)",
+      "decision": "treated as a dependency cycle of length one — ERROR",
+      "rationale": "It is never satisfiable, so the alternative (leaving it to the scheduler) would silently produce a 'skipped' status, which AC-WK-03 reserves for dependents of a FAILED job. Rejecting it keeps 'skipped' meaning exactly one thing."
+    },
+    {
+      "ir_region": "cycle reachability — cycles among jobs that could never run anyway",
+      "decision": "the acyclicity check covers the entire graph, including components unreachable from any runnable job, and any cycle rejects the whole input",
+      "rationale": "AC-WK-05 names 'a dependency cycle' unconditionally, with no reachability qualifier. A reachability-limited check would make the same cyclic input sometimes ERROR and sometimes schedule depending on unrelated jobs, breaking the one-input-one-output guarantee of INV-WK-DET-01."
+    },
+    {
+      "ir_region": "duplicate ids in a single job's needs list",
+      "decision": "accepted; the repeated dependency is simply evaluated twice and has no effect on the schedule",
+      "rationale": "AC-WK-05 lists duplicate JOB ids as a rejection, not duplicate entries within one needs array. The duplicate is semantically harmless under an all-needs-ok predicate, so it was not promoted to an error."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "ec92f66898fe6338c0b483f52c563674e7fcc1c4fcb527772f37aa30218f7305"
+}

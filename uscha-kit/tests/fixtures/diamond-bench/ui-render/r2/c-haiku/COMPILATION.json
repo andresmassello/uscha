@@ -1,0 +1,66 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "073d8935a3aa14dfb844ed9d77e683c213f2e85d9e985cb4f7213a38b09d54af",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "reads one JSON value from stdin, prints one line, exits 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "5c18dbf65afd3c4b62450a94113b7ff55ce09ab0421baac1c393d8f68887b0ed"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-UI-01",
+        "AC-UI-02",
+        "AC-UI-03",
+        "AC-UI-04",
+        "AC-UI-05",
+        "AC-UI-06",
+        "INV-UI-RESET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "value-type-validation",
+      "decision": "reject null, numbers, and non-string/bool values as malformed input",
+      "rationale": "spec constraint explicitly states 'string or bool'; null and numeric types violate this hard boundary"
+    },
+    {
+      "ir_region": "field-order-in-errors",
+      "decision": "errors list preserves insertion order from initial model's fields array",
+      "rationale": "spec says errors 'in field order'; only defined order is the initial model; Python 3.7+ preserves dict insertion order"
+    },
+    {
+      "ir_region": "json-output-formatting",
+      "decision": "output compact JSON (no spaces) via json.dumps()",
+      "rationale": "spec: 'Output formatting is free; only structure and values are fixed'"
+    },
+    {
+      "ir_region": "extra-field-tolerance",
+      "decision": "silently ignore extra fields in model and event objects",
+      "rationale": "spec defines required fields; extra fields don't violate structure—only missing/wrong-typed fields do"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T00:00:00+00:00",
+      "finished": "2026-08-16T00:00:00+00:00"
+    },
+    "constraint_handling": "r2: second blind run of the same model on the same canonical package (ADR-027 intra-model variance)"
+  },
+  "_integrity": "23e6090b99e3abbab13b9d502b6a77ea867dc49917e70b70d7423d2414bf430f"
+}
