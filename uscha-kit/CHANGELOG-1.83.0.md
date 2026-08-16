@@ -81,7 +81,10 @@ exercises the promised exception; noted, and it is the same contradiction seen f
 side. The reviewer also observed the smoke suite is sensitive to concurrent `qa_ledger.py`
 invocations against the same checkout (sidecar reads returned None during their parallel
 verification; an isolated run was 418 · 135/135) — worth knowing for anyone sharing a working
-tree.
+tree. And the CI matrix caught one more, post-review: T132's AC-LI-01/02 pinned the guard pair as
+REDUCED unconditionally, but on the three py3.8 cells it reads MIXED (the 1.78.0 fact — the guard's
+controlled/c-haiku crashes at def-time on a 3.9+ annotation); the pin is now interpreter-guarded
+exactly as AC-CL2-03 already was. The instrument is the matrix cell, not the dev box — again.
 
 `AC-SH-01..03` and `AC-LI-01..03` measured green (T132 added). Suite: 418 checks, 0 failures;
 acceptance **135/135** criteria measured green.

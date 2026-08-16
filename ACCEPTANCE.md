@@ -397,8 +397,8 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   WORSE, ADR-026) is reachable and correct across the five committed same-generation pairs;
   every JSON report carries the `improved`/`regressed` booleans.
 - [x] AC-LI-02 - the four pre-existing pinned verdicts are unchanged by the ADR-026 rule
-  addition: guard `REDUCED`, parser `NO EFFECT`, state-machine `NO EFFECT`, transformer
-  `WORSE`.
+  addition: guard `REDUCED` (`MIXED` on Python 3.8, the same interpreter-pinned expectation
+  AC-CL2-03 carries), parser `NO EFFECT`, state-machine `NO EFFECT`, transformer `WORSE`.
 - [x] AC-SH-03 - `lang-compare` over `scheduler-free` vs `scheduler-controlled` (oracle
   byte-identical across both arms and to the bench entry's own oracle) yields the pinned
   `IMPROVED` verdict (`improved` true, `regressed` false, oracle-green delta +1, mean pass-rate

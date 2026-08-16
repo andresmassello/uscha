@@ -6015,7 +6015,11 @@ res["AC-SH-03"] = (rc_sh.returncode == 0 and rep_sh.get("verdict") == "IMPROVED"
 # committed pair that reaches a distinct branch -- no synthetic arms needed, the five
 # same-generation pairs already on disk cover REDUCED, NO EFFECT (x2), WORSE and IMPROVED.
 # Every JSON report now carries the "improved"/"regressed" booleans.
-PAIRS5 = [("guard-free-r2", "controlled", "REDUCED"),
+# The guard pair reads MIXED on Python 3.8 (controlled/c-haiku crashes at def-time on a 3.9+
+# annotation -> 0/23 -> behaviour regressed), REDUCED on 3.9+ -- the same interpreter-pinned
+# expectation AC-CL2-03 (T129) already carries; the artifact is never edited (1.78.0 rule).
+GUARD_WANT = "REDUCED" if sys.version_info >= (3, 9) else "MIXED"
+PAIRS5 = [("guard-free-r2", "controlled", GUARD_WANT),
           ("parser-free", "parser-controlled", "NO EFFECT"),
           ("state-machine-free-r2", "state-machine-controlled", "NO EFFECT"),
           ("transformer-free-r2", "transformer-controlled", "WORSE"),
@@ -6036,7 +6040,7 @@ for free, ctrl, want in PAIRS5:
     if not (isinstance(rp.get("improved"), bool) and isinstance(rp.get("regressed"), bool)):
         bools_ok = False
 res["AC-LI-01"] = rule_ok and bools_ok
-res["AC-LI-02"] = (verdicts.get("guard-free-r2") == "REDUCED"
+res["AC-LI-02"] = (verdicts.get("guard-free-r2") == GUARD_WANT
                    and verdicts.get("parser-free") == "NO EFFECT"
                    and verdicts.get("state-machine-free-r2") == "NO EFFECT"
                    and verdicts.get("transformer-free-r2") == "WORSE")
