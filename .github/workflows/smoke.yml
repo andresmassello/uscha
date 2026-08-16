@@ -34,7 +34,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.8", "3.13"]   # the declared floor and a current release
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 35   # the bench grew to 12 archetypes + r2 + roundtrip; Windows py3.8 crossed 20 (measured 2026-08-16)
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
