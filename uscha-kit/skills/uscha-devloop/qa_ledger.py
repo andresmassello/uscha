@@ -4007,6 +4007,86 @@ def _extract_static_py(repo_path, tracked):
     return obs, unsupported
 
 
+# Node one-liner (ADR-028): `require`s the impl and reports ITS OWN module.exports --
+# the target's own runtime reporting its own public surface, never a regex-narrated AST. A
+# module that guards its entry point with `require.main === module` (the SPEC contract) will
+# not auto-run under `require()`, since `require.main` here is this -e script, not the module.
+_NODE_EXPORTS_PROBE = (
+    "const p=process.argv[1]; const m=require(require('path').resolve(p)); "
+    "const ks=Object.keys(m).filter(k=>typeof m[k]==='function'||typeof m[k]==='object'); "
+    "process.stdout.write(JSON.stringify(ks.sort()))"
+)
+_STATIC_JS_TIMEOUT = 15
+
+
+def _extract_static_js(repo_path, tracked):
+    """v0 static extractor for JS (ADR-028): the target's OWN runtime reports its own public
+    surface via `node -e` + `Object.keys(module.exports)` -- measured, not parsed by a
+    heuristic. Function-vs-object and the observation's line number are best-effort source
+    regexes (Node reports WHICH names are exported; it does not report where they are
+    defined). If node is absent, or a file fails to load/print a clean JSON array, that file's
+    surface is UNMEASURED -- named in `unsupported`, never silently empty-as-measured.
+    Returns (observations, unsupported) where unsupported is a list of "<file>: <reason>"."""
+    obs, unsupported = [], []
+    js_files = sorted(rel for rel in tracked if rel.lower().endswith(".js"))
+    if not js_files:
+        return obs, unsupported
+    node = shutil.which("node")
+    if not node:
+        return obs, ["%s: node not on PATH" % rel for rel in js_files]
+    for rel in js_files:
+        full = os.path.join(repo_path, rel.replace("/", os.sep))
+        abs_path = os.path.abspath(full)
+        try:
+            r = subprocess.run([node, "-e", _NODE_EXPORTS_PROBE, "--", abs_path],
+                               capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=_STATIC_JS_TIMEOUT,
+                               cwd=os.path.dirname(full))
+        except subprocess.TimeoutExpired:
+            unsupported.append("%s: node timed out extracting exports" % rel)
+            continue
+        except OSError as exc:
+            unsupported.append("%s: could not run node: %s" % (rel, exc))
+            continue
+        if r.returncode != 0:
+            unsupported.append("%s: node exited %d extracting exports (%s)"
+                               % (rel, r.returncode, (r.stderr or "").strip()[:200]))
+            continue
+        try:
+            names = json.loads(r.stdout)
+            if not isinstance(names, list):
+                raise ValueError("exports output was not a JSON list")
+        except ValueError as exc:
+            unsupported.append("%s: could not parse exports output: %s" % (rel, exc))
+            continue
+        try:
+            with open(full, encoding="utf-8", errors="replace") as fh:
+                src = fh.read()
+        except OSError:
+            src = ""
+        src_lines = src.splitlines()
+        for name in sorted(names):
+            is_function = bool(re.search(r"\bfunction\s+%s\s*\(" % re.escape(name), src))
+            lineno = 0
+            patterns = (r"\bfunction\s+%s\b" % re.escape(name),
+                        r"\b%s\s*=" % re.escape(name),
+                        r"exports\.%s\b" % re.escape(name),
+                        r"module\.exports\b")
+            for i, ln in enumerate(src_lines, 1):
+                if any(re.search(p, ln) for p in patterns):
+                    lineno = i
+                    break
+            stmt = ("%s exports function %s" % (rel, name) if is_function
+                    else "%s exports object %s" % (rel, name))
+            prov = "%s:%d" % (rel, lineno)
+            obs.append({"id": _obs_id("contract", stmt, prov), "type": "contract",
+                        "statement": stmt, "evidence_class": "static",
+                        "provenance": {"files": [prov],
+                                       "derivation": "node -e Object.keys(module.exports)",
+                                       "tool": "qa_ledger-static-js"}})
+    return obs, unsupported
+
+
 def _under_bound(rel, bound):
     return bound is None or rel == bound or rel.startswith(bound + "/")
 
@@ -5307,26 +5387,69 @@ def cmd_compile_ingest(args):
 _BOOTSTRAP_CASE_TIMEOUT = 15                        # a compiled hook must decide fast
 
 
+def _entry_unit(source_list):
+    """The unit the oracle runs (ADR-029): the one whose basename starts with `cli.` if any,
+    else the first declared source unit. Single-unit compilations resolve to their only unit,
+    unchanged. Returns None when there is no usable unit."""
+    units = [u.get("unit") for u in (source_list or []) if isinstance(u, dict) and u.get("unit")]
+    if not units:
+        return None
+    for u in units:
+        if os.path.basename(u).lower().startswith("cli."):
+            return u
+    return units[0]
+
+
+def _static_surface_for(cd, unit):
+    """Route the reverse-discovery organ by the unit's extension (ADR-028/029)."""
+    if os.path.splitext(unit)[1].lower() == ".js":
+        return _extract_static_js(cd, [unit])
+    so, _n = _extract_static_py(cd, [unit])
+    return so, []
+
+
+def _impl_interpreter(impl_path):
+    """Resolve the interpreter argv prefix for one implementation file by extension (ADR-028):
+    `.py` runs under this same Python (unchanged); `.js` runs under `node`, resolved from PATH.
+    Returns None when the extension's interpreter cannot be resolved (today: node absent) --
+    the caller must treat that as UNMEASURED, never a fake red or green."""
+    if impl_path.lower().endswith(".js"):
+        node = shutil.which("node")
+        return [node] if node else None
+    return [sys.executable]
+
+
 def _run_oracle_case(impl_path, case):
     """Run ONE withheld oracle case against a compiled implementation: feed the case's stdin
-    (raw_stdin verbatim if present, else json.dumps(payload)) to `python <impl>`, and check its
-    result against whichever expectations the case declares. Deterministic execution -- the
-    oracle is a `measured` fact, never an LLM judgment. Returns a per-case result dict.
+    (raw_stdin verbatim if present, else json.dumps(payload)) to the impl's interpreter (ADR-028:
+    `python` for `.py`, `node` for `.js`), and check its result against whichever expectations
+    the case declares. Deterministic execution -- the oracle is a `measured` fact, never an LLM
+    judgment. Returns a per-case result dict.
 
     A case may assert any of: `expected_exit` (process exit code -- the M4 guard's contract),
     `expected_stdout` (the program's stdout, compared stripped -- for archetypes that COMPUTE an
     output, e.g. a parser or transformer), and `expected_json` (stdout parsed as JSON and
     compared structurally, so an output whose formatting is free but whose value is fixed is not
     penalised for whitespace or key order). The case passes iff EVERY declared expectation holds;
-    a case that declares none proves nothing and fails."""
+    a case that declares none proves nothing and fails.
+
+    If the impl's interpreter cannot be resolved (a `.js` impl and no `node` on PATH), the case
+    is UNMEASURED -- never a fake red or green (ADR-028)."""
     if "raw_stdin" in case:
         stdin = case["raw_stdin"]
     else:
         stdin = json.dumps(case.get("payload"))
+    interp = _impl_interpreter(impl_path)
+    if interp is None:
+        return {"name": case.get("name"), "expected": case.get("expected_exit"), "got": None,
+                "ok": False, "error": "node not on PATH", "unmeasured": True}
     try:
-        r = subprocess.run([sys.executable, impl_path], input=stdin, capture_output=True,
-                           text=True, encoding="utf-8", errors="replace",
-                           timeout=_BOOTSTRAP_CASE_TIMEOUT)
+        # cwd = the impl's own directory (ADR-029): a multi-unit compilation imports its
+        # sibling modules by bare name; single-unit impls are unaffected by their cwd
+        r = subprocess.run(interp + [os.path.abspath(impl_path)], input=stdin,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=_BOOTSTRAP_CASE_TIMEOUT,
+                           cwd=os.path.dirname(os.path.abspath(impl_path)) or None)
         got, out, err = r.returncode, r.stdout, None
     except subprocess.TimeoutExpired:
         got, out, err = None, "", "timeout"
@@ -5369,22 +5492,30 @@ def cmd_bootstrap_oracle(args):
               file=sys.stderr)
         sys.exit(2)
     results = [_run_oracle_case(args.impl, c) for c in cases]
+    unmeasured = bool(results) and all(r.get("unmeasured") for r in results)
     passed = sum(1 for r in results if r["ok"])
     failed = [r for r in results if not r["ok"]]
     report = {"impl": args.impl, "oracle": args.oracle, "total": len(results),
               "passed": passed, "failed": len(failed),
-              "oracle_green": not failed, "results": results}
+              "oracle_green": (None if unmeasured else not failed), "results": results}
+    if unmeasured:
+        report["unmeasured"] = results[0]["error"]
     if args.ledger and args.repo:
         ledger = _load(args.ledger)
         _repo_node(ledger, args.repo)
         rec = {"impl": os.path.basename(args.impl), "oracle": os.path.basename(args.oracle),
                "total": len(results), "passed": passed, "failed": len(failed),
-               "oracle_green": not failed,
+               "oracle_green": (None if unmeasured else not failed),
                "failing": [r["name"] for r in failed], "at": _now()}
+        if unmeasured:
+            rec["unmeasured"] = results[0]["error"]
         ledger.setdefault("bootstrap_oracle", []).append(rec)
         _save(args.ledger, ledger)
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
+    elif unmeasured:
+        print("BOOTSTRAP-ORACLE %s: UNMEASURED -- %s"
+              % (os.path.basename(args.impl), report["unmeasured"]))
     else:
         print("BOOTSTRAP-ORACLE %s: %d/%d cases pass -- %s"
               % (os.path.basename(args.impl), passed, len(results),
@@ -5394,17 +5525,60 @@ def cmd_bootstrap_oracle(args):
             print("  x %s: expected exit %s, got %s%s"
                   % (r["name"], r["expected"], r["got"],
                      " (%s)" % r["error"] if r["error"] else ""))
-    sys.exit(0 if not failed else 1)
+    sys.exit(2 if unmeasured else (0 if not failed else 1))
+
+
+_JS_IMPORT_RE = re.compile(
+    r"""require\(\s*['"]([^'"]+)['"]\s*\)"""
+    r"""|import\s+(?:.+?\s+from\s+)?['"]([^'"]+)['"]"""
+)
+
+
+def _impl_metrics_js(path, src):
+    """JS structural fingerprint (ADR-028), honestly NARROWER than Python's: `loc` (non-blank,
+    non-`//` lines, with `/*..*/` blocks toggled by a simple per-line state machine) and
+    `imports` (require()/import specifiers -- a lexical fact over string literals, not a
+    narrated structure) are measured; `ast_nodes`/`functions`/`classes` are UNMEASURED (None) --
+    no stdlib JS AST exists and the engine does not invent one."""
+    loc = 0
+    in_block = False
+    for ln in src.splitlines():
+        s = ln.strip()
+        if in_block:
+            if "*/" in s:
+                in_block = False
+            continue
+        if not s:
+            continue
+        if s.startswith("/*"):
+            if "*/" not in s[2:]:
+                in_block = True
+            continue
+        if s.startswith("//"):
+            continue
+        loc += 1
+    imports = set()
+    for m in _JS_IMPORT_RE.finditer(src):
+        spec = m.group(1) or m.group(2)
+        if spec:
+            imports.add(spec)
+    return {"path": path, "loc": loc, "ast_nodes": None, "functions": None,
+            "classes": None, "imports": sorted(imports),
+            "sha256": hashlib.sha256(src.encode("utf-8")).hexdigest()}
 
 
 def _impl_metrics(path):
     """Structural fingerprint of one implementation: physical LOC, AST node count, function
-    and class counts, and the set of imported top-level modules. Deterministic; no judgment."""
+    and class counts, and the set of imported top-level modules. Deterministic; no judgment.
+    Routed by extension (ADR-028): `.py` unchanged; `.js` delegates to `_impl_metrics_js`,
+    which returns the same keys with `ast_nodes`/`functions`/`classes` UNMEASURED (None)."""
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             src = fh.read()
     except OSError as exc:
         return {"path": path, "error": "unreadable: %s" % exc}
+    if path.lower().endswith(".js"):
+        return _impl_metrics_js(path, src)
     loc = sum(1 for ln in src.splitlines() if ln.strip())
     try:
         tree = ast.parse(src)
@@ -5531,8 +5705,14 @@ def _bench_curation_map(records):
 def _bench_oracle_all(impl_path, cases):
     results = [_run_oracle_case(impl_path, c) for c in cases]
     passed = sum(1 for r in results if r["ok"])
-    return {"passed": passed, "total": len(results), "green": passed == len(results),
-            "failing": [r["name"] for r in results if not r["ok"]]}
+    out = {"passed": passed, "total": len(results), "green": passed == len(results),
+           "failing": [r["name"] for r in results if not r["ok"]]}
+    # every case UNMEASURED (ADR-028: a `.js` impl with no `node` on PATH) is NOT a fake red --
+    # name the reason and let the caller treat it as absent, never as a scored FAIL.
+    if results and all(r.get("unmeasured") for r in results):
+        out["unmeasured"] = results[0]["error"]
+        out["green"] = False
+    return out
 
 
 def _bench_entry(entry_dir, name, fidelity=False, curation=None):
@@ -5564,15 +5744,16 @@ def _bench_entry(entry_dir, name, fidelity=False, curation=None):
             with open(cj, encoding="utf-8-sig") as fh:
                 c = json.load(fh)
             src = c.get("source") or []
-            unit = src[0].get("unit") if src else None
+            unit = _entry_unit(src)
+            all_units = [u.get("unit") for u in src if isinstance(u, dict) and u.get("unit")]
             model = (c.get("compilation_report") or {}).get("model")
         except (OSError, ValueError, AttributeError, IndexError):
-            pass
+            all_units = []
         impl = os.path.join(cd, unit.replace("/", os.sep)) if unit else None
         ores = (_bench_oracle_all(impl, cases) if impl and os.path.isfile(impl)
                 else {"passed": 0, "total": len(cases), "green": False, "failing": ["<no impl>"]})
-        comp_rec = {"dir": d, "model": model, "impl": impl,
-                    "compile_valid": not errors, "oracle": ores}
+        comp_rec = {"dir": d, "model": model, "impl": impl, "entry_unit": unit,
+                    "units": len(all_units), "compile_valid": not errors, "oracle": ores}
         if fidelity and impl and os.path.isfile(impl) and unit:
             # the per-compiler fidelity descriptor (ADR-022): the M1 static extractor applied
             # to the compiled artifact -- reverse discovery per compiler. Advisory by
@@ -5597,20 +5778,36 @@ def _bench_entry(entry_dir, name, fidelity=False, curation=None):
                             units_f.add(u2["unit"])
             except AttributeError:
                 pass
-            sobs, _uns = _extract_static_py(cd, [unit])
+            # ADR-028: the static extractor is routed by the source unit's extension -- `.py`
+            # via the AST (unchanged), `.js` via the target's own `node` runtime. `uns_f` is a
+            # list of "<file>: <reason>" for JS (an int count for Python, discarded either way).
+            sobs, uns_f = [], []
+            for u_all in (all_units or [unit]):
+                so, un = _static_surface_for(cd, u_all)
+                sobs.extend(so)
+                uns_f.extend(un)
             fn_names, cls_names = [], []
             for o2 in sobs:
-                m2 = re.search(r"defines function (\w+)", o2.get("statement", ""))
+                m2 = re.search(r"defines function (\w+)|exports function (\w+)",
+                               o2.get("statement", ""))
                 if m2:
-                    fn_names.append(m2.group(1))
-                m2 = re.search(r"defines class (\w+)", o2.get("statement", ""))
+                    fn_names.append(m2.group(1) or m2.group(2))
+                m2 = re.search(r"defines class (\w+)|exports object (\w+)",
+                               o2.get("statement", ""))
                 if m2:
-                    cls_names.append(m2.group(1))
+                    cls_names.append(m2.group(1) or m2.group(2))
             unex = sorted(u for u in units_f if u not in traced_f)
+            if not sobs and uns_f:
+                # node absent (or every JS file failed to load): the surface is UNMEASURED,
+                # never a silent "0 functions, 0 classes" that reads as a measured empty
+                # surface (ADR-028 -- absence named, same discipline as curation_closure below).
+                static_surface = "UNMEASURED: %s" % "; ".join(uns_f)
+            else:
+                static_surface = {"functions": len(fn_names), "classes": len(cls_names),
+                                  "names": sorted(fn_names + cls_names)}
             comp_rec["fidelity"] = {
                 "trace_coverage": round(len(covered_f) / max(len(node_ids_f), 1), 3),
-                "static_surface": {"functions": len(fn_names), "classes": len(cls_names),
-                                   "names": sorted(fn_names + cls_names)},
+                "static_surface": static_surface,
                 "oracle_passrate": (round(ores["passed"] / ores["total"], 3)
                                     if ores["total"] else None),
                 "unexplained_share": round(len(unex) / max(len(units_f), 1), 3),
@@ -5634,9 +5831,17 @@ def _bench_entry(entry_dir, name, fidelity=False, curation=None):
     stub_dir = os.path.join(entry_dir, "stub")
     stub_green = False
     if os.path.isdir(stub_dir):
-        stubs = sorted(f for f in os.listdir(stub_dir) if f.endswith(".py"))
-        if stubs:
-            sres = _bench_oracle_all(os.path.join(stub_dir, stubs[0]), cases)
+        stubs = sorted(f for f in os.listdir(stub_dir) if f.endswith((".py", ".js")))
+        stub_path = os.path.join(stub_dir, stubs[0]) if stubs else None
+        if stub_path is None and os.path.isdir(os.path.join(stub_dir, "source")):
+            # multi-unit entries (ADR-029): the stub is a directory shaped like a compilation;
+            # its entry unit is the cli.* under source/
+            cands = sorted(f for f in os.listdir(os.path.join(stub_dir, "source"))
+                           if f.lower().startswith("cli.") and f.endswith((".py", ".js")))
+            if cands:
+                stub_path = os.path.join(stub_dir, "source", cands[0])
+        if stub_path:
+            sres = _bench_oracle_all(stub_path, cases)
             stub_green = sres["green"]
             rec["discrimination"] = {"stub_passed": sres["passed"], "total": sres["total"],
                                      "stub_green": stub_green}
@@ -5651,7 +5856,14 @@ def _bench_entry(entry_dir, name, fidelity=False, curation=None):
     # distinct is None when variance could not be computed (fewer than 2 resolvable impl files),
     # which is NOT the same as a byte-identical convergence -- keep the two reasons apart.
     distinct = rec["variance"]["all_distinct"] if rec["variance"] else None
-    if stub_green:
+    # ADR-028: node absent for a `.js` entry means EVERY case of that compilation came back
+    # UNMEASURED -- never score that as a FAIL (nor a PASS); the entry stays PENDING with the
+    # reason named, ahead of every other verdict check.
+    unmeasured_js = next((i["oracle"]["unmeasured"] for i in impls
+                          if i["oracle"].get("unmeasured")), None)
+    if unmeasured_js:
+        rec["verdict"], rec["reason"] = "PENDING", "%s -- JS entry unmeasured" % unmeasured_js
+    elif stub_green:
         rec["verdict"], rec["reason"] = "FAIL", ("oracle satisfied by a degenerate stub -- not "
                                                  "discriminating; the entry proves nothing")
     elif not all_valid:
@@ -5720,15 +5932,23 @@ def _render_bench_md(table, anon, recs):
                 if isinstance(cur_v, float):
                     cur_v = "%.3f (judged %d/%d)" % (cur_v, fd["curation"]["judged"],
                                                      fd["curation"]["total"])
-                lines.append("- fidelity `%s` (%s): trace %.2f · surface %d fn / %d cls · "
+                ss = fd["static_surface"]
+                # ADR-028: `static_surface` is UNMEASURED (a named string) when a JS entry's
+                # extractor could not run (node absent) -- never a silent "0 fn / 0 cls".
+                surface_txt = ("%d fn / %d cls" % (ss["functions"], ss["classes"])
+                               if isinstance(ss, dict) else ss)
+                lines.append("- fidelity `%s` (%s): trace %.2f · surface %s · "
                              "oracle %s · unexplained %.2f · curation %s" % (
                                  i["dir"], anon.get(i["model"], i["model"] or "?"),
-                                 fd["trace_coverage"], fd["static_surface"]["functions"],
-                                 fd["static_surface"]["classes"],
+                                 fd["trace_coverage"], surface_txt,
                                  ("%.3f" % fd["oracle_passrate"])
                                  if fd["oracle_passrate"] is not None else "n/a",
                                  fd["unexplained_share"], cur_v))
         lines.append("")
+    if any((i.get("impl") or "").lower().endswith(".js")
+           for r in recs for i in r["compilations"]):
+        lines += ["*JS pairs use a 2-dimensional distance (LOC + import Jaccard; no stdlib JS "
+                  "AST).*", ""]
     return "\n".join(lines)
 
 
@@ -5817,11 +6037,11 @@ def _r2_entry(entry_dir, name):
     r2 = os.path.join(entry_dir, _R2_DIR)
     if not os.path.isdir(r2):
         rec["reason"] = "no r2/ directory -- intra-model variance not measured"
-        return rec
+        return rec, False
     rec["has_r2"] = True
     if ir_graph is None or ir_errors or not cases:
         rec["reason"] = "entry incomplete (missing/invalid IR or oracle)"
-        return rec
+        return rec, False
 
     def load_run(cd):
         cj = os.path.join(cd, "COMPILATION.json")
@@ -5831,7 +6051,7 @@ def _r2_entry(entry_dir, name):
         try:
             with open(cj, encoding="utf-8-sig") as fh:
                 c = json.load(fh)
-            unit = (c.get("source") or [{}])[0].get("unit")
+            unit = _entry_unit(c.get("source") or [])
             model = (c.get("compilation_report") or {}).get("model")
         except (OSError, ValueError, AttributeError, IndexError):
             return None
@@ -5849,6 +6069,7 @@ def _r2_entry(entry_dir, name):
 
     intra = []
     run1_metrics = []
+    has_js = False                                  # footer disclosure only; not serialized
     for d in sorted(os.listdir(entry_dir)):
         if not d.startswith("c-") or not os.path.isdir(os.path.join(entry_dir, d)):
             continue
@@ -5857,10 +6078,14 @@ def _r2_entry(entry_dir, name):
             continue
         if r1["metrics"]:
             run1_metrics.append(r1["metrics"])
+            if r1["metrics"]["path"].lower().endswith(".js"):
+                has_js = True
         r2run = load_run(os.path.join(r2, d))
         if r2run is None:
             rec["models"].append({"dir": d, "model": r1["model"], "r2": "absent"})
             continue
+        if r2run["metrics"] and r2run["metrics"]["path"].lower().endswith(".js"):
+            has_js = True
         dist = (_struct_distance(r1["metrics"], r2run["metrics"])
                 if r1["metrics"] and r2run["metrics"] else None)
         stable = r1["case_vector"] == r2run["case_vector"]
@@ -5893,7 +6118,7 @@ def _r2_entry(entry_dir, name):
         # missing COMPILATION.json in every r2 model): absent, named -- never a silent None
         rec["reason"] = ("r2/ present but no model pair measurable (no parseable run-1+run-2 "
                          "source for any model) -- intra-model variance not measured")
-    return rec
+    return rec, has_js
 
 
 _R2_VERDICT_TEXT = {
@@ -5910,7 +6135,7 @@ _R2_VERDICT_TEXT = {
 }
 
 
-def _render_r2_md(recs, agg):
+def _render_r2_md(recs, agg, has_js=False):
     lines = ["<!-- GENERATED by qa_ledger.py bench-r2 (ADR-027) -- measured run; do not hand-edit. -->",
              "", "# DIAMOND-BENCH-R2 -- intra-model variance, the noise floor under the bench", "",
              "For every archetype with a second blind run (`r2/`) of the SAME model on the SAME "
@@ -5951,6 +6176,9 @@ def _render_r2_md(recs, agg):
               "changing -- classes are stable across 3.8/3.13 on this bench, ratios are not "
               "point-precise, and an entry within ~0.25 of a threshold should be read as "
               "borderline.*", ""]
+    if has_js:
+        lines += ["*JS pairs use a 2-dimensional distance (LOC + import Jaccard; no stdlib JS "
+                  "AST).*", ""]
     return "\n".join(lines)
 
 
@@ -5963,7 +6191,9 @@ def cmd_bench_r2(args):
     if not entries:
         print("[qa_ledger] bench-r2: no entries under %s" % args.dir, file=sys.stderr)
         sys.exit(2)
-    recs = [_r2_entry(os.path.join(args.dir, e), e) for e in entries]
+    pairs = [_r2_entry(os.path.join(args.dir, e), e) for e in entries]
+    recs = [p[0] for p in pairs]
+    has_js = any(p[1] for p in pairs)
     measured = [r for r in recs if r["class"] is not None]
     ratios = [r["intra_over_inter"] for r in measured]
     reruns = [m for r in recs if r["has_r2"] for m in r["models"] if m.get("r2") != "absent"]
@@ -5982,7 +6212,7 @@ def cmd_bench_r2(args):
         top = max(c for c, _ in counts)
         # ties resolve toward the more cautious reading (NOISE > NOISY > SIGNAL)
         agg["verdict"] = [n for c, n in reversed(counts) if c == top][0]
-    md = _render_r2_md(recs, agg)
+    md = _render_r2_md(recs, agg, has_js)
     if args.out:
         with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(md)
@@ -6005,6 +6235,215 @@ def cmd_bench_r2(args):
     sys.exit(0)
 
 
+_RT_ID_RE = re.compile(r"(?i)\b(AC|INV|ADR)[-_][A-Z0-9-]*?\d+\b")
+
+
+def _rt_ids_in(text):
+    """Every canonical id (AC-*, INV-*, ADR-*) literally referenced in a text, upper-cased.
+    ID REFERENCE only (the ADR-013 rule) -- no fuzzy or semantic matching, ever."""
+    out = set()
+    for m in _RT_ID_RE.finditer(text or ""):
+        out.add(m.group(0).upper().replace("_", "-"))
+    return out
+
+
+def _rt_read_source(cd, unit):
+    try:
+        with open(os.path.join(cd, unit.replace("/", os.sep)), encoding="utf-8",
+                  errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def _rt_compilation(entry_dir, cd, ir_graph, cases):
+    """Round-trip recoverability of ONE compilation against the pinned IR (ADR-030): for every
+    IR node, whether the mechanical reverse organs find footing for it in the artifact --
+    (a) static: a source unit's text or a static observation literally references the id;
+    (b) manifest: the compiler's validated trace manifest maps the node to a unit that exists;
+    (c) behaviour: for AC nodes, at least one withheld-oracle case tagged with the id passes
+    (UNMEASURED when no case carries any AC tag). It regenerates NOTHING: no IR', no spec --
+    a coverage over the human-authored IR, plus the list of nodes nothing anchors."""
+    cj = os.path.join(cd, "COMPILATION.json")
+    try:
+        with open(cj, encoding="utf-8-sig") as fh:
+            c = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    units = [u.get("unit") for u in (c.get("source") or []) if isinstance(u, dict) and u.get("unit")]
+    units = [u for u in units if os.path.isfile(os.path.join(cd, u.replace("/", os.sep)))]
+    node_ids = [n["id"] for n in (ir_graph.get("nodes") or [])]
+    # (a) static footing: ids referenced in source text (comments/docstrings/names) or in
+    # the static observations' statements/provenance
+    static_ids = set()
+    for u in units:
+        static_ids |= _rt_ids_in(_rt_read_source(cd, u))
+        so, _un = _static_surface_for(cd, u)
+        for o in so:
+            static_ids |= _rt_ids_in(o.get("statement", ""))
+    # (b) manifest footing
+    manifest_ids = set()
+    for e in c.get("trace_manifest") or []:
+        if e.get("unit") in units:
+            for nid in e.get("implements") or []:
+                manifest_ids.add(str(nid).upper())
+    # (c) behaviour footing: oracle cases whose NAME carries an AC id (payload tags are not a
+    # convention the bench oracles use today -- absence named, not faked)
+    tagged = {}
+    for case in cases:
+        for cid in _rt_ids_in(case.get("name", "")):
+            tagged.setdefault(cid, []).append(case)
+    behaviour_measured = bool(tagged)
+    behaviour_ids = set()
+    entry_unit = _entry_unit(c.get("source") or [])
+    impl = os.path.join(cd, entry_unit.replace("/", os.sep)) if entry_unit else None
+    if behaviour_measured and impl and os.path.isfile(impl):
+        for cid, cs in tagged.items():
+            if any(_run_oracle_case(impl, case).get("ok") for case in cs):
+                behaviour_ids.add(cid)
+    per_node = []
+    anchored = 0
+    for nid in node_ids:
+        a_s = nid in static_ids
+        a_m = nid in manifest_ids
+        a_b = (nid in behaviour_ids) if (behaviour_measured and nid.startswith("AC-")) else None
+        anchored_any = a_s or a_m or bool(a_b)
+        # the MEASURED footing excludes the manifest: the manifest is what the compiler
+        # CLAIMED (and the prompt handed it the ids), so counting it as recovered would be
+        # tautological -- the 1.000 that means nothing (found on the first run of this tool)
+        anchored_meas = a_s or bool(a_b)
+        anchored += 1 if anchored_meas else 0
+        per_node.append({"id": nid, "static": a_s, "manifest": a_m,
+                         "behaviour": a_b, "anchored": anchored_meas,
+                         "claimed": anchored_any})
+    edges = ir_graph.get("edges") or []
+    anch_ids = {n["id"] for n in per_node if n["anchored"]}
+    edges_recovered = sum(1 for e in edges if e.get("from") in anch_ids and e.get("to") in anch_ids)
+    claimed = sum(1 for n in per_node if n["claimed"])
+    return {"dir": os.path.basename(cd), "units": len(units),
+            "ir_nodes": len(node_ids), "anchored": anchored, "claimed": claimed,
+            "recoverability": round(anchored / len(node_ids), 3) if node_ids else None,
+            "claimed_share": round(claimed / len(node_ids), 3) if node_ids else None,
+            "static_anchored": sum(1 for n in per_node if n["static"]),
+            "manifest_anchored": sum(1 for n in per_node if n["manifest"]),
+            "behaviour": ("UNMEASURED" if not behaviour_measured
+                          else sum(1 for n in per_node if n["behaviour"])),
+            "edges": len(edges), "edges_recovered": edges_recovered,
+            "unanchored": [n["id"] for n in per_node if not n["anchored"]],
+            "nodes": per_node}
+
+
+def _rt_entry(entry_dir, name):
+    ir_graph, ir_errors = _load_ir_at(os.path.join(entry_dir, IR_FILE))
+    try:
+        with open(os.path.join(entry_dir, "oracle", "ORACLE.json"), encoding="utf-8-sig") as fh:
+            cases = (json.load(fh) or {}).get("cases") or []
+    except (OSError, ValueError):
+        cases = []
+    rec = {"archetype": name, "compilations": [], "ir_nodes": None, "edges": None,
+           "recoverability_mean": None, "edges_recovered_mean": None, "reason": None}
+    if ir_graph is None or ir_errors:
+        rec["reason"] = "entry incomplete (missing/invalid IR)"
+        return rec
+    rec["ir_nodes"] = len(ir_graph.get("nodes") or [])
+    rec["edges"] = len(ir_graph.get("edges") or [])
+    for d in sorted(os.listdir(entry_dir)):
+        cd = os.path.join(entry_dir, d)
+        if d.startswith("c-") and os.path.isfile(os.path.join(cd, "COMPILATION.json")):
+            r = _rt_compilation(entry_dir, cd, ir_graph, cases)
+            if r:
+                rec["compilations"].append(r)
+    recs = [c["recoverability"] for c in rec["compilations"] if c["recoverability"] is not None]
+    if recs:
+        rec["recoverability_mean"] = round(sum(recs) / len(recs), 3)
+        rec["edges_recovered_mean"] = round(
+            sum(c["edges_recovered"] for c in rec["compilations"]) / len(rec["compilations"]), 2)
+    else:
+        rec["reason"] = "no compilations yet"
+    return rec
+
+
+def _render_rt_md(recs, agg):
+    lines = ["<!-- GENERATED by qa_ledger.py bench-roundtrip (ADR-030) -- measured run; do not hand-edit. -->",
+             "", "# DIAMOND-ROUNDTRIP -- how much of the pinned IR the reverse organs can anchor in each compiled artifact", "",
+             "**What this is NOT:** it does not regenerate an IR from code, it does not diff specs, "
+             "it does not infer requirements. Reverse discovery produces FACTS (ADR-013); the human "
+             "authors the spec. This instrument joins those facts against the human-authored IR "
+             "and reports, per compilation, which nodes have footing -- (a) static: the id is "
+             "literally referenced in a source unit or a static observation; (b) manifest: the "
+             "compiler's validated trace manifest maps the node to a unit that exists; (c) "
+             "behaviour: a withheld-oracle case tagged with the AC id passes (UNMEASURED where "
+             "the entry's oracle cases carry no AC tag -- absence named). **`recoverability` "
+             "counts ONLY static + behaviour footing** -- the manifest is what the compiler "
+             "CLAIMED (and the blind prompt handed it the node ids), so it is reported apart as "
+             "`claimed` and never counted as recovered: the first run of this instrument read "
+             "1.000 on every entry for exactly that reason. `edges recovered` = edges with both "
+             "endpoints MEASURED-anchored. Advisory: no bench verdict changes. The unanchored "
+             "list IS the honest gap, per compiler.", "",
+             "| Archetype | IR nodes | edges | recoverability (mean, measured) | edges recovered (mean) | per compilation (measured/nodes · static · behaviour · claimed-by-manifest · unanchored) |",
+             "|-----------|----------|-------|---------------------------------|------------------------|--------------------------------------------------------------------------------------------|"]
+    for r in recs:
+        if r["recoverability_mean"] is None:
+            lines.append("| %s | %s | %s | -- | -- | %s |" % (r["archetype"], r["ir_nodes"], r["edges"], r["reason"] or ""))
+            continue
+        pc = "; ".join("%s %d/%d · s%d · b%s · claimed %d · [%s]" % (
+            c["dir"], c["anchored"], c["ir_nodes"], c["static_anchored"],
+            c["behaviour"], c["manifest_anchored"], ",".join(c["unanchored"]) or "none")
+            for c in r["compilations"])
+        lines.append("| %s | %d | %d | %.3f | %.2f | %s |" % (
+            r["archetype"], r["ir_nodes"], r["edges"], r["recoverability_mean"],
+            r["edges_recovered_mean"], pc))
+    lines += ["", "**Aggregate:** %d entries measured · mean recoverability %s · entries with edges %d "
+              "· behaviour dimension measured in %d/%d entries." % (
+                  agg["measured"], "%.3f" % agg["mean_recoverability"] if agg["mean_recoverability"] is not None else "n/a",
+                  agg["with_edges"], agg["behaviour_measured"], agg["measured"]),
+              "", "*The manifest dimension is what the compiler CLAIMED (validated for shape, "
+              "not truth) and is excluded from recoverability; the static dimension is what the "
+              "artifact literally names; the behaviour dimension is what the withheld oracle can "
+              "attribute per AC -- and it is UNMEASURED wherever oracle cases are not tagged with "
+              "AC ids, which today is every entry: the honest state of reverse discovery is that "
+              "it anchors names, not semantics, until oracles carry per-AC tags. None of the three "
+              "is a spec.*", ""]
+    return "\n".join(lines)
+
+
+def cmd_bench_roundtrip(args):
+    if not os.path.isdir(args.dir):
+        print("[qa_ledger] bench-roundtrip: no directory %s" % args.dir, file=sys.stderr)
+        sys.exit(2)
+    entries = sorted(d for d in os.listdir(args.dir)
+                     if os.path.isfile(os.path.join(args.dir, d, IR_FILE)))
+    if not entries:
+        print("[qa_ledger] bench-roundtrip: no entries under %s" % args.dir, file=sys.stderr)
+        sys.exit(2)
+    recs = [_rt_entry(os.path.join(args.dir, e), e) for e in entries]
+    measured = [r for r in recs if r["recoverability_mean"] is not None]
+    agg = {"entries": len(recs), "measured": len(measured),
+           "mean_recoverability": (round(sum(r["recoverability_mean"] for r in measured) / len(measured), 3)
+                                   if measured else None),
+           "with_edges": sum(1 for r in measured if (r["edges"] or 0) > 0),
+           "behaviour_measured": sum(1 for r in measured
+                                     if any(c["behaviour"] != "UNMEASURED" for c in r["compilations"]))}
+    md = _render_rt_md(recs, agg)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(md)
+    if args.json:
+        print(json.dumps({"aggregate": agg, "raw": recs}, indent=2, ensure_ascii=False))
+    else:
+        print("BENCH-ROUNDTRIP: %d entries, %d measured -- mean recoverability %s, %d with edges, "
+              "behaviour measured in %d" % (agg["entries"], agg["measured"],
+                                            "%.3f" % agg["mean_recoverability"] if agg["mean_recoverability"] is not None else "n/a",
+                                            agg["with_edges"], agg["behaviour_measured"]))
+        for r in recs:
+            if r["recoverability_mean"] is not None:
+                print("  %-17s nodes %2d edges %d  recover %.3f  edges-rec %.2f" % (
+                    r["archetype"], r["ir_nodes"], r["edges"], r["recoverability_mean"], r["edges_recovered_mean"]))
+        if args.out:
+            print("  -> %s" % args.out)
+    sys.exit(0)
+
+
 def _bench_curable_obs(bench_dir, entry, cdir):
     """The curable set for one compilation: the SAME observations the M1 static extractor
     produces for the descriptor's static_surface, re-extracted at call time -- a verdict
@@ -6021,13 +6460,20 @@ def _bench_curable_obs(bench_dir, entry, cdir):
         with open(cj, encoding="utf-8-sig") as fh:
             c = json.load(fh)
         src = c.get("source") or []
-        unit = src[0].get("unit") if src else None
+        units = [u.get("unit") for u in src if isinstance(u, dict) and u.get("unit")]
     except (OSError, ValueError, AttributeError, IndexError):
-        unit = None
-    if not unit or not os.path.isfile(os.path.join(cd, unit.replace("/", os.sep))):
+        units = []
+    units = [u for u in units if os.path.isfile(os.path.join(cd, u.replace("/", os.sep)))]
+    if not units:
         return None, ("%s/%s: no resolvable source unit -- nothing to extract a surface "
                       "from" % (entry, cdir))
-    sobs, _uns = _extract_static_py(cd, [unit])
+    sobs, uns = [], []
+    for u in units:
+        so, un = _static_surface_for(cd, u)
+        sobs.extend(so)
+        uns.extend(un)
+    if not sobs and uns:
+        return None, ("%s/%s: static surface UNMEASURED -- %s" % (entry, cdir, "; ".join(uns)))
     return sobs, None
 
 
@@ -6114,7 +6560,9 @@ _LANG_PR_MARGIN = 0.02                              # mean oracle pass-rate drop
 
 def _lang_arm_metrics(arm_dir):
     """Measure ONE arm: per-compiler oracle green + unresolved_intent, and inter-compiler
-    variance over the arm's compilations. Reuses the M4/M5 organs unchanged."""
+    variance over the arm's compilations. Reuses the M4/M5 organs unchanged. Returns
+    (rec, errors, has_js) -- has_js is a footer-only signal for _render_lang_md (ADR-028);
+    it is never part of `rec`, so lang-compare's JSON output is untouched by it."""
     ir_graph, ir_errors = _load_ir_at(os.path.join(arm_dir, IR_FILE))
     try:
         with open(os.path.join(arm_dir, "oracle", "ORACLE.json"), encoding="utf-8-sig") as fh:
@@ -6126,7 +6574,7 @@ def _lang_arm_metrics(arm_dir):
            "mean_passrate": None, "ui_count": 0.0, "ui_distinct_regions": 0.0,
            "ui_rationale_len": 0.0}
     if ir_graph is None or ir_errors or not cases:
-        return rec, ["arm incomplete (missing/invalid IR or oracle)"]
+        return rec, ["arm incomplete (missing/invalid IR or oracle)"], False
     comp_dirs = sorted(d for d in os.listdir(arm_dir)
                        if d.startswith("c-") and
                        os.path.isfile(os.path.join(arm_dir, d, "COMPILATION.json")))
@@ -6140,7 +6588,7 @@ def _lang_arm_metrics(arm_dir):
             with open(cj, encoding="utf-8-sig") as fh:
                 c = json.load(fh)
             src = c.get("source") or []
-            unit = src[0].get("unit") if src else None
+            unit = _entry_unit(src)
             model = (c.get("compilation_report") or {}).get("model")
             uis = c.get("unresolved_intent") or []
         except (OSError, ValueError, AttributeError, IndexError):
@@ -6175,17 +6623,25 @@ def _lang_arm_metrics(arm_dir):
         for j in range(i + 1, len(good)):
             dists.append(_struct_distance(good[i], good[j]))
     rec["variance_score"] = round(sum(dists) / len(dists), 4) if dists else None
-    return rec, []
+    has_js = any(p.lower().endswith(".js") for p in impl_paths)
+    return rec, [], has_js
 
 
 def _struct_distance(a, b):
     """The ONE structural distance the program uses between two implementations -- mean of
     normalized LOC delta, AST-node delta and import-set Jaccard distance (0 = identical). Shared
     by the inter-compiler variance (lang-compare, bench) and the intra-model variance (bench-r2,
-    ADR-027) so their ratio is commensurable: same function, both sides."""
+    ADR-027) so their ratio is commensurable: same function, both sides.
+
+    ADR-028: a `.js` metrics dict has `ast_nodes: None` (no stdlib JS AST) -- when either side
+    lacks it, the distance is the mean over the dimensions BOTH sides have (LOC + import
+    Jaccard only). A cross-language pair never occurs (one archetype, one language), so this
+    never mixes a Python 3-dimensional distance with a JS 2-dimensional one within a pair."""
     ia, ib = set(a["imports"]), set(b["imports"])
     jac = (len(ia & ib) / len(ia | ib)) if (ia or ib) else 1.0
     dloc = abs(a["loc"] - b["loc"]) / max(a["loc"], b["loc"], 1)
+    if a.get("ast_nodes") is None or b.get("ast_nodes") is None:
+        return (dloc + (1.0 - jac)) / 2.0
     dast = abs(a["ast_nodes"] - b["ast_nodes"]) / max(a["ast_nodes"], b["ast_nodes"], 1)
     return (dloc + dast + (1.0 - jac)) / 3.0
 
@@ -6213,8 +6669,9 @@ def cmd_lang_compare(args):
               "the comparison requires the SAME withheld oracle; behaviour must be held fixed "
               "while only the authoring changes." % (hf[:12], hc[:12]), file=sys.stderr)
         sys.exit(2)
-    free, ef = _lang_arm_metrics(args.free)
-    ctrl, ec = _lang_arm_metrics(args.controlled)
+    free, ef, has_js_f = _lang_arm_metrics(args.free)
+    ctrl, ec, has_js_c = _lang_arm_metrics(args.controlled)
+    has_js = has_js_f or has_js_c
     if ef or ec:
         for e in ef + ec:
             print("[qa_ledger] lang-compare: %s" % e, file=sys.stderr)
@@ -6253,7 +6710,7 @@ def cmd_lang_compare(args):
               "margin": _LANG_MARGIN, "passrate_margin": _LANG_PR_MARGIN, "oracle_shared": True}
     if args.out:
         with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(_render_lang_md(report))
+            fh.write(_render_lang_md(report, has_js))
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
@@ -6277,7 +6734,7 @@ def cmd_lang_compare(args):
     sys.exit(0)
 
 
-def _render_lang_md(r):
+def _render_lang_md(r, has_js=False):
     d = r["delta"]
     lines = ["<!-- GENERATED by qa_ledger.py lang-compare (ADR-019) -- measured run; do not "
              "hand-edit. -->", "", "# CONTROLLED-LANGUAGE-REPORT", "",
@@ -6326,6 +6783,9 @@ def _render_lang_md(r):
               "", "*The oracle is byte-identical across both arms, so behaviour is held fixed; "
               "the only variable is the authoring discipline. The judgement of \"same semantic "
               "content\" between the two canonical packages is human — a stated limitation.*", ""]
+    if has_js:
+        lines += ["*JS pairs use a 2-dimensional distance (LOC + import Jaccard; no stdlib JS "
+                  "AST).*", ""]
     return "\n".join(lines)
 
 
@@ -10484,6 +10944,17 @@ def build_parser():
     pbr.add_argument("--out", default=None, help="write DIAMOND-BENCH-R2.md here")
     pbr.add_argument("--json", action="store_true")
     pbr.set_defaults(func=cmd_bench_r2)
+
+    prt = sub.add_parser(
+        "bench-roundtrip",
+        help="round-trip recoverability (ADR-030): per compilation, which pinned-IR nodes the "
+             "mechanical reverse organs can anchor in the compiled artifact -- static id "
+             "reference, validated manifest claim, tagged withheld-oracle behaviour -- and the "
+             "unanchored gap list; regenerates NO IR, infers NO spec; advisory, deterministic")
+    prt.add_argument("--dir", required=True, help="the bench directory")
+    prt.add_argument("--out", default=None, help="write DIAMOND-ROUNDTRIP.md here")
+    prt.add_argument("--json", action="store_true")
+    prt.set_defaults(func=cmd_bench_roundtrip)
 
     plc = sub.add_parser(
         "lang-compare",

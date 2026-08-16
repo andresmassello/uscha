@@ -37,15 +37,18 @@ compiler, reverse discovery is the decompiler — and code becomes a regenerable
 artifact, so the spec package + behavior ledger is the canonical asset of a system.
 Truth-pass status: the human-judgment layer (curation, oracle, id-level roundtrip) is
 real and shipped; implementation replaceability is now demonstrated for bounded systems
-(the Diamond Bench, kit 1.74–1.83: 7 of 10 archetypes regenerate to the same system,
-mechanically certified by a withheld oracle — ADR-017/018/020/025); semantic round-trip, full
-code regenerability of arbitrary systems, and a shared drift/discovery engine remain
-VISION, deferred until they can be measured (ADR-011). The framing is positioning where
+(the Diamond Bench, kit 1.74–1.85: 9 of 12 archetypes (11 Python + 1 JavaScript, one
+multi-unit) regenerate to the same system, mechanically certified by a withheld oracle
+— ADR-017/018/020/025/028/029); semantic round-trip is now REAL but bounded (kit 1.85, ADR-030: bench-roundtrip measures how
+much of the human-authored IR the mechanical reverse organs can anchor in each compiled artifact
+-- 0.062 on static footing, behaviour UNMEASURED until oracles carry per-AC tags; it anchors
+names, not semantics, and regenerates no spec); full code regenerability of arbitrary systems
+and a shared drift/discovery engine remain VISION, deferred until they can be measured (ADR-011). The framing is positioning where
 it says VISION and a measured mechanism where it says REAL.
 
-The kit (v1.84.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+The kit (v1.85.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil) —
-plus a pure-Python engine (qa_ledger.py, 50 subcommands, zero runtime dependencies)
+plus a pure-Python engine (qa_ledger.py, 51 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux
 (Python 3.8+). Install for one agent, or `--target all`:
 `npx --yes @andresmassello/uscha@latest install --target claude`

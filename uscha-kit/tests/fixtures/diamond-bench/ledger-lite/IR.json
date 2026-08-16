@@ -1,0 +1,118 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-LG-01",
+      "type": "AC",
+      "statement": "a balanced posting (amounts sum to 0, ≥ 2 lines) is accepted and its lines",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-LG-02",
+      "type": "AC",
+      "statement": "an unbalanced posting, or one with fewer than two lines, is rejected: its id is",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 5
+      }
+    },
+    {
+      "id": "AC-LG-03",
+      "type": "AC",
+      "statement": "a posting whose id was already seen in the batch (accepted or rejected) is",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 7
+      }
+    },
+    {
+      "id": "AC-LG-04",
+      "type": "AC",
+      "statement": "balances list only accounts touched by accepted postings; `rejected` is in input",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 9
+      }
+    },
+    {
+      "id": "AC-LG-05",
+      "type": "AC",
+      "statement": "shape problems (not an array, non-object element, missing/mistyped id/lines/",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 11
+      }
+    },
+    {
+      "id": "AC-LG-06",
+      "type": "AC",
+      "statement": "the system is two units: `source/model.py` (no I/O, `post(postings) ->",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 13
+      }
+    },
+    {
+      "id": "ADR-001",
+      "type": "DECISION",
+      "statement": "The model/CLI seam — acceptance and arithmetic live in `model`, I/O and shape live in `cli`",
+      "source": {
+        "file": "docs/adr/ADR-001-model-cli-seam.md",
+        "line": 1
+      }
+    },
+    {
+      "id": "INV-LG-BALANCE-01",
+      "type": "INV",
+      "statement": "the journal never goes out of balance",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "INV-LG-SEAM-01",
+      "type": "INV",
+      "statement": "balances are computed in exactly one place",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 5
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "ADR-001",
+      "to": "INV-LG-SEAM-01",
+      "type": "DECISION->INV"
+    },
+    {
+      "from": "ADR-001",
+      "to": "AC-LG-04",
+      "type": "REQ->AC"
+    },
+    {
+      "from": "ADR-001",
+      "to": "AC-LG-05",
+      "type": "REQ->AC"
+    }
+  ],
+  "untyped": [],
+  "stats": {
+    "nodes": 9,
+    "edges": 3,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 2,
+      "AC": 6,
+      "DECISION": 1
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "1b4e614b94fdcbe75e064f02ab26e0e8ad40aa3a5b71f66a5809671ed06eabae"
+}

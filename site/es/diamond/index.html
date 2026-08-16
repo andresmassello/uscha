@@ -261,9 +261,9 @@
         <tr><td>Round-trip por cobertura de ID (¿qué specs son trazables en el código?)</td>
             <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
         <tr><td>Round-trip semántico (¿el código <em>dice lo mismo</em> que la spec?)</td>
-            <td><span class="chip vision">VISIÓN</span></td><td>diferido con condiciones · ADR-011</td></tr>
+            <td><span class="chip real">REAL</span> (medido, acotado)</td><td>recoverability 0.062 medido, comportamiento UNMEASURED — ancla nombres, no semántica · 1.85 · ADR-030</td></tr>
         <tr><td>Reemplazabilidad de implementación, demostrada en sistemas acotados — modelos independientes regeneran el mismo sistema desde el paquete canónico, y un oráculo oculto lo certifica</td>
-            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 7/10 arquetipos PASS, 3 PARTIAL · 1.74–1.83 · ADR-017/018/020/025</td></tr>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 arquetipos (11 Python + 1 JavaScript, uno multi-unidad): 9 PASS, 3 PARTIAL · 1.74–1.85 · ADR-017/018/020/025/028/029</td></tr>
         <tr><td>Fidelidad por compilador (reverse discovery sobre cada artefacto compilado) + curación humana de código generado por máquina, un veredicto por observación</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED queda literal donde no hay veredicto</td></tr>
         <tr><td>La autoría controlada (EARS+STE) reduce la varianza entre compiladores</td>
@@ -287,13 +287,13 @@
     registradas — son lo único que vale la pena migrar.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      Estado verificado contra kit 1.84.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-027,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.84.0 · los
+      Estado verificado contra kit 1.85.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-030,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.85.0 · los
       estados REAL/VISIÓN siguen la regla
       INV-TRUTH-01 del repo.
     </p>
 
-    <h2>07 · El programa, medido — T0 → 1.84.0</h2>
+    <h2>07 · El programa, medido — T0 → 1.85.0</h2>
     <p>El programa Diamond corrió como ocho releases del kit midiéndose a sí mismo. Cada
     número de abajo sale de un reporte commiteado y regenerable en el repo — ninguno es
     narrado:</p>
@@ -309,6 +309,15 @@
         <tr><td>Varianza intra-modelo, el piso de ruido — bench-r2 sobre 10 arquetipos × 3 modelos × 2 corridas</td>
             <td>NOISY: las re-corridas del mismo modelo difieren estructuralmente casi tanto como modelos distintos (intra/inter medio 0.98), mientras el comportamiento se mantiene estable en 26 de 30 re-corridas. Toda afirmación de varianza del programa lleva ahora un calificador SIGNAL/NOISY/NOISE por arquetipo, y la lectura del lenguaje controlado de arriba es comportamiento-primero.</td>
             <td>1.84</td></tr>
+        <tr><td>Primer arquetipo no-Python — un rate limiter de token-bucket en JavaScript, 3 compiladores ciegos bajo un oráculo oculto</td>
+            <td>PASS 25/25 × 3, implementaciones distintas, superficie estática (exports del módulo listados por Node) 3/6/3 — la afirmación de reemplazabilidad se sostiene fuera de Python; una entrada JS sin node en el PATH se lee como PENDING/UNMEASURED, nunca como un pase falso.</td>
+            <td>1.85</td></tr>
+        <tr><td>Primer arquetipo multi-unidad — ledger-lite: dos módulos unidos por un ADR de costura, compile/0.1 ejercitado sobre 2 unidades fuente, 3 compiladores ciegos bajo un oráculo oculto</td>
+            <td>El primer IR del bench con aristas reales (3, extraídas de la decisión de costura): PASS 24/24 × 3, unidad de entrada enrutada a través del CLI sobre ambas unidades, superficie estática main+post — la costura se sostiene bajo 3 compiladores independientes; el wrong/ que rompe la costura (lógica de balance movida al CLI) y el que ignora por completo la unidad del modelo leen ambos en rojo.</td>
+            <td>1.85</td></tr>
+        <tr><td>Recuperabilidad round-trip — cuánto de la IR fijada pueden anclar los órganos reversos mecánicos, sobre 12 arquetipos × 3 compiladores cada uno</td>
+            <td>Recoverability media 0.062, medida — los órganos reversos anclan nombres, no semántica; el anclaje del manifest leería 1.000 y se excluye por tautológico (es lo que el compilador CLAIMEÓ, no lo recuperado); la dimensión de comportamiento está UNMEASURED en 12/12 (ningún caso de oráculo lleva tag de AC todavía). La mitad reversa del diamante es una medición con techo declarado, no una promesa.</td>
+            <td>1.85</td></tr>
         <tr><td>Fidelidad por compilador — el extractor estático de M1 aplicado a cada artefacto compilado</td>
             <td>Compiladores casi idénticos en conducta exponen superficies visiblemente distintas: 19–21/23 sobre el mismo oráculo a través de 5, 4 y 8 funciones públicas.</td>
             <td>1.79</td></tr>

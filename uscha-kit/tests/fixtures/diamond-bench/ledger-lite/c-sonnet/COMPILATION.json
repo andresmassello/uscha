@@ -1,0 +1,81 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "1b4e614b94fdcbe75e064f02ab26e0e8ad40aa3a5b71f66a5809671ed06eabae",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "two units: source/model.py (pure) + source/cli.py (entry, imports model); run python cli.py from source/"
+  ],
+  "source": [
+    {
+      "unit": "source/model.py",
+      "sha256": "844b6d4798e3cdbbe719fff37214031cc5e21f552f054559539e7eea2dcbc829"
+    },
+    {
+      "unit": "source/cli.py",
+      "sha256": "aef9a301e7f53b60a17e77d8d7028e7fc954df98af77a71b8a806691c2e27166"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/model.py",
+      "implements": [
+        "AC-LG-01",
+        "AC-LG-02",
+        "AC-LG-03",
+        "AC-LG-04",
+        "AC-LG-06",
+        "ADR-001",
+        "INV-LG-BALANCE-01",
+        "INV-LG-SEAM-01"
+      ]
+    },
+    {
+      "unit": "source/cli.py",
+      "implements": [
+        "AC-LG-04",
+        "AC-LG-05",
+        "AC-LG-06",
+        "ADR-001",
+        "INV-LG-SEAM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-LG-05",
+      "decision": "a JSON float amount (e.g. 5.0) is treated as mistyped and yields ERROR, since the spec requires 'integer' and JSON preserves the float/int distinction",
+      "rationale": "the spec only carves out booleans as a named exception to 'integer'; floats are not integers so they fall under 'mistyped amount'"
+    },
+    {
+      "ir_region": "AC-LG-03",
+      "decision": "a posting's id is added to the seen-id set before checking balance/line-count, so a later duplicate of a rejected-for-imbalance id is still rejected as a duplicate rather than re-evaluated for balance",
+      "rationale": "the spec says duplicate means 'an id already seen... accepted or rejected earlier', implying rejected ids also occupy the id namespace"
+    },
+    {
+      "ir_region": "AC-LG-05",
+      "decision": "a posting object missing the 'id' or 'lines' key entirely is treated the same as a present-but-mistyped key: whole-input ERROR",
+      "rationale": "the spec groups 'missing/mistyped id, lines, account or amount' together as one error class, not as separate behaviors"
+    },
+    {
+      "ir_region": "AC-LG-02 / AC-LG-03",
+      "decision": "duplicate-id detection happens before the balance/line-count check inside model.post, so a duplicate id is always reported as a duplicate rejection even if its lines would also have been unbalanced",
+      "rationale": "the spec does not state a precedence between the two rejection reasons; since 'rejected' only records ids (not reasons), the choice is behaviorally invisible except for the seen-id bookkeeping timing, which AC-LG-03's wording implies should run first"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T13:00:00+00:00",
+      "finished": "2026-08-16T13:00:00+00:00"
+    },
+    "constraint_handling": "first multi-unit bench archetype; the seam ADR-001 is in the canonical package (ADR-029)"
+  },
+  "_integrity": "815e68f018cfb19db16c1f158e5b162f87b505c981168701e367f32e4b662136"
+}

@@ -261,9 +261,9 @@
         <tr><td>Round-trip by ID coverage (which specs are traceable in the code?)</td>
             <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
         <tr><td>Semantic round-trip (does the code <em>say the same thing</em> as the spec?)</td>
-            <td><span class="chip vision">VISION</span></td><td>deferred with conditions · ADR-011</td></tr>
+            <td><span class="chip real">REAL</span> (measured, bounded)</td><td>recoverability 0.062 measured, behaviour UNMEASURED — anchors names, not semantics · 1.85 · ADR-030</td></tr>
         <tr><td>Implementation replaceability, demonstrated on bounded systems — independent models regenerate the same system from the canonical package, a withheld oracle certifies it</td>
-            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 7/10 archetypes PASS, 3 PARTIAL · 1.74–1.83 · ADR-017/018/020/025</td></tr>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 archetypes (11 Python + 1 JavaScript, one multi-unit): 9 PASS, 3 PARTIAL · 1.74–1.85 · ADR-017/018/020/025/028/029</td></tr>
         <tr><td>Per-compiler fidelity (reverse discovery over each compiled artifact) + human curation of machine-generated code, one verdict per observation</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED stays literal where no verdict exists</td></tr>
         <tr><td>Controlled authoring (EARS+STE) reduces inter-compiler variance</td>
@@ -287,12 +287,12 @@
     the only thing worth migrating.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      State verified against kit 1.84.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016–ADR-027,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.84.0 · the REAL/VISION
+      State verified against kit 1.85.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016–ADR-030,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.85.0 · the REAL/VISION
       labels follow the repo's INV-TRUTH-01 rule.
     </p>
 
-    <h2>07 · The program, measured — T0 → 1.84.0</h2>
+    <h2>07 · The program, measured — T0 → 1.85.0</h2>
     <p>The Diamond program ran as eight releases of the kit measuring itself. Every number
     below comes from a committed, regenerable report in the repo — none is narrated:</p>
     <table>
@@ -307,6 +307,15 @@
         <tr><td>Intra-model variance, the noise floor — bench-r2 over 10 archetypes × 3 models × 2 runs</td>
             <td>NOISY: same-model reruns differ structurally about as much as different models do (mean intra/inter 0.98), while behaviour stays stable on 26 of 30 reruns. Every variance claim the program makes now carries a per-entry SIGNAL/NOISY/NOISE qualifier, and the controlled-language reading above is behaviour-first.</td>
             <td>1.84</td></tr>
+        <tr><td>First non-Python archetype — a JavaScript token-bucket rate limiter, 3 blind compilers under a withheld oracle</td>
+            <td>PASS 25/25 × 3, distinct implementations, static surface (module exports listed by Node) 3/6/3 — the replaceability claim holds outside Python; a JS entry with no node on PATH reads PENDING/UNMEASURED, never a fake pass.</td>
+            <td>1.85</td></tr>
+        <tr><td>First multi-unit archetype — ledger-lite: two modules joined by a seam ADR, compile/0.1 exercised over 2 source units, 3 blind compilers under a withheld oracle</td>
+            <td>The bench's first IR with real edges (3, extracted from the seam decision): PASS 24/24 × 3, entry unit routed through the CLI over both units, static surface main+post — the seam holds under 3 independent compilers; the wrong/ that breaks the seam (balance logic moved into the CLI) and the one that ignores the model unit entirely both read red.</td>
+            <td>1.85</td></tr>
+        <tr><td>Round-trip recoverability — how much of the pinned IR the mechanical reverse organs anchor, over 12 archetypes × 3 compilers each</td>
+            <td>Mean recoverability 0.062, measured — the reverse organs anchor names, not semantics; the manifest footing would read 1.000 and is excluded as tautological (it is what the compiler CLAIMED, not what was recovered); the behaviour dimension is UNMEASURED in 12/12 (no oracle case is tagged with an AC id yet). The diamond's reverse half is a measurement with a stated ceiling, not a promise.</td>
+            <td>1.85</td></tr>
         <tr><td>Fidelity per compiler — the M1 static extractor applied to each compiled artifact</td>
             <td>Behaviourally near-identical compilers expose visibly different surfaces: 19–21/23 on the same oracle through 5, 4 and 8 public functions.</td>
             <td>1.79</td></tr>

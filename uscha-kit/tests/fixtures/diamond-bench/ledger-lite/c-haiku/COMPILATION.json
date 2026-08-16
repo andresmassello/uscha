@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "1b4e614b94fdcbe75e064f02ab26e0e8ad40aa3a5b71f66a5809671ed06eabae",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "two units: source/model.py (pure) + source/cli.py (entry, imports model); run python cli.py from source/"
+  ],
+  "source": [
+    {
+      "unit": "source/model.py",
+      "sha256": "83dd3d1861091bc2fb51f55800eede88953bc73bf6c26f634d20f0950274459a"
+    },
+    {
+      "unit": "source/cli.py",
+      "sha256": "748a93a8c6cc4b75bd58aa1c2d5ffbf6059314387984916d324b62faaebed8eb"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/model.py",
+      "implements": [
+        "AC-LG-01",
+        "AC-LG-02",
+        "AC-LG-03",
+        "AC-LG-04",
+        "AC-LG-06",
+        "ADR-001",
+        "INV-LG-BALANCE-01",
+        "INV-LG-SEAM-01"
+      ]
+    },
+    {
+      "unit": "source/cli.py",
+      "implements": [
+        "AC-LG-04",
+        "AC-LG-05",
+        "AC-LG-06",
+        "ADR-001"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-LG-04",
+      "decision": "Accounts in balances dict ordered by insertion order (order of first appearance in accepted postings)",
+      "rationale": "Spec does not mandate account ordering. Python 3.7+ dicts preserve insertion order; this natural order reflects the sequence accounts are first seen."
+    },
+    {
+      "ir_region": "AC-LG-05",
+      "decision": "Empty lines array treated as shape-valid structure, passed to model for logical rejection (insufficient lines rule)",
+      "rationale": "Spec explicitly distinguishes shape errors (structural JSON validity) from logical rejections (business rules). Empty array is structurally valid JSON but fails ≥2 lines requirement."
+    },
+    {
+      "ir_region": "AC-LG-04",
+      "decision": "JSON output formatted via json.dumps() with default settings (no pretty-print, no key sorting)",
+      "rationale": "Spec states only structure and values are fixed, not formatting. Using standard json.dumps behavior."
+    },
+    {
+      "ir_region": "AC-LG-03",
+      "decision": "Duplicate id detection via set membership; rejected list maintains input order via sequential append",
+      "rationale": "Spec requires rejected list in input order. Set provides O(1) duplicate detection; list append preserves order. Alternative approaches (linear scan) would be O(n) per posting."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T13:00:00+00:00",
+      "finished": "2026-08-16T13:00:00+00:00"
+    },
+    "constraint_handling": "first multi-unit bench archetype; the seam ADR-001 is in the canonical package (ADR-029)"
+  },
+  "_integrity": "c9e782a049a30ab387990765b032753193137b7dfb4bcf5e3aa5a73f0fcbca82"
+}

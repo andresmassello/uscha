@@ -8,8 +8,10 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 |-----------|---------|--------------------------------|----------|--------------|
 | crud-store | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
 | guard | PARTIAL | M1 19/23, M2 21/23, M3 21/23 | yes | 23 |
+| ledger-lite | PASS | M1 24/24, M2 24/24, M3 24/24 | yes | 24 |
 | parser | PASS | M1 21/21, M2 21/21, M3 21/21 | yes | 21 |
 | protocol-adapter | PASS | M1 15/15, M2 15/15, M3 15/15 | yes | 15 |
+| rate-limiter | PASS | M1 25/25, M2 25/25, M3 25/25 | yes | 25 |
 | rest-handler | PARTIAL | M1 14/15, M2 14/15, M3 15/15 | yes | 15 |
 | scheduler | PARTIAL | M1 25/30, M2 30/30, M3 26/30 | yes | 30 |
 | state-machine | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
@@ -17,7 +19,7 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 | ui-render | PASS | M1 13/13, M2 13/13, M3 13/13 | yes | 13 |
 | worker | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
 
-**Coverage:** 3 PARTIAL, 7 PASS (of 10 entries).
+**Coverage:** 3 PARTIAL, 9 PASS (of 12 entries).
 
 **Model map (published, not the headline):** M1 = haiku, M2 = opus, M3 = sonnet.
 
@@ -29,9 +31,6 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 12/12 GREEN
 - `c-sonnet` (M3): oracle 12/12 GREEN
 - discrimination stub: 1/12 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
-- fidelity `c-opus` (M2): trace 1.00 · surface 4 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 4/4)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
 
 ### guard — PARTIAL
 *core identity (min 83% of cases); divergence isolated*
@@ -39,9 +38,13 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 21/23
 - `c-sonnet` (M3): oracle 21/23
 - discrimination stub: 11/23 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 5 fn / 0 cls · oracle 0.826 · unexplained 0.00 · curation 1.000 (judged 5/5)
-- fidelity `c-opus` (M2): trace 1.00 · surface 4 fn / 0 cls · oracle 0.913 · unexplained 0.00 · curation 1.000 (judged 4/4)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 8 fn / 0 cls · oracle 0.913 · unexplained 0.00 · curation 1.000 (judged 8/8)
+
+### ledger-lite — PASS
+*all 3 compilations oracle-green and genuinely different -- the same system*
+- `c-haiku` (M1): oracle 24/24 GREEN
+- `c-opus` (M2): oracle 24/24 GREEN
+- `c-sonnet` (M3): oracle 24/24 GREEN
+- discrimination stub: 1/24 (oracle rejects the stub)
 
 ### parser — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
@@ -49,9 +52,6 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 21/21 GREEN
 - `c-sonnet` (M3): oracle 21/21 GREEN
 - discrimination stub: 9/21 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 2 fn / 1 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 3/3)
-- fidelity `c-opus` (M2): trace 1.00 · surface 3 fn / 2 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 5/5)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 3 fn / 2 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 5/5)
 
 ### protocol-adapter — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
@@ -59,9 +59,13 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 15/15 GREEN
 - `c-sonnet` (M3): oracle 15/15 GREEN
 - discrimination stub: 6/15 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 6 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 6/6)
-- fidelity `c-opus` (M2): trace 1.00 · surface 7 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 7/7)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 3 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 3/3)
+
+### rate-limiter — PASS
+*all 3 compilations oracle-green and genuinely different -- the same system*
+- `c-haiku` (M1): oracle 25/25 GREEN
+- `c-opus` (M2): oracle 25/25 GREEN
+- `c-sonnet` (M3): oracle 25/25 GREEN
+- discrimination stub: 0/25 (oracle rejects the stub)
 
 ### rest-handler — PARTIAL
 *core identity (min 93% of cases); divergence isolated*
@@ -69,9 +73,6 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 14/15
 - `c-sonnet` (M3): oracle 15/15 GREEN
 - discrimination stub: 1/15 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 2 fn / 0 cls · oracle 0.933 · unexplained 0.00 · curation 1.000 (judged 2/2)
-- fidelity `c-opus` (M2): trace 1.00 · surface 5 fn / 1 cls · oracle 0.933 · unexplained 0.00 · curation 1.000 (judged 6/6)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
 
 ### scheduler — PARTIAL
 *core identity (min 83% of cases); divergence isolated*
@@ -79,9 +80,6 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 30/30 GREEN
 - `c-sonnet` (M3): oracle 26/30
 - discrimination stub: 1/30 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 1 fn / 0 cls · oracle 0.833 · unexplained 0.00 · curation UNMEASURED
-- fidelity `c-opus` (M2): trace 1.00 · surface 4 fn / 1 cls · oracle 1.000 · unexplained 0.00 · curation UNMEASURED
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 1 fn / 0 cls · oracle 0.867 · unexplained 0.00 · curation UNMEASURED
 
 ### state-machine — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
@@ -89,9 +87,6 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 12/12 GREEN
 - `c-sonnet` (M3): oracle 12/12 GREEN
 - discrimination stub: 5/12 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 0 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation UNMEASURED
-- fidelity `c-opus` (M2): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
 
 ### transformer — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
@@ -99,9 +94,6 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 14/14 GREEN
 - `c-sonnet` (M3): oracle 14/14 GREEN
 - discrimination stub: 1/14 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
-- fidelity `c-opus` (M2): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
 
 ### ui-render — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
@@ -109,9 +101,6 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 13/13 GREEN
 - `c-sonnet` (M3): oracle 13/13 GREEN
 - discrimination stub: 2/13 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
-- fidelity `c-opus` (M2): trace 1.00 · surface 5 fn / 1 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 6/6)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 2 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 2/2)
 
 ### worker — PASS
 *all 3 compilations oracle-green and genuinely different -- the same system*
@@ -119,6 +108,5 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 - `c-opus` (M2): oracle 12/12 GREEN
 - `c-sonnet` (M3): oracle 12/12 GREEN
 - discrimination stub: 4/12 (oracle rejects the stub)
-- fidelity `c-haiku` (M1): trace 1.00 · surface 1 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 1/1)
-- fidelity `c-opus` (M2): trace 1.00 · surface 4 fn / 1 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 5/5)
-- fidelity `c-sonnet` (M3): trace 1.00 · surface 2 fn / 0 cls · oracle 1.000 · unexplained 0.00 · curation 1.000 (judged 2/2)
+
+*JS pairs use a 2-dimensional distance (LOC + import Jaccard; no stdlib JS AST).*

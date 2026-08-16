@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "7fb7475c0463485d7262db40a7ef745e9866e04a40cea1ce2e080f09de9971de",
+    "schema_version": "0.1"
+  },
+  "target_stack": "javascript",
+  "implementation_constraints": [
+    "plain JavaScript, Node >= 18, no dependencies, CommonJS",
+    "reads one JSON value from stdin, prints one line, exits 0; module.exports + require.main guard"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.js",
+      "sha256": "41b421e916516b2fef2666c26308fd8dc29f8b1342ec0a7547eec0e235b90645"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.js",
+      "implements": [
+        "AC-RL-01",
+        "AC-RL-02",
+        "AC-RL-03",
+        "AC-RL-04",
+        "AC-RL-05",
+        "AC-RL-06",
+        "INV-RL-CLAMP-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "extra-keys-in-input-object",
+      "decision": "Unknown keys beyond capacity/refill/events are ignored, not an error",
+      "rationale": "The spec enumerates ERROR causes as missing/mistyped fields and bad events; it never lists unexpected keys, so tolerating them is the reading that does not invent a rejection rule."
+    },
+    {
+      "ir_region": "top-level-json-non-object",
+      "decision": "Arrays and null are rejected as 'not a JSON object'; only a plain object passes",
+      "rationale": "typeof null === 'object' and arrays are objects in JS, so an explicit isPlainObject guard is needed to honour 'input that is not a JSON object -> ERROR' in the JSON sense rather than the JS sense."
+    },
+    {
+      "ir_region": "stdin-parse-failure-and-empty-input",
+      "decision": "Unparseable or empty stdin is treated as malformed input -> ERROR, and a failed stdin read degrades to the empty string rather than throwing",
+      "rationale": "The contract mandates exit 0 with exactly one printed line; letting a JSON.parse throw or an EIO propagate would produce a stack trace and a non-zero exit, violating the contract."
+    },
+    {
+      "ir_region": "missing-key-vs-undefined-value",
+      "decision": "Presence is checked with hasOwnProperty before type-checking the value",
+      "rationale": "'Missing capacity/refill/events' and 'mistyped' are separate error causes but converge on ERROR; the explicit presence check makes the missing-key path unambiguous rather than relying on undefined failing the integer test."
+    },
+    {
+      "ir_region": "trailing-newline-on-output",
+      "decision": "console.log emits the JSON followed by a newline; no trailing-newline suppression",
+      "rationale": "The spec says 'prints one line', and a line conventionally terminates with a newline; formatting beyond structure and values is explicitly unfixed by the spec."
+    }
+  ],
+  "compilation_report": {
+    "stack": "javascript",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T12:00:00+00:00",
+      "finished": "2026-08-16T12:00:00+00:00"
+    },
+    "constraint_handling": "first non-Python bench archetype (ADR-028)"
+  },
+  "_integrity": "85b251cb7e8428f3ea6f4c91fc3816a90ef39bab096170065eb18484eb634e2e"
+}

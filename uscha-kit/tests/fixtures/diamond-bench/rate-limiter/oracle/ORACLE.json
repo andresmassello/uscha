@@ -1,0 +1,415 @@
+{
+  "_generated_by": "hand-designed cases from the canonical SPEC BEFORE any compilation (ADR-028); expectations produced by a JS reference implementation that is NOT a bench compilation and is never committed. WITHHELD from every compiler. Discrimination checked pre-compilation against a degenerate stub and one wrong/ implementation per rule. Target: JavaScript (node).",
+  "cases": [
+    {
+      "name": "empty-events-full-bucket",
+      "payload": {
+        "capacity": 3,
+        "refill": 1,
+        "events": []
+      },
+      "expected_json": {
+        "log": [],
+        "tokens": 3
+      }
+    },
+    {
+      "name": "single-allow",
+      "payload": {
+        "capacity": 1,
+        "refill": 1,
+        "events": [
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "drain-then-deny",
+      "payload": {
+        "capacity": 2,
+        "refill": 1,
+        "events": [
+          "req",
+          "req",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "allow",
+          "deny"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "tick-refills-one",
+      "payload": {
+        "capacity": 2,
+        "refill": 1,
+        "events": [
+          "req",
+          "req",
+          "tick",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "allow",
+          "allow"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "tick-clamps-at-capacity",
+      "payload": {
+        "capacity": 2,
+        "refill": 10,
+        "events": [
+          "tick",
+          "req",
+          "req",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "allow",
+          "deny"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "tick-at-full-is-noop",
+      "payload": {
+        "capacity": 2,
+        "refill": 1,
+        "events": [
+          "tick",
+          "tick",
+          "req",
+          "req",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "allow",
+          "deny"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "capacity-zero-denies-all",
+      "payload": {
+        "capacity": 0,
+        "refill": 5,
+        "events": [
+          "req",
+          "tick",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "deny",
+          "deny"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "refill-zero-never-replenishes",
+      "payload": {
+        "capacity": 1,
+        "refill": 0,
+        "events": [
+          "req",
+          "tick",
+          "tick",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "deny"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "order-req-before-tick",
+      "payload": {
+        "capacity": 1,
+        "refill": 1,
+        "events": [
+          "req",
+          "req",
+          "tick",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "deny",
+          "allow"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "order-tick-before-req",
+      "payload": {
+        "capacity": 1,
+        "refill": 1,
+        "events": [
+          "tick",
+          "req",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "deny"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "many-ticks-then-burst",
+      "payload": {
+        "capacity": 3,
+        "refill": 1,
+        "events": [
+          "req",
+          "req",
+          "req",
+          "tick",
+          "tick",
+          "tick",
+          "tick",
+          "req",
+          "req",
+          "req",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "deny"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "partial-refill",
+      "payload": {
+        "capacity": 5,
+        "refill": 2,
+        "events": [
+          "req",
+          "req",
+          "req",
+          "req",
+          "req",
+          "tick",
+          "req",
+          "req",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "deny"
+        ],
+        "tokens": 0
+      }
+    },
+    {
+      "name": "only-ticks",
+      "payload": {
+        "capacity": 2,
+        "refill": 1,
+        "events": [
+          "tick",
+          "tick",
+          "tick"
+        ]
+      },
+      "expected_json": {
+        "log": [],
+        "tokens": 2
+      }
+    },
+    {
+      "name": "only-reqs",
+      "payload": {
+        "capacity": 4,
+        "refill": 1,
+        "events": [
+          "req",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "allow"
+        ],
+        "tokens": 2
+      }
+    },
+    {
+      "name": "large-values",
+      "payload": {
+        "capacity": 1000,
+        "refill": 250,
+        "events": [
+          "req",
+          "req",
+          "req",
+          "req",
+          "req",
+          "tick",
+          "req",
+          "req",
+          "req"
+        ]
+      },
+      "expected_json": {
+        "log": [
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow",
+          "allow"
+        ],
+        "tokens": 997
+      }
+    },
+    {
+      "name": "malformed-not-object",
+      "payload": [
+        1,
+        2
+      ],
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-array-events-missing",
+      "payload": {
+        "capacity": 1,
+        "refill": 1
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-bool-capacity",
+      "payload": {
+        "capacity": true,
+        "refill": 1,
+        "events": []
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-float-refill",
+      "payload": {
+        "capacity": 2,
+        "refill": 1.5,
+        "events": []
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-negative-capacity",
+      "payload": {
+        "capacity": -1,
+        "refill": 1,
+        "events": []
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-negative-refill",
+      "payload": {
+        "capacity": 1,
+        "refill": -2,
+        "events": []
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-events-not-array",
+      "payload": {
+        "capacity": 1,
+        "refill": 1,
+        "events": "req"
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-unknown-event",
+      "payload": {
+        "capacity": 2,
+        "refill": 1,
+        "events": [
+          "req",
+          "nope"
+        ]
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-string-capacity",
+      "payload": {
+        "capacity": "2",
+        "refill": 1,
+        "events": []
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-null-refill",
+      "payload": {
+        "capacity": 2,
+        "refill": null,
+        "events": []
+      },
+      "expected_stdout": "ERROR"
+    }
+  ]
+}

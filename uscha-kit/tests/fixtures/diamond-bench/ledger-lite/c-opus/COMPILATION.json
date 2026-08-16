@@ -1,0 +1,86 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "1b4e614b94fdcbe75e064f02ab26e0e8ad40aa3a5b71f66a5809671ed06eabae",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, python 3.8+",
+    "two units: source/model.py (pure) + source/cli.py (entry, imports model); run python cli.py from source/"
+  ],
+  "source": [
+    {
+      "unit": "source/model.py",
+      "sha256": "5822991f9b6d00024caa5b84a4e78ce1ae8d7e1bd4b152da0f0cb9878b64a868"
+    },
+    {
+      "unit": "source/cli.py",
+      "sha256": "bd0c317dd5636d7954e69f000a723af6e940c543e6e4f2bf0bba8dd6591c1123"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/model.py",
+      "implements": [
+        "AC-LG-01",
+        "AC-LG-02",
+        "AC-LG-03",
+        "AC-LG-04",
+        "AC-LG-06",
+        "ADR-001",
+        "INV-LG-BALANCE-01",
+        "INV-LG-SEAM-01"
+      ]
+    },
+    {
+      "unit": "source/cli.py",
+      "implements": [
+        "AC-LG-04",
+        "AC-LG-05",
+        "AC-LG-06",
+        "ADR-001",
+        "INV-LG-SEAM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-LG-03",
+      "decision": "An id is marked as seen the moment the posting is first encountered — including when that first occurrence is itself rejected for being unbalanced — so a later posting reusing the id is rejected as a duplicate; the duplicate check runs BEFORE the balance/line-count check, so a duplicate id is rejected once for duplication rather than evaluated again",
+      "rationale": "The spec says a duplicate is an id 'already accepted or rejected earlier in the batch', which requires seen-tracking to include rejections; ordering the duplicate check first keeps a single rejection reason per posting and makes the outcome independent of whether the repeat is balanced"
+    },
+    {
+      "ir_region": "AC-LG-04 / output formatting",
+      "decision": "Balances are emitted as a JSON object built from a plain dict in first-touch insertion order (Python 3.7+ dicts preserve insertion order); keys are not sorted and no separators/indent options are set",
+      "rationale": "The spec explicitly leaves output formatting unfixed and constrains only structure and values, so the cheapest deterministic order — the order accounts are first touched by accepted postings — is used rather than inventing a sort contract"
+    },
+    {
+      "ir_region": "AC-LG-04 / zero balances",
+      "decision": "An account whose accepted lines net to 0 (including an account touched only by zero-amount lines) still appears in balances with value 0; accounts are pruned only when every posting touching them was rejected",
+      "rationale": "The spec states balances include every account appearing in at least one ACCEPTED posting and that zero-amount lines legally 'touch the account with 0', so presence is decided by acceptance, not by the resulting value"
+    },
+    {
+      "ir_region": "AC-LG-05 / ERROR surface",
+      "decision": "ERROR is printed to standard output (not stderr) and the process exits 0 via normal return from main(); malformed UTF-8 or unparseable JSON, a non-list top level, a non-object element, and missing or mistyped id/lines/account/amount all collapse to the same single ERROR line for the whole input, with no partial results emitted",
+      "rationale": "The contract requires one line on stdout and exit 0 in all cases, and states shape problems fail the whole input, so no per-posting error reporting or nonzero exit code is introduced"
+    },
+    {
+      "ir_region": "AC-LG-05 / extra keys",
+      "decision": "Unknown extra keys on a posting object or a line object are ignored rather than treated as shape violations",
+      "rationale": "The acceptance criterion enumerates shape problems as missing or mistyped required fields; rejecting unlisted extras would add a strictness the spec never asked for and would make the format non-extensible"
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "opus",
+    "model_version": "opus",
+    "timestamps": {
+      "started": "2026-08-16T13:00:00+00:00",
+      "finished": "2026-08-16T13:00:00+00:00"
+    },
+    "constraint_handling": "first multi-unit bench archetype; the seam ADR-001 is in the canonical package (ADR-029)"
+  },
+  "_integrity": "e8b198080246b9f13f89f70a48b4010f5f41e5ae19017231786774152c4190aa"
+}

@@ -3447,6 +3447,9 @@ rm -f "$KIT/reports/junit/.bench-curate-cases.json"  # same rule for T130
 rm -f "$KIT/reports/junit/.lang3-cases.json"      # same rule for T131
 rm -f "$KIT/reports/junit/.sched-cases.json"      # same rule for T132
 rm -f "$KIT/reports/junit/.r2-cases.json"         # same rule for T133
+rm -f "$KIT/reports/junit/.js-cases.json"         # same rule for T134
+rm -f "$KIT/reports/junit/.multi-cases.json"      # same rule for T135
+rm -f "$KIT/reports/junit/.rt-cases.json"         # same rule for T136
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -5266,7 +5269,7 @@ direct = json.loads(rr.stdout)["passed"]
 outp = os.path.join(tempfile.mkdtemp(), "DIAMOND-BENCH.md")
 subprocess.run([sys.executable, ENG, "bench", "--dir", BENCH, "--out", outp],
                capture_output=True, text=True, encoding="utf-8", errors="replace")
-res["AC-DB-01"] = (d.get("entries") == 10 and byarch.get("parser", {}).get("verdict") == "PASS"
+res["AC-DB-01"] = (d.get("entries") == 12 and byarch.get("parser", {}).get("verdict") == "PASS"
                    and byarch.get("crud-store", {}).get("verdict") == "PASS"
                    and all(r["verdict"] != "PENDING" for r in d.get("raw", []))
                    and any(c["oracle"]["passed"] == direct
@@ -5384,7 +5387,7 @@ def entry_complete(e):
         ("canonical", "SPEC.md"), ("canonical", "ACCEPTANCE.md"),
         ("canonical", "CONSTITUTION.md"), ("IR.json",), ("oracle", "ORACLE.json"),
         ("stub", "stub.py")))
-res["AC-BG-01"] = (d.get("entries") == 10 and all(entry_complete(e) for e in NEW5)
+res["AC-BG-01"] = (d.get("entries") == 12 and all(entry_complete(e) for e in NEW5)
                    and all(r["verdict"] != "PENDING" for r in d.get("raw", [])))
 res["AC-BG-02"] = all((byarch.get(e, {}).get("discrimination") or {}).get("stub_green") is False
                       for e in NEW5)
@@ -5429,7 +5432,7 @@ def wrongs_red(e):
         except ValueError:
             return False
     return True
-res["AC-BG-05"] = d.get("entries") == 10 and all(wrongs_red(e) for e in NEW5)
+res["AC-BG-05"] = d.get("entries") == 12 and all(wrongs_red(e) for e in NEW5)
 
 # Fidelity-per-compiler criteria (ADR-022): advisory descriptor, opt-in, UNMEASURED named.
 def bench_fid():
@@ -5959,8 +5962,8 @@ res["AC-SH-01"] = stub_ok and wrong_ok and disc_ok and len(wrongs) == 9
 
 # AC-SH-02: the three blind compilations validate against the pinned IR; unresolved_intent is
 # non-empty, bounded, and model-distinct (verbatim, not synthesized); the bench verdict for
-# scheduler is PARTIAL with the pinned per-compiler oracle counts; entries == 10 (the ninth
-# archetype landed).
+# scheduler is PARTIAL with the pinned per-compiler oracle counts; entries == 12 (rate-limiter
+# and ledger-lite have since joined the ninth archetype).
 cv_ok = True
 ui_fps = []
 for m in ("opus", "sonnet", "haiku"):
@@ -5980,7 +5983,7 @@ per_comp = dict((c["model"], c["oracle"]["passed"]) for c in sched_entry.get("co
 counts_ok = (per_comp == {"opus": 30, "sonnet": 26, "haiku": 25}
             and all(c["oracle"]["total"] == 30 for c in sched_entry.get("compilations", [])))
 res["AC-SH-02"] = (cv_ok and distinct_ok and sched_entry.get("verdict") == "PARTIAL"
-                   and counts_ok and d0.get("entries") == 10)
+                   and counts_ok and d0.get("entries") == 12)
 
 # AC-SH-03: lang-compare over scheduler-free vs scheduler-controlled (shared byte-identical
 # oracle, also byte-identical to the bench entry's own oracle -- one dispatch feeds both
@@ -6105,7 +6108,7 @@ def bench_r2_json(dirpath):
         return {}
 
 # AC-R2-01: bench --json is byte-identical with r2/ present vs r2/ hidden -- bench ignores the
-# second-run dirs entirely. The real bench still reports 10 entries, PARTIAL exactly
+# second-run dirs entirely. The real bench now reports 12 entries, PARTIAL exactly
 # {guard, rest-handler, scheduler}.
 # byte-identity is proven over a ONE-entry copy (protocol-adapter: 3 run-1 + 3 r2
 # compilations) -- a full 10-entry double bench pass is minutes of subprocess launches on
@@ -6119,11 +6122,14 @@ without_r2 = run("bench", "--dir", tcopy, "--json")
 d0 = bench_json(BENCH)
 partial = sorted(r["archetype"] for r in d0.get("raw", []) if r["verdict"] == "PARTIAL")
 res["AC-R2-01"] = (with_r2.stdout == without_r2.stdout and with_r2.returncode == 0
-                   and d0.get("entries") == 10
+                   and d0.get("entries") == 12
                    and partial == ["guard", "rest-handler", "scheduler"])
 
 # AC-R2-02: bench-r2 --json shape and per-entry class-from-ratio recomputation; an entry with
 # its r2/ removed reports has_r2 False, class None, a non-empty reason (absent, never 0).
+# rate-limiter and ledger-lite carry no r2/ at all (ADR-028, ADR-029) -- their has_r2 False is
+# the legitimately-absent case, not a shape defect, so the loop skips them without failing
+# shape_ok; the absence contract itself is asserted below by absent_ok/gap_ok.
 r2d0 = bench_r2_json(BENCH)
 raw = r2d0.get("raw", [])
 def expect_class(ratio):
@@ -6137,7 +6143,6 @@ def expect_class(ratio):
 shape_ok = True
 for r in raw:
     if not r.get("has_r2"):
-        shape_ok = False
         continue
     if r.get("class") not in ("SIGNAL", "NOISY", "NOISE"):
         shape_ok = False
@@ -6246,6 +6251,480 @@ PY
 case "$T133" in
   OK*) PASS=$((PASS+1)); echo "  ok   noise-floor: $T133";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T133";;
+esac
+
+echo "== T134 (1.85.0): the method leaves Python -- a JS archetype under the withheld oracle (ADR-028) =="
+T134=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
+res = {}
+spec = importlib.util.spec_from_file_location("qa_ledger_t134", ENG)
+q = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(q)
+
+def run(*a, env=None):
+    return subprocess.run([sys.executable, ENG] + list(a), capture_output=True,
+                          text=True, encoding="utf-8", errors="replace", env=env)
+
+def bench_json(dirpath, fidelity=False):
+    args = ["bench", "--dir", dirpath, "--json"] + (["--fidelity"] if fidelity else [])
+    r = run(*args)
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+def bench_r2_json(dirpath):
+    r = run("bench-r2", "--dir", dirpath, "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+# AC-JS-01: Python untouched -- the bench now reports 12 entries (rate-limiter and ledger-lite
+# join the 10 original Python archetypes) but every Python verdict is pinned exactly as it was
+# before ADR-028/ADR-029; bench-r2's aggregate is unaffected (neither rate-limiter nor
+# ledger-lite has r2/, so neither ever enters "measured"); lang-compare over the scheduler pair
+# is byte-for-byte the same computation (the refactor routes JS and multi-unit entries through
+# new organs, it does not touch the Python single-unit metrics path at all).
+d0 = bench_json(BENCH)
+WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "ledger-lite": "PASS",
+                "parser": "PASS", "protocol-adapter": "PASS", "rest-handler": "PARTIAL",
+                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PASS",
+                "ui-render": "PASS", "worker": "PASS"}
+py_verdicts_ok = all(
+    next((r for r in d0.get("raw", []) if r["archetype"] == a), {}).get("verdict") == v
+    for a, v in WANT_VERDICT.items())
+r2d0 = bench_r2_json(BENCH)
+agg = r2d0.get("aggregate", {})
+rl_r2 = next((r for r in r2d0.get("raw", []) if r["archetype"] == "rate-limiter"), {})
+ll_r2 = next((r for r in r2d0.get("raw", []) if r["archetype"] == "ledger-lite"), {})
+r2_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 5
+        and agg.get("noise") == 4 and agg.get("measured") == 10 and rl_r2.get("has_r2") is False
+        and ll_r2.get("has_r2") is False)
+rc_sh = run("lang-compare", "--free", os.path.join(CL, "scheduler-free"),
+           "--controlled", os.path.join(CL, "scheduler-controlled"), "--json")
+try:
+    rep_sh = json.loads(rc_sh.stdout)
+except ValueError:
+    rep_sh = {}
+lang_ok = (rep_sh.get("verdict") == "IMPROVED"
+          and rep_sh.get("free", {}).get("variance_score") == 0.0195
+          and rep_sh.get("controlled", {}).get("variance_score") == 0.1879)
+guard_impl = os.path.join(BENCH, "guard", "c-opus", "source", "guard.py")
+gm = q._impl_metrics(guard_impl)
+guard_ok = isinstance(gm.get("ast_nodes"), int) and "error" not in gm
+res["AC-JS-01"] = bool(d0.get("entries") == 12 and py_verdicts_ok and r2_ok and lang_ok
+                       and guard_ok)
+
+# AC-JS-02: the JS entry itself, run through the SAME oracle/discrimination organs as every
+# Python entry -- and the honest failure mode when node is absent. Written so the case is
+# meaningful whether or not this machine has node on PATH (CI does); when it does, a second,
+# harness-controlled absence is simulated so the "node missing" path is exercised for real
+# rather than only described.
+node = shutil.which("node")
+rl_dir = os.path.join(BENCH, "rate-limiter")
+rl_rec = next((r for r in d0.get("raw", []) if r["archetype"] == "rate-limiter"), {})
+if node is None:
+    res["AC-JS-02"] = bool(rl_rec.get("verdict") == "PENDING"
+                           and "node not on PATH" in (rl_rec.get("reason") or ""))
+else:
+    comp_ok = (rl_rec.get("verdict") == "PASS" and len(rl_rec.get("compilations", [])) == 3
+              and all(c.get("compile_valid") and c.get("oracle", {}).get("passed") == 25
+                      and c.get("oracle", {}).get("total") == 25
+                      for c in rl_rec.get("compilations", [])))
+    oracle_path = os.path.join(rl_dir, "oracle", "ORACLE.json")
+    stub_r = run("bootstrap-oracle", "--impl", os.path.join(rl_dir, "stub", "stub.js"),
+                "--oracle", oracle_path, "--json")
+    try:
+        stub_rep = json.loads(stub_r.stdout)
+    except ValueError:
+        stub_rep = {}
+    stub_ok = stub_rep.get("oracle_green") is False
+    wrong_dir = os.path.join(rl_dir, "wrong")
+    wrong_files = sorted(f for f in os.listdir(wrong_dir) if f.endswith(".js"))
+    wrong_ok = len(wrong_files) > 0
+    for wf in wrong_files:
+        wr = run("bootstrap-oracle", "--impl", os.path.join(wrong_dir, wf),
+                 "--oracle", oracle_path, "--json")
+        try:
+            wrep = json.loads(wr.stdout)
+        except ValueError:
+            wrep = {}
+        if wrep.get("oracle_green") is not False:
+            wrong_ok = False
+
+    # Node-absent simulation: a one-entry temp copy of rate-limiter, run with a PATH stripped
+    # down to only the python executable's own directory -- node cannot be found there.
+    tdir = tempfile.mkdtemp()
+    shutil.copytree(rl_dir, os.path.join(tdir, "rate-limiter"))
+    absent_env = dict(os.environ)
+    absent_env["PATH"] = os.path.dirname(sys.executable)
+    if os.name == "nt":
+        absent_env["SystemRoot"] = os.environ.get("SystemRoot", "")
+    ar = run("bench", "--dir", tdir, "--json", env=absent_env)
+    try:
+        absent_rep = json.loads(ar.stdout)
+    except ValueError:
+        absent_rep = {}
+    absent_rec = next((r for r in absent_rep.get("raw", [])
+                       if r["archetype"] == "rate-limiter"), {})
+    absent_ok = (absent_rec.get("verdict") == "PENDING"
+                and "node not on PATH" in (absent_rec.get("reason") or "")
+                and any(c.get("oracle", {}).get("unmeasured")
+                        for c in absent_rec.get("compilations", [])))
+    res["AC-JS-02"] = bool(comp_ok and stub_ok and wrong_ok and absent_ok)
+
+# AC-JS-03: the honesty of the JS metric -- no stdlib JS AST, so ast_nodes is None and the
+# structural distance drops to the two dimensions both sides actually have; the static surface
+# is the module's OWN exports, reported by node itself (not narrated by a heuristic).
+if node is None:
+    opus_impl = os.path.join(rl_dir, "c-opus", "source", "impl.js")
+    m_opus = q._impl_metrics(opus_impl)
+    res["AC-JS-03"] = bool(m_opus.get("ast_nodes") is None and isinstance(m_opus.get("loc"), int)
+                           and "fs" in (m_opus.get("imports") or []))
+else:
+    opus_impl = os.path.join(rl_dir, "c-opus", "source", "impl.js")
+    sonnet_impl = os.path.join(rl_dir, "c-sonnet", "source", "impl.js")
+    m_opus = q._impl_metrics(opus_impl)
+    m_sonnet = q._impl_metrics(sonnet_impl)
+    metrics_ok = (m_opus.get("ast_nodes") is None and isinstance(m_opus.get("loc"), int)
+                 and "fs" in (m_opus.get("imports") or []))
+    ia, ib = set(m_opus["imports"]), set(m_sonnet["imports"])
+    jac = (len(ia & ib) / len(ia | ib)) if (ia or ib) else 1.0
+    dloc = abs(m_opus["loc"] - m_sonnet["loc"]) / max(m_opus["loc"], m_sonnet["loc"], 1)
+    expected_dist = round((dloc + (1.0 - jac)) / 2.0, 6)
+    dist = q._struct_distance(m_opus, m_sonnet)
+    dist_ok = round(dist, 6) == expected_dist
+    sonnet_dir = os.path.join(rl_dir, "c-sonnet")
+    sobs, suns = q._extract_static_js(sonnet_dir, ["source/impl.js"])
+    stmt_set = set(o["statement"] for o in sobs)
+    static_ok = (stmt_set == {"source/impl.js exports function isInt",
+                              "source/impl.js exports function main",
+                              "source/impl.js exports function run"}
+                and not suns)
+    # scoped to the one entry -- a full 11-entry --fidelity pass reruns every oracle case for
+    # every compilation a second time (minutes of subprocess launches on Windows) and proves
+    # nothing more about rate-limiter than this one-entry copy does.
+    fdir = tempfile.mkdtemp()
+    shutil.copytree(rl_dir, os.path.join(fdir, "rate-limiter"))
+    fid_rep = bench_json(fdir, fidelity=True)
+    rl_fid = next((r for r in fid_rep.get("raw", []) if r["archetype"] == "rate-limiter"), {})
+    fid_ok = bool(rl_fid.get("compilations"))
+    for c in rl_fid.get("compilations", []):
+        ss = c.get("fidelity", {}).get("static_surface")
+        if not isinstance(ss, dict) or ss.get("functions") not in (3, 6):
+            fid_ok = False
+            continue
+        names = ss.get("names")
+        if not isinstance(names, list) or names != sorted(names):
+            fid_ok = False
+    res["AC-JS-03"] = bool(metrics_ok and dist_ok and static_ok and fid_ok)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".js-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T134" in
+  OK*) PASS=$((PASS+1)); echo "  ok   non-python-archetype: $T134";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T134";;
+esac
+
+echo "== T135 (1.85.0): the bench leaves the single file -- a multi-unit archetype with real IR edges (ADR-029) =="
+T135=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import importlib.util, io, json, os, subprocess, sys
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
+LL = os.path.join(BENCH, "ledger-lite")
+res = {}
+spec = importlib.util.spec_from_file_location("qa_ledger_t135", ENG)
+q = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(q)
+
+def run(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+def bench_json(dirpath, fidelity=False):
+    args = ["bench", "--dir", dirpath, "--json"] + (["--fidelity"] if fidelity else [])
+    r = run(*args)
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+def bench_r2_json(dirpath):
+    r = run("bench-r2", "--dir", dirpath, "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+d0 = bench_json(BENCH)
+byarch = {r["archetype"]: r for r in d0.get("raw", [])}
+
+# AC-MU-01: single-unit Python entries unchanged -- the same bench verdicts, the same scheduler
+# lang-compare numbers, the same noise-floor aggregate, and a single-unit compilation (guard,
+# c-opus) still carries entry_unit/units exactly as a one-source-file entry always has.
+WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "parser": "PASS",
+                "protocol-adapter": "PASS", "rate-limiter": "PASS", "rest-handler": "PARTIAL",
+                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PASS",
+                "ui-render": "PASS", "worker": "PASS"}
+py_verdicts_ok = all(byarch.get(a, {}).get("verdict") == v for a, v in WANT_VERDICT.items())
+rc_sh = run("lang-compare", "--free", os.path.join(CL, "scheduler-free"),
+           "--controlled", os.path.join(CL, "scheduler-controlled"), "--json")
+try:
+    rep_sh = json.loads(rc_sh.stdout)
+except ValueError:
+    rep_sh = {}
+lang_ok = (rep_sh.get("verdict") == "IMPROVED"
+          and rep_sh.get("free", {}).get("variance_score") == 0.0195
+          and rep_sh.get("controlled", {}).get("variance_score") == 0.1879)
+r2d0 = bench_r2_json(BENCH)
+agg = r2d0.get("aggregate", {})
+r2_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 5
+        and agg.get("noise") == 4 and agg.get("measured") == 10)
+guard_opus = next((c for c in byarch.get("guard", {}).get("compilations", [])
+                   if c.get("model") == "opus"), {})
+guard_unit_ok = (guard_opus.get("entry_unit") == "source/guard.py"
+                and guard_opus.get("units") == 1)
+res["AC-MU-01"] = bool(py_verdicts_ok and lang_ok and r2_ok and guard_unit_ok)
+
+# AC-MU-02: ledger-lite carries the bench's first IR with real edges (ADR-001, the seam
+# decision); every blind compilation ships two sha-validated source units mapped in the trace
+# manifest; the oracle runs through the entry unit (cli) over both units; the fidelity
+# descriptor lists names from both units.
+ir = json.load(io.open(os.path.join(LL, "IR.json"), encoding="utf-8"))
+ir_ok = (sum(1 for n in ir.get("nodes", []) if n.get("type") == "DECISION") >= 1
+        and len(ir.get("edges", [])) >= 2)
+comp_ok = True
+for m in ("opus", "sonnet", "haiku"):
+    cpath = os.path.join(LL, "c-" + m, "COMPILATION.json")
+    with io.open(cpath, encoding="utf-8-sig") as fh:
+        c = json.load(fh)
+    if len(c.get("source", [])) != 2:
+        comp_ok = False
+    rv = run("compile-validate", "--ir", os.path.join(LL, "IR.json"), "--compilation", cpath)
+    if rv.returncode != 0:
+        comp_ok = False
+    units = set(e.get("unit") for e in c.get("trace_manifest", []))
+    if units != {"source/model.py", "source/cli.py"}:
+        comp_ok = False
+ll_rec = byarch.get("ledger-lite", {})
+bench_ok = (ll_rec.get("verdict") == "PASS"
+           and all(c.get("oracle", {}).get("passed") == 24
+                   and c.get("oracle", {}).get("total") == 24
+                   and c.get("entry_unit") == "source/cli.py"
+                   and c.get("units") == 2
+                   for c in ll_rec.get("compilations", [])))
+fid = bench_json(BENCH, fidelity=True)
+fid_by = {r["archetype"]: r for r in fid.get("raw", [])}
+ll_fid = fid_by.get("ledger-lite", {})
+fid_ok = bool(ll_fid.get("compilations")) and all(
+    c.get("fidelity", {}).get("static_surface", {}).get("names") == ["main", "post"]
+    for c in ll_fid.get("compilations", []))
+res["AC-MU-02"] = bool(ir_ok and comp_ok and bench_ok and fid_ok)
+
+# AC-MU-03: discrimination holds for the multi-unit entry -- the stub and every wrong/
+# (including the one that breaks the seam by computing balances in the CLI, and the one that
+# ignores the model unit entirely) score below oracle-green.
+oracle_path = os.path.join(LL, "oracle", "ORACLE.json")
+stub_r = run("bootstrap-oracle", "--impl", os.path.join(LL, "stub", "source", "cli.py"),
+            "--oracle", oracle_path, "--json")
+try:
+    stub_rep = json.loads(stub_r.stdout)
+except ValueError:
+    stub_rep = {}
+stub_ok = stub_rep.get("oracle_green") is False
+wrong_dir = os.path.join(LL, "wrong")
+wrong_names = sorted(d for d in os.listdir(wrong_dir)
+                     if os.path.isfile(os.path.join(wrong_dir, d, "source", "cli.py")))
+wrong_verdicts = {}
+for wn in wrong_names:
+    wr = run("bootstrap-oracle", "--impl", os.path.join(wrong_dir, wn, "source", "cli.py"),
+             "--oracle", oracle_path, "--json")
+    try:
+        wrep = json.loads(wr.stdout)
+    except ValueError:
+        wrep = {}
+    wrong_verdicts[wn] = wrep.get("oracle_green")
+wrong_ok = bool(wrong_names) and all(v is False for v in wrong_verdicts.values())
+named_ok = (wrong_verdicts.get("balance-in-cli") is False
+           and wrong_verdicts.get("ignores-model") is False)
+disc_ok = (ll_rec.get("discrimination") or {}).get("stub_green") is False
+res["AC-MU-03"] = bool(stub_ok and wrong_ok and named_ok and disc_ok)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".multi-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T135" in
+  OK*) PASS=$((PASS+1)); echo "  ok   multi-unit-archetype: $T135";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T135";;
+esac
+
+echo "== T136 (1.85.0): the round trip gets its honest number -- reverse organs anchor facts, never a spec (ADR-030) =="
+T136=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import glob, io, json, os, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
+res = {}
+
+def run(*a, py=sys.executable):
+    return subprocess.run([py, ENG] + list(a), capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+def bench_json(dirpath):
+    r = run("bench", "--dir", dirpath, "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+def rt_json(dirpath, out=None, py=sys.executable):
+    args = ["bench-roundtrip", "--dir", dirpath, "--json"]
+    if out:
+        args += ["--out", out]
+    r = run(*args, py=py)
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+def snapshot(d):
+    out = set()
+    for dp, dn, fn in os.walk(d):
+        for f in fn:
+            out.add(os.path.relpath(os.path.join(dp, f), d))
+    return out
+
+def bad_ir_files(fileset):
+    bad = []
+    for p in fileset:
+        base = os.path.basename(p)
+        if base.startswith("IR") and base.endswith(".json") and base != "IR.json":
+            bad.append(p)
+        if "IR" + chr(39) in base:
+            bad.append(p)
+    return bad
+
+before = snapshot(BENCH)
+d0 = rt_json(BENCH)
+after = snapshot(BENCH)
+no_new_ir = (after == before) and not bad_ir_files(after)
+
+tmp_out = os.path.join(tempfile.mkdtemp(), "RT.md")
+rt_json(BENCH, out=tmp_out)
+tmp_md = io.open(tmp_out, encoding="utf-8").read()
+committed_md = io.open(os.path.join(root, "DIAMOND-ROUNDTRIP.md"), encoding="utf-8").read()
+phrases = ["does not regenerate an IR", "counts ONLY static + behaviour", "never counted as recovered"]
+phrase_ok = all(p in tmp_md for p in phrases) and all(p in committed_md for p in phrases)
+
+recs = d0.get("raw", [])
+agg = d0.get("aggregate", {})
+all_measured_12 = (len(recs) == 12 and agg.get("measured") == 12
+                   and all(r.get("recoverability_mean") is not None for r in recs))
+
+rc_sh = run("lang-compare", "--free", os.path.join(CL, "scheduler-free"),
+           "--controlled", os.path.join(CL, "scheduler-controlled"), "--json")
+try:
+    rep_sh = json.loads(rc_sh.stdout)
+except ValueError:
+    rep_sh = {}
+lang_ok = (rep_sh.get("verdict") == "IMPROVED"
+          and rep_sh.get("free", {}).get("variance_score") == 0.0195
+          and rep_sh.get("controlled", {}).get("variance_score") == 0.1879)
+
+WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "parser": "PASS",
+                "protocol-adapter": "PASS", "rest-handler": "PARTIAL",
+                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PASS",
+                "ui-render": "PASS", "worker": "PASS", "rate-limiter": "PASS",
+                "ledger-lite": "PASS"}
+b0 = bench_json(BENCH)
+byarch = {r["archetype"]: r for r in b0.get("raw", [])}
+bench_ok = (len(b0.get("raw", [])) == 12
+           and all(byarch.get(a, {}).get("verdict") == v for a, v in WANT_VERDICT.items()))
+
+res["AC-RT-01"] = bool(phrase_ok and no_new_ir and all_measured_12 and lang_ok and bench_ok)
+
+# AC-RT-02: every compilation's per-node accounting is internally consistent, and the manifest
+# footing is never counted as recovered -- the tautology this instrument was built to name.
+per_ok = True
+ll_edges_ok = True
+for r in recs:
+    for c in r.get("compilations", []):
+        rec = c.get("recoverability")
+        if rec is None or not (0 <= rec <= 1):
+            per_ok = False
+        anchored = c.get("anchored")
+        static_a = c.get("static_anchored")
+        beh = c.get("behaviour")
+        beh_int = beh if isinstance(beh, int) else None
+        if not (anchored <= static_a + (beh_int or 0) and anchored >= max(static_a, beh_int or 0)):
+            per_ok = False
+        if not (c.get("claimed") >= anchored):
+            per_ok = False
+        if beh != "UNMEASURED":
+            per_ok = False
+        if not (c.get("edges_recovered") <= c.get("edges")):
+            per_ok = False
+        unanchored = c.get("unanchored")
+        if not isinstance(unanchored, list) or len(unanchored) != c.get("ir_nodes") - anchored:
+            per_ok = False
+        for n in c.get("nodes", []):
+            if not all(k in n for k in ("id", "static", "manifest", "behaviour", "anchored", "claimed")):
+                per_ok = False
+    if r["archetype"] == "ledger-lite":
+        if not all(c.get("edges") == 3 for c in r.get("compilations", [])):
+            ll_edges_ok = False
+        if r.get("edges_recovered_mean") != 0.33:
+            ll_edges_ok = False
+res["AC-RT-02"] = bool(per_ok and ll_edges_ok)
+
+# AC-RT-03: the aggregate pinned to today's measured state -- behaviour UNMEASURED everywhere
+# (no oracle case is tagged with an AC id yet), the id-regex + file-read + oracle-run path
+# carries no AST, so it is expected interpreter-stable; measured first, pinned second.
+WANT_MEAN = {
+    "crud-store": 0.000, "guard": 0.125, "ledger-lite": 0.148, "parser": 0.000,
+    "protocol-adapter": 0.000, "rate-limiter": 0.048, "rest-handler": 0.048,
+    "scheduler": 0.000, "state-machine": 0.000, "transformer": 0.286, "ui-render": 0.095,
+    "worker": 0.000,
+}
+per_entry_ok = all(r.get("recoverability_mean") == WANT_MEAN.get(r["archetype"]) for r in recs)
+agg_ok = (agg.get("mean_recoverability") == 0.062 and agg.get("with_edges") == 1
+         and agg.get("behaviour_measured") == 0 and agg.get("measured") == 12)
+
+uv38_candidates = glob.glob(os.path.expanduser(
+    "~/AppData/Roaming/uv/python/cpython-3.8*/python.exe"))
+uv38_ok = True
+if uv38_candidates:
+    d38 = rt_json(BENCH, py=uv38_candidates[0])
+    uv38_ok = (d38.get("aggregate") == agg)
+res["AC-RT-03"] = bool(per_entry_ok and agg_ok and uv38_ok)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".rt-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T136" in
+  OK*) PASS=$((PASS+1)); echo "  ok   round-trip-recoverability: $T136";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T136";;
 esac
 
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
@@ -7565,6 +8044,57 @@ for _r2id in ("AC-R2-01", "AC-R2-02", "AC-R2-03"):
         results.append((_r2id, "intra-model-variance", None))
     else:
         results.append((_r2id, "intra-model-variance", "T133 case failed or missing"))
+
+# Non-Python archetype criteria (ADR-028): measured by T134, same sidecar contract.
+def _js_cases():
+    p = os.path.join(kit, "reports", "junit", ".js-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_jsc = _js_cases()
+for _jsid in ("AC-JS-01", "AC-JS-02", "AC-JS-03"):
+    if _jsc is None or _jsc.get(_jsid) is None:
+        results.append((_jsid, "non-python-archetype", SKIP))
+    elif _jsc.get(_jsid) is True:
+        results.append((_jsid, "non-python-archetype", None))
+    else:
+        results.append((_jsid, "non-python-archetype", "T134 case failed or missing"))
+
+# Multi-unit archetype criteria (ADR-029): measured by T135, same sidecar contract.
+def _multi_cases():
+    p = os.path.join(kit, "reports", "junit", ".multi-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_muc = _multi_cases()
+for _muid in ("AC-MU-01", "AC-MU-02", "AC-MU-03"):
+    if _muc is None or _muc.get(_muid) is None:
+        results.append((_muid, "multi-unit-archetype", SKIP))
+    elif _muc.get(_muid) is True:
+        results.append((_muid, "multi-unit-archetype", None))
+    else:
+        results.append((_muid, "multi-unit-archetype", "T135 case failed or missing"))
+
+# Round-trip recoverability criteria (ADR-030): measured by T136, same sidecar contract.
+def _rt_cases():
+    p = os.path.join(kit, "reports", "junit", ".rt-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_rtc = _rt_cases()
+for _rtid in ("AC-RT-01", "AC-RT-02", "AC-RT-03"):
+    if _rtc is None or _rtc.get(_rtid) is None:
+        results.append((_rtid, "round-trip", SKIP))
+    elif _rtc.get(_rtid) is True:
+        results.append((_rtid, "round-trip", None))
+    else:
+        results.append((_rtid, "round-trip", "T136 case failed or missing"))
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

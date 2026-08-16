@@ -1,0 +1,665 @@
+{
+  "_generated_by": "hand-designed cases from the canonical SPEC BEFORE any compilation (ADR-029); expectations produced by a two-module reference that is NOT a bench compilation and is never committed. WITHHELD from every compiler. Run through the ENTRY unit (cli) with the source dir on the module path.",
+  "cases": [
+    {
+      "name": "empty-batch",
+      "payload": [],
+      "expected_json": {
+        "balances": {},
+        "rejected": []
+      }
+    },
+    {
+      "name": "single-balanced",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "cash",
+              "amount": -50
+            },
+            {
+              "account": "rev",
+              "amount": 50
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "cash": -50,
+          "rev": 50
+        },
+        "rejected": []
+      }
+    },
+    {
+      "name": "three-line-balanced",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -10
+            },
+            {
+              "account": "b",
+              "amount": 4
+            },
+            {
+              "account": "c",
+              "amount": 6
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": -10,
+          "b": 4,
+          "c": 6
+        },
+        "rejected": []
+      }
+    },
+    {
+      "name": "accumulate-same-account",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -5
+            },
+            {
+              "account": "b",
+              "amount": 5
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -7
+            },
+            {
+              "account": "c",
+              "amount": 7
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": -12,
+          "b": 5,
+          "c": 7
+        },
+        "rejected": []
+      }
+    },
+    {
+      "name": "unbalanced-rejected",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 5
+            },
+            {
+              "account": "b",
+              "amount": -4
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {},
+        "rejected": [
+          "p1"
+        ]
+      }
+    },
+    {
+      "name": "unbalanced-isolated-others-post",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 5
+            },
+            {
+              "account": "c",
+              "amount": -4
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "lines": [
+            {
+              "account": "b",
+              "amount": 2
+            },
+            {
+              "account": "c",
+              "amount": -2
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": 1,
+          "b": 1,
+          "c": -2
+        },
+        "rejected": [
+          "p2"
+        ]
+      }
+    },
+    {
+      "name": "one-line-rejected",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 0
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {},
+        "rejected": [
+          "p1"
+        ]
+      }
+    },
+    {
+      "name": "empty-lines-rejected-not-error",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": []
+        }
+      ],
+      "expected_json": {
+        "balances": {},
+        "rejected": [
+          "p1"
+        ]
+      }
+    },
+    {
+      "name": "zero-amount-lines-accepted",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 0
+            },
+            {
+              "account": "b",
+              "amount": 0
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": 0,
+          "b": 0
+        },
+        "rejected": []
+      }
+    },
+    {
+      "name": "duplicate-id-second-rejected",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        },
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 2
+            },
+            {
+              "account": "b",
+              "amount": -2
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": 1,
+          "b": -1
+        },
+        "rejected": [
+          "p1"
+        ]
+      }
+    },
+    {
+      "name": "duplicate-of-rejected-still-rejected",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 3
+            }
+          ]
+        },
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {},
+        "rejected": [
+          "p1",
+          "p1"
+        ]
+      }
+    },
+    {
+      "name": "rejected-account-absent-from-balances",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "ghost",
+              "amount": 9
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": 1,
+          "b": -1
+        },
+        "rejected": [
+          "p1"
+        ]
+      }
+    },
+    {
+      "name": "rejected-order-is-input-order",
+      "payload": [
+        {
+          "id": "z",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": "y",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": "x",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": 1,
+          "b": -1
+        },
+        "rejected": [
+          "z",
+          "y"
+        ]
+      }
+    },
+    {
+      "name": "negative-and-positive-large",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -1000000
+            },
+            {
+              "account": "b",
+              "amount": 999999
+            },
+            {
+              "account": "c",
+              "amount": 1
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": -1000000,
+          "b": 999999,
+          "c": 1
+        },
+        "rejected": []
+      }
+    },
+    {
+      "name": "many-postings",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -1
+            },
+            {
+              "account": "b",
+              "amount": 1
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -2
+            },
+            {
+              "account": "b",
+              "amount": 2
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -3
+            },
+            {
+              "account": "b",
+              "amount": 3
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -4
+            },
+            {
+              "account": "b",
+              "amount": 4
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -5
+            },
+            {
+              "account": "b",
+              "amount": 5
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -6
+            },
+            {
+              "account": "b",
+              "amount": 6
+            }
+          ]
+        },
+        {
+          "id": "p7",
+          "lines": [
+            {
+              "account": "a",
+              "amount": -7
+            },
+            {
+              "account": "b",
+              "amount": 7
+            }
+          ]
+        }
+      ],
+      "expected_json": {
+        "balances": {
+          "a": -28,
+          "b": 28
+        },
+        "rejected": []
+      }
+    },
+    {
+      "name": "malformed-not-array",
+      "payload": {
+        "id": "x"
+      },
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-element-not-object",
+      "payload": [
+        1
+      ],
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-missing-id",
+      "payload": [
+        {
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        }
+      ],
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-id-not-string",
+      "payload": [
+        {
+          "id": 1,
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        }
+      ],
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-lines-not-array",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": "x"
+        }
+      ],
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-line-not-object",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            1,
+            2
+          ]
+        }
+      ],
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-bool-amount",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": true
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        }
+      ],
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-float-amount",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": "a",
+              "amount": 1.5
+            },
+            {
+              "account": "b",
+              "amount": -1.5
+            }
+          ]
+        }
+      ],
+      "expected_stdout": "ERROR"
+    },
+    {
+      "name": "malformed-account-not-string",
+      "payload": [
+        {
+          "id": "p1",
+          "lines": [
+            {
+              "account": 7,
+              "amount": 1
+            },
+            {
+              "account": "b",
+              "amount": -1
+            }
+          ]
+        }
+      ],
+      "expected_stdout": "ERROR"
+    }
+  ]
+}

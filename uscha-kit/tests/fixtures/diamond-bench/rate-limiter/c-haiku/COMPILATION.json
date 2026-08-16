@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "7fb7475c0463485d7262db40a7ef745e9866e04a40cea1ce2e080f09de9971de",
+    "schema_version": "0.1"
+  },
+  "target_stack": "javascript",
+  "implementation_constraints": [
+    "plain JavaScript, Node >= 18, no dependencies, CommonJS",
+    "reads one JSON value from stdin, prints one line, exits 0; module.exports + require.main guard"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.js",
+      "sha256": "1c9e48761bbbba08eeec3b1a13959f267f8b961d03addd50a7746e87755c8b30"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.js",
+      "implements": [
+        "AC-RL-01",
+        "AC-RL-02",
+        "AC-RL-03",
+        "AC-RL-04",
+        "AC-RL-05",
+        "AC-RL-06",
+        "INV-RL-CLAMP-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "format-json-output",
+      "decision": "Compact JSON via JSON.stringify() with no extra whitespace",
+      "rationale": "Spec explicitly states formatting is not fixed by the spec, only structure and values; compact is standard and efficient for streaming output"
+    },
+    {
+      "ir_region": "error-output-line-termination",
+      "decision": "Append newline after ERROR string (output is ERROR\\n)",
+      "rationale": "Spec says 'print exactly ERROR' but line-oriented programs terminate each output line; consistent with JSON output format which is also line-terminated"
+    },
+    {
+      "ir_region": "input-buffering-strategy",
+      "decision": "Buffer entire stdin before parsing, then parse once",
+      "rationale": "Spec requires exactly one JSON object per execution; buffering is simpler and safer than stream parsing for single-object input"
+    },
+    {
+      "ir_region": "extra-properties-handling",
+      "decision": "Silently ignore extra properties in input object",
+      "rationale": "Spec specifies required properties (capacity, refill, events) but does not forbid additional ones; ignoring extras follows standard JSON practice"
+    },
+    {
+      "ir_region": "token-count-type-representation",
+      "decision": "Output tokens as JavaScript number in JSON (not string)",
+      "rationale": "Spec designates tokens as int and provides no special encoding; JSON numbers are the native representation"
+    }
+  ],
+  "compilation_report": {
+    "stack": "javascript",
+    "model": "haiku",
+    "model_version": "haiku",
+    "timestamps": {
+      "started": "2026-08-16T12:00:00+00:00",
+      "finished": "2026-08-16T12:00:00+00:00"
+    },
+    "constraint_handling": "first non-Python bench archetype (ADR-028)"
+  },
+  "_integrity": "65ec003cb12e118b8427e9f01be7b92eab97f2b5b9b25385ce4e0a2b5b383b93"
+}

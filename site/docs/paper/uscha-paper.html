@@ -50,7 +50,7 @@ a { color: #003366; text-decoration: none; }
   <div class="author">Andr&eacute;s Massello</div>
   <div class="affil">Independent Researcher &mdash; C&oacute;rdoba, Argentina</div>
   <div class="affil"><code>info@uscha.dev</code> &middot; <code>github.com/andresmassello</code> &middot; <code>linkedin.com/in/amassello</code></div>
-  <div class="date">July 2026</div>
+  <div class="date">July 2026 (revised August 2026)</div>
   <div class="license">This work is licensed under a Creative Commons Attribution 4.0 International (CC BY 4.0) license.</div>
   <div class="affil">DOI: <a href="https://doi.org/10.5281/zenodo.21228014">10.5281/zenodo.21228014</a></div>
 </div>
@@ -81,15 +81,17 @@ methodology also applies its own Lean discipline reflexively: a meta-invariant
 that keeps a growing set of good gates from becoming an audit (over-processing
 waste), enforced by collapsing every persisted gate into a single readiness
 verdict. A reference implementation (nine agent skills and a dependency-free
-Python engine with 32 subcommands and adapters for eleven language stacks) is
+Python engine with 51 subcommands and adapters for eleven language stacks) is
 described, together with its design validation: two adversarial audits (231
 agent evaluations) that initially found the central principle inverted in code
 and drove its re-wiring; a systematic cross-examination against classical
 software-engineering doctrine that produced ten shipped improvements; and
 sustained self-application, in which fresh-context reviews repeatedly caught
-real defects before merge across the release series. We report design validation and
-self-application evidence only; controlled empirical evaluation remains future
-work.</p>
+real defects before merge across the release series. We report design
+validation, self-application, and one bounded controlled evaluation &mdash;
+the Diamond program, a blind, oracle-certified benchmark of implementation
+replaceability across twelve archetypes with a measured noise floor; a
+controlled evaluation on external operators remains future work.</p>
 </div>
 
 <h2>1&nbsp;&nbsp;Introduction</h2>
@@ -458,7 +460,7 @@ its threshold is a declared requirement or a kit default.</div>
 (the two fronts, a precision interview for known features, the loop
 orchestrator, golden capture, a two-audience system-documentation generator,
 the rubric grader adapter, and two read-only status views &mdash; a dashboard
-and an in-chat readout) plus the engine (32 subcommands). Three
+and an in-chat readout) plus the engine (51 subcommands). Three
 properties matter for portability. First, the skills are markdown instruction
 files readable by any instruction-following agent; the engine is invoked
 identically from any of them. Second, every LLM-judgment interface is a
@@ -558,12 +560,54 @@ evidence for the methodology's core premise: independent, fresh-context
 checking against recorded criteria catches what the authoring context cannot
 see.</p>
 
+<p><b class="rh">The Diamond program (versions 1.72&ndash;1.85): a bounded
+controlled evaluation.</b> Between July and August 2026 the methodology's
+central claim &mdash; that a canonical specification package is the source and
+code is a build artifact &mdash; was put under its own instruments. A
+<i>Diamond Bench</i> of twelve bounded archetypes (eleven Python, one
+JavaScript, one multi-module with a decided seam) was compiled blind by three
+independent LLM compilers from the canonical package alone and certified by a
+<i>withheld oracle</i> authored before any compilation and shown
+discriminating against a degenerate stub and per-rule wrong implementations:
+nine archetypes PASS (three oracle-green, structurally distinct
+implementations of the same system), three PARTIAL. The oracle caught a
+convergent aliasing defect two compilers shared. A <i>controlled-language
+arm</i> compared free-prose against EARS+STE authoring of the same package
+under the same oracle, deconfounded by same-generation runs of both arms,
+across five archetypes: REDUCED in one, IMPROVED in one, NO EFFECT in two,
+WORSE in one &mdash; dense archetypes helped behaviourally, simple ones did
+not, and one rewrite sharpened a latent ambiguity into an over-commitment the
+oracle rejected. A <i>noise-floor</i> run (thirty second blind runs of the
+same models) read NOISY: same-model reruns differ structurally about as much
+as different models (mean intra/inter distance ratio 0.98), while behaviour is
+stable (26/30 reruns fail the same oracle cases) &mdash; so the program's
+variance claims now carry a per-entry qualifier and its controlled-language
+conclusion is stated behaviour-first, with one earlier variance narrative
+retracted. A <i>round-trip</i> instrument measures how much of the
+human-authored intermediate representation the mechanical reverse organs can
+anchor in each compiled artifact: 0.062 on static footing, with the
+behavioural dimension unmeasured everywhere because no oracle yet tags cases
+per acceptance criterion &mdash; the reverse half of the diamond anchors
+names, not semantics, and says so. Every one of these numbers is regenerated
+by the engine from committed fixtures and pinned by the suite; each release
+passed an independent blind review before it shipped, and those reviews
+caught real defects in most releases &mdash; each catch is recorded in that release&rsquo;s changelog &mdash; including two that changed how a
+result was stated (a spec found self-contradictory, a false-precision ratio).
+Human curation of the machine-generated code &mdash; one verdict per
+observation, 83 across the first two rounds &mdash; found eight defects the oracles had
+passed. This is a controlled evaluation of the artifact-level claim; it is not
+the operator-level study below.</p>
+
 <h2>7&nbsp;&nbsp;Limitations and Threats to Validity</h2>
 
-<p><b class="rh">No controlled evaluation.</b> All evidence is design
-validation and self-application by the methodology's author; effect sizes on
-team productivity, defect escape rates, or comparison against the frameworks
-surveyed in [3] are unmeasured.
+<p><b class="rh">No operator-level controlled evaluation.</b> The Diamond
+program (&sect;6) is a controlled evaluation of the artifact-level claim
+&mdash; replaceability under a withheld oracle, with a measured noise floor
+&mdash; but all of it was run by the methodology's author on bounded
+archetypes; effect sizes on team productivity, defect escape rates, or
+comparison against the frameworks surveyed in [3] remain unmeasured, and the
+structural distance the program uses is coarse (LOC, AST size, imports) and
+interpreter-sensitive, which the instrument now states.
 <b class="rh">Single-operator bias.</b> Self-application shares authorship
 context; although reviews run in fresh contexts, they share the model family
 and the author's configuration.
@@ -579,7 +623,7 @@ disclosed at the point of use, but disclosure is not elimination.</p>
 
 <h2>8&nbsp;&nbsp;Future Work</h2>
 
-<p>The central gap is controlled evaluation. Concretely, we plan a study that
+<p>The central gap is operator-level controlled evaluation. Concretely, we plan a study that
 assigns matched non-trivial changes to operators <i>with</i> and <i>without</i>
 the methodology and measures three outcomes the ledger already instruments:
 defect-escape rate at human review, rework (first-time yield across cycles),

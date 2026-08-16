@@ -411,7 +411,7 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 ## Intra-model variance (ADR-027) - the noise floor under the bench
 
 - [x] AC-R2-01 - `bench --dir BENCH --json` output is byte-identical whether the `r2/` second-run
-  directories are present or removed; the real bench reports 10 entries with `PARTIAL` exactly
+  directories are present or removed; the real bench reports 12 entries with `PARTIAL` exactly
   `{guard, rest-handler, scheduler}`.
 - [x] AC-R2-02 - `bench-r2 --dir BENCH --json` reports, for every entry, `has_r2` true, a `class`
   in `{SIGNAL, NOISY, NOISE}` equal to the expected function of the ratio (`< 0.5` SIGNAL,
@@ -428,6 +428,85 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   26, reruns 30) and every per-entry class is pinned exactly: SIGNAL `protocol-adapter`; NOISY
   `crud-store`, `guard`, `rest-handler`, `transformer`, `ui-render`; NOISE `parser`, `scheduler`,
   `state-machine`, `worker`.
+
+## Non-Python archetype (ADR-028) - the method leaves Python
+
+- [x] AC-JS-01 - Python untouched: `bench --json` entries equal 12 and the eleven Python entries'
+  verdicts equal the pins `{crud-store PASS, guard PARTIAL, ledger-lite PASS, parser PASS,
+  protocol-adapter PASS, rest-handler PARTIAL, scheduler PARTIAL, state-machine PASS,
+  transformer PASS, ui-render PASS, worker PASS}`; `bench-r2 --json` aggregate stays `verdict`
+  NOISY, signal 1, noisy 5, noise 4, with 10 measured and both `rate-limiter` and `ledger-lite`
+  `has_r2` false; `lang-compare` on scheduler-free vs scheduler-controlled stays `IMPROVED` with
+  variance scores 0.0195/0.1879 (the refactor left Python metrics identical); `_impl_metrics` on
+  a Python impl returns an `int` `ast_nodes`.
+- [x] AC-JS-02 - the JS entry plus discrimination and the node-absent path: `rate-limiter`
+  verdict `PASS`, each compilation oracle passed 25/25 with `compile_valid` true;
+  `bootstrap-oracle` on `stub/stub.js` is not green; every file in `rate-limiter/wrong/*.js` is
+  not green; with no `node` on `PATH` the entry reads verdict `PENDING` with a reason containing
+  "node not on PATH" instead of a fake red or green — measured directly on a machine without
+  node, and simulated on a machine with node by stripping `PATH` down to the Python
+  interpreter's own directory, which also verifies the raw compilation oracle records carry
+  `unmeasured`.
+- [x] AC-JS-03 - metrics/distance/static-surface honesty for JS: `_impl_metrics` on a JS impl
+  returns `lang`-agnostic `ast_nodes: None`, an `int` `loc`, and its lexical imports (e.g. `fs`);
+  `_struct_distance` between two JS impls equals the two-dimensional mean (LOC delta + import
+  Jaccard distance, no AST dimension) recomputed independently from their metrics dicts;
+  `_extract_static_js` on a compiled JS unit returns observations naming exactly the module's
+  own `module.exports` functions, reported by Node itself; `bench --fidelity --json` on the JS
+  entry carries a `static_surface.functions` count and a sorted `names` list per compilation.
+
+## Multi-unit archetype (ADR-029) - the bench leaves the single file
+
+- [x] AC-MU-01 - single-unit Python entries unchanged: `bench --json` verdicts equal the pins
+  `{crud-store PASS, guard PARTIAL, parser PASS, protocol-adapter PASS, rate-limiter PASS,
+  rest-handler PARTIAL, scheduler PARTIAL, state-machine PASS, transformer PASS, ui-render PASS,
+  worker PASS}`; `lang-compare` on scheduler-free vs scheduler-controlled stays `IMPROVED` with
+  variance scores 0.0195/0.1879; `bench-r2 --json` aggregate stays `verdict` NOISY, signal 1,
+  noisy 5, noise 4, with 10 measured; a single-unit compilation (`guard`, `c-opus`) still reports
+  `entry_unit` `source/guard.py` and `units` 1.
+- [x] AC-MU-02 - `ledger-lite`'s `IR.json` carries at least one `DECISION` node and at least 2
+  edges (the bench's first IR with edges, extracted from `docs/adr/ADR-001-model-cli-seam.md`);
+  each of the three blind `COMPILATION.json` files ships exactly 2 source units, `compile-validate`
+  exits 0 against the IR, and `trace_manifest` names exactly `{source/model.py, source/cli.py}`;
+  the bench record's verdict is `PASS`, each compilation's oracle is 24/24, and every compilation
+  carries `entry_unit` `source/cli.py` and `units` 2; `bench --fidelity --json` reports
+  `static_surface.names == ["main", "post"]` for each compilation.
+- [x] AC-MU-03 - discrimination holds for the multi-unit entry: `bootstrap-oracle` on
+  `stub/source/cli.py` is not green; every `wrong/<name>/source/cli.py` is not green, including
+  `wrong/balance-in-cli` (breaks the model/CLI seam by computing balances in the CLI) and
+  `wrong/ignores-model` (ignores the model unit entirely); `bench --json` reports `ledger-lite`
+  `discrimination.stub_green` false.
+
+## Round-trip recoverability (ADR-030) - the reverse organs anchor facts, never a spec
+
+- [x] AC-RT-01 - `bench-roundtrip --json` reports all 12 bench entries measured; the rendered
+  report (both a fresh `--out` render and the committed `DIAMOND-ROUNDTRIP.md`) states, in
+  words, that the instrument "does not regenerate an IR" from code, that `recoverability`
+  "counts ONLY static + behaviour" footing, and that the manifest footing is "never counted as
+  recovered"; running it regenerates no `IR*.json` or `*IR'*` file anywhere under the bench
+  directory (a before/after file-tree snapshot is equal); `lang-compare` on the scheduler pair
+  still reads `IMPROVED` with variance scores 0.0195/0.1879, and `bench --json` still reports 12
+  entries with the same verdict pins `{crud-store PASS, guard PARTIAL, ledger-lite PASS, parser
+  PASS, protocol-adapter PASS, rate-limiter PASS, rest-handler PARTIAL, scheduler PARTIAL,
+  state-machine PASS, transformer PASS, ui-render PASS, worker PASS}` - this instrument changes
+  no bench verdict.
+- [x] AC-RT-02 - for every compilation of every entry: `recoverability` is between 0 and 1;
+  `anchored` never exceeds `static_anchored + behaviour` (when behaviour is measured) and never
+  falls below the larger of the two, allowing overlap; `claimed` (the manifest footing) is
+  always `>= anchored`; `behaviour` reads the literal string `UNMEASURED` for every compilation
+  today (no oracle case is tagged with an AC id yet); `edges_recovered <= edges`; `unanchored`
+  is a list whose length equals `ir_nodes - anchored`; per-node detail carries the keys
+  `id`/`static`/`manifest`/`behaviour`/`anchored`/`claimed`; `ledger-lite` - the bench's only
+  entry with edges - reports `edges == 3` for every compilation and `edges_recovered_mean ==
+  0.33`.
+- [x] AC-RT-03 - the aggregate is pinned to today's measured state: 12 entries measured, mean
+  `recoverability` 0.062, 1 entry with edges, behaviour measured in 0 of 12 entries; the
+  per-entry `recoverability_mean` is pinned exactly: `crud-store 0.000, guard 0.125, ledger-lite
+  0.148, parser 0.000, protocol-adapter 0.000, rate-limiter 0.048, rest-handler 0.048, scheduler
+  0.000, state-machine 0.000, transformer 0.286, ui-render 0.095, worker 0.000`; the instrument
+  is id-regex + file reads + oracle runs with no AST involved, so the same aggregate is
+  reproduced under a second Python interpreter (3.8) where available - measured directly, not
+  assumed, before being pinned as a single cross-interpreter expectation.
 
 ## Out of scope for measurement here
 

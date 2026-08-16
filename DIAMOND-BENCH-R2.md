@@ -8,8 +8,10 @@ For every archetype with a second blind run (`r2/`) of the SAME model on the SAM
 |-----------|--------------|-------|-------------|-------|--------------------------------------------|
 | crud-store | 0.0866 | 0.1052 | 0.82 | NOISY | c-haiku 1.0->1.0 stable; c-opus 1.0->1.0 stable; c-sonnet 1.0->1.0 stable |
 | guard | 0.2230 | 0.3472 | 0.64 | NOISY | c-haiku 0.826->0.957 DIFFERS; c-opus 0.913->1.0 DIFFERS; c-sonnet 0.913->0.913 stable |
+| ledger-lite | -- | -- | -- | (no r2) | no r2/ directory -- intra-model variance not measured |
 | parser | 0.0890 | 0.0787 | 1.13 | NOISE | c-haiku 1.0->1.0 stable; c-opus 1.0->1.0 stable; c-sonnet 1.0->1.0 stable |
 | protocol-adapter | 0.0406 | 0.1401 | 0.29 | SIGNAL | c-haiku 1.0->1.0 stable; c-opus 1.0->1.0 stable; c-sonnet 1.0->1.0 stable |
+| rate-limiter | -- | -- | -- | (no r2) | no r2/ directory -- intra-model variance not measured |
 | rest-handler | 0.1909 | 0.2058 | 0.93 | NOISY | c-haiku 0.933->0.933 stable; c-opus 0.933->0.933 stable; c-sonnet 1.0->1.0 stable |
 | scheduler | 0.0348 | 0.0195 | 1.78 | NOISE | c-haiku 0.833->0.933 DIFFERS; c-opus 1.0->1.0 stable; c-sonnet 0.867->0.9 DIFFERS |
 | state-machine | 0.0735 | 0.0657 | 1.12 | NOISE | c-haiku 1.0->1.0 stable; c-opus 1.0->1.0 stable; c-sonnet 1.0->1.0 stable |

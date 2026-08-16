@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="138" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="147" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -275,5 +275,23 @@
   <testcase classname="uscha.acceptance" name="AC-R2-02_intra-model-variance">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-R2-03_intra-model-variance">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-JS-01_non-python-archetype">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-JS-02_non-python-archetype">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-JS-03_non-python-archetype">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-MU-01_multi-unit-archetype">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-MU-02_multi-unit-archetype">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-MU-03_multi-unit-archetype">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RT-01_round-trip">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RT-02_round-trip">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RT-03_round-trip">
   </testcase>
 </testsuite>

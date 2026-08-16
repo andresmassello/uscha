@@ -1,0 +1,71 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "7fb7475c0463485d7262db40a7ef745e9866e04a40cea1ce2e080f09de9971de",
+    "schema_version": "0.1"
+  },
+  "target_stack": "javascript",
+  "implementation_constraints": [
+    "plain JavaScript, Node >= 18, no dependencies, CommonJS",
+    "reads one JSON value from stdin, prints one line, exits 0; module.exports + require.main guard"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.js",
+      "sha256": "15308e3f9d8a1d56b8af4c248ec92f2235a8f16042afd9a41a4e2c611ac2f73f"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.js",
+      "implements": [
+        "AC-RL-01",
+        "AC-RL-02",
+        "AC-RL-03",
+        "AC-RL-04",
+        "AC-RL-05",
+        "AC-RL-06",
+        "INV-RL-CLAMP-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "input-shape-check",
+      "decision": "reject with ERROR when the parsed top-level JSON value is null, an array, or any non-plain-object (e.g. number/string/bool), since the spec only allows a JSON object",
+      "rationale": "spec says 'not a JSON object' is an error but JSON.parse(null-literal) also yields typeof 'object' in JS, so null must be excluded explicitly to avoid crashing on capacity/refill/events destructure"
+    },
+    {
+      "ir_region": "integer-validation",
+      "decision": "use Number.isInteger to reject booleans, non-integral numbers, strings, and other non-number types for capacity/refill in one check, since typeof true !== 'number' already excludes booleans",
+      "rationale": "spec explicitly calls out booleans and non-integral numbers as invalid; Number.isInteger combined with a typeof number guard covers both without a separate boolean check"
+    },
+    {
+      "ir_region": "event-validation-order",
+      "decision": "validate the entire events array (every element is exactly 'tick' or 'req') BEFORE processing any event, rather than validating and processing in the same pass",
+      "rationale": "AC-RL-05 requires 'no partial log' on malformed input; a single-pass approach could emit partial log entries before hitting an invalid event, so validation is a separate upfront pass"
+    },
+    {
+      "ir_region": "stdout-format",
+      "decision": "use console.log(JSON.stringify(result)) for compact single-line JSON output with no extra whitespace",
+      "rationale": "spec states output formatting is not fixed, only structure/values matter, so the simplest compact serialization satisfies the contract"
+    },
+    {
+      "ir_region": "malformed-json-input",
+      "decision": "treat JSON.parse failures (syntactically invalid JSON on stdin) the same as structurally malformed objects, printing ERROR",
+      "rationale": "the spec's error list doesn't explicitly mention JSON parse failures, but 'input that is not a JSON object' is naturally read to include input that isn't valid JSON at all"
+    }
+  ],
+  "compilation_report": {
+    "stack": "javascript",
+    "model": "sonnet",
+    "model_version": "sonnet",
+    "timestamps": {
+      "started": "2026-08-16T12:00:00+00:00",
+      "finished": "2026-08-16T12:00:00+00:00"
+    },
+    "constraint_handling": "first non-Python bench archetype (ADR-028)"
+  },
+  "_integrity": "f42f2baec8f9081607cbedc433e5a6e0aa5c825244418e887eb16e4275d082a1"
+}

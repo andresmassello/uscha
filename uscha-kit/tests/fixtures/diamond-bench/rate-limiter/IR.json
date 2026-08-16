@@ -1,0 +1,83 @@
+{
+  "schema_version": "0.1",
+  "_generated_by": "qa_ledger.py ir-extract (ADR-015) -- derived index of the canonical package; never hand-edit",
+  "nodes": [
+    {
+      "id": "AC-RL-01",
+      "type": "AC",
+      "statement": "the bucket starts full (`tokens = capacity`); a `req` with `tokens ≥ 1` logs",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 3
+      }
+    },
+    {
+      "id": "AC-RL-02",
+      "type": "AC",
+      "statement": "a `tick` adds `refill` tokens clamped at `capacity`; `refill` 0 never",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 5
+      }
+    },
+    {
+      "id": "AC-RL-03",
+      "type": "AC",
+      "statement": "events are processed strictly in array order; the output `log` has exactly one",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 7
+      }
+    },
+    {
+      "id": "AC-RL-04",
+      "type": "AC",
+      "statement": "an empty `events` array yields `{\"log\": [], \"tokens\": capacity}`.",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 9
+      }
+    },
+    {
+      "id": "AC-RL-05",
+      "type": "AC",
+      "statement": "malformed input (not an object, missing/mistyped/negative `capacity`/`refill`,",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 10
+      }
+    },
+    {
+      "id": "AC-RL-06",
+      "type": "AC",
+      "statement": "the file exposes its functions on `module.exports` and runs `main` only under",
+      "source": {
+        "file": "ACCEPTANCE.md",
+        "line": 13
+      }
+    },
+    {
+      "id": "INV-RL-CLAMP-01",
+      "type": "INV",
+      "statement": "tokens never leave `[0, capacity]`",
+      "source": {
+        "file": "CONSTITUTION.md",
+        "line": 3
+      }
+    }
+  ],
+  "edges": [],
+  "untyped": [],
+  "stats": {
+    "nodes": 7,
+    "edges": 0,
+    "edges_dropped": 0,
+    "untyped": 0,
+    "by_type": {
+      "INV": 1,
+      "AC": 6
+    },
+    "untyped_rate": 0.0
+  },
+  "_integrity": "7fb7475c0463485d7262db40a7ef745e9866e04a40cea1ce2e080f09de9971de"
+}
