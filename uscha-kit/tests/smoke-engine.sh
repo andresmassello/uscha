@@ -6740,10 +6740,16 @@ echo "== T0 live: every published claim must match the derived facts (FACTUAL DR
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
 # Historical changelogs are archives, deliberately out of scope (ADR-012).
+# Scope = EVERY authored site page (ES/EN twins) + their footers, not just the landing: the
+# 1.85.0 sweep found /how at 1.65.0 and /diamond footers at 1.75.1 while the landing was
+# green -- pages outside this list are pages the gate cannot see.
 chk "site+README+manifests+docs claims match SYSTEM-FACTS" 0 \
   "$PY" "$QL" facts --check \
     "$ROOT/README.md" "$ROOT/uscha-kit/README.md" \
     "$ROOT/site/index.html" "$ROOT/site/es/index.html" "$ROOT/site/llms.txt" \
+    "$ROOT/site/how/index.html" "$ROOT/site/es/how/index.html" \
+    "$ROOT/site/diamond/index.html" "$ROOT/site/es/diamond/index.html" \
+    "$ROOT/site/why/index.html" "$ROOT/site/es/why/index.html" \
     "$ROOT/.claude-plugin/marketplace.json" "$ROOT/uscha-kit/.claude-plugin/plugin.json" \
     "$ROOT/docs/uscha-claude-code-doc.html" "$ROOT/docs/uscha-claude-code-doc-EN.html" \
     "$ROOT/site/docs/uscha-claude-code-doc.html" "$ROOT/site/docs/uscha-claude-code-doc-EN.html" \
