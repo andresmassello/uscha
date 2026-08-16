@@ -8,7 +8,7 @@ never what was claimed.
 > The tool executes · the method governs · evidence decides · the human approves.
 
 **[uscha.dev](https://uscha.dev)** — the method, the five rules, the skills, the library
-(essay, 2-day dev course, reference, paper).
+(the diamond thesis, how-it-works diagrams, essay, 2-day dev course, reference, paper).
 
 ```bash
 npx --yes @andresmassello/uscha@latest install --target claude   # Claude Code
@@ -46,6 +46,68 @@ runtime dependencies). The npm package is a thin router; the canonical installer
 
 ---
 
+## The diamond — specs are the source code, end to end
+
+Uscha closes a cycle most spec-driven tools only walk halfway. The **spec package plus its
+behavior ledger** is the canonical asset of a system; the code is a regenerable build artifact.
+An LLM compiles the package into code under a validated contract; reverse discovery decompiles
+existing code back into *curated* specs — passing, mandatorily, through the one step no
+automatic tool can perform: a human verdict.
+
+```
+                          THE ASSET (solid) ── it appreciates with every model generation
+                    ┌─────────────────────────────────────────────┐
+                    │   SPEC PACKAGE  +  BEHAVIOR LEDGER  +  IR   │
+                    │   SPEC · ADRs · ACCEPTANCE · CONSTITUTION   │
+                    │   verdicts: preserve · fix · undefined      │
+                    └──────────┬────────────────────▲─────────────┘
+                               │                    │
+             FORWARD           │                    │        REVERSE
+        the LLM compiles       │                    │   reverse discovery
+   ┌───────────────────────────┘                    └───────────────────────────┐
+   │  compile-validate ─ output contract, mechanical only, model-blind          │
+   │  withheld ORACLE   ─ authored BEFORE compiling, never in the prompt        │
+   ▼                                                                            │
+ ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐         ┌────────────────────────────────┐   │
+    CODE  (dashed) — build artifact,        │  CURATION  ·  the human gate   │   │
+    regenerable, disposable                 │  candidate ──▶ verdict ──▶ ledger│──┘
+ └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘         │  no verdict → PR blocked,      │
+   │                                        │  the candidate is NAMED        │
+   │  discover · golden capture             └───────────────▲────────────────┘
+   │  candidates: typed evidence + confidence               │
+   └────────────────────────────────────────────────────────┘
+                     also enters here: any LEGACY system (= 100% drift)
+
+   round trip · bench-roundtrip ─ how much of the asset the reverse organs re-anchor
+   from the compiled code: 0.062 measured (12 archetypes) — names, not yet semantics
+```
+
+**What each arrow is, in the engine (kit 1.85.0, 51 subcommands, all measured):**
+
+| Leg | Subcommands | What it establishes |
+|---|---|---|
+| Asset → typed graph | `ir-extract`, `ir-render` | the whole package becomes one canonical IR (M2, ADR-015) — deterministic, `UNTYPED` is a measurement not an error |
+| Forward, the compiler | `compile-validate`, `compile-ingest` | any model produces code; the engine validates the output contract and never compiles (M3, ADR-016) |
+| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 9 PASS · 3 PARTIAL**, three models, JS included (M4/M5, ADR-017/018/028/029) |
+| Reverse, facts | `discover`, `golden-diff` (+ the `/uscha-characterize` skill) | system map + mechanically captured golden; typed candidate observations with evidence class (M1, ADR-013) |
+| Reverse, the human gate | `curate`, `promote`, `curation-check`, `bench-curate` | one verdict per candidate, append-only ledger verified against git; unjudged → `pr-ready` blocked naming it (ADR-009/010, INV-CURATION-01) |
+| Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.062**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |
+
+**Read the numbers the way the repo does.** 9 of 12 archetypes regenerate to the same system
+under an oracle the compilers never saw — that is the closed loop working. 0.062 is the mean
+*recoverability* of the asset from compiled code counting only static and behavioural
+footing, with the behaviour dimension still `UNMEASURED` — it says the reverse organs anchor
+**names, not yet semantics**, and it is published rather than smoothed. And `bench-r2` measured
+that same-model reruns differ structurally about as much as different models do (aggregate
+`NOISY`) — so one earlier variance narrative was **retracted**. Every claim above is a subcommand
+you can run; every unmeasured part is labeled. That honesty is the method applied to itself.
+
+→ The full thesis, with before/after diagrams and the REAL vs VISION table:
+**[uscha.dev/diamond](https://uscha.dev/diamond)** · the mechanism, in three diagrams:
+**[uscha.dev/how](https://uscha.dev/how)**
+
+---
+
 ## The problem it solves
 
 An agent will tell you the tests pass. It will tell you the feature is done. It is often
@@ -68,7 +130,7 @@ and see which file, which test, and when.
 |---|---|
 | `/uscha-discovery` | Idea → spec package (CONTEXT, SPEC, ADRs, CONSTITUTION, ACCEPTANCE) |
 | `/uscha-adr-refine` | Known feature → ADR + ACCEPTANCE, by interrogating you first |
-| `/uscha-reverse-discovery` | Existing system → extracted facts (brownfield migrations) |
+| `/uscha-reverse-discovery` | Existing system → facts + typed candidates in quarantine; never promoted without a human verdict (brownfield) |
 | `/uscha-characterize` | Capture a golden suite of current behavior before touching it |
 | `/uscha-devloop` | Plan → build → severity-gated QA loop → PR (stops at the merge) |
 | `/uscha-rubric` | Grade the non-testable (conventions, ergonomics) against a versioned rubric |
