@@ -1565,6 +1565,20 @@ s = json.load(sys.stdin)['snapshots']
 sys.exit(0 if len(s) == 1 and isinstance(s[0]['readiness'], (int, float)) and 'date' in s[0] else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   readiness --record puebla el time-lapse (add-on prospectivo)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL time-lapse no se poblo tras --record"; }
+# issue #1 (field note 001): each history entry persists its CAUSES -- cap_applied {reason,key}
+# or null when no cap bit, and stale_discarded {count, reports} -- facts the same readiness
+# computed, so a later reader never infers why a score was capped. Additive: at/score untouched.
+"$PY" -c "
+import json, sys
+h = json.load(open('L-mir.json', encoding='utf-8'))['readiness_history']
+e = h[-1]
+ok = ('at' in e and 'score' in e and 'cap_applied' in e and 'stale_discarded' in e
+      and (e['cap_applied'] is None or (isinstance(e['cap_applied'], dict) and 'reason' in e['cap_applied']))
+      and isinstance(e['stale_discarded'], dict) and isinstance(e['stale_discarded'].get('count'), int)
+      and isinstance(e['stale_discarded'].get('reports'), list))
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   readiness --record persists cap_applied + stale_discarded per history entry (issue #1)"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL history entry lacks cap_applied/stale_discarded (issue #1)"; }
 # inv mapea el gate persistido por su kind REAL (pit-check, no 'pit'): sin este check
 # un typo de kind deja el invariante en null en silencio (regresion muda).
 run log-gate --ledger L-mir.json --repo backend-api --iteration 1 --kind pit-check --verdict fail --count 2 >/dev/null 2>&1

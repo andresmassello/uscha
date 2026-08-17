@@ -8231,8 +8231,15 @@ def cmd_readiness(args):
     # hacia adelante (no backfillea). El dashboard lo consume, nunca escribe.
     if getattr(args, "record", False):
         now = _now()
+        # issue #1 (field note 001, limitation 1): persist the CAUSES per entry, not only the
+        # score -- both facts are already computed above; nothing is re-derived. Additive keys:
+        # every existing reader uses .get("at")/.get("score"). None/0 mean "no cap"/"none
+        # discarded", stated rather than absent.
         ledger.setdefault("readiness_history", []).append(
-            {"at": now, "score": round(final, 1)})
+            {"at": now, "score": round(final, 1),
+             "cap_applied": ({"reason": cap_reason, "key": cap_key} if cap_reason else None),
+             "stale_discarded": {"count": len(stale_reports),
+                                 "reports": list(stale_reports)[:8]}})
         # kit 1.46.1: persist a compact MEASURED summary so the statusline (uscha_progress.py)
         # shows MEASURED acceptance -- the same truth this readiness computed -- instead of
         # counting checkboxes (narrated). Write-once/read-many: the fast Stop hook reads this
