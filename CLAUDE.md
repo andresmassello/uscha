@@ -34,7 +34,10 @@ itself.
    `uscha-kit/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `package.json`.
    All six must match (smoke T44 verifies it).
 7. **Conventional commits** (`feat:`, `fix:`, `docs:`…), small and atomic.
-8. **INV-GOLDEN-01 governs here too**: never write/rename a `.approved`
+8. **Multi-ADR features get a `docs/<feature>/`** (curated 2026-08-17 with `uscha top`): the
+   narrative SPEC + FIXTURES live there while the ADRs are `Proposed`; the ACs are promoted into
+   `ACCEPTANCE.md` on acceptance. Single-ADR changes keep the plain `docs/adr/` + `ACCEPTANCE.md` path.
+9. **INV-GOLDEN-01 governs here too**: never write/rename a `.approved`
    (the kit's hook applies to this repo like any other).
 
 ## Known gotchas
