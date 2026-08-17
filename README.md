@@ -55,30 +55,33 @@ existing code back into *curated* specs — passing, mandatorily, through the on
 automatic tool can perform: a human verdict.
 
 ```
-                          THE ASSET (solid) ── it appreciates with every model generation
-                    ┌─────────────────────────────────────────────┐
-                    │   SPEC PACKAGE  +  BEHAVIOR LEDGER  +  IR   │
-                    │   SPEC · ADRs · ACCEPTANCE · CONSTITUTION   │
-                    │   verdicts: preserve · fix · undefined      │
-                    └──────────┬────────────────────▲─────────────┘
-                               │                    │
-             FORWARD           │                    │        REVERSE
-        the LLM compiles       │                    │   reverse discovery
-   ┌───────────────────────────┘                    └───────────────────────────┐
-   │  compile-validate ─ output contract, mechanical only, model-blind          │
-   │  withheld ORACLE   ─ authored BEFORE compiling, never in the prompt        │
-   ▼                                                                            │
- ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐         ┌────────────────────────────────┐   │
-    CODE  (dashed) — build artifact,        │  CURATION  ·  the human gate   │   │
-    regenerable, disposable                 │  candidate ──▶ verdict ──▶ ledger│──┘
- └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘         │  no verdict → PR blocked,      │
-   │                                        │  the candidate is NAMED        │
-   │  discover · golden capture             └───────────────▲────────────────┘
-   │  candidates: typed evidence + confidence               │
-   └────────────────────────────────────────────────────────┘
-                     also enters here: any LEGACY system (= 100% drift)
+                THE ASSET (solid) ── it appreciates with every model generation
+          ┌───────────────────────────────────────────────────────────────┐
+          │   SPEC PACKAGE  +  BEHAVIOR LEDGER  +  IR                     │
+          │   SPEC · ADRs · ACCEPTANCE · CONSTITUTION                     │
+          │   verdicts: preserve · fix · undefined                        │
+          └──────────────┬─────────────────────────────▲──────────────────┘
+                         │                             │
+        FORWARD          │                             │          REVERSE
+        the LLM compiles │                             │   reverse discovery
+                         ▼                             │
+   ┌─────────────────────────────────────┐   ┌─────────┴─────────────────────┐
+   │ compile-validate — output contract, │   │ CURATION · the human gate     │
+   │   mechanical only, model-blind      │   │ candidate ─▶ verdict ─▶ ledger │
+   │ withheld ORACLE — authored BEFORE   │   │ no verdict → PR blocked,      │
+   │   compiling, never in the prompt    │   │   the candidate is NAMED      │
+   └─────────────────┬───────────────────┘   └─────────▲─────────────────────┘
+                     │                                 │
+                     ▼                                 │
+   ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐   ┌─────────────┴─────────────────────┐
+     CODE (dashed) — build artifact,      │ discover · golden capture         │
+     regenerable, disposable          ───▶│ candidates: typed evidence        │
+   └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘   │   + confidence                    │
+                                          └───────────────────────────────────┘
+                                            ▲ also enters here: any LEGACY
+                                              system (= 100% drift)
 
-   round trip · bench-roundtrip ─ how much of the asset the reverse organs re-anchor
+   round trip · bench-roundtrip — how much of the asset the reverse organs re-anchor
    from the compiled code: 0.062 measured (12 archetypes) — names, not yet semantics
 ```
 
