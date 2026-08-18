@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-033: The verdict is the only thing `uscha top` writes, and it writes it by shelling out to the existing `curate` — one keypress, one `curate` call, no batch, no auto-promotion, no auto-rerun
 
-## Status: Proposed
+## Status: Accepted (M3 shipped in 1.89.0; curated 2026-08-17)
 
 ## Context
 Decision #2: the verdict write goes through the **existing** `curate` subcommand, never a
@@ -36,9 +36,23 @@ demo-only.
   the single selected OBS, then advance to the next uncurated OBS; an empty queue returns to BOARD.
   There is no loop that batches multiple OBS into one action — the engine would refuse it, and the
   TUI must not attempt it.
-- **`--human` is passed explicitly** by the TUI (resolving the operator's name), rather than relying
-  on `curate`'s `$USERNAME`/`$USER` default (L4452), so an SSH/multi-user verdict is attributed
-  correctly. If no name resolves, the engine default stands.
+- **`--human` is passed explicitly** by the TUI, which resolves the operator's name. Stated
+  precisely (1.89.0, correcting an over-claim in the first draft of this ADR): the TUI's own
+  fallback is `$USERNAME`/`$USER` — **the same environment `curate` reads** — so on a plain local
+  run the recorded name is identical either way, and the explicit pass buys nothing there. What it
+  buys is the case it was written for: **only the explicit flag** attributes an SSH or multi-user
+  verdict correctly, because only it can name someone the environment of whichever process runs
+  `curate` does not. That is why the `uscha top` launcher forwards `--human` too. If nothing
+  resolves, no flag is passed and the engine default stands.
+- **One keypress means one keypress.** A held key repeats, and because the queue advances after each
+  write, repeat two would judge an observation the human never read — the batch INV-CURATION-01
+  forbids, arriving one legal call at a time. Two guards, both in the TUI: the input buffer is
+  drained after every verdict attempt (`drain_keys`), and for 250 ms afterwards `p`/`f`/`u` produce
+  no verdict at all and the status line says so. Navigation and the exits keep working — the
+  cooldown blocks writes, not the reader.
+- **A frozen snapshot is not a ledger.** With `--state` the frame comes from a file that may
+  describe another project entirely, so a verdict is refused and named rather than written to
+  whatever ledger happens to be in the working directory.
 - **No auto-promotion.** `promote` is never called by the TUI; it stays a human-run follow-up outside
   the single writable action.
 - **No auto-rerun.** A verdict does not trigger tests, an oracle, or `readiness`. `DONE` (terminado)
@@ -57,9 +71,24 @@ demo-only.
   read as a bug (the fix is queued for the compiler, not applied to the score).
 
 ## Verification
-- [ ] `p`/`f`/`u` shells out to `curate` once per keypress, never batched; empty queue returns to BOARD (AC-T-15)
-- [ ] the appended record is byte-identical to a manual `qa_ledger.py curate` call with the same arguments (AC-T-17)
-- [ ] after a verdict DONE does not change; no auto-rerun moves it (AC-T-16)
+- [x] `p`/`f`/`u` shells out to `curate` once per keypress, never batched; empty queue returns to BOARD (AC-T-15)
+- [x] the appended record is byte-identical to a manual `qa_ledger.py curate` call with the same arguments (AC-T-17)
+- [x] after a verdict DONE does not change; no auto-rerun moves it (AC-T-16)
+
+*Measured by T141 (1.89.0) over temp copies of `fixture-stale-quarantine`. What each assertion
+really does, so the tick is readable: AC-T-15 replaces the subprocess boundary (`_curate_call`) and
+counts the calls one keypress makes — one — and pins the argv; it also parses `uscha_top.py` and
+fails if the module opens any file for writing, dumps JSON, or builds a second `curate` argv.
+It also pins the three guards above: `apply_verdict` is called exactly ONCE in the whole module and
+no `for`/`while` encloses that call (which is why the key loop reaches it through
+`_apply_and_advance`); a verdict key during the cooldown yields no verdict while `j`/`t`/`q` still
+work; and a `--state` run refuses with a named message and spawns nothing.
+AC-T-17 compares the record the TUI path appended with the record a manual `curate` call appended on
+a second copy: equal member for member, with `at` compared for shape (it is a wall clock, and the
+suite injects no clock into a subprocess). AC-T-16 re-reads `top --json` before and after a real
+verdict: `terminado.done` and `terminado.pct` unchanged, `debtors.you` down by one, the four buckets
+still partitioning the board. Mutation-checked: a doubled call, a note the TUI authors itself, and a
+verdict counted as DONE each turn the matching criterion red.*
 
 ## What this ADR does NOT decide
 - The verdict record shape — owned by `curate`/ADR-013, consumed here unchanged.

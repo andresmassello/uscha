@@ -8234,6 +8234,7 @@ def _top_ac_key(cid):
 
 TOP_EVENTS_TAIL = 8          # how many steps the feed carries; the TUI shows what fits
 TOP_EVENT_WIDTH = 72         # one feed line, short enough to survive the 80-column floor
+TOP_OBS_TITLE_WIDTH = 72     # the verdict queue's one-line label; the CLAIM is never capped
 
 # kind -> level, the FIXED map ADR-032 (amended 1.88.0, M2) requires. `level` and `text` do
 # not exist in `ledger["steps"]`; they are derived here, once, so the TUI renders a feed it
@@ -8281,20 +8282,66 @@ def _top_key(value):
     return repr(value)
 
 
-def _top_event_text(*parts):
-    """One feed line: the only free text of the whole contract that reaches a terminal.
-
-    Its ingredients are ledger prose (an escalation reason, a tool name) -- human and CLI
-    input -- so an ESC or a C0 byte inside one would be a control sequence the board prints
-    verbatim. Every control character is dropped HERE, in the engine, and the renderer drops
-    them again on the way out: two cheap guards over one attack surface."""
-    txt = " · ".join(str(p) for p in parts if p not in (None, "", "?"))
-    txt = "".join(" " if c in ("\t", "\n", "\r") else c for c in txt)
+def _top_clean(text):
+    """One state-supplied string with every control character gone and its whitespace
+    collapsed. The contract's free text is ledger prose (an escalation reason, an
+    observation statement, a tool name) -- human and CLI input -- so an ESC or a C0 byte
+    inside one would be a control sequence the board obeys instead of prints. It dies HERE,
+    in the engine, and the renderer drops it again on the way out: two cheap guards over one
+    attack surface. What is filtered is exactly C0 and DEL (ADR-032)."""
+    txt = "".join(" " if c in ("\t", "\n", "\r") else c for c in str(text))
     txt = "".join(c for c in txt if ord(c) >= 32 and ord(c) != 127)
-    txt = " ".join(txt.split())
-    if len(txt) > TOP_EVENT_WIDTH:
-        txt = txt[:TOP_EVENT_WIDTH - 1] + "…"
-    return txt
+    return " ".join(txt.split())
+
+
+def _top_cap(text, width):
+    """A capped string that SAYS it was cut. Never used on a claim the human has to judge --
+    only on labels (a feed line, an observation title), whose full text the contract carries
+    somewhere else (M3: `candidate[]` holds the whole claim, `title` only its head)."""
+    return text if len(text) <= width else text[:width - 1] + "…"
+
+
+def _top_event_text(*parts):
+    """One feed line: free text of the contract that reaches a terminal, sanitized and
+    capped to survive the 80-column floor."""
+    return _top_cap(_top_clean(" · ".join(str(p) for p in parts
+                                          if p not in (None, "", "?"))), TOP_EVENT_WIDTH)
+
+
+def _top_obs_view(o, repo):
+    """ONE uncurated observation as the verdicts queue reads it (ADR-032, amended 1.89.0 for
+    M3). The delta record is the only source: `type`, `statement`, `provenance.files`,
+    `evidence_class` -- nothing here is inferred, and a member the delta does not carry comes
+    out empty rather than guessed.
+
+    - `repo` is the delta's OWN repo, and it is in the contract because the write path needs
+      it: `curate` takes `--repo`, so a queue without it would force the TUI to pick one --
+      the one derivation the TUI is never allowed to make (ADR-033).
+    - `title` is the statement's HEAD, capped and marked with an ellipsis when cut. It is a
+      label for the list line only. The claim the human judges is in `candidate[]` in full:
+      a verdict recorded on half a sentence is the failure this split exists to prevent.
+    - a delta is JSON on disk, so `provenance` can arrive as a list from a hand edit -- the
+      read-only readout degrades that observation to no evidence line, it does not raise."""
+    prov = o.get("provenance") if isinstance(o.get("provenance"), dict) else {}
+    raw = prov.get("files") if isinstance(prov.get("files"), list) else []
+    files = [f for f in (_top_clean(x) for x in raw) if f]
+    statement = _top_clean(o.get("statement"))
+    otype = _top_clean(o.get("type"))
+    site = files[0] if files else ""
+    candidate = ["type: %s%s" % (otype or "?", (" · site: %s" % site) if site else "")]
+    if statement:
+        candidate.append("claim: " + statement)          # WHOLE, never capped
+    evidence = list(files)
+    cls, tool = _top_clean(o.get("evidence_class")), _top_clean(prov.get("tool"))
+    if cls or tool:
+        evidence.append("evidence_class: %s%s" % (cls or "?",
+                                                  (" · tool: %s" % tool) if tool else ""))
+    return {"id": o.get("id"), "ac": o.get("canonical_match"), "repo": repo,
+            "title": _top_cap(statement, TOP_OBS_TITLE_WIDTH) if statement else None,
+            "candidate": candidate, "evidence": evidence,
+            # no per-observation first-seen timestamp exists (ADR-032/035): the queue is
+            # ordered by the criterion it anchors, not by an age nobody recorded.
+            "age_hours": None}
 
 
 def _top_events(ledger, limit=TOP_EVENTS_TAIL):
@@ -8444,15 +8491,15 @@ def cmd_top(args):
             cid = o.get("canonical_match")
             if cid and cid not in quarantine:
                 quarantine[cid] = o["id"]
-            observations.append({
-                "id": o.get("id"), "ac": cid,
-                # no separate short label exists on an observation; `statement` is the only
-                # prose field, so `title` is null and the TUI may head-truncate candidate[0]
-                "title": None,
-                "candidate": [o.get("statement")],
-                "evidence": list((o.get("provenance") or {}).get("files") or []),
-                "age_hours": None})
-    observations.sort(key=lambda o: o.get("id") or "")
+            observations.append(_top_obs_view(o, rname))
+    # the queue's order: the criterion each observation anchors first (by the same key the
+    # board orders obligations with), the unanchored ones after, and the content-addressed
+    # id as the tie-break. Deterministic given the delta -- which is what lets a golden frame
+    # be the oracle for the verdicts pane. AGE-descending, which the SPEC drafted, is not
+    # derivable: every age_hours is null (no first-seen timestamp), and ordering by a value
+    # that does not exist would be the fabrication INV-TOP-05 forbids.
+    observations.sort(key=lambda o: ((_top_ac_key(o["ac"]) if o.get("ac") else (3, "", 0)),
+                                     o.get("id") or ""))
 
     # obligations: one row per DISTINCT tagged criterion of the acceptance file. kind is
     # "AC" for all of them -- there is no per-INV ledger in the general path (the mirador's

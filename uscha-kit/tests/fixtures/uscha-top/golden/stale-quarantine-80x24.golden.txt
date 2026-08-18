@@ -21,4 +21,4 @@ feed · 5/7 · newest first · P/F/H/U/I = pass/fail/human/unmeasured/info
   11:20:00  P  qa-step backend-api/improve · 0 reported, 0 fixed
   11:05:00  U  gate-not-run backend-api/gate:license · not run — nobody measure…
   10:40:00  I  qa-step backend-api/judgment-day · 3 reported, 1 fixed
-[j/k] move · [r] reload · [q] quit · [v] verdicts (M3) · [d]/[o] phase 2
+[j/k] move · [r] reload · [q] quit · [v] verdicts · [d]/[o] phase 2

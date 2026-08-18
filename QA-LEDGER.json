@@ -2,7 +2,7 @@
   "schema": "dev-loop/qa-ledger@1",
   "run_id": "20260721-164219",
   "started_at": "2026-07-21T19:42:19+00:00",
-  "updated_at": "2026-08-18T05:03:55+00:00",
+  "updated_at": "2026-08-18T06:18:04+00:00",
   "config": {
     "version": "1.44.0",
     "project": "uscha (self-applied)",
@@ -32,7 +32,7 @@
       "enabled": false
     }
   },
-  "step_counter": 32,
+  "step_counter": 34,
   "repos": {
     "uscha": {
       "type": "python",
@@ -878,6 +878,102 @@
             "commit": "47e86a2fdec29c21505236ee1a34e303047ee656",
             "dirty": true
           }
+        },
+        {
+          "at": "2026-08-18T05:51:23+00:00",
+          "coverage": {
+            "covered": 3818,
+            "missed": 2808,
+            "pct": 57.62,
+            "report_found": true,
+            "reports": [
+              "./reports/coverage.xml"
+            ]
+          },
+          "tests": {
+            "total": 178,
+            "executed": 178,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0,
+            "passed": 178,
+            "report_found": true,
+            "reports": [
+              {
+                "path": "reports/junit/uscha-acceptance.xml",
+                "mtime_ns": 1787032282617090600,
+                "mtime": "2026-08-18T05:51:22.617091+00:00"
+              }
+            ],
+            "freshness": {
+              "status": "fresh",
+              "reason": "selected JUnit report(s) are current relative to source/test files",
+              "newest_source": {
+                "path": "uscha-kit/skills/uscha-devloop/uscha_top.py",
+                "mtime_ns": 1787031141479764000,
+                "mtime": "2026-08-18T05:32:21.479764+00:00"
+              },
+              "tolerance_ns": 1000000000
+            }
+          },
+          "loc": {
+            "prod_loc": 25478,
+            "test_loc": 13222,
+            "prod_files": 14,
+            "test_files": 160
+          },
+          "origin": {
+            "commit": "cc5f770b2d4310fc8970249976dbe6e761486e50",
+            "dirty": true
+          }
+        },
+        {
+          "at": "2026-08-18T06:18:04+00:00",
+          "coverage": {
+            "covered": 3818,
+            "missed": 2808,
+            "pct": 57.62,
+            "report_found": true,
+            "reports": [
+              "./reports/coverage.xml"
+            ]
+          },
+          "tests": {
+            "total": 178,
+            "executed": 178,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0,
+            "passed": 178,
+            "report_found": true,
+            "reports": [
+              {
+                "path": "reports/junit/uscha-acceptance.xml",
+                "mtime_ns": 1787033883808067000,
+                "mtime": "2026-08-18T06:18:03.808067+00:00"
+              }
+            ],
+            "freshness": {
+              "status": "fresh",
+              "reason": "selected JUnit report(s) are current relative to source/test files",
+              "newest_source": {
+                "path": "uscha-kit/skills/uscha-devloop/uscha_top.py",
+                "mtime_ns": 1787032746472832800,
+                "mtime": "2026-08-18T05:59:06.472833+00:00"
+              },
+              "tolerance_ns": 1000000000
+            }
+          },
+          "loc": {
+            "prod_loc": 25652,
+            "test_loc": 13222,
+            "prod_files": 14,
+            "test_files": 160
+          },
+          "origin": {
+            "commit": "cc5f770b2d4310fc8970249976dbe6e761486e50",
+            "dirty": true
+          }
         }
       ],
       "iterations": [
@@ -1411,6 +1507,20 @@
       "kind": "snapshot",
       "repo": "uscha",
       "phase": "post"
+    },
+    {
+      "n": 33,
+      "at": "2026-08-18T05:51:23+00:00",
+      "kind": "snapshot",
+      "repo": "uscha",
+      "phase": "post"
+    },
+    {
+      "n": 34,
+      "at": "2026-08-18T06:18:04+00:00",
+      "kind": "snapshot",
+      "repo": "uscha",
+      "phase": "post"
     }
   ],
   "escalations": [],
@@ -1418,7 +1528,7 @@
   "spec_doubts": [],
   "spec_change_requests": [],
   "integrity": {
-    "sha256": "98c2c024d4c6698503b6922cfc78271eade62be3ff3eda03532f92e522154fd7"
+    "sha256": "7cf28e4d05e881a3df6a92bf9320b9ec978d254d1b245cbb8fe2b1855560a053"
   },
   "readiness_history": [
     {
@@ -1554,18 +1664,33 @@
         "count": 0,
         "reports": []
       }
+    },
+    {
+      "at": "2026-08-18T05:51:23+00:00",
+      "score": 99.3,
+      "cap_applied": null,
+      "stale_discarded": {
+        "count": 0,
+        "reports": []
+      }
+    },
+    {
+      "at": "2026-08-18T06:18:04+00:00",
+      "score": 99.3,
+      "cap_applied": null,
+      "stale_discarded": {
+        "count": 0,
+        "reports": []
+      }
     }
   ],
   "measured": {
-    "at": "2026-08-18T05:03:55+00:00",
-    "score": 97.9,
+    "at": "2026-08-18T06:18:04+00:00",
+    "score": 99.3,
     "band": "READY",
-    "acceptance_done": 173,
+    "acceptance_done": 178,
     "acceptance_total": 178,
-    "next": {
-      "id": "AC-T-13",
-      "text": "(M3) `v` enters VERDICTS listing only uncurated OBS, age-descending."
-    },
+    "next": null,
     "repos": {
       "uscha": {
         "phase": "pr-ready",

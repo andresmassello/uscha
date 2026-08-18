@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-032: The engine computes the whole projection — one read-only subcommand `top --json` emits every state, cardinality, median and feed line already derived, and a field with no honest source is `null`, never invented
 
-## Status: Accepted (M1 shipped in 1.86.0; feed derivation amended and shipped in 1.88.0 for M2; nullable fields per ADR-035; curated 2026-08-17)
+## Status: Accepted (M1 shipped in 1.86.0; feed derivation amended and shipped in 1.88.0 for M2; `observations[]` amended and shipped in 1.89.0 for M3; nullable fields per ADR-035; curated 2026-08-17)
 
 ## Context
 Decision #1 of this work: the engine computes everything and the TUI only renders
@@ -58,9 +58,10 @@ writes, never runs tests, never calls a model. Shape:
     {
       "id": "OBS-0234",
       "ac": null,
-      "title": null,
-      "candidate": ["type: tolerance · site: cuotas()", "claim: fecha_venc=None → assumes today()"],
-      "evidence":  ["conciliador.py:88 if c.fecha_venc is None: ...", "41 historical tickets"],
+      "repo": "backend-api",
+      "title": "the settlement window rolls to the next business day",
+      "candidate": ["type: behavior · site: svc/settle.py", "claim: <the whole statement>"],
+      "evidence":  ["svc/settle.py:88", "evidence_class: static · tool: qa_ledger-static-py"],
       "age_hours": null
     }
   ],
@@ -97,7 +98,7 @@ and derivations live in exactly one place.
 | `obligations[].trace` | `[]` | No general AC→implementation map exists; `_rt_ids_in`/`_RT_ID_RE` is bench-wired only. Deferred to ADR-035; until then the array is empty, never fabricated. (A/`trace`, E.3) |
 | `obligations[].ac`, `.quarantine_obs` | OBS id or `null` | The AC↔OBS link is a heuristic text match (`canonical_match`, L4374), not a designed field. `null` when no match — carried honestly. (A/`quarantine_obs`, C) |
 | `obligations[].age_hours`, `observations[].age_hours` | `null` | No per-observation/first-seen timestamp; CANDIDATE-DELTA.json is rewritten wholesale each `discover` run, so `mtime` is not a valid "first seen" proxy. (A/`age_hours`, E.5) |
-| `observations[].title` | `null` | No separate short label exists; `statement` is the only prose field. TUI may head-truncate `candidate[0]` for display but the engine emits `null`. (A/`observations`) |
+| `observations[].title` | the statement's capped head *(amended 1.89.0, M3)* | Still no separate short label: `statement` is the only prose field. Until M3 the engine emitted `null` and left the truncation to the TUI. M3 needs the label and the full claim at once, and a renderer that cuts prose is a renderer that decides what the human judges — so the ENGINE now emits both: `title` is the statement cleaned and capped at 72 (marked `…` when cut), `candidate[]` carries the whole claim, uncapped. `null` only when the observation has no statement at all. (A/`observations`) |
 | `eta_min` | `null` | `ETA = you × median_verdict + machine × median_loop`; `median_verdict` is null (below), so ETA is null → `—`. (§3, E.5) |
 | `medians.verdict_min` | `null` | No timestamp for "entered quarantine"; only `curation[].at` exists. Throughput between curations is a *different* metric, not per-item wait — not substituted silently. (A/`medians.verdict_min`, C) |
 | `medians.loop_min` | integer or `null` | Honestly computable from `ledger["repos"][r]["iterations"][*].at` (median gap between consecutive iterations); `null` if fewer than two iterations. (A/`medians.loop_min`) |
@@ -120,6 +121,29 @@ Handoff ladder: `UNMEASURED → TRACED → TAGGED → MEASURED_PASS ↘ MEASURED
 
 The rule: `TRACED`/`TAGGED` are never faked into existence and never rendered as `MEASURED_PASS`. They
 render in their own gray (INV-TOP-02) exactly because the ledger does not carry their facts yet.
+
+**Verdict-queue derivation** *(amended 1.89.0, M3 — the shape below is the shipped one).*
+`observations[]` was already the UNCURATED set (`_delta_state().uncurated`); M3 fixes what each
+entry carries, because the pane that shows it is the one a human records a verdict from.
+
+- **Only uncurated observations.** A verdict removes its observation from the queue on the next
+  read — the same filter the gates use, not a second definition of "pending".
+- **`repo`** is the delta's own repo. It is in the contract because `curate` takes `--repo`
+  (ADR-033): a queue without it would make the TUI pick one, which is the derivation the TUI is
+  never allowed to make.
+- **`candidate[]`** is typed, from the delta's own fields: `type: <type> · site: <first
+  provenance entry>`, then `claim: <statement>` **uncapped**. The claim is the thing being judged;
+  capping it in the engine would hide evidence, and capping it in the renderer would move a
+  derivation into the TUI.
+- **`evidence[]`** is one line per provenance entry (already `file:line` where the extractor knows
+  the line), then `evidence_class: <class> · tool: <tool>` — the class is what separates a measured
+  observation from a narrated one, and it belongs beside the files, not in a legend.
+- **Order:** the criterion the observation anchors first (by the same key the obligations use),
+  the unanchored ones after, the content-addressed id as the tie-break. **Age-descending, which the
+  SPEC drafted, is not derivable**: every `age_hours` is null, and sorting by a value that does not
+  exist is the fabrication INV-TOP-05 forbids.
+- Every string is sanitized here (C0 + DEL, `_top_clean`) exactly as the feed's text is, and the
+  renderer sanitizes again on the way out.
 
 **Events feed derivation** *(amended 1.88.0, M2 — the map below is the shipped one).*
 `events_tail[]` is built from `ledger["steps"]` (fields `n, at, kind, repo` exist, L1943…). `level`

@@ -1,0 +1,32 @@
+uscha top · backend-api · verdicts                                                         step #147
+────────────────────────────────────────────────────────────────────────────────────────────────────
+pending 3 · you owe 2 · a verdict never moves DONE (INV-TOP-03)
+> [1] OBS-2b837dfd92ec  AC-05 the settlement window rolls to the next business day  · AC-5 · pending
+  [2] OBS-21653f98dedb  AC-06 a refund never exceeds the captured amount            · AC-6 · pending
+  [3] OBS-2a9f0dc835ee  the retry budget is exhausted silently after three attempts · AC — · pending
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  OBS-2b837dfd92ec · AC-5 · repo backend-api
+
+  CANDIDATE                                       │ EVIDENCE
+  type: behavior · site: svc/settle.py            │ svc/settle.py
+  claim: AC-05 the settlement window rolls to the │ evidence_class: static · tool: fixture
+  next business day                               │
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+status · the only write is a verdict, recorded by `qa_ledger.py curate`
+[jk/1-9] move · [p]reserve · [f]ix · [u]ndefined · [r]eload · [t] back · [q]uit

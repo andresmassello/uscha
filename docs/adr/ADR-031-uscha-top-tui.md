@@ -49,7 +49,10 @@ Constraints inherited from the kit and confirmed against the engine audit:
   - *read* — the app shells out to the engine subcommand `qa_ledger.py top --json` (ADR-032) and
     renders that JSON. It derives no KPI itself (single-derivation rule, the 1.48.1/mirador lesson).
   - *write* — the app shells out to the existing `qa_ledger.py curate` subcommand (ADR-033). It is
-    the *medium* of the human verdict, never a promoter.
+    the *medium* of the human verdict, never a promoter. **(1.89.0)** the `top` subparser forwards
+    `--human` to `uscha_top.py` the way it already forwards `--refresh`/`--once`, so the verdict's
+    author is nameable from the launcher and not only from a direct invocation; absent, it is not
+    passed and the TUI falls back to `$USERNAME`/`$USER`, then to `curate`'s own default.
 - **UI copy is English** (repo convention since kit 1.55.0), e.g.
   `DONE 14/24 (58%) · machine owes 2 · you owe 4 · untagged 4`.
 

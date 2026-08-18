@@ -43,8 +43,10 @@ conflict is named. The definitive AC ids are assigned here, not by the handoff.
   stub)* · `[j/k` or `↑/↓]` move · `[q]` quit.
 
 ### VERDICTS (`v`)
-- List of quarantined OBS (age, affected AC) with candidate and evidence side by side.
-- Keys: `[1-9]` or `[j/k]` select · `[p]` preserve · `[f]` fix · `[u]` undefined · `[t]`/`[Esc]` back.
+- List of uncurated OBS (affected AC, and the age the engine cannot supply — so it is not shown)
+  with candidate and evidence side by side, stacked below 100 columns.
+- Keys: `[1-9]` or `[j/k]` select · `[p]` preserve · `[f]` fix · `[u]` undefined · `[r]` reload ·
+  `[t]`/`[Esc]` back · `[q]` quit.
 - Each verdict shells out to `curate` once (ADR-033) and advances to the next uncurated OBS; empty
   queue returns to BOARD.
 
@@ -111,7 +113,9 @@ renders them, it does not recompute them (single derivation, ADR-032).
   path and `--once` (AC-T-18, AC-T-20, AC-T-22).
 - **M2 — live feed.** Event tail + `mtime` polling. **Gate:** AC-T-11, AC-T-12.
 - **M3 — verdicts mode.** The single write. **Gate:** AC-T-13..16 + the before/after `curate`
-  byte-equal fixture (AC-T-17).
+  byte-equal fixture (AC-T-17). **Shipped 1.89.0**, measured by T141 plus two VERDICTS golden
+  frames; the queue's order is the one §7/AC-T-13 records, not the age-descending one drafted in
+  §2 (there is no age to sort by — ADR-032 amended for M3).
 - **M4 — phase 2 (not now).** `d` diff, `o` rerun, spec-lens over the same contract.
 
 Each milestone closes with a full turn of the method (spec pinned → compile → oracle → curation).
@@ -145,23 +149,23 @@ Each milestone closes with a full turn of the method (spec pinned → compile �
 ```md
 ## uscha top v0.1 (ADR-031..035) - closes on green `AC-T-nn` smoke assertions and golden frames
 
-- [ ] AC-T-01 — the header shows `DONE x/N (p%)` computed per SPEC §3, rendered from the
+- [x] AC-T-01 — the header shows `DONE x/N (p%)` computed per SPEC §3, rendered from the
   engine-computed `terminado` block of `top --json`; the TUI derives no value itself.
-- [ ] AC-T-02 — the header shows `machine owes M · you owe Q · untagged U` from the `debtors` block.
-- [ ] AC-T-03 — ETA is rendered per §3; with `medians.verdict_min` null (v0.1 always) it renders `—`.
-- [ ] AC-T-04 — with `terminado.unmeasured ≥ 1`, the percentage carries the suffix `· N unmeasured`
+- [x] AC-T-02 — the header shows `machine owes M · you owe Q · untagged U` from the `debtors` block.
+- [x] AC-T-03 — ETA is rendered per §3; with `medians.verdict_min` null (v0.1 always) it renders `—`.
+- [x] AC-T-04 — with `terminado.unmeasured ≥ 1`, the percentage carries the suffix `· N unmeasured`
   (INV-TOP-01).
-- [ ] AC-T-05 — the burn-up is rendered with block chars from `burnup`; v0.1 renders the `kind:"score"`
+- [x] AC-T-05 — the burn-up is rendered with block chars from `burnup`; v0.1 renders the `kind:"score"`
   series and labels it as a score trend, not a count of closed obligations.
-- [ ] AC-T-06 — `spec_pin` renders the git `HEAD` sha with a *not clean-room verified* marker; a null
+- [x] AC-T-06 — `spec_pin` renders the git `HEAD` sha with a *not clean-room verified* marker; a null
   pin (non-git) renders `—`; a fabricated pin never appears (INV-TOP-05).
-- [ ] AC-T-07 — one row per obligation, state-colored (PASS green, FAIL red, QUARANTINE amber,
+- [x] AC-T-07 — one row per obligation, state-colored (PASS green, FAIL red, QUARANTINE amber,
   UNMEASURED/TRACED/TAGGED gray), stable order by id.
-- [ ] AC-T-08 — TRACED and TAGGED render in the UNMEASURED-class gray in v0.1, never as PASS and
+- [x] AC-T-08 — TRACED and TAGGED render in the UNMEASURED-class gray in v0.1, never as PASS and
   never fabricated, because the ledger carries no general-project source for them (INV-TOP-02,
   ADR-032).
-- [ ] AC-T-09 — the `GATE` column shows `junit` or `curation` (never `oracle`) for a general project.
-- [ ] AC-T-10 — the `AGE` column renders `—` for every obligation in v0.1 (no first-seen timestamp,
+- [x] AC-T-09 — the `GATE` column shows `junit` or `curation` (never `oracle`) for a general project.
+- [x] AC-T-10 — the `AGE` column renders `—` for every obligation in v0.1 (no first-seen timestamp,
   ADR-035).
 - [x] AC-T-11 — the engine derives `events_tail`: the last ≤8 `ledger["steps"]`, newest first, each
   `{ts, level, text}` with `level` from the fixed per-kind map (ADR-032, amended for M2), `ts` the
@@ -175,24 +179,43 @@ Each milestone closes with a full turn of the method (spec pinned → compile �
   coloured frames keep identical geometry). **What is measured is the polling primitive plus the
   rendered frame, not a driven TTY session** — the interactive loop needs a terminal the suite does
   not have, and a test that claimed one would be the over-claim the golden frames exist to prevent.
-- [ ] AC-T-13 — `v` enters VERDICTS listing only uncurated OBS, age-descending order.
-- [ ] AC-T-14 — selecting an OBS shows candidate and evidence side by side, claims not truncated.
-- [ ] AC-T-15 — `p`/`f`/`u` shells out to `curate` once per keypress (never batched) in the current
-  curation record format and advances to the next uncurated OBS; empty queue returns to BOARD
-  (ADR-033).
-- [ ] AC-T-16 — after a verdict, DONE does not change (INV-TOP-03); the per-debtor cardinalities do;
-  no auto-rerun moves DONE.
-- [ ] AC-T-17 — the ledger record the TUI's verdict path appends is byte-identical to a manual
-  `qa_ledger.py curate` call with the same arguments (before/after fixture).
-- [ ] AC-T-18 — stdlib-only; runnable via `python -m`; py3.8-clean like the rest of the kit.
-- [ ] AC-T-19 — `render(state, size)` is pure (no I/O); golden frames byte-identical over fixtures at
+- [x] AC-T-13 — `v` enters VERDICTS and the queue is exactly the UNCURATED observations the engine
+  emitted, in the documented order: the criterion each one anchors first, the unanchored ones after,
+  the content-addressed id as the tie-break. **Age-descending, drafted above, is not what shipped**:
+  every `age_hours` is null (no first-seen timestamp, ADR-035), so ordering by age would sort on a
+  value nobody records. `t`/`Esc` returns to BOARD. Measured over a temp copy: a curated OBS leaves
+  the queue and only that one, and each queue entry carries the `repo` the write needs.
+- [x] AC-T-14 — the selected OBS shows candidate and evidence side by side at 100 columns and
+  stacked at the 80-column floor, and a claim longer than either column comes back **whole**, word
+  for word, across the pane's lines. When even the wrapped form does not fit, the pane names the
+  shortfall (`— N more line(s) …`) instead of cutting in silence. The one-line queue label above it
+  MAY carry the engine's `…` cap — the label is a label; the claim is in the pane.
+- [x] AC-T-15 — `p`/`f`/`u` shells out to `curate` exactly once per keypress (never batched) with
+  the documented argv and advances to the next uncurated OBS; an empty queue returns to BOARD; the
+  engine's refusal (unknown OBS, batch-looking id) is surfaced and nothing is retried. Also measured
+  structurally: `uscha_top.py` opens no file for writing, dumps no JSON, builds exactly one
+  `curate` argv, calls `apply_verdict` exactly once with no `for`/`while` above that call, and
+  drains the input buffer on every verdict path — `curate` is not merely the write path used, it is
+  the only one that exists, and one keypress cannot become a pass over the queue (ADR-033).
+  Two further refusals are measured here: a verdict key inside the 250 ms cooldown records nothing
+  (a held key would otherwise judge the observation that just took the cursor's place) while
+  `j`/`t`/`q` keep working, and a `--state` run — a frozen snapshot, not a live ledger — refuses by
+  name and spawns nothing.
+- [x] AC-T-16 — after a real verdict on a temp copy, `terminado.done` and `terminado.pct` are
+  unchanged (INV-TOP-03) and `debtors.you` drops by one while the four buckets still partition the
+  board; no auto-rerun moves DONE.
+- [x] AC-T-17 — the ledger record the TUI's verdict path appends and the record a manual
+  `qa_ledger.py curate` call appends, over two copies of the same fixture with the same arguments,
+  are identical member for member — `at` (a wall clock in a subprocess) compared for shape.
+- [x] AC-T-18 — stdlib-only; runnable via `python -m`; py3.8-clean like the rest of the kit.
+- [x] AC-T-19 — `render(state, size)` is pure (no I/O); golden frames byte-identical over fixtures at
   100×32 and 80×24.
-- [ ] AC-T-20 — no TTY (pipe/CI) → `--once` prints one plain frame and exits 0.
-- [ ] AC-T-21 — degradation to 80×24: the layout does not break; the feed shortens first.
-- [ ] AC-T-22 — Windows legacy conhost: VT processing is enabled via `SetConsoleMode` (ctypes,
+- [x] AC-T-20 — no TTY (pipe/CI) → `--once` prints one plain frame and exits 0.
+- [x] AC-T-21 — degradation to 80×24: the layout does not break; the feed shortens first.
+- [x] AC-T-22 — Windows legacy conhost: VT processing is enabled via `SetConsoleMode` (ctypes,
   stdlib); on failure the app degrades to the `--once` plain frame rather than emitting raw escapes.
-- [ ] AC-T-23 — honesty negative case: a 23/24-PASS + 1-UNMEASURED fixture renders 96% with the
+- [x] AC-T-23 — honesty negative case: a 23/24-PASS + 1-UNMEASURED fixture renders 96% with the
   suffix, never 100% (discriminates a cheating renderer).
-- [ ] AC-T-24 — single derivation: rendered from a frozen `top --json` fixture with no engine call,
+- [x] AC-T-24 — single derivation: rendered from a frozen `top --json` fixture with no engine call,
   every number in the frame traces to a JSON field; the TUI computes no KPI itself.
 ```

@@ -545,13 +545,16 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   specific combination; it does not corrupt the `qa_ledger.py` or auxiliary-script figures
   above, which come from separate data files untouched by that collision.
 
-## uscha top v0.1, M1+M2 (ADR-031/032/034) - closes on green `AC-T-nn` smoke assertions and golden frames
+## uscha top v0.1, M1+M2+M3 (ADR-031/032/033/034) - closes on green `AC-T-nn` smoke assertions and golden frames
 
-Shipped in 1.86.0 (M1 = read-only board) and extended in 1.88.0 (M2 = the live feed and its mtime
-poll). Criteria authored in `docs/uscha-top/SPEC.md` s7 and curated before code; measured by T137
-(engine `top --json` contract, including the derived feed) and T138 (pure `render`, golden frames,
-the poll primitive) through the acceptance sidecar. M3 ids stay UNMEASURED (skipped testcase, never
-a silent pass) until their milestone ships. They close by the suite, like every other family prefix — and since
+Shipped in 1.86.0 (M1 = read-only board), extended in 1.88.0 (M2 = the live feed and its mtime poll)
+and completed in 1.89.0 (M3 = VERDICTS mode, the application's single write, made by shelling out to
+the engine's own `curate`). Criteria authored in `docs/uscha-top/SPEC.md` s7 and curated before code;
+measured by T137 (engine `top --json` contract, including the derived feed and the verdict queue),
+T138 (pure `render`, twelve golden frames, the poll primitive) and T141 (the write path, on temp
+copies of the quarantine fixture) through the acceptance sidecar. Every v0.1 id is now measured; the
+phase-2 keys (`d` diff, `o` rerun) are out of scope and carry no criterion here. They close by the
+suite, like every other family prefix — and since
 1.87.0 (ADR-036) the engine also READS those family ids, so the green ones enter the measured
 pipeline instead of counting as untagged (the gap ADR-035 item 6 recorded is closed).
 
@@ -567,11 +570,11 @@ pipeline instead of counting as untagged (the gap ADR-035 item 6 recorded is clo
 - [x] AC-T-10 - the AGE column renders `-` for every obligation in v0.1 (ADR-035).
 - [x] AC-T-11 - (M2) the engine derives `events_tail`: the last <=8 steps, newest first, each `{ts, level, text}` with `level` from the fixed per-kind map, `ts` the step's `at` as UTC HH:MM:SS, `text` stripped of C0 controls and DEL (8-bit C1 and Unicode format chars are not filtered in v0.1); no steps -> `[]`.
 - [x] AC-T-12 - (M2) the mtime poll: `_changed()` flips on a real disk change and only then, `--refresh` defaults to 2 s with a 0.5 s floor, and a `--once` frame renders the derived feed with timestamp and level letter. Measures the polling PRIMITIVE plus the rendered frame, not a driven TTY session.
-- [ ] AC-T-13 - (M3) `v` enters VERDICTS listing only uncurated OBS, age-descending.
-- [ ] AC-T-14 - (M3) selecting an OBS shows candidate and evidence side by side, claims not truncated.
-- [ ] AC-T-15 - (M3) `p`/`f`/`u` shells out to `curate` once per keypress and advances; empty queue returns to BOARD.
-- [ ] AC-T-16 - (M3) after a verdict DONE does not change (INV-TOP-03); no auto-rerun moves it.
-- [ ] AC-T-17 - (M3) the appended curation record is byte-identical to a manual `curate` call.
+- [x] AC-T-13 - (M3) `v` enters VERDICTS and the queue is exactly the uncurated observations the engine emitted, in its documented order: the criterion each anchors first, the unanchored after, the content-addressed id as the tie-break. NOT age-descending as first drafted - every `age_hours` is null, so there is no age to sort by (ADR-032 amended). `t`/`Esc` returns to BOARD; a curated OBS leaves the queue and only that one.
+- [x] AC-T-14 - (M3) candidate and evidence side by side at 100 columns, stacked at the 80-column floor, and a claim longer than either column comes back whole across the pane's lines. A pane too short to hold it NAMES the shortfall instead of cutting in silence; the one-line queue label above may carry the engine's `…` cap, the claim in the pane may not.
+- [x] AC-T-15 - (M3) `p`/`f`/`u` shells out to `curate` exactly once per keypress with the documented argv and advances; an empty queue returns to BOARD; the engine's refusal is surfaced and nothing retried. Also measured structurally: `uscha_top.py` opens no file for writing, dumps no JSON, builds exactly one `curate` argv, calls `apply_verdict` exactly once with no loop above that call, and drains the input buffer on every verdict path. Two refusals besides: a verdict key inside the 250 ms cooldown records nothing (a held key would otherwise judge the observation that just took the cursor's place) while navigation keeps working, and a `--state` run - a frozen snapshot, not a live ledger - refuses by name and spawns nothing.
+- [x] AC-T-16 - (M3) after a real verdict, `terminado.done`/`pct` are unchanged (INV-TOP-03) and `debtors.you` drops by one, the four buckets still partitioning the board; no auto-rerun moves DONE.
+- [x] AC-T-17 - (M3) the record the TUI path appends and the record a manual `curate` call appends, over two copies of the same fixture with the same arguments, are identical member for member - `at` (a wall clock in a subprocess) compared for shape.
 - [x] AC-T-18 - stdlib-only; runnable via `python -m`; py3.8-clean.
 - [x] AC-T-19 - `render(state, size)` is pure; golden frames byte-identical at 100x32 and 80x24.
 - [x] AC-T-20 - no TTY -> `--once` prints one plain frame and exits 0.
@@ -616,6 +619,7 @@ form is claimed. Measured by T140 through the acceptance sidecar.
 - ADR-014 — Fidelity is a vector; an advisory-class dimension can never gate.
 - ADR-031 — `uscha top` is a raw-ANSI terminal projection of the ledger, wired like `mirador`.
 - ADR-032 — One engine subcommand (`top --json`) computes the whole projection; the TUI renders.
+- ADR-033 — The verdict is the only thing `uscha top` writes, and it writes it through the existing `curate`.
 - ADR-034 — `render(state, size)` is pure; golden frames are its oracle, with a negative-honesty fixture.
 - ADR-036 — The instrument reads family-prefixed criteria (`AC-<FAMILY>-<n>`); the bare form is unchanged.
 

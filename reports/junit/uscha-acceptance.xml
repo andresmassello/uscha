@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="178" failures="0" errors="0" skipped="5">
+<testsuite name="uscha-acceptance" tests="178" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -319,19 +319,14 @@
   <testcase classname="uscha.acceptance" name="AC-T-12_uscha-top">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-T-13_uscha-top">
-    <skipped message="no source configured for this criterion"/>
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-T-14_uscha-top">
-    <skipped message="no source configured for this criterion"/>
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-T-15_uscha-top">
-    <skipped message="no source configured for this criterion"/>
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-T-16_uscha-top">
-    <skipped message="no source configured for this criterion"/>
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-T-17_uscha-top">
-    <skipped message="no source configured for this criterion"/>
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-T-18_uscha-top">
   </testcase>

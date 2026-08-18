@@ -106,38 +106,47 @@
   ],
   "observations": [
     {
-      "id": "OBS-21653f98dedb",
-      "ac": "AC-6",
-      "title": null,
+      "id": "OBS-2b837dfd92ec",
+      "ac": "AC-5",
+      "repo": "backend-api",
+      "title": "AC-05 the settlement window rolls to the next business day",
       "candidate": [
-        "AC-06 a refund never exceeds the captured amount"
+        "type: behavior · site: svc/settle.py",
+        "claim: AC-05 the settlement window rolls to the next business day"
       ],
       "evidence": [
-        "svc/refund.py"
+        "svc/settle.py",
+        "evidence_class: static · tool: fixture"
+      ],
+      "age_hours": null
+    },
+    {
+      "id": "OBS-21653f98dedb",
+      "ac": "AC-6",
+      "repo": "backend-api",
+      "title": "AC-06 a refund never exceeds the captured amount",
+      "candidate": [
+        "type: invariant · site: svc/refund.py",
+        "claim: AC-06 a refund never exceeds the captured amount"
+      ],
+      "evidence": [
+        "svc/refund.py",
+        "evidence_class: static · tool: fixture"
       ],
       "age_hours": null
     },
     {
       "id": "OBS-2a9f0dc835ee",
       "ac": null,
-      "title": null,
+      "repo": "backend-api",
+      "title": "the retry budget is exhausted silently after three attempts",
       "candidate": [
-        "the retry budget is exhausted silently after three attempts"
+        "type: contract · site: svc/retry.py",
+        "claim: the retry budget is exhausted silently after three attempts"
       ],
       "evidence": [
-        "svc/retry.py"
-      ],
-      "age_hours": null
-    },
-    {
-      "id": "OBS-2b837dfd92ec",
-      "ac": "AC-5",
-      "title": null,
-      "candidate": [
-        "AC-05 the settlement window rolls to the next business day"
-      ],
-      "evidence": [
-        "svc/settle.py"
+        "svc/retry.py",
+        "evidence_class: static · tool: fixture"
       ],
       "age_hours": null
     }

@@ -13,8 +13,12 @@ Truth-pass (INV-TOP-05): a field the engine emits as null renders as an em dash,
 zero and never as a guess. In v0.1 that is ETA, every AGE, drift, and the trace column --
 each with its deferred wiring recorded in ADR-035.
 
-M2 scope: the read-only BOARD plus the live feed and its mtime poll. VERDICTS mode (M3) is
-not wired; the pane that will hold it is labelled as such rather than faked.
+M3 scope: the read-only BOARD, the live feed and its mtime poll, and VERDICTS mode -- the
+ONE thing this application writes. A verdict is written by shelling out to the engine's own
+`qa_ledger.py curate`, one process per keypress, one observation per process (ADR-033): the
+TUI never opens the ledger for writing and never builds a curation record, so it cannot
+drift from the record shape the engine owns. It records a judgement; it does not promote,
+does not rerun, and never moves DONE (INV-TOP-03).
 
 Stdlib only. Python 3.8+. Runnable directly or via `python -m uscha_top`.
 """
@@ -36,6 +40,26 @@ CHROME_LINES = 11
 FEED_MAX = 8            # = the engine's events_tail length; a short terminal shows fewer
 BURNUP_MAX = 24
 MIN_REFRESH = 0.5       # a poll faster than this is a busy loop, not a refresh
+
+MODE_BOARD = "board"
+MODE_VERDICTS = "verdicts"
+# VERDICTS geometry: title, rule, the pending line, the rule under the list, the rule under
+# the pane, the status line, the key hint. Everything else is queue rows + the detail pane.
+VERDICT_CHROME = 7
+VERDICT_LIST_MAX = 9    # [1]..[9]: exactly the observations a single keypress can select
+SIDE_BY_SIDE_MIN = 100  # narrower than this, candidate and evidence stack instead of pairing
+# The three verdicts `curate` accepts, and nothing else: the vocabulary belongs to ADR-013.
+VERDICTS = {"p": "preserve", "f": "fix", "u": "undefined"}
+CURATE_NOTE = "recorded via uscha top"
+VERDICT_HINT = "the only write is a verdict, recorded by `qa_ledger.py curate`"
+# A held key repeats. Because the queue ADVANCES after every write, repeat number two would
+# land on an observation the human never read -- N verdicts from one glance, which is the
+# batch INV-CURATION-01 forbids arriving one legitimate call at a time. Two guards: the input
+# buffer is drained after a write (`drain_keys`), and for this long a verdict key is refused
+# outright, saying so instead of swallowing it.
+VERDICT_COOLDOWN = 0.25
+VERDICT_COOLDOWN_MSG = ("verdict recorded -- release the key (the queue advanced; the next "
+                        "observation is a new judgement)")
 
 # ANSI SGR by obligation state. TRACED and TAGGED deliberately share the UNMEASURED gray:
 # the v0.1 engine has no source for either rung (ADR-032), so they must read as "not
@@ -189,14 +213,23 @@ def _colorize(line, state):
     return line.replace(state, "\x1b[%sm%s%s" % (code, state, RESET), 1)
 
 
-def render(state, size, sel=0, plain=True):
-    """The whole board as a list of exactly `rows` lines, none wider than `cols`.
+def render(state, size, sel=0, plain=True, mode=MODE_BOARD, status=""):
+    """One frame: exactly `rows` lines, none wider than `cols`.
 
     PURE (ADR-034): no I/O, no clock, no randomness, no environment. `state` is the parsed
-    `qa_ledger.py top --json` object; `size` is (cols, rows); `sel` is the highlighted row.
-    plain=True emits no escape sequences at all -- the mode `--once`, CI and the golden
-    frames use, so a snapshot compares text and not terminal control codes.
+    `qa_ledger.py top --json` object; `size` is (cols, rows); `sel` is the highlighted row of
+    the ACTIVE mode; `mode` picks the board or the verdicts queue; `status` is the last line
+    the write path produced (a parameter, not a global, so the frame stays a pure function of
+    its inputs and the golden frames stay reproducible). plain=True emits no escape sequences
+    at all -- the mode `--once`, CI and the golden frames use, so a snapshot compares text and
+    not terminal control codes.
     """
+    if mode == MODE_VERDICTS:
+        return _render_verdicts(state, size, sel, plain, status)
+    return _render_board(state, size, sel, plain, status)
+
+
+def _render_board(state, size, sel, plain, status=""):
     cols, rows = size
     cols = max(20, int(cols))
     rows = max(CHROME_LINES + 1, int(rows))
@@ -276,9 +309,19 @@ def render(state, size, sel=0, plain=True):
         # sent: a feed that silently drops lines is a feed that can hide the red one.
         out.append("feed %s %d/%d %s newest first %s P/F/H/U/I = pass/fail/human/"
                    "unmeasured/info" % (MID, len(shown), len(events), MID, MID))
+    if status:
+        # the LAST verdict of a queue empties it and drops the reader back here, so the
+        # engine's own confirmation would otherwise vanish with the mode that showed it. It
+        # takes the feed's label line for exactly one frame (the next keypress clears it) --
+        # the feed's own `N/M` count returns with it. `status` is empty on every other path,
+        # which is why the golden frames never see this line.
+        out[-1] = _fit("status %s %s" % (MID, _safe(status)), cols)
     for i in range(feed_n):
         out.append(_feed_line(shown[i], cols, plain) if i < len(shown) else "")
-    out.append("[j/k] move %s [r] reload %s [q] quit %s [v] verdicts (M3) %s "
+    # `[v] verdicts` lost its `(M3)` marker in 1.89.0 because the key now works; `[d]/[o]`
+    # keeps its `phase 2` marker because those two still do nothing (SPEC s1/s6). A hint that
+    # labels a live key as future is the same class of stale claim the frames exist to catch.
+    out.append("[j/k] move %s [r] reload %s [q] quit %s [v] verdicts %s "
                "[d]/[o] phase 2" % (MID, MID, MID, MID))
     # a coloured line was already fitted BEFORE its escape bytes went in (table rows and
     # feed lines both), and re-fitting it here would count those bytes as visible width --
@@ -288,6 +331,154 @@ def render(state, size, sel=0, plain=True):
     # exactly `rows` lines: a frame that drifts in height is a frame no snapshot can pin
     out = out[:rows] + [""] * max(0, rows - len(out))
     return out
+
+
+# --------------------------------------------------------------------------- #
+# VERDICTS mode -- the queue, the detail pane, and the keymap that writes      #
+# --------------------------------------------------------------------------- #
+def verdict_queue(state):
+    """The pending queue is EXACTLY what the engine emitted. `observations[]` already holds
+    only uncurated observations, in the order `cmd_top` fixed (the anchored criterion first,
+    then the id). The TUI filters nothing and sorts nothing -- a second place that decides
+    what is pending is a second place that can disagree with the ledger (ADR-032)."""
+    return [o for o in (state.get("observations") or []) if isinstance(o, dict)]
+
+
+def _wrap(text, width):
+    """Whole words onto as many lines as they need.
+
+    The pane must never cut a claim in half: a claim the reader cannot finish is a verdict
+    recorded on half the evidence (AC-T-14). A single token wider than the pane is hard-split
+    and CONTINUES on the next line, so nothing is dropped either way."""
+    width = max(8, int(width))
+    out, line = [], ""
+    for word in _safe(text).split():
+        if not line:
+            line = word
+        elif len(line) + 1 + len(word) <= width:
+            line += " " + word
+        else:
+            out.append(line)
+            line = word
+        while len(line) > width:
+            out.append(line[:width])
+            line = line[width:]
+    if line:
+        out.append(line)
+    return out or [""]
+
+
+def _obs_row(i, ob, selected, cols):
+    """One queue line: `[n] OBS-id  title  · AC-x · pending`. The TITLE is the engine's
+    capped head of the claim; the whole claim lives in the pane below, never here."""
+    gutter = "> " if selected else "  "
+    idx = "[%d]" % (i + 1) if i < VERDICT_LIST_MAX else "   "
+    tail = " %s %s %s pending" % (MID, _safe(ob.get("ac")) or ("AC " + DASH), MID)
+    head = "%s%-4s%-18s" % (gutter, idx, _safe(ob.get("id"))[:18])
+    room = max(4, cols - len(head) - len(tail))
+    title = _fit(_safe(ob.get("title")) or DASH, room)
+    return head + title.ljust(room) + tail
+
+
+def _column_widths(cols):
+    """`  <left> │ <right>` spends 2 on the gutter and 3 on the divider."""
+    left = (cols - 5) // 2
+    return left, cols - 5 - left
+
+
+def _pane(ob, cols, height):
+    """The detail of the selected observation, in exactly `height` lines.
+
+    Side by side while there is room, stacked below `SIDE_BY_SIDE_MIN` columns -- a
+    40-character column is not a pane, it is a word per line. Content that still does not fit
+    is NOT silently cut: the last line says how many lines are missing, which is the same
+    discipline the feed's `5/7` label follows."""
+    if height <= 0:
+        return []
+    if not ob:
+        body = ["  no observation selected %s the queue is empty ([t] returns to the board)"
+                % MID]
+    else:
+        head = ["  %s %s %s %s repo %s" % (_safe(ob.get("id")) or "?", MID,
+                                           _safe(ob.get("ac")) or ("AC " + DASH), MID,
+                                           _safe(ob.get("repo")) or DASH), ""]
+        def block(key, width):
+            return [ln for x in (ob.get(key) or []) for ln in _wrap(x, width)]
+
+        if cols >= SIDE_BY_SIDE_MIN:
+            lw, rw = _column_widths(cols)
+            left = ["CANDIDATE"] + block("candidate", lw)
+            right = ["EVIDENCE"] + block("evidence", rw)
+            pad = max(len(left), len(right))
+            left += [""] * (pad - len(left))
+            right += [""] * (pad - len(right))
+            body = head + [("  %s │ %s" % (l.ljust(lw), r)).rstrip()
+                           for l, r in zip(left, right)]
+        else:
+            body = (head + ["  CANDIDATE"] + ["  " + ln for ln in block("candidate", cols - 2)]
+                    + [""] + ["  EVIDENCE"] + ["  " + ln for ln in block("evidence", cols - 2)])
+    if len(body) > height:
+        body = body[:height - 1] + ["  %s %d more line(s) of this observation do not fit at "
+                                    "this size" % (DASH, len(body) - (height - 1))]
+    return [_fit(ln, cols) for ln in body] + [""] * max(0, height - len(body))
+
+
+def _render_verdicts(state, size, sel, plain, status):
+    """The verdicts queue. Read-only like every other frame -- the write happens in the
+    dispatch, never in the renderer (ADR-034: `render` performs no I/O at all).
+
+    `plain` is accepted and not used: this frame carries no colour of its own (the `>` gutter
+    marks the selection, and a state colour here would decorate a claim rather than a
+    verdict), so the coloured and plain paths are the same lines. Keeping the parameter keeps
+    one render signature, and keeps the golden frames comparing the frame the terminal draws."""
+    cols, rows = size
+    cols = max(20, int(cols))
+    rows = max(VERDICT_CHROME + 4, int(rows))
+    queue = verdict_queue(state)
+    debtors = state.get("debtors") or {}
+    sel = max(0, min(int(sel), max(0, len(queue) - 1)))
+
+    out = [_spread("uscha top %s %s %s verdicts"
+                   % (MID, _safe(state.get("project")) or "(unnamed project)", MID),
+                   "step #%s" % _safe(_num(state.get("step"))), cols),
+           RULE * cols,
+           # the two numbers are DIFFERENT facts and both are named: `pending` counts
+           # uncurated observations, `you owe` counts the criteria they hold in quarantine.
+           # One observation can name no criterion at all, so conflating them would inflate
+           # whichever is shown alone.
+           _fit("pending %d %s you owe %s %s a verdict never moves DONE (INV-TOP-03)"
+                % (len(queue), MID, _num(debtors.get("you")), MID), cols)]
+
+    avail = rows - VERDICT_CHROME
+    want = len(queue) or 1
+    list_n = max(1, min(VERDICT_LIST_MAX, want, avail - 3))
+    body = list_n - 1 if len(queue) > list_n else list_n
+    body = max(1, body)
+    top = 0
+    if sel >= body:
+        top = min(sel - body + 1, max(0, len(queue) - body))
+    rowsout = [_fit(_obs_row(i, ob, i == sel, cols), cols)
+               for i, ob in enumerate(queue[top:top + body], start=top)]
+    if len(queue) > len(rowsout):
+        rowsout.append(_fit("  %s %d more observation(s) not shown (j/k to move)"
+                            % (DASH, len(queue) - len(rowsout)), cols))
+    if not queue:
+        rowsout = [_fit("  nothing uncurated %s every observation carries a verdict "
+                        "(`promote` is a human step, not this one)" % MID, cols)]
+    out.extend(rowsout[:list_n])
+    out.extend([""] * max(0, list_n - len(rowsout)))
+
+    out.append(RULE * cols)
+    out.extend(_pane(queue[sel] if queue else None, cols, avail - list_n))
+    out.append(RULE * cols)
+    out.append(_fit("status %s %s" % (MID, _safe(status) or VERDICT_HINT), cols))
+    # every key this mode answers to is on the line, `[r]` included: the queue is re-read from
+    # a ledger another process can move, and a reload the reader cannot find is a reload that
+    # does not exist. Abbreviated to fit the 80-column floor without the `…` cut.
+    out.append(_fit("[jk/1-9] move %s [p]reserve %s [f]ix %s [u]ndefined %s [r]eload %s "
+                    "[t] back %s [q]uit" % (MID, MID, MID, MID, MID, MID), cols))
+    out = [line if "\x1b" in line else _fit(line, cols) for line in out]
+    return out[:rows] + [""] * max(0, rows - len(out))
 
 
 # --------------------------------------------------------------------------- #
@@ -403,6 +594,50 @@ def wait_key(timeout):
         termios.tcsetattr(fd, termios.TCSADRAIN, saved)
 
 
+DRAIN_MAX = 256          # a terminal that never stops reporting input is not drained forever
+
+
+def drain_keys():
+    """Throw away whatever is ALREADY in the input buffer, and say how much it threw.
+
+    Called right after a verdict. `wait_key` reads one byte per turn of the loop, so a held
+    key (or a fast repeat, or a paste) leaves N keypresses queued -- and because the queue
+    advances after every write, keypress two would judge the observation that just moved into
+    the cursor's place. Draining is what makes "one keypress, one verdict" true of the
+    KEYBOARD and not only of the dispatch (ADR-033, INV-CURATION-01).
+
+    Same family as `read_key`/`wait_key` and isolated for the same reason: the driver is not
+    what the suite tests, so it must be replaceable. Without a terminal it drops nothing and
+    returns 0 rather than raising -- a pipe has no held key to drain."""
+    dropped = 0
+    if os.name == "nt":
+        try:
+            import msvcrt
+            while dropped < DRAIN_MAX and msvcrt.kbhit():
+                msvcrt.getch()
+                dropped += 1
+        except Exception:
+            return dropped                           # no console: nothing was buffered
+        return dropped
+    import select
+    import termios
+    import tty
+    fd = sys.stdin.fileno()
+    try:
+        saved = termios.tcgetattr(fd)
+    except Exception:
+        return 0                                     # no terminal: nothing to drain
+    try:
+        tty.setraw(fd)
+        while dropped < DRAIN_MAX and select.select([sys.stdin], [], [], 0)[0]:
+            if not sys.stdin.read(1):
+                break                                # EOF reads ready forever: stop
+            dropped += 1
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+    return dropped
+
+
 def _changed(paths, seen):
     """(changed?, new snapshot) for a set of files, by (mtime, size).
 
@@ -428,6 +663,117 @@ def watch_paths(args):
     v0.1 (the state carries no path to it), so a `discover` run that leaves the ledger
     untouched is seen on the next `r`, not on the next tick. Under-claim, then wire."""
     return [args.state] if getattr(args, "state", None) else [getattr(args, "ledger", None)]
+
+
+def resolve_human(explicit=None):
+    """Who is at the keyboard. The person recording the verdict is its author, so the TUI
+    passes the name EXPLICITLY (ADR-033) instead of letting the engine guess in a different
+    process -- an SSH or multi-user session would otherwise attribute the judgement to
+    whoever owns the environment. It never invents one: with nothing to resolve this returns
+    None, `--human` is left off the call, and `curate`'s own default stands."""
+    return explicit or os.environ.get("USERNAME") or os.environ.get("USER") or None
+
+
+def _curate_call(engine, ledger, repo, obs_id, verdict, human=None, note=CURATE_NOTE):
+    """THE single write of this application (ADR-033): one process, one observation, one
+    verdict. The TUI never opens the ledger for writing and never constructs a curation
+    record -- the record shape belongs to `curate` (ADR-013), which is exactly what the
+    byte-equal fixture (AC-T-17) measures.
+
+    It is one function on purpose: it is the boundary the suite replaces to assert the argv
+    and the ONE call per keypress without writing anything (AC-T-15).
+
+    Returns (returncode, the engine's own last line)."""
+    argv = [sys.executable, engine, "curate", "--ledger", ledger, "--repo", repo,
+            "--obs", obs_id, "--verdict", verdict]
+    if human:
+        argv += ["--human", human]
+    argv += ["--note", note]
+    proc = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    said = ((proc.stderr or b"").decode("utf-8", "replace").strip().splitlines()
+            or (proc.stdout or b"").decode("utf-8", "replace").strip().splitlines())
+    return proc.returncode, (said[-1] if said else "")
+
+
+def apply_verdict(ob, verdict, args, engine=None):
+    """One keypress -> one `curate` call, synchronously, for the ONE selected observation.
+
+    A refusal by the engine (an unknown OBS, a malformed delta, a batch-looking id) comes
+    back as the engine's OWN line and is surfaced: the selection does not advance and nothing
+    is retried. A retry loop over a refusal is how a batch gets written one call at a time,
+    which is the thing INV-CURATION-01 exists to make impossible.
+
+    Returns (recorded?, the line the status bar shows)."""
+    if getattr(args, "state", None):
+        # `--state` renders a FROZEN snapshot: the ledger on disk is not the one on screen (it
+        # may be another project's, or none at all). A verdict recorded from it would judge an
+        # observation the reader is not looking at -- refused, and named.
+        return False, "--state is a frozen snapshot -- verdicts need a live ledger"
+    if not ob or not ob.get("id"):
+        return False, "no observation selected: nothing to record"
+    if not ob.get("repo"):
+        return False, ("%s carries no repo in `top --json` -- curate needs one (--repo)"
+                       % ob.get("id"))
+    eng = engine or engine_path()
+    if not eng:
+        return False, "qa_ledger.py not found next to uscha_top.py"
+    rc, said = _curate_call(eng, args.ledger, ob["repo"], ob["id"], verdict,
+                            getattr(args, "human", None))
+    if rc == 0:
+        return True, said or ("%s = %s recorded" % (ob["id"], verdict))
+    return False, said or ("curate exited %s -- nothing was recorded" % rc)
+
+
+def after_verdict(sel, count):
+    """Where the cursor lands once the queue has been re-read: (selection, mode).
+
+    The observation just judged is GONE from `observations[]` (the engine emits only
+    uncurated ones), so the next pending observation has taken its index -- the selection
+    stays put and only clamps at the end. An empty queue is the signal to go back to the
+    board: there is nothing left to judge, and a verdicts pane over an empty queue invites a
+    second verdict on nothing."""
+    if count <= 0:
+        return 0, MODE_BOARD
+    return max(0, min(sel, count - 1)), MODE_VERDICTS
+
+
+def dispatch_mode(key, mode, sel, count, cooling=False):
+    """The mode machine: key + current mode -> (mode, selection, quit?, reload?, verdict).
+
+    Pure, and the ONE place a keypress becomes a write decision -- `verdict` is a string the
+    caller then spends on exactly one `curate` call, never a loop. The BOARD keymap is
+    `dispatch` below, unchanged and still measured on its own, so nothing about the board's
+    keys moved when this was layered on top. `sel` belongs to the ACTIVE mode; a mode change
+    hands back 0 and the caller keeps the other mode's cursor.
+
+    `cooling` is the caller's answer to "is a verdict still echoing?" (it owns the clock; this
+    stays pure). While it is true, `p`/`f`/`u` produce NO verdict: a key held down repeats,
+    and the second repeat would judge the observation that just took the cursor's place. Every
+    other key keeps working -- the cooldown blocks writes, not the reader."""
+    if mode != MODE_VERDICTS:
+        if key in ("v", "V"):
+            return MODE_VERDICTS, 0, False, False, None
+        sel, quit_now, reload_now = dispatch(key, sel, count)
+        return MODE_BOARD, sel, quit_now, reload_now, None
+    if key in ("q", "Q", "\x03"):
+        return mode, sel, True, False, None
+    if key in ("t", "T", "\x1b"):
+        return MODE_BOARD, 0, False, False, None
+    if key == "j":
+        return mode, min(sel + 1, max(0, count - 1)), False, False, None
+    if key == "k":
+        return mode, max(0, sel - 1), False, False, None
+    if key == "r":
+        return mode, sel, False, True, None
+    if key in VERDICTS:
+        # an empty queue produces NO verdict: there is nothing selected to judge, and a
+        # keypress that writes anyway would be a verdict the human never aimed at an OBS.
+        # Neither does a queue still cooling from the last one.
+        return mode, sel, False, False, (VERDICTS[key] if (count and not cooling) else None)
+    if len(str(key)) == 1 and key in "123456789":
+        n = int(key) - 1
+        return mode, (n if n < count else sel), False, False, None
+    return mode, sel, False, False, None
 
 
 def dispatch(key, sel, count):
@@ -466,8 +812,33 @@ def _reload(state, args):
         return state
 
 
+def _apply_and_advance(state, args, queue, cur, verdict):
+    """ONE keypress -> ONE curate process -> re-read. Returns (state, sel, mode, status, wrote?).
+
+    This lives in a function of its own, and not as four lines inside the key loop, for a
+    reason the suite asserts structurally (AC-T-15): the module's single call to
+    `apply_verdict` must have no `for` or `while` above it, so no later edit can quietly turn
+    one keypress into a pass over the queue. The re-read afterwards is a READ -- the verdict
+    left the queue and the board behind it did not move (INV-TOP-03); nothing reruns.
+
+    The input buffer is drained whether the write landed or not: a held key queues repeats
+    either way, and a refusal followed by three buffered `p`s is the same hazard as a success
+    followed by three."""
+    ok, status = apply_verdict(queue[cur] if cur < len(queue) else None, verdict, args)
+    drain_keys()
+    if not ok:
+        return state, cur, MODE_VERDICTS, status, False
+    state = _reload(state, args)
+    cur, mode = after_verdict(cur, len(verdict_queue(state)))
+    return state, cur, mode, status, True
+
+
 def _loop(state, args):
-    sel = 0
+    sel = 0                       # the board's cursor
+    vsel = 0                      # the verdict queue's cursor, kept apart from it
+    mode = MODE_BOARD
+    status = ""
+    cooldown_until = 0.0
     interval = max(MIN_REFRESH, float(args.refresh or 0))
     paths = watch_paths(args)
     _seed, seen = _changed(paths, {})          # the first frame is already current
@@ -477,7 +848,8 @@ def _loop(state, args):
         while True:
             if dirty:
                 frame = render(state, terminal_size(args.cols, args.rows),
-                               sel=sel, plain=False)
+                               sel=(vsel if mode == MODE_VERDICTS else sel), plain=False,
+                               mode=mode, status=status)
                 sys.stdout.write("\x1b[H\x1b[2J" + "\n".join(frame))
                 sys.stdout.flush()
                 dirty = False
@@ -485,13 +857,40 @@ def _loop(state, args):
             # `--refresh` tick that re-reads only when a watched file actually moved.
             key = wait_key(interval)
             if key:
-                sel, quit_now, reload_now = dispatch(
-                    key, sel, len(state.get("obligations") or []))
+                queue = verdict_queue(state)
+                if mode == MODE_VERDICTS:
+                    cur, count = vsel, len(queue)
+                else:
+                    cur, count = sel, len(state.get("obligations") or [])
+                # the last write's line lives exactly one frame: the next keypress clears it,
+                # so a stale confirmation never sits over a board that has moved on.
+                status = ""
+                cooling = time.time() < cooldown_until
+                new_mode, cur, quit_now, reload_now, verdict = dispatch_mode(
+                    key, mode, cur, count, cooling=cooling)
                 if quit_now:
                     return 0
-                if reload_now:
+                if verdict:
+                    state, cur, new_mode, status, wrote = _apply_and_advance(
+                        state, args, queue, cur, verdict)
+                    cooldown_until = time.time() + VERDICT_COOLDOWN
+                    if wrote:
+                        _fresh, seen = _changed(paths, seen)
+                elif key in VERDICTS and cooling:
+                    # the key WAS a verdict and it was refused: say why. A keypress that
+                    # vanishes silently reads as a dropped input, and the next reflex is to
+                    # press it again -- which is the repeat this cooldown exists to stop.
+                    status = VERDICT_COOLDOWN_MSG
+                elif reload_now:
                     state = _reload(state, args)
                     _fresh, seen = _changed(paths, seen)
+                # each mode keeps its OWN cursor: coming back from a verdict must not move
+                # the row the reader left highlighted on the board.
+                if new_mode == MODE_VERDICTS:
+                    vsel = cur
+                elif mode == MODE_BOARD:
+                    sel = cur
+                mode = new_mode
                 dirty = True
                 continue
             moved, seen = _changed(paths, seen)
@@ -521,6 +920,12 @@ def build_parser():
     parser.add_argument("--refresh", type=float, default=2.0,
                         help="seconds between mtime polls of the ledger (default: 2, "
                              "floor %.1f); `r` still forces a re-read" % MIN_REFRESH)
+    parser.add_argument("--human", default=None,
+                        help="who is at the keyboard: the name recorded on every verdict "
+                             "this session writes (default: $USERNAME/$USER; with neither "
+                             "set, `curate`'s own default applies). The person pressing the "
+                             "key is the author of the judgement -- the TUI never invents a "
+                             "name for it")
     parser.add_argument("--cols", type=int, default=None)
     parser.add_argument("--rows", type=int, default=None)
     return parser
@@ -533,6 +938,7 @@ def main(argv=None):
         except Exception:
             pass
     args = build_parser().parse_args(argv)
+    args.human = resolve_human(args.human)
     try:
         state = load_state(args.state, args.ledger)
     except (OSError, ValueError, RuntimeError) as exc:

@@ -836,6 +836,12 @@ def cmd_top(args):
            "--refresh", str(args.refresh)]
     if args.once:
         cmd.append("--once")
+    # the verdict's author travels from the launcher too (1.89.0): the person at the keyboard
+    # is who the record names, and an SSH or multi-user session cannot be resolved from the
+    # environment of whichever process happens to run `curate` (ADR-033). Absent -> not passed,
+    # and uscha_top.py falls back to $USERNAME/$USER, then to curate's own default.
+    if getattr(args, "human", None):
+        cmd += ["--human", args.human]
     rc = subprocess.call(cmd)
     if rc:
         raise SystemExit(rc)
@@ -1043,7 +1049,8 @@ def build_parser():
     top = sub.add_parser("top", help="live terminal board of the project's obligations, read from QA-LEDGER.json")
     top.add_argument("--ledger", default="QA-LEDGER.json", help="ledger to read (default: the QA-LEDGER.json convention)")
     top.add_argument("--once", action="store_true", help="print one plain frame and exit (implied without a TTY)")
-    top.add_argument("--refresh", type=float, default=2.0, help="seconds between polls (reserved for M2; M1 re-reads on the `r` key)")
+    top.add_argument("--refresh", type=float, default=2.0, help="seconds between mtime polls of the ledger (default: 2, floor 0.5); `r` still forces a re-read")
+    top.add_argument("--human", default=None, help="who is at the keyboard: the name recorded on every verdict this session writes (default: $USERNAME/$USER, then `curate`'s own default)")
     top.add_argument("--json", action="store_true", help="print the engine's read-only `top --json` contract instead of rendering it")
     top.set_defaults(func=cmd_top)
     return parser

@@ -3464,7 +3464,7 @@ rm -f "$KIT/reports/junit/.r2-cases.json"         # same rule for T133
 rm -f "$KIT/reports/junit/.js-cases.json"         # same rule for T134
 rm -f "$KIT/reports/junit/.multi-cases.json"      # same rule for T135
 rm -f "$KIT/reports/junit/.rt-cases.json"         # same rule for T136
-rm -f "$KIT/reports/junit/.top-cases.json"        # same rule for T137/T138
+rm -f "$KIT/reports/junit/.top-cases.json"        # same rule for T137/T138/T141
 rm -f "$KIT/reports/junit/.fa-cases.json"         # same rule for T140
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
@@ -6845,7 +6845,12 @@ for n in NAMES:
         if o.get("age_hours") is not None or o.get("trace") != []:
             ok = False
     for o in s.get("observations") or []:
-        if o.get("age_hours") is not None or o.get("title") is not None:
+        # the AGE claim covers the observations too. `title` used to be asserted null here
+        # beside it: it stopped being one claim in 1.89.0, when M3 gave the queue a real
+        # label (the statement's capped head, ADR-032 amended). What is measured about
+        # `title` now lives with the queue that shows it (AC-T-13); what is measured here
+        # is the age nobody records -- and that is still null.
+        if o.get("age_hours") is not None:
             ok = False
 # and the column really renders the em dash, on every row of every frame
 for n in ("healthy", "stale-quarantine", "honesty-negative"):
@@ -7251,6 +7256,17 @@ for n in NAMES:
             ok = False            # same input twice: not merely equal, IDENTICAL
     if json.dumps(s, sort_keys=True) != frozen:
         ok = False                # a pure function does not mutate what it was handed
+# the VERDICTS frames (M3) are the same oracle over the same fixture: pure, and byte-identical
+# against the committed snapshot at both canonical sizes.
+sq19 = state("stale-quarantine")
+for cols, rows in SIZES:
+    got = uscha_top.render(sq19, (cols, rows), sel=0, plain=True, mode="verdicts")
+    p = os.path.join(GOLD, "stale-quarantine-verdicts-%dx%d.golden.txt" % (cols, rows))
+    with io.open(p, encoding="utf-8") as fh:
+        if got != fh.read().split("\n")[:-1]:
+            ok = False
+    if got != uscha_top.render(sq19, (cols, rows), sel=0, plain=True, mode="verdicts"):
+        ok = False
 # purity is a property, not a promise: render from a directory with no ledger and no engine
 cwd = os.getcwd()
 tmp = tempfile.mkdtemp(prefix="uscha-top-pure-")
@@ -7848,6 +7864,507 @@ PY
 case "$T140" in
   OK*) PASS=$((PASS+1)); echo "  ok   family AC ids measured, bare form byte-identical (AC-FA-01..05): $T140";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T140";;
+esac
+
+echo "== T141 (uscha top M3): VERDICTS mode -- the ONE write, made by the engine's own curate (ADR-033) =="
+# The single writable action of the whole application. What is measured here is that the TUI
+# ADDS NOTHING to it: one keypress spawns exactly one curate process, the record that lands in
+# the ledger is the one a manual call would have written, and DONE does not move because a
+# verdict is a judgement and not a measurement (INV-TOP-03). Every write in this block happens
+# on a TEMP COPY of the fixture -- the committed one stays read-only like the rest of the suite.
+T141=$("$PY" - "$KIT" <<'PY'
+import ast, io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
+ENG = os.path.join(SKILL, "qa_ledger.py")
+TUI = os.path.join(SKILL, "uscha_top.py")
+FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
+GOLD = os.path.join(FIX, "golden")
+HOME = os.getcwd()
+res = {}
+
+sys.path.insert(0, SKILL)
+import uscha_top
+
+
+def fixture_copy(tag):
+    """A WRITABLE copy of the quarantine fixture: this is the one block of the suite whose
+    subject is a write, so it never touches the committed fixture."""
+    d = os.path.join(tempfile.mkdtemp(prefix="uscha-top-m3-" + tag + "-"), "f")
+    shutil.copytree(os.path.join(FIX, "fixture-stale-quarantine"), d)
+    return d
+
+
+def top(d):
+    r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                       cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                       text=True, encoding="utf-8", errors="replace")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+
+class Args(object):
+    def __init__(self, d, human="operator"):
+        self.ledger = "QA-LEDGER.json"
+        self.human = human
+        self.dir = d
+
+
+def delta_of(d):
+    p = os.path.join(d, "repo", "discovery", "CANDIDATE-DELTA.json")
+    return json.loads(io.open(p, encoding="utf-8").read())
+
+
+# --- AC-T-13: v enters VERDICTS, and the queue is exactly the UNCURATED observations, in the
+# documented order: the criterion each one anchors first, the unanchored ones after, the
+# content-addressed id as the tie-break. The order is RECOMPUTED from the delta here, so what
+# is measured is the rule and not the fixture's current spelling.
+ok = uscha_top.dispatch_mode("v", "board", 5, 8) == ("verdicts", 0, False, False, None)
+if uscha_top.dispatch_mode("t", "verdicts", 2, 3) != ("board", 0, False, False, None):
+    ok = False
+if uscha_top.dispatch_mode(chr(27), "verdicts", 2, 3) != ("board", 0, False, False, None):
+    ok = False
+d13 = fixture_copy("queue")
+delta = delta_of(d13)
+
+
+def ac_key(cid):
+    """The family rule, REIMPLEMENTED here rather than imported: bare AC-<n> first by number,
+    then each letter family alphabetically and by number inside it, anything else last
+    (ADR-036). An oracle that calls the engine's own helper measures nothing about the rule."""
+    parts = str(cid).split("-")
+    if len(parts) >= 3:
+        try:
+            return (1, parts[1].upper(), int(parts[2]))
+        except ValueError:
+            return (2, str(cid), 0)
+    try:
+        return (0, "", int(parts[1]))
+    except (IndexError, ValueError):
+        return (2, str(cid), 0)
+
+
+def order_key(o):
+    ac = o.get("canonical_match")
+    return (ac_key(ac) if ac else (3, "", 0), o.get("id") or "")
+
+
+# the rule itself, on ids no fixture has to carry: bare by number, then families
+if [c for c in sorted(["AC-BC-7", "AC-10", "AC-2", "zz", "AC-AA-2"], key=ac_key)] \
+        != ["AC-2", "AC-10", "AC-AA-2", "AC-BC-7", "zz"]:
+    ok = False
+
+
+want = [o["id"] for o in sorted(delta["observations"], key=order_key)]
+s13 = top(d13)
+queue = uscha_top.verdict_queue(s13)
+if [o.get("id") for o in queue] != want or len(want) != 3:
+    ok = False
+if any(o.get("repo") != "backend-api" for o in queue):
+    ok = False                     # curate needs a repo: a queue without one cannot write
+by_id = dict((o["id"], o) for o in delta["observations"])
+for o in queue:
+    src = by_id.get(o.get("id")) or {}
+    # the label is the statement's HEAD, capped by the engine; the whole claim travels in
+    # candidate[] so the pane can show all of it (AC-T-14).
+    if not o.get("title") or len(o["title"]) > 72:
+        ok = False
+    if not src.get("statement", "").startswith(o["title"].rstrip(chr(8230))):
+        ok = False
+    if ("claim: " + src.get("statement")) not in (o.get("candidate") or []):
+        ok = False
+    if src.get("provenance", {}).get("files", [None])[0] not in (o.get("evidence") or []):
+        ok = False
+# the FRAME lists the same three, and nothing else that looks like an id
+frame = uscha_top.render(s13, (100, 32), sel=0, plain=True, mode="verdicts")
+listed = [ln for ln in frame if ln.startswith(("> [", "  [1", "  [2", "  [3"))]
+if len(listed) != 3:
+    ok = False
+for i, oid in enumerate(want):
+    if oid not in listed[i]:
+        ok = False
+if not frame[0].startswith("uscha top") or "verdicts" not in frame[0]:
+    ok = False
+# a CURATED observation leaves the queue, and only that one
+r = subprocess.run([sys.executable, ENG, "curate", "--ledger", "QA-LEDGER.json", "--repo",
+                    "backend-api", "--obs", want[1], "--verdict", "fix", "--human", "op"],
+                   cwd=d13, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+after = [o.get("id") for o in uscha_top.verdict_queue(top(d13))]
+if r.returncode != 0 or after != [want[0], want[2]]:
+    ok = False
+res["AC-T-13"] = bool(ok)
+
+# --- AC-T-14: candidate and evidence side by side (stacked at the 80-column floor), and a
+# claim is never silently cut: a 120-character claim comes back WHOLE across the pane's
+# lines. When even the wrapped form does not fit, the pane says how many lines are missing --
+# a named shortfall, the same discipline the feed's 5/7 label follows.
+CLAIM = ("the settlement window rolls to the next business day whenever the cutoff date "
+         "falls on a weekend or a public bank holiday")
+ok = len(CLAIM) > 120           # wider than either pane column at either canonical size
+s14 = json.loads(json.dumps(s13))
+s14["observations"] = [{"id": "OBS-longclaim01", "ac": "AC-5", "repo": "backend-api",
+                        "title": CLAIM[:71] + chr(8230),
+                        "candidate": ["type: behavior " + chr(183) + " site: svc/settle.py",
+                                      "claim: " + CLAIM],
+                        "evidence": ["svc/settle.py:88", "41 historical tickets",
+                                     "evidence_class: static " + chr(183) + " tool: fixture"],
+                        "age_hours": None}]
+wide = uscha_top.render(s14, (100, 32), sel=0, plain=True, mode="verdicts")
+tight = uscha_top.render(s14, (80, 24), sel=0, plain=True, mode="verdicts")
+if len(wide) != 32 or max(len(ln) for ln in wide) > 100:
+    ok = False
+if len(tight) != 24 or max(len(ln) for ln in tight) > 80:
+    ok = False
+# side by side: one line carries both column headers; stacked: they are on separate lines
+head_wide = [ln for ln in wide if "CANDIDATE" in ln]
+if len(head_wide) != 1 or "EVIDENCE" not in head_wide[0]:
+    ok = False
+head_tight = [ln for ln in tight if "CANDIDATE" in ln]
+if len(head_tight) != 1 or "EVIDENCE" in head_tight[0]:
+    ok = False
+if not any(ln.strip() == "EVIDENCE" for ln in tight):
+    ok = False
+
+
+def pane_of(frame):
+    """The detail pane: what sits between the rule under the queue and the rule above the
+    status line. The list row above it MAY head-truncate the title (the engine caps it and
+    the pane carries the whole claim); the pane may not."""
+    rules = [i for i, ln in enumerate(frame) if ln and set(ln) == set(chr(9472))]
+    return frame[rules[1] + 1:rules[2]]
+
+
+def claim_words(pane, cols):
+    """The claim as the PANE really shows it: the left column at 100, the whole line at 80."""
+    words, started = [], False
+    for ln in pane:
+        part = ln.split(chr(9474))[0] if cols >= 100 else ln
+        if "claim:" in part:
+            started = True
+            part = part.split("claim:", 1)[1]
+        elif not started or "CANDIDATE" in part or "EVIDENCE" in part:
+            continue
+        elif not part.strip():
+            break
+        words.extend(part.split())
+    return words
+
+
+for frame, cols in ((wide, 100), (tight, 80)):
+    pane = pane_of(frame)
+    if claim_words(pane, cols) != CLAIM.split():
+        ok = False                 # every word of the claim, in order, nothing dropped
+    if any(chr(8230) in ln for ln in pane):
+        ok = False                 # and nothing in the pane cut
+# a token wider than the column CONTINUES on the next line; it is not dropped either
+long_token = "x" * 30
+if "".join(uscha_top._wrap(long_token, 10)) != long_token:
+    ok = False
+# the short pane: the shortfall is NAMED, never a silent truncation
+short = uscha_top.render(s14, (100, 13), sel=0, plain=True, mode="verdicts")
+if not any("more line(s) of this observation do not fit" in ln for ln in short):
+    ok = False
+if len(short) != 13:
+    ok = False
+# the committed VERDICTS golden frames: the oracle for this pane, byte-identical
+for c, r_ in ((100, 32), (80, 24)):
+    p = os.path.join(GOLD, "stale-quarantine-verdicts-%dx%d.golden.txt" % (c, r_))
+    g = io.open(p, encoding="utf-8").read().split("\n")[:-1]
+    st = json.load(io.open(os.path.join(FIX, "state", "state-stale-quarantine.json"),
+                           encoding="utf-8"))
+    if uscha_top.render(st, (c, r_), sel=0, plain=True, mode="verdicts") != g:
+        ok = False
+res["AC-T-14"] = bool(ok)
+
+# --- AC-T-15: one keypress, ONE curate process. The subprocess boundary is replaced here, so
+# what is measured is the call the dispatch makes and not the engine behind it (that is
+# AC-T-16/17). A batch is not merely unused: the code has no path that could build one.
+d15 = fixture_copy("dispatch")
+s15 = top(d15)
+q15 = uscha_top.verdict_queue(s15)
+a15 = Args(d15)
+calls = []
+real_call = uscha_top._curate_call
+
+
+def fake_call(engine, ledger, repo, obs_id, verdict, human=None, note=uscha_top.CURATE_NOTE):
+    calls.append((engine, ledger, repo, obs_id, verdict, human, note))
+    return 0, "[qa_ledger] curate: %s = %s (by %s)" % (obs_id, verdict, human)
+
+
+uscha_top._curate_call = fake_call
+ok = True
+for key, verdict in (("p", "preserve"), ("f", "fix"), ("u", "undefined")):
+    calls[:] = []
+    mode, sel, quit_now, reload_now, got = uscha_top.dispatch_mode(key, "verdicts", 0, len(q15))
+    if (mode, quit_now, reload_now, got) != ("verdicts", False, False, verdict):
+        ok = False
+    recorded, msg = uscha_top.apply_verdict(q15[sel], verdict, a15, engine=ENG)
+    if not recorded or len(calls) != 1:
+        ok = False                 # exactly one call per keypress -- never a loop
+    if calls[0][2:5] != ("backend-api", q15[0]["id"], verdict):
+        ok = False
+    if calls[0][5] != "operator" or calls[0][6] != "recorded via uscha top":
+        ok = False
+# a key that is not a verdict writes nothing at all
+calls[:] = []
+for key in ("j", "k", "r", "1", "t", "z"):
+    _m, _s, _q, _r, got = uscha_top.dispatch_mode(key, "verdicts", 0, len(q15))
+    if got is not None:
+        ok = False
+if calls:
+    ok = False
+# an EMPTY queue: no verdict is produced, and the mode goes back to the board
+if uscha_top.dispatch_mode("p", "verdicts", 0, 0)[4] is not None:
+    ok = False
+if uscha_top.after_verdict(0, 0) != (0, "board"):
+    ok = False
+if uscha_top.after_verdict(2, 2) != (1, "verdicts"):
+    ok = False
+if uscha_top.after_verdict(0, 2) != (0, "verdicts"):
+    ok = False
+uscha_top._curate_call = real_call
+
+# the argv itself: the shape curate documents, with --human explicit and one --obs
+seen_argv = []
+
+
+class FakeProc(object):
+    returncode = 0
+    stdout = b"ok\n"
+    stderr = b""
+
+
+class FakeSub(object):
+    PIPE = subprocess.PIPE
+
+    @staticmethod
+    def run(argv, **kw):
+        seen_argv.append(list(argv))
+        return FakeProc()
+
+
+real_sub = uscha_top.subprocess
+uscha_top.subprocess = FakeSub
+try:
+    rc, said = uscha_top._curate_call(ENG, "QA-LEDGER.json", "backend-api", "OBS-x",
+                                      "preserve", "operator")
+finally:
+    uscha_top.subprocess = real_sub
+want_argv = [sys.executable, ENG, "curate", "--ledger", "QA-LEDGER.json", "--repo",
+             "backend-api", "--obs", "OBS-x", "--verdict", "preserve", "--human", "operator",
+             "--note", "recorded via uscha top"]
+if len(seen_argv) != 1 or seen_argv[0] != want_argv or (rc, said) != (0, "ok"):
+    ok = False
+# no name to resolve -> --human is left OFF and the engine's own default stands; the TUI
+# never invents an author for a human judgement
+seen_argv[:] = []
+uscha_top.subprocess = FakeSub
+try:
+    uscha_top._curate_call(ENG, "L.json", "r", "OBS-y", "fix", None)
+finally:
+    uscha_top.subprocess = real_sub
+if "--human" in seen_argv[0]:
+    ok = False
+env_was = dict(os.environ)
+os.environ.pop("USERNAME", None)
+os.environ.pop("USER", None)
+if uscha_top.resolve_human(None) is not None or uscha_top.resolve_human("x") != "x":
+    ok = False
+os.environ.update(env_was)
+
+# the engine's refusal is SURFACED, not swallowed, and nothing is retried: an unknown OBS and
+# a batch-looking id both come back as the engine's own line with recorded=False.
+os.chdir(d15)
+try:
+    for bad in ("OBS-nope", "OBS-a,OBS-b"):
+        recorded, msg = uscha_top.apply_verdict(
+            {"id": bad, "repo": "backend-api"}, "preserve", a15, engine=ENG)
+        if recorded or "qa_ledger" not in msg:
+            ok = False
+    led15 = json.loads(io.open(os.path.join(d15, "QA-LEDGER.json"), encoding="utf-8").read())
+    if led15.get("curation"):
+        ok = False                 # a refusal wrote nothing
+finally:
+    os.chdir(HOME)
+# an observation with no repo cannot be written at all, and says why
+if uscha_top.apply_verdict({"id": "OBS-z"}, "fix", a15, engine=ENG)[0]:
+    ok = False
+
+
+# a FROZEN snapshot is not a ledger: --state renders a file that may describe another project
+# entirely, so a verdict from it would judge an observation the reader is not looking at.
+class FrozenArgs(object):
+    ledger = "QA-LEDGER.json"
+    human = "operator"
+    state = "state-stale-quarantine.json"
+
+
+calls[:] = []
+uscha_top._curate_call = fake_call
+frozen_ok, frozen_msg = uscha_top.apply_verdict(
+    {"id": "OBS-1", "repo": "backend-api"}, "preserve", FrozenArgs(), engine=ENG)
+uscha_top._curate_call = real_call
+if frozen_ok or "frozen snapshot" not in frozen_msg or calls:
+    ok = False                     # refused, named, and nothing spawned
+
+# the held key (SF1): a verdict starts a cooldown during which p/f/u produce NO verdict, so a
+# key repeat cannot judge the observation that just took the cursor's place -- N verdicts from
+# one glance is the batch INV-CURATION-01 forbids, arriving one legal call at a time. Measured
+# purely: the cooldown is a caller-supplied boolean, so no clock enters the dispatch.
+calls[:] = []
+uscha_top._curate_call = fake_call
+first = uscha_top.dispatch_mode("p", "verdicts", 0, len(q15), cooling=False)
+if first[4] != "preserve":
+    ok = False
+uscha_top.apply_verdict(q15[0], first[4], a15, engine=ENG)
+for key in ("p", "f", "u"):
+    repeat = uscha_top.dispatch_mode(key, "verdicts", 0, len(q15), cooling=True)
+    if repeat[4] is not None:
+        ok = False                 # the repeat writes NOTHING
+    if repeat[0] != "verdicts" or repeat[1] != 0:
+        ok = False                 # and it does not move the cursor either
+if len(calls) != 1:
+    ok = False                     # one call for the first press, none for the repeats
+# the cooldown blocks WRITES, not the reader: navigation and the exits keep working
+if uscha_top.dispatch_mode("j", "verdicts", 0, 3, cooling=True)[1] != 1:
+    ok = False
+if uscha_top.dispatch_mode("t", "verdicts", 1, 3, cooling=True)[0] != "board":
+    ok = False
+if uscha_top.dispatch_mode("q", "verdicts", 1, 3, cooling=True)[2] is not True:
+    ok = False
+uscha_top._curate_call = real_call
+if not (0 < uscha_top.VERDICT_COOLDOWN <= 1.0):
+    ok = False
+# and the buffer itself is drained. What the SUITE can measure of a keyboard primitive is that
+# it answers with a count, does not raise and does not block when there is no terminal (the
+# usual case here) and no key held (the case in CI). The count is not pinned to 0: a human
+# running this suite in a terminal may legitimately have typed something. Bounded by DRAIN_MAX
+# so a terminal that reports input forever cannot spin.
+drained = uscha_top.drain_keys()
+if not isinstance(drained, int) or not (0 <= drained <= uscha_top.DRAIN_MAX):
+    ok = False
+
+# curate is the ONLY write path: the module opens no file for writing and dumps no JSON.
+src = io.open(TUI, encoding="utf-8").read()
+tree = ast.parse(src)
+
+
+def calls_to(node, name):
+    """Every Call to the given NAME anywhere under this node."""
+    return [c for c in ast.walk(node)
+            if isinstance(c, ast.Call)
+            and (getattr(c.func, "attr", None) or getattr(c.func, "id", None)) == name]
+
+
+for nd in ast.walk(tree):
+    if not isinstance(nd, ast.Call):
+        continue
+    name = getattr(nd.func, "attr", None) or getattr(nd.func, "id", None)
+    if name in ("dump", "dumps") and isinstance(nd.func, ast.Attribute):
+        ok = False                 # a curation record built here is a record that can drift
+    if name == "open":
+        modes = list(nd.args[1:2]) + [k.value for k in nd.keywords if k.arg == "mode"]
+        for m in modes:
+            if isinstance(m, ast.Constant) and isinstance(m.value, str):
+                if set(m.value) & set("wax+"):
+                    ok = False
+if src.count(chr(34) + "curate" + chr(34)) != 1:
+    ok = False                     # exactly ONE place builds a curate call
+# ...and the write is reached from exactly ONE place, with no loop above it. The argv check
+# above cannot see this: a second call, or the same call inside a pass over the queue, would
+# still build one argv per iteration and still look like one write path in the source. What
+# makes "one keypress, one verdict" structural is that apply_verdict is called ONCE in the
+# whole module and that no for/while encloses that call (the key loop must reach it through a
+# function, which is why _apply_and_advance exists).
+if len(calls_to(tree, "apply_verdict")) != 1:
+    ok = False
+for nd in ast.walk(tree):
+    if isinstance(nd, (ast.For, ast.While, ast.AsyncFor)) and calls_to(nd, "apply_verdict"):
+        ok = False
+if len(calls_to(tree, "drain_keys")) != 1:
+    ok = False                     # the buffer is drained on every verdict path, once
+res["AC-T-15"] = bool(ok)
+
+# --- AC-T-16 (INV-TOP-03): a verdict is a judgement, not a measurement. DONE does not move;
+# the debtor columns do, because the criterion left QUARANTINE for the bucket the engine
+# derives. Nothing reruns.
+d16 = fixture_copy("inv3")
+before = top(d16)
+q16 = uscha_top.verdict_queue(before)
+os.chdir(d16)
+try:
+    recorded, msg = uscha_top.apply_verdict(q16[0], "preserve", Args(d16), engine=ENG)
+finally:
+    os.chdir(HOME)
+after = top(d16)
+ok = bool(recorded)
+if after.get("terminado", {}).get("done") != before.get("terminado", {}).get("done"):
+    ok = False
+if after.get("terminado", {}).get("pct") != before.get("terminado", {}).get("pct"):
+    ok = False
+if after.get("debtors", {}).get("you") != before.get("debtors", {}).get("you") - 1:
+    ok = False
+if after.get("debtors", {}).get("machine") != before.get("debtors", {}).get("machine"):
+    ok = False
+if len(uscha_top.verdict_queue(after)) != len(q16) - 1:
+    ok = False
+# the four buckets still partition the board exactly once after the write
+t16, d16c = after.get("terminado") or {}, after.get("debtors") or {}
+if t16.get("done", 0) + d16c.get("machine", 0) + d16c.get("you", 0) + d16c.get("untagged", 0) \
+        != t16.get("total"):
+    ok = False
+res["AC-T-16"] = bool(ok)
+
+# --- AC-T-17: the write-equivalence fixture (ADR-034 s4). The record the TUI path appends and
+# the record a manual curate call appends, over two copies of the same fixture with the same
+# arguments, are identical member for member -- the at stamp is the only member that cannot be, and it
+# is compared for SHAPE, not value. This is the proof the TUI reimplements no append logic.
+d_tui, d_man = fixture_copy("equiv-tui"), fixture_copy("equiv-man")
+obs_id = uscha_top.verdict_queue(top(d_tui))[0]["id"]
+os.chdir(d_tui)
+try:
+    recorded, _msg = uscha_top.apply_verdict(
+        {"id": obs_id, "repo": "backend-api"}, "preserve", Args(d_tui, "operator"), engine=ENG)
+finally:
+    os.chdir(HOME)
+r = subprocess.run([sys.executable, ENG, "curate", "--ledger", "QA-LEDGER.json",
+                    "--repo", "backend-api", "--obs", obs_id, "--verdict", "preserve",
+                    "--human", "operator", "--note", "recorded via uscha top"],
+                   cwd=d_man, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+rec_tui = json.loads(io.open(os.path.join(d_tui, "QA-LEDGER.json"),
+                             encoding="utf-8").read())["curation"]
+rec_man = json.loads(io.open(os.path.join(d_man, "QA-LEDGER.json"),
+                             encoding="utf-8").read())["curation"]
+ok = bool(recorded) and r.returncode == 0 and len(rec_tui) == 1 and len(rec_man) == 1
+a, b = dict(rec_tui[0]), dict(rec_man[0])
+at_a, at_b = a.pop("at", None), b.pop("at", None)
+if json.dumps(a, sort_keys=True) != json.dumps(b, sort_keys=True):
+    ok = False
+if sorted(rec_tui[0]) != ["at", "human", "note", "obs_id", "repo", "verdict"]:
+    ok = False
+if not (isinstance(at_a, str) and isinstance(at_b, str) and len(at_a) == len(at_b)):
+    ok = False
+res["AC-T-17"] = bool(ok)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+sp = os.path.join(side, ".top-cases.json")
+try:
+    prev = json.loads(io.open(sp, encoding="utf-8").read())
+except (OSError, ValueError):
+    prev = {}
+prev.update(res)
+io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T141" in
+  OK*) PASS=$((PASS+1)); echo "  ok   uscha-top verdicts, the single write (AC-T-13,14,15,16,17): $T141";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T141";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -9206,8 +9723,9 @@ for _rtid in ("AC-RT-01", "AC-RT-02", "AC-RT-03"):
     else:
         results.append((_rtid, "round-trip", "T136 case failed or missing"))
 
-# uscha top criteria (ADR-031..034): M1+M2 ids measured by T137/T138 through the same
-# sidecar contract; M3 ids (13..17) are SKIP = UNMEASURED on purpose until M3 ships.
+# uscha top criteria (ADR-031..034): M1+M2 ids measured by T137/T138 and the M3 ids (13..17)
+# by T141, all through the same sidecar contract. A missing sidecar key is still SKIP =
+# UNMEASURED, never a silent pass -- that is what the whole family is worth.
 def _top_cases():
     p = os.path.join(kit, "reports", "junit", ".top-cases.json")
     try:
@@ -9223,7 +9741,7 @@ for _n in range(1, 25):
     elif _tpc.get(_tid) is True:
         results.append((_tid, "uscha-top", None))
     else:
-        results.append((_tid, "uscha-top", "T137/T138 case failed or missing"))
+        results.append((_tid, "uscha-top", "T137/T138/T141 case failed or missing"))
 
 # Family-prefixed criteria (ADR-036): measured by T140, same sidecar contract. AC-FA-03 (the
 # bare form pinned byte-identical against the previous engine) reports None without git or the

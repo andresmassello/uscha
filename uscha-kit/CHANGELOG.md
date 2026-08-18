@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.89.0** — [`uscha top` M3: the human's verdict, from the terminal, through the one write path that already existed (2026-08-18)](CHANGELOG-1.89.0.md)
 - **1.88.0** — [`uscha top` M2: the ledger's feed reaches the terminal, and the board redraws when the disk moves (2026-08-18)](CHANGELOG-1.88.0.md)
 - **1.87.0** — [the instrument reads family-prefixed criteria: the kit's own ledger goes from 6/172 measured to the truth (2026-08-18)](CHANGELOG-1.87.0.md)
 - **1.86.1** — [what four blind judges found in 1.86.0, fixed the same day (2026-08-18)](CHANGELOG-1.86.1.md)
