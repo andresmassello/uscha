@@ -40,7 +40,7 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.90.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v1.91.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -85,7 +85,7 @@ automatic tool can perform: a human verdict.
    from the compiled code: 0.828 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (kit 1.90.0, 52 subcommands, all measured):**
+**What each arrow is, in the engine (kit 1.91.0, 52 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|
@@ -99,7 +99,7 @@ automatic tool can perform: a human verdict.
 **Read the numbers the way the repo does.** 9 of 12 archetypes regenerate to the same system
 under an oracle the compilers never saw — that is the closed loop working. 0.828 is the mean
 *recoverability* of the asset from compiled code counting only static and behavioural
-footing. It read **0.062** until 1.90.0, with the behaviour dimension `UNMEASURED`, because no
+footing. It read **0.062** until 1.91.0, with the behaviour dimension `UNMEASURED`, because no
 oracle case carried an AC tag — a named absence, not a zero. The 12 bench oracles are now
 curated per case (`ORACLE-TAGS-CURATED.json`, human-authored; payloads and expectations
 untouched), so the dimension is measured and the number says the reverse organs anchor **names
