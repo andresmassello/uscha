@@ -1,0 +1,1691 @@
+{
+ "crud-store": {
+  "acs": {
+   "AC-CS-01": "create stores new key; create on existing key fails, never overwrites",
+   "AC-CS-02": "read returns stored value or missing error",
+   "AC-CS-03": "update replaces existing value; update on missing key never inserts",
+   "AC-CS-04": "delete removes existing key; delete on missing key errors",
+   "AC-CS-05": "list returns current keys sorted lexicographically",
+   "AC-CS-06": "unknown/incomplete op returns bad op; failure never aborts batch; non-array is ERROR"
+  },
+  "cases": [
+   {
+    "name": "create-read",
+    "ac": [
+     "AC-CS-01",
+     "AC-CS-02"
+    ],
+    "why": "create must store v1 for read to return it, not missing"
+   },
+   {
+    "name": "create-exists-no-overwrite",
+    "ac": [
+     "AC-CS-01"
+    ],
+    "why": "second create on same key must fail with exists, keep v1"
+   },
+   {
+    "name": "update-replaces",
+    "ac": [
+     "AC-CS-03"
+    ],
+    "why": "update on existing key must change v1 to v2"
+   },
+   {
+    "name": "update-missing-never-inserts",
+    "ac": [
+     "AC-CS-03"
+    ],
+    "why": "update on absent key must not insert; read still missing"
+   },
+   {
+    "name": "delete-then-recreate",
+    "ac": [
+     "AC-CS-04"
+    ],
+    "why": "delete must free key so later create succeeds"
+   },
+   {
+    "name": "delete-missing",
+    "ac": [
+     "AC-CS-04"
+    ],
+    "why": "delete on absent key must return missing"
+   },
+   {
+    "name": "read-missing",
+    "ac": [
+     "AC-CS-02"
+    ],
+    "why": "read on absent key must return missing, not crash/empty"
+   },
+   {
+    "name": "list-sorted",
+    "ac": [
+     "AC-CS-05"
+    ],
+    "why": "keys b,a,c must come back sorted a,b,c"
+   },
+   {
+    "name": "unknown-op",
+    "ac": [
+     "AC-CS-06"
+    ],
+    "why": "op 'upsert' is unrecognized, must return bad op"
+   },
+   {
+    "name": "missing-required-field",
+    "ac": [
+     "AC-CS-06"
+    ],
+    "why": "create without value is missing a required field"
+   },
+   {
+    "name": "bad-op-does-not-abort",
+    "ac": [
+     "AC-CS-06"
+    ],
+    "why": "bad op followed by valid create must still execute the second"
+   },
+   {
+    "name": "not-array-error",
+    "ac": [
+     "AC-CS-06"
+    ],
+    "why": "non-array top-level input must print exactly ERROR"
+   }
+  ],
+  "unmapped_acs": [],
+  "notes": "12 cases, 12 mapped (one with 2 ACs), 0 ACs without any case"
+ },
+ "guard": {
+  "acs": {
+   "AC-GH-01": "verdict is exit code only: 0 allow, 2 block, block writes reason to stderr",
+   "AC-GH-02": "create/edit/rename/delete of a .approved file is blocked, marker case-insensitive",
+   "AC-GH-03": "a call that only reads a .approved file is allowed",
+   "AC-GH-04": "read-only tools are always allowed even naming a .approved file",
+   "AC-GH-05": "shell tool is default-deny: block unless the command is provably read-only",
+   "AC-GH-06": "any other/unknown tool: .approved anywhere in args at any depth blocks",
+   "AC-GH-07": "fail-closed: invalid JSON or wrong shape blocks; unproven-safe calls block"
+  },
+  "cases": [
+   {
+    "name": "edit-a-golden",
+    "ac": [
+     "AC-GH-02"
+    ],
+    "why": "Edit tool directly modifying a .approved file must block"
+   },
+   {
+    "name": "write-a-golden",
+    "ac": [
+     "AC-GH-02"
+    ],
+    "why": "Write tool creating a .approved file must block"
+   },
+   {
+    "name": "marker-is-case-insensitive",
+    "ac": [
+     "AC-GH-02"
+    ],
+    "why": "CASE.APPROVED.txt must still be recognized and blocked"
+   },
+   {
+    "name": "bash-redirect-into-golden",
+    "ac": [
+     "AC-GH-05"
+    ],
+    "why": "output redirection into .approved must be judged a write"
+   },
+   {
+    "name": "bash-tee-pipeline-writes-golden",
+    "ac": [
+     "AC-GH-05"
+    ],
+    "why": "a later pipeline stage (tee) writing must still block"
+   },
+   {
+    "name": "bash-in-place-write-flag",
+    "ac": [
+     "AC-GH-05"
+    ],
+    "why": "sed -i write flag on .approved must be judged a write"
+   },
+   {
+    "name": "bash-move-golden",
+    "ac": [
+     "AC-GH-05"
+    ],
+    "why": "mv is not a provably read-only shell command, must block"
+   },
+   {
+    "name": "bash-remove-golden",
+    "ac": [
+     "AC-GH-05"
+    ],
+    "why": "rm is not provably read-only, must block"
+   },
+   {
+    "name": "bash-copy-into-golden",
+    "ac": [
+     "AC-GH-05"
+    ],
+    "why": "cp writing dst.approved is not provably read-only"
+   },
+   {
+    "name": "unknown-tool-nested-golden",
+    "ac": [
+     "AC-GH-06"
+    ],
+    "why": ".approved nested deep in unknown tool's args must still block"
+   },
+   {
+    "name": "fail-closed-non-json",
+    "ac": [
+     "AC-GH-07"
+    ],
+    "why": "invalid JSON stdin must block, not allow by default"
+   },
+   {
+    "name": "fail-closed-non-dict-json",
+    "ac": [
+     "AC-GH-07"
+    ],
+    "why": "valid JSON but wrong shape (array) must block"
+   },
+   {
+    "name": "read-tool-reads-golden",
+    "ac": [
+     "AC-GH-04"
+    ],
+    "why": "Read tool naming .approved must be allowed regardless"
+   },
+   {
+    "name": "grep-tool-searches-golden",
+    "ac": [
+     "AC-GH-04"
+    ],
+    "why": "Grep is a recognized read-only tool, must allow"
+   },
+   {
+    "name": "glob-tool-names-golden",
+    "ac": [
+     "AC-GH-04"
+    ],
+    "why": "Glob is read-only even with .approved in its pattern"
+   },
+   {
+    "name": "websearch-mentions-golden",
+    "ac": [
+     "AC-GH-04"
+    ],
+    "why": "WebSearch is read-only, mentioning .approved must allow"
+   },
+   {
+    "name": "bash-cat-reads-golden",
+    "ac": [
+     "AC-GH-03"
+    ],
+    "why": "cat alone only reads .approved, must be allowed"
+   },
+   {
+    "name": "bash-diff-reads-goldens",
+    "ac": [
+     "AC-GH-03"
+    ],
+    "why": "diff of two .approved-ish files only reads, must allow"
+   },
+   {
+    "name": "bash-reader-pipeline-no-write",
+    "ac": [
+     "AC-GH-03"
+    ],
+    "why": "cat | grep pipeline has no write stage, must allow"
+   },
+   {
+    "name": "bash-writes-non-golden-file",
+    "ac": [],
+    "why": "rm on scratch.txt never names a golden; not discriminating"
+   },
+   {
+    "name": "write-non-golden-file",
+    "ac": [],
+    "why": "Write to notes.md has no .approved marker; baseline sanity"
+   },
+   {
+    "name": "bash-python-inline-writes-golden",
+    "ac": [],
+    "why": "documented out-of-scope interpreter boundary, expected-permissive by design"
+   },
+   {
+    "name": "bash-node-inline-writes-golden",
+    "ac": [],
+    "why": "same documented interpreter-as-reader boundary as the python case"
+   }
+  ],
+  "unmapped_acs": [
+   "AC-GH-01"
+  ],
+  "notes": "23 cases, 19 mapped, 1 AC (AC-GH-01, exit-code/stderr contract) has no dedicated case"
+ },
+ "ledger-lite": {
+  "acs": {
+   "AC-LG-01": "balanced posting (sum 0, >=2 lines) accepted and updates balances",
+   "AC-LG-02": "unbalanced or <2-line posting rejected; isolates other postings",
+   "AC-LG-03": "a posting whose id was already seen (accepted or rejected) is rejected",
+   "AC-LG-04": "balances list only accounts touched by accepted; rejected in input order; empty batch",
+   "AC-LG-05": "shape problems (not array, bad types, missing fields) print ERROR",
+   "AC-LG-06": "system is two units: model.py (no I/O, post()) and cli.py (I/O+shape), CLI never balances"
+  },
+  "cases": [
+   {
+    "name": "empty-batch",
+    "ac": [
+     "AC-LG-04"
+    ],
+    "why": "empty input must yield exactly the empty-batch default shape"
+   },
+   {
+    "name": "single-balanced",
+    "ac": [
+     "AC-LG-01"
+    ],
+    "why": "basic balanced 2-line posting must update both balances"
+   },
+   {
+    "name": "three-line-balanced",
+    "ac": [
+     "AC-LG-01"
+    ],
+    "why": ">2 lines summing to 0 must still be accepted and applied"
+   },
+   {
+    "name": "accumulate-same-account",
+    "ac": [
+     "AC-LG-01"
+    ],
+    "why": "balance must be sum of amounts across multiple accepted postings"
+   },
+   {
+    "name": "unbalanced-rejected",
+    "ac": [
+     "AC-LG-02"
+    ],
+    "why": "amounts summing to 1 (not 0) must be rejected, not applied"
+   },
+   {
+    "name": "unbalanced-isolated-others-post",
+    "ac": [
+     "AC-LG-02"
+    ],
+    "why": "p2's rejection must not affect p1/p3 balances"
+   },
+   {
+    "name": "one-line-rejected",
+    "ac": [
+     "AC-LG-02"
+    ],
+    "why": "single-line posting violates >=2 lines, must be rejected"
+   },
+   {
+    "name": "empty-lines-rejected-not-error",
+    "ac": [
+     "AC-LG-02",
+     "AC-LG-05"
+    ],
+    "why": "empty lines array is a rejection, not a shape ERROR"
+   },
+   {
+    "name": "zero-amount-lines-accepted",
+    "ac": [
+     "AC-LG-01"
+    ],
+    "why": "zero-amount lines are legal and must still balance/accept"
+   },
+   {
+    "name": "duplicate-id-second-rejected",
+    "ac": [
+     "AC-LG-03"
+    ],
+    "why": "second posting reusing id p1 must be rejected"
+   },
+   {
+    "name": "duplicate-of-rejected-still-rejected",
+    "ac": [
+     "AC-LG-03"
+    ],
+    "why": "id already seen as rejected still blocks reuse"
+   },
+   {
+    "name": "rejected-account-absent-from-balances",
+    "ac": [
+     "AC-LG-04"
+    ],
+    "why": "ghost account from rejected p1 must not appear in balances"
+   },
+   {
+    "name": "rejected-order-is-input-order",
+    "ac": [
+     "AC-LG-04"
+    ],
+    "why": "rejected ids z,y must appear in that input order"
+   },
+   {
+    "name": "negative-and-positive-large",
+    "ac": [],
+    "why": "large-magnitude numeric sanity, not discriminating a specific rule"
+   },
+   {
+    "name": "many-postings",
+    "ac": [],
+    "why": "scale/stress case, not discriminating one specific rule"
+   },
+   {
+    "name": "malformed-not-array",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "top-level object instead of array must print ERROR"
+   },
+   {
+    "name": "malformed-element-not-object",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "array element 1 (not object) is a shape error"
+   },
+   {
+    "name": "malformed-missing-id",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "posting missing id field is a shape error"
+   },
+   {
+    "name": "malformed-id-not-string",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "integer id violates required string type"
+   },
+   {
+    "name": "malformed-lines-not-array",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "lines as a string instead of array is a shape error"
+   },
+   {
+    "name": "malformed-line-not-object",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "line entries as bare ints violate object shape"
+   },
+   {
+    "name": "malformed-bool-amount",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "boolean amount must not be treated as integer"
+   },
+   {
+    "name": "malformed-float-amount",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "non-integral amount 1.5 is a shape error"
+   },
+   {
+    "name": "malformed-account-not-string",
+    "ac": [
+     "AC-LG-05"
+    ],
+    "why": "integer account name violates required string type"
+   }
+  ],
+  "unmapped_acs": [
+   "AC-LG-06"
+  ],
+  "notes": "24 cases, 22 mapped, 1 AC (AC-LG-06, two-unit architecture) is structural and not black-box testable"
+ },
+ "parser": {
+  "acs": {
+   "AC-PR-01": "well-formed expression evaluates to its value, exit 0",
+   "AC-PR-02": "precedence and left-associativity of */ and +- hold",
+   "AC-PR-03": "parentheses override precedence; unary minus negates",
+   "AC-PR-04": "integer division truncates toward zero; division by zero is ERROR",
+   "AC-PR-05": "grammar-unparseable input (stray token, unmatched paren, empty, trailing op) is ERROR",
+   "AC-PR-06": "program prints only the value or ERROR, no extra text"
+  },
+  "cases": [
+   {
+    "name": "precedence",
+    "ac": [
+     "AC-PR-02"
+    ],
+    "why": "2+3*4=14 only holds if * binds tighter than +"
+   },
+   {
+    "name": "parens-override",
+    "ac": [
+     "AC-PR-03"
+    ],
+    "why": "(2+3)*4=20 requires parens to override precedence"
+   },
+   {
+    "name": "left-assoc-minus",
+    "ac": [
+     "AC-PR-02"
+    ],
+    "why": "10-2-3=5 only holds under left-to-right associativity"
+   },
+   {
+    "name": "unary-minus",
+    "ac": [
+     "AC-PR-03"
+    ],
+    "why": "-(3+4)=-7 requires unary minus negation"
+   },
+   {
+    "name": "int-div",
+    "ac": [
+     "AC-PR-04"
+    ],
+    "why": "7/2=3 exercises integer division truncation"
+   },
+   {
+    "name": "trunc-toward-zero",
+    "ac": [
+     "AC-PR-04"
+    ],
+    "why": "-7/2=-3 (not -4) discriminates truncation vs floor"
+   },
+   {
+    "name": "single-number",
+    "ac": [
+     "AC-PR-01"
+    ],
+    "why": "well-formed expression evaluates to its value (human adjustment)"
+   },
+   {
+    "name": "mixed",
+    "ac": [
+     "AC-PR-02"
+    ],
+    "why": "2*3+4*5=26 requires correct precedence across two terms"
+   },
+   {
+    "name": "nested-parens",
+    "ac": [
+     "AC-PR-03"
+    ],
+    "why": "nested parens must both override precedence correctly"
+   },
+   {
+    "name": "minus-unary",
+    "ac": [
+     "AC-PR-03"
+    ],
+    "why": "3 - -2=5 combines binary minus with unary negation"
+   },
+   {
+    "name": "div-trunc-small",
+    "ac": [
+     "AC-PR-01"
+    ],
+    "why": "well-formed expression evaluates to its value (human adjustment)"
+   },
+   {
+    "name": "trailing-operator",
+    "ac": [
+     "AC-PR-05"
+    ],
+    "why": "'2 +' is unparseable, must print ERROR"
+   },
+   {
+    "name": "empty",
+    "ac": [
+     "AC-PR-05"
+    ],
+    "why": "empty input is unparseable, must print ERROR"
+   },
+   {
+    "name": "div-by-zero",
+    "ac": [
+     "AC-PR-04"
+    ],
+    "why": "1/0 must specifically trigger the division-by-zero error"
+   },
+   {
+    "name": "not-an-expression",
+    "ac": [
+     "AC-PR-05"
+    ],
+    "why": "'abc' has no valid parse, must print ERROR"
+   },
+   {
+    "name": "unmatched-paren",
+    "ac": [
+     "AC-PR-05"
+    ],
+    "why": "'(1 + 2' unmatched paren must print ERROR"
+   },
+   {
+    "name": "two-numbers",
+    "ac": [
+     "AC-PR-05"
+    ],
+    "why": "'1 2' stray token must print ERROR"
+   },
+   {
+    "name": "exponentiation-rejected",
+    "ac": [
+     "AC-PR-05"
+    ],
+    "why": "** is outside the grammar, must print ERROR"
+   },
+   {
+    "name": "bitwise-and-rejected",
+    "ac": [
+     "AC-PR-05"
+    ],
+    "why": "& is outside the grammar, must print ERROR"
+   },
+   {
+    "name": "bitwise-or-rejected",
+    "ac": [
+     "AC-PR-05"
+    ],
+    "why": "| is outside the grammar, must print ERROR"
+   },
+   {
+    "name": "trunc-toward-zero-2",
+    "ac": [
+     "AC-PR-04"
+    ],
+    "why": "-9/4=-2 (not -3) discriminates truncation vs floor"
+   }
+  ],
+  "unmapped_acs": [
+   "AC-PR-06"
+  ],
+  "notes": "21 cases, 19 mapped, 2 ACs (AC-PR-01 generic success, AC-PR-06 output-cleanliness) have no dedicated discriminating case"
+ },
+ "protocol-adapter": {
+  "acs": {
+   "AC-PA-01": "decode yields {type, fields as ordered pairs}, order preserved exactly",
+   "AC-PA-02": "encode yields the exact frame string, segments joined by |, key=value",
+   "AC-PA-03": "round-trip holds both directions: encode(decode(x))==x and decode(encode(y))==y",
+   "AC-PA-04": "empty value (key=) is legal and a frame with zero fields is legal",
+   "AC-PA-05": "any malformed frame/message prints ERROR for the whole batch, never partial",
+   "AC-PA-06": "malformed top-level shape or unknown direction prints ERROR"
+  },
+  "cases": [
+   {
+    "name": "decode-basic",
+    "ac": [
+     "AC-PA-01"
+    ],
+    "why": "basic MSG frame must decode to type+ordered field pairs"
+   },
+   {
+    "name": "decode-no-fields",
+    "ac": [
+     "AC-PA-04"
+    ],
+    "why": "PING with zero fields must decode to empty fields array"
+   },
+   {
+    "name": "decode-empty-value",
+    "ac": [
+     "AC-PA-04"
+    ],
+    "why": "ACK|of= must preserve the legal empty value"
+   },
+   {
+    "name": "decode-order-preserved",
+    "ac": [
+     "AC-PA-01"
+    ],
+    "why": "b=1|a=2 must decode in that exact order, not sorted"
+   },
+   {
+    "name": "encode-basic",
+    "ac": [
+     "AC-PA-02"
+    ],
+    "why": "MSG with id=7 must encode to exact byte string MSG|id=7"
+   },
+   {
+    "name": "encode-no-fields",
+    "ac": [
+     "AC-PA-04"
+    ],
+    "why": "message with zero fields must encode to just the type"
+   },
+   {
+    "name": "encode-empty-value",
+    "ac": [
+     "AC-PA-04"
+    ],
+    "why": "empty value field must round-trip to key= on encode"
+   },
+   {
+    "name": "encode-order-preserved",
+    "ac": [
+     "AC-PA-02"
+    ],
+    "why": "b,a field order must be preserved in encoded output"
+   },
+   {
+    "name": "decode-two-frames",
+    "ac": [],
+    "why": "two independent frames decoded; not discriminating beyond decode-basic"
+   },
+   {
+    "name": "lowercase-type-error",
+    "ac": [
+     "AC-PA-05"
+    ],
+    "why": "lowercase 'msg' type violates uppercase-only rule, must ERROR"
+   },
+   {
+    "name": "field-without-equals-error",
+    "ac": [
+     "AC-PA-05"
+    ],
+    "why": "'id7' field segment lacks =, must ERROR"
+   },
+   {
+    "name": "atomic-batch-error",
+    "ac": [
+     "AC-PA-05"
+    ],
+    "why": "one bad frame among two must reject the whole batch, no partial"
+   },
+   {
+    "name": "uppercase-key-error",
+    "ac": [
+     "AC-PA-05"
+    ],
+    "why": "key 'Id' is not all-lowercase, must ERROR"
+   },
+   {
+    "name": "encode-value-with-pipe-error",
+    "ac": [
+     "AC-PA-05"
+    ],
+    "why": "value containing | cannot be encoded, must ERROR"
+   },
+   {
+    "name": "unknown-direction-error",
+    "ac": [
+     "AC-PA-06"
+    ],
+    "why": "direction 'transcode' is unknown, must ERROR"
+   }
+  ],
+  "unmapped_acs": [
+   "AC-PA-03"
+  ],
+  "notes": "15 cases, 14 mapped, 1 AC (AC-PA-03, round-trip law) has no case chaining decode+encode together"
+ },
+ "rate-limiter": {
+  "acs": {
+   "AC-RL-01": "bucket starts full; req with tokens>=1 allows and consumes one, else denies",
+   "AC-RL-02": "tick adds refill tokens clamped at capacity; refill 0 never replenishes; capacity 0 denies all",
+   "AC-RL-03": "events processed strictly in order; log has exactly one entry per req",
+   "AC-RL-04": "empty events array yields {log: [], tokens: capacity}",
+   "AC-RL-05": "malformed input prints ERROR with no partial log",
+   "AC-RL-06": "module exposes exports, runs main only under require.main===module, no side effects on require"
+  },
+  "cases": [
+   {
+    "name": "empty-events-full-bucket",
+    "ac": [
+     "AC-RL-04"
+    ],
+    "why": "no events must yield empty log and tokens=capacity"
+   },
+   {
+    "name": "single-allow",
+    "ac": [
+     "AC-RL-01"
+    ],
+    "why": "full bucket req must allow and consume exactly one token"
+   },
+   {
+    "name": "drain-then-deny",
+    "ac": [
+     "AC-RL-01"
+    ],
+    "why": "third req at 0 tokens must deny, not allow"
+   },
+   {
+    "name": "tick-refills-one",
+    "ac": [
+     "AC-RL-02"
+    ],
+    "why": "tick between reqs must add refill tokens before next req"
+   },
+   {
+    "name": "tick-clamps-at-capacity",
+    "ac": [
+     "AC-RL-02"
+    ],
+    "why": "refill 10 on capacity 2 must clamp tokens to 2, not overflow"
+   },
+   {
+    "name": "tick-at-full-is-noop",
+    "ac": [
+     "AC-RL-02"
+    ],
+    "why": "ticking an already-full bucket must not exceed capacity"
+   },
+   {
+    "name": "capacity-zero-denies-all",
+    "ac": [
+     "AC-RL-02"
+    ],
+    "why": "capacity 0 must deny every request even after a tick"
+   },
+   {
+    "name": "refill-zero-never-replenishes",
+    "ac": [
+     "AC-RL-02"
+    ],
+    "why": "refill 0 ticks must never restore tokens"
+   },
+   {
+    "name": "order-req-before-tick",
+    "ac": [
+     "AC-RL-03"
+    ],
+    "why": "strict order means the tick cannot help a req that came before it"
+   },
+   {
+    "name": "order-tick-before-req",
+    "ac": [
+     "AC-RL-03"
+    ],
+    "why": "tick preceding req must apply before that req is evaluated"
+   },
+   {
+    "name": "many-ticks-then-burst",
+    "ac": [],
+    "why": "composite stress scenario, not isolating one specific rule"
+   },
+   {
+    "name": "partial-refill",
+    "ac": [
+     "AC-RL-02"
+    ],
+    "why": "refill 2 (not full capacity) proves refill adds, doesn't top off"
+   },
+   {
+    "name": "only-ticks",
+    "ac": [
+     "AC-RL-03"
+    ],
+    "why": "ticks alone must produce zero log entries (one per req only)"
+   },
+   {
+    "name": "only-reqs",
+    "ac": [],
+    "why": "plain sequential allows, not discriminating beyond single-allow"
+   },
+   {
+    "name": "large-values",
+    "ac": [],
+    "why": "large-magnitude numeric sanity, not discriminating a specific rule"
+   },
+   {
+    "name": "malformed-not-object",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "array top-level instead of object must print ERROR"
+   },
+   {
+    "name": "malformed-array-events-missing",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "missing events field is a shape error"
+   },
+   {
+    "name": "malformed-bool-capacity",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "boolean capacity must not be treated as an integer"
+   },
+   {
+    "name": "malformed-float-refill",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "non-integral refill 1.5 is a shape error"
+   },
+   {
+    "name": "malformed-negative-capacity",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "negative capacity violates the >=0 constraint"
+   },
+   {
+    "name": "malformed-negative-refill",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "negative refill violates the >=0 constraint"
+   },
+   {
+    "name": "malformed-events-not-array",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "events as a string instead of array is a shape error"
+   },
+   {
+    "name": "malformed-unknown-event",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "'nope' is not tick/req, must ERROR the whole batch"
+   },
+   {
+    "name": "malformed-string-capacity",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "string capacity violates required integer type"
+   },
+   {
+    "name": "malformed-null-refill",
+    "ac": [
+     "AC-RL-05"
+    ],
+    "why": "null refill violates required integer type"
+   }
+  ],
+  "unmapped_acs": [
+   "AC-RL-06"
+  ],
+  "notes": "25 cases, 22 mapped, 1 AC (AC-RL-06, module/require shape) is structural and not black-box testable"
+ },
+ "rest-handler": {
+  "acs": {
+   "AC-RH-01": "POST creates item with monotonic id, 201; ids never reused after delete",
+   "AC-RH-02": "GET /items lists in creation order; GET /items/<id> returns item or 404",
+   "AC-RH-03": "PUT updates name and returns 200 or 404; DELETE returns 204 or 404",
+   "AC-RH-04": "defined path with unsupported method returns 405, distinct from 404",
+   "AC-RH-05": "bad POST/PUT body returns 400; a bad request never aborts the batch",
+   "AC-RH-06": "state persists across requests in a run, starts empty; non-array input is ERROR"
+  },
+  "cases": [
+   {
+    "name": "create-one",
+    "ac": [
+     "AC-RH-01"
+    ],
+    "why": "single POST must assign id 1 and return 201 with the item"
+   },
+   {
+    "name": "create-then-list",
+    "ac": [
+     "AC-RH-01",
+     "AC-RH-02",
+     "AC-RH-06"
+    ],
+    "why": "two POSTs get sequential ids 1,2 and GET lists both in that order + state persists within the run (human adjustment)"
+   },
+   {
+    "name": "get-by-id",
+    "ac": [
+     "AC-RH-02"
+    ],
+    "why": "GET /items/1 after create must return that exact item"
+   },
+   {
+    "name": "get-missing-404",
+    "ac": [
+     "AC-RH-02"
+    ],
+    "why": "GET on nonexistent id 9 must return 404 not found"
+   },
+   {
+    "name": "put-updates",
+    "ac": [
+     "AC-RH-03"
+    ],
+    "why": "PUT must change the name and later GET must reflect it"
+   },
+   {
+    "name": "put-missing-404",
+    "ac": [
+     "AC-RH-03"
+    ],
+    "why": "PUT on nonexistent id 3 must return 404"
+   },
+   {
+    "name": "delete-then-404",
+    "ac": [
+     "AC-RH-03",
+     "AC-RH-06"
+    ],
+    "why": "DELETE returns 204, subsequent GET on same id must 404 + state persists within the run (human adjustment)"
+   },
+   {
+    "name": "id-never-reused",
+    "ac": [
+     "AC-RH-01",
+     "AC-RH-06"
+    ],
+    "why": "after deleting id 1, next created item must get id 2, not 1 + state persists within the run (human adjustment)"
+   },
+   {
+    "name": "unknown-path-404",
+    "ac": [
+     "AC-RH-04"
+    ],
+    "why": "undefined path /users establishes the 404 baseline vs 405"
+   },
+   {
+    "name": "collection-wrong-method-405",
+    "ac": [
+     "AC-RH-04"
+    ],
+    "why": "DELETE /items (defined path, wrong method) must be 405 not 404"
+   },
+   {
+    "name": "item-wrong-method-405",
+    "ac": [
+     "AC-RH-04"
+    ],
+    "why": "POST /items/1 (defined path, wrong method) must be 405 not 404"
+   },
+   {
+    "name": "bad-body-400",
+    "ac": [
+     "AC-RH-05"
+    ],
+    "why": "POST with body missing name must return 400"
+   },
+   {
+    "name": "bad-does-not-abort",
+    "ac": [
+     "AC-RH-05"
+    ],
+    "why": "a 400 request must not stop the next valid POST from succeeding"
+   },
+   {
+    "name": "non-integer-id-404",
+    "ac": [
+     "AC-RH-02"
+    ],
+    "why": "/items/abc non-integer id segment must return 404"
+   },
+   {
+    "name": "not-array-error",
+    "ac": [],
+    "why": "non-array top-level input must print exactly ERROR (human: no top-level-shape AC; RH-06 removed)"
+   }
+  ],
+  "unmapped_acs": [],
+  "notes": "15 cases, 15 mapped (one with 2 ACs), 0 ACs without any case"
+ },
+ "scheduler": {
+  "acs": {
+   "AC-SC-01": "jobs become ready at arrival tick with an arrive event, ascending id order",
+   "AC-SC-02": "ready job with highest priority runs; ties break by earliest arrival then lowest id",
+   "AC-SC-03": "higher-priority arrival preempts running job; preempted job resumes, never restarts",
+   "AC-SC-04": "job past its deadline (not complete) is dropped as missed before selection; exact-tick completion is not missed",
+   "AC-SC-05": "duration-0 job starts and completes same tick; idle tick emits idle",
+   "AC-SC-06": "events in tick order, completed in completion order, missed in miss order; empty input empty arrays",
+   "AC-SC-07": "malformed input (shape, types, negative arrival/duration, duplicate ids) prints ERROR"
+  },
+  "cases": [
+   {
+    "name": "empty",
+    "ac": [
+     "AC-SC-06"
+    ],
+    "why": "empty job array must yield all-empty output arrays"
+   },
+   {
+    "name": "single-job",
+    "ac": [],
+    "why": "basic single-job happy path, not discriminating one specific rule"
+   },
+   {
+    "name": "zero-duration",
+    "ac": [
+     "AC-SC-05"
+    ],
+    "why": "duration 0 must start and complete in the same tick"
+   },
+   {
+    "name": "idle-gap-before-arrival",
+    "ac": [
+     "AC-SC-05"
+    ],
+    "why": "ticks before arrival with nothing ready must emit idle"
+   },
+   {
+    "name": "two-sequential-by-priority",
+    "ac": [
+     "AC-SC-02"
+    ],
+    "why": "priority 5 job must run before priority 1 despite same arrival"
+   },
+   {
+    "name": "preempt-then-resume",
+    "ac": [
+     "AC-SC-03"
+    ],
+    "why": "higher-priority arrival must preempt then original resumes, not restarts"
+   },
+   {
+    "name": "preempt-keeps-remaining",
+    "ac": [
+     "AC-SC-03"
+    ],
+    "why": "preempted job must keep remaining duration across the preemption"
+   },
+   {
+    "name": "no-preempt-on-equal-priority",
+    "ac": [
+     "AC-SC-03"
+    ],
+    "why": "equal-priority arrival must NOT preempt the running job"
+   },
+   {
+    "name": "no-preempt-on-lower-priority",
+    "ac": [
+     "AC-SC-03"
+    ],
+    "why": "lower-priority arrival must NOT preempt the running job"
+   },
+   {
+    "name": "double-preempt-chain",
+    "ac": [
+     "AC-SC-03"
+    ],
+    "why": "chained preempt/resume across three jobs of rising priority"
+   },
+   {
+    "name": "tie-arrival-then-id",
+    "ac": [
+     "AC-SC-02"
+    ],
+    "why": "same priority+arrival must break tie by lowest id"
+   },
+   {
+    "name": "tie-earlier-arrival-wins",
+    "ac": [
+     "AC-SC-02"
+    ],
+    "why": "same priority must break tie by earliest arrival, not id"
+   },
+   {
+    "name": "deadline-exact-completion-ok",
+    "ac": [
+     "AC-SC-04"
+    ],
+    "why": "completing exactly at the deadline tick must NOT be missed"
+   },
+   {
+    "name": "deadline-missed-while-running",
+    "ac": [
+     "AC-SC-04"
+    ],
+    "why": "running job past its deadline must be dropped as missed"
+   },
+   {
+    "name": "deadline-missed-while-preempted",
+    "ac": [
+     "AC-SC-04"
+    ],
+    "why": "a preempted (not running) job can still miss its deadline"
+   },
+   {
+    "name": "deadline-at-arrival-tick-missed",
+    "ac": [
+     "AC-SC-04"
+    ],
+    "why": "deadline<=arrival tick means missed immediately on arrival"
+   },
+   {
+    "name": "deadline-far-never-missed",
+    "ac": [
+     "AC-SC-04"
+    ],
+    "why": "a distant deadline must not falsely trigger a miss"
+   },
+   {
+    "name": "two-missed-ascending-id",
+    "ac": [
+     "AC-SC-04",
+     "AC-SC-06"
+    ],
+    "why": "two same-tick misses must appear in ascending id, in miss list order"
+   },
+   {
+    "name": "arrivals-ascending-id-order",
+    "ac": [
+     "AC-SC-01"
+    ],
+    "why": "two same-tick arrivals (ids 5,3) must emit in ascending id order"
+   },
+   {
+    "name": "negative-priority-allowed",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "negative priority must NOT trigger ERROR (only arrival/duration are checked)"
+   },
+   {
+    "name": "late-high-priority-after-idle",
+    "ac": [
+     "AC-SC-05"
+    ],
+    "why": "idle ticks must appear between completion and a later arrival"
+   },
+   {
+    "name": "mixed-full-scenario",
+    "ac": [],
+    "why": "large composite regression scenario, not isolating one specific rule"
+   },
+   {
+    "name": "malformed-not-array",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "top-level object instead of array must print ERROR"
+   },
+   {
+    "name": "malformed-missing-field",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "job missing duration field is a shape error"
+   },
+   {
+    "name": "malformed-bool-priority",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "boolean priority must not be treated as integer"
+   },
+   {
+    "name": "malformed-negative-duration",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "negative duration violates the >=0 constraint"
+   },
+   {
+    "name": "malformed-negative-arrival",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "negative arrival violates the >=0 constraint"
+   },
+   {
+    "name": "malformed-duplicate-id",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "two jobs sharing id 1 must print ERROR"
+   },
+   {
+    "name": "malformed-string-deadline",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "string deadline violates required integer type"
+   },
+   {
+    "name": "malformed-element-not-object",
+    "ac": [
+     "AC-SC-07"
+    ],
+    "why": "bare int 7 as a job element is a shape error"
+   }
+  ],
+  "unmapped_acs": [],
+  "notes": "30 cases, 27 mapped (one with 2 ACs), 0 ACs without any case"
+ },
+ "state-machine": {
+  "acs": {
+   "AC-SM-01": "empty event array ends in the start state locked",
+   "AC-SM-02": "coin unlocks locked; push locks unlocked",
+   "AC-SM-03": "coin on unlocked stays unlocked; push on locked stays locked (total machine)",
+   "AC-SM-04": "events fold left to right from locked; final state printed",
+   "AC-SM-05": "unknown or non-string event prints ERROR",
+   "AC-SM-06": "input that is not a JSON array prints ERROR"
+  },
+  "cases": [
+   {
+    "name": "empty-stays-locked",
+    "ac": [
+     "AC-SM-01"
+    ],
+    "why": "no events must leave the machine in locked"
+   },
+   {
+    "name": "coin-unlocks",
+    "ac": [
+     "AC-SM-02"
+    ],
+    "why": "single coin from locked must transition to unlocked"
+   },
+   {
+    "name": "coin-then-push-locks",
+    "ac": [
+     "AC-SM-02"
+    ],
+    "why": "push after coin must transition unlocked back to locked"
+   },
+   {
+    "name": "push-on-locked-stays",
+    "ac": [
+     "AC-SM-03"
+    ],
+    "why": "push on the start state must be a no-op, stay locked"
+   },
+   {
+    "name": "coin-on-unlocked-stays",
+    "ac": [
+     "AC-SM-03"
+    ],
+    "why": "second coin while unlocked must be a no-op, stay unlocked"
+   },
+   {
+    "name": "push-coin-push",
+    "ac": [
+     "AC-SM-04"
+    ],
+    "why": "three-event sequence only ends locked if folded in order"
+   },
+   {
+    "name": "coin-push-coin",
+    "ac": [
+     "AC-SM-04"
+    ],
+    "why": "three-event sequence only ends unlocked if folded in order"
+   },
+   {
+    "name": "long-sequence",
+    "ac": [],
+    "why": "longer repeat sequence, not discriminating beyond shorter fold cases"
+   },
+   {
+    "name": "unknown-event",
+    "ac": [
+     "AC-SM-05"
+    ],
+    "why": "'spin' is not coin/push, must print ERROR"
+   },
+   {
+    "name": "non-string-event",
+    "ac": [
+     "AC-SM-05"
+    ],
+    "why": "numeric element 5 in the array must print ERROR"
+   },
+   {
+    "name": "not-an-array-object",
+    "ac": [
+     "AC-SM-06"
+    ],
+    "why": "a JSON object instead of array must print ERROR"
+   },
+   {
+    "name": "not-json",
+    "ac": [
+     "AC-SM-06"
+    ],
+    "why": "invalid JSON text must print ERROR"
+   }
+  ],
+  "unmapped_acs": [],
+  "notes": "12 cases, 11 mapped, 0 ACs without any case"
+ },
+ "transformer": {
+  "acs": {
+   "AC-TR-01": "each record maps to name = first + space + last",
+   "AC-TR-02": "adult is age >= 18 (18 is adult, 17 is not)",
+   "AC-TR-03": "output order equals input order; empty array maps to empty array",
+   "AC-TR-04": "input that is not a JSON array prints ERROR",
+   "AC-TR-05": "a record with a missing or wrong-typed field prints ERROR for the whole batch",
+   "AC-TR-06": "only structure and values of the output are fixed, not its JSON formatting"
+  },
+  "cases": [
+   {
+    "name": "single-adult",
+    "ac": [
+     "AC-TR-01"
+    ],
+    "why": "first+last concatenation with a single space is the core mapping"
+   },
+   {
+    "name": "empty-array",
+    "ac": [
+     "AC-TR-03"
+    ],
+    "why": "empty input must map to an empty output array"
+   },
+   {
+    "name": "minor",
+    "ac": [
+     "AC-TR-02"
+    ],
+    "why": "age 17 must map to adult:false"
+   },
+   {
+    "name": "boundary-18-is-adult",
+    "ac": [
+     "AC-TR-02"
+    ],
+    "why": "age exactly 18 must map to adult:true, the boundary case"
+   },
+   {
+    "name": "order-preserved",
+    "ac": [
+     "AC-TR-03"
+    ],
+    "why": "two records must appear in the same order as input"
+   },
+   {
+    "name": "not-an-array",
+    "ac": [
+     "AC-TR-04"
+    ],
+    "why": "top-level object instead of array must print ERROR"
+   },
+   {
+    "name": "missing-age",
+    "ac": [
+     "AC-TR-05"
+    ],
+    "why": "record missing age field is a shape error"
+   },
+   {
+    "name": "missing-last",
+    "ac": [
+     "AC-TR-05"
+    ],
+    "why": "record missing last field is a shape error"
+   },
+   {
+    "name": "age-not-integer",
+    "ac": [
+     "AC-TR-05"
+    ],
+    "why": "string age 'old' violates required integer type"
+   },
+   {
+    "name": "record-not-object",
+    "ac": [
+     "AC-TR-05"
+    ],
+    "why": "bare string 'nope' as a record is a shape error"
+   },
+   {
+    "name": "not-json",
+    "ac": [
+     "AC-TR-04"
+    ],
+    "why": "unparseable stdin falls under the not-a-JSON-array error clause"
+   },
+   {
+    "name": "age-boolean-rejected",
+    "ac": [
+     "AC-TR-05"
+    ],
+    "why": "boolean age must not be treated as an integer"
+   },
+   {
+    "name": "age-float-rejected",
+    "ac": [
+     "AC-TR-05"
+    ],
+    "why": "non-integral age 18.0 is a shape error"
+   },
+   {
+    "name": "extra-field-tolerated",
+    "ac": [
+     "AC-TR-06"
+    ],
+    "why": "extra input fields tolerated: only the OUTPUT structure is fixed (human adjustment)"
+   }
+  ],
+  "unmapped_acs": [],
+  "notes": "14 cases, 12 mapped, 1 AC (AC-TR-06, formatting freedom) has no dedicated discriminating case"
+ },
+ "ui-render": {
+  "acs": {
+   "AC-UI-01": "input sets a string field; toggle flips a boolean field; events apply in order",
+   "AC-UI-02": "reset restores every field to its INITIAL value, clears submitted and errors",
+   "AC-UI-03": "submit with any empty string field keeps submitted false, lists empty fields in errors in field order",
+   "AC-UI-04": "submit with all string fields non-empty sets submitted true and empties errors",
+   "AC-UI-05": "view maps every field to current value, reflects state after last event; no events = initial model",
+   "AC-UI-06": "unknown field, type mismatch, duplicate name, or malformed shape prints ERROR"
+  },
+  "cases": [
+   {
+    "name": "no-events",
+    "ac": [
+     "AC-UI-05"
+    ],
+    "why": "zero events must render exactly the initial model"
+   },
+   {
+    "name": "input-sets",
+    "ac": [
+     "AC-UI-01"
+    ],
+    "why": "an input event must set the string field to the given value"
+   },
+   {
+    "name": "toggle-flips",
+    "ac": [
+     "AC-UI-01"
+    ],
+    "why": "a toggle event must flip false to true"
+   },
+   {
+    "name": "reset-restores-initial",
+    "ac": [
+     "AC-UI-02"
+    ],
+    "why": "reset after an input change must restore init, not empty"
+   },
+   {
+    "name": "submit-empty-fails",
+    "ac": [
+     "AC-UI-03"
+    ],
+    "why": "empty string field on submit must fail and list it in errors"
+   },
+   {
+    "name": "submit-ok",
+    "ac": [
+     "AC-UI-04"
+    ],
+    "why": "non-empty string field on submit must set submitted true"
+   },
+   {
+    "name": "errors-in-field-order",
+    "ac": [
+     "AC-UI-03"
+    ],
+    "why": "two empty fields a,c must list in field order in errors"
+   },
+   {
+    "name": "errors-order-not-alphabetical",
+    "ac": [
+     "AC-UI-03"
+    ],
+    "why": "z before a proves errors follow field order, not alphabetical"
+   },
+   {
+    "name": "recover-after-failed-submit",
+    "ac": [
+     "AC-UI-01",
+     "AC-UI-04"
+    ],
+    "why": "input after a failed submit must still apply, enabling a later success"
+   },
+   {
+    "name": "bool-fields-not-validated",
+    "ac": [
+     "AC-UI-03"
+    ],
+    "why": "a false boolean field must not block submit validation"
+   },
+   {
+    "name": "reset-clears-submitted",
+    "ac": [
+     "AC-UI-02"
+    ],
+    "why": "reset after a successful submit must clear submitted back to false"
+   },
+   {
+    "name": "unknown-field-error",
+    "ac": [
+     "AC-UI-06"
+    ],
+    "why": "event naming field 'zz' not in the model must print ERROR"
+   },
+   {
+    "name": "type-mismatch-error",
+    "ac": [
+     "AC-UI-06"
+    ],
+    "why": "toggle on a string field is a type mismatch, must print ERROR"
+   }
+  ],
+  "unmapped_acs": [],
+  "notes": "13 cases, 13 mapped (one with 2 ACs), 0 ACs without any case"
+ },
+ "worker": {
+  "acs": {
+   "AC-WK-01": "a job never executes before every job in its needs has completed ok",
+   "AC-WK-02": "among ready jobs the highest priority runs first, tie breaks by FIFO input order",
+   "AC-WK-03": "a job with fails true gets status failed; its dependents (transitively) get status skipped",
+   "AC-WK-04": "order lists exactly the executed jobs (ok/failed); status maps every job to ok/failed/skipped",
+   "AC-WK-05": "duplicate id, unknown needs id, or a dependency cycle prints ERROR, never a partial schedule",
+   "AC-WK-06": "malformed input (not an object with a well-formed jobs array) prints ERROR"
+  },
+  "cases": [
+   {
+    "name": "single-job",
+    "ac": [],
+    "why": "trivial single-job happy path, not discriminating one specific rule"
+   },
+   {
+    "name": "priority-order",
+    "ac": [
+     "AC-WK-02"
+    ],
+    "why": "priority 5 job must run before priority 3 and 1"
+   },
+   {
+    "name": "fifo-tie-break",
+    "ac": [
+     "AC-WK-02"
+    ],
+    "why": "equal priority a,b must run in input order a then b"
+   },
+   {
+    "name": "dependency-first",
+    "ac": [
+     "AC-WK-01"
+    ],
+    "why": "a (priority 9) needing b must wait for b despite lower priority of b"
+   },
+   {
+    "name": "deps-and-priority",
+    "ac": [
+     "AC-WK-01",
+     "AC-WK-02"
+    ],
+    "why": "a is blocked by its need on c, and among ready b,c the higher priority b runs first"
+   },
+   {
+    "name": "failure-skips-dependent",
+    "ac": [
+     "AC-WK-03",
+     "AC-WK-04"
+    ],
+    "why": "b needing failed a must be skipped, absent from executed order"
+   },
+   {
+    "name": "failure-skips-transitively",
+    "ac": [
+     "AC-WK-03"
+    ],
+    "why": "c needing skipped b must also be skipped, not just b"
+   },
+   {
+    "name": "failure-isolates-not-aborts",
+    "ac": [
+     "AC-WK-03"
+    ],
+    "why": "independent job x must still run despite a's earlier failure"
+   },
+   {
+    "name": "cycle-error",
+    "ac": [
+     "AC-WK-05"
+    ],
+    "why": "a needs b needs a is a cycle, must print ERROR"
+   },
+   {
+    "name": "unknown-need-error",
+    "ac": [
+     "AC-WK-05"
+    ],
+    "why": "needs naming unknown id 'zz' must print ERROR"
+   },
+   {
+    "name": "duplicate-id-error",
+    "ac": [
+     "AC-WK-05"
+    ],
+    "why": "two jobs both with id 'a' must print ERROR"
+   },
+   {
+    "name": "malformed-error",
+    "ac": [
+     "AC-WK-06"
+    ],
+    "why": "jobs as a string instead of an array is a shape error"
+   }
+  ],
+  "unmapped_acs": [],
+  "notes": "12 cases, 11 mapped, 0 ACs without any case"
+ },
+ "_approved": [
+  "scheduler",
+  "rate-limiter",
+  "ledger-lite",
+  "guard",
+  "parser",
+  "protocol-adapter",
+  "crud-store",
+  "rest-handler",
+  "state-machine",
+  "transformer",
+  "ui-render",
+  "worker"
+ ],
+ "_curated_by": "Andres Massello",
+ "_curated_at": "2026-08-18",
+ "_note": "mapping approved archetype by archetype interactively; 3 human adjustments (parser AC-PR-01, rest-handler AC-RH-06, transformer AC-TR-06)"
+}

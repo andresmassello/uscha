@@ -2,7 +2,7 @@
   "_generated_by": "hand-designed cases from the canonical SPEC BEFORE any compilation (ADR-028); expectations produced by a JS reference implementation that is NOT a bench compilation and is never committed. WITHHELD from every compiler. Discrimination checked pre-compilation against a degenerate stub and one wrong/ implementation per rule. Target: JavaScript (node).",
   "cases": [
     {
-      "name": "empty-events-full-bucket",
+      "name": "empty-events-full-bucket", "ac": ["AC-RL-04"],
       "payload": {
         "capacity": 3,
         "refill": 1,
@@ -14,7 +14,7 @@
       }
     },
     {
-      "name": "single-allow",
+      "name": "single-allow", "ac": ["AC-RL-01"],
       "payload": {
         "capacity": 1,
         "refill": 1,
@@ -30,7 +30,7 @@
       }
     },
     {
-      "name": "drain-then-deny",
+      "name": "drain-then-deny", "ac": ["AC-RL-01"],
       "payload": {
         "capacity": 2,
         "refill": 1,
@@ -50,7 +50,7 @@
       }
     },
     {
-      "name": "tick-refills-one",
+      "name": "tick-refills-one", "ac": ["AC-RL-02"],
       "payload": {
         "capacity": 2,
         "refill": 1,
@@ -71,7 +71,7 @@
       }
     },
     {
-      "name": "tick-clamps-at-capacity",
+      "name": "tick-clamps-at-capacity", "ac": ["AC-RL-02"],
       "payload": {
         "capacity": 2,
         "refill": 10,
@@ -92,7 +92,7 @@
       }
     },
     {
-      "name": "tick-at-full-is-noop",
+      "name": "tick-at-full-is-noop", "ac": ["AC-RL-02"],
       "payload": {
         "capacity": 2,
         "refill": 1,
@@ -114,7 +114,7 @@
       }
     },
     {
-      "name": "capacity-zero-denies-all",
+      "name": "capacity-zero-denies-all", "ac": ["AC-RL-02"],
       "payload": {
         "capacity": 0,
         "refill": 5,
@@ -133,7 +133,7 @@
       }
     },
     {
-      "name": "refill-zero-never-replenishes",
+      "name": "refill-zero-never-replenishes", "ac": ["AC-RL-02"],
       "payload": {
         "capacity": 1,
         "refill": 0,
@@ -153,7 +153,7 @@
       }
     },
     {
-      "name": "order-req-before-tick",
+      "name": "order-req-before-tick", "ac": ["AC-RL-03"],
       "payload": {
         "capacity": 1,
         "refill": 1,
@@ -174,7 +174,7 @@
       }
     },
     {
-      "name": "order-tick-before-req",
+      "name": "order-tick-before-req", "ac": ["AC-RL-03"],
       "payload": {
         "capacity": 1,
         "refill": 1,
@@ -225,7 +225,7 @@
       }
     },
     {
-      "name": "partial-refill",
+      "name": "partial-refill", "ac": ["AC-RL-02"],
       "payload": {
         "capacity": 5,
         "refill": 2,
@@ -256,7 +256,7 @@
       }
     },
     {
-      "name": "only-ticks",
+      "name": "only-ticks", "ac": ["AC-RL-03"],
       "payload": {
         "capacity": 2,
         "refill": 1,
@@ -321,7 +321,7 @@
       }
     },
     {
-      "name": "malformed-not-object",
+      "name": "malformed-not-object", "ac": ["AC-RL-05"],
       "payload": [
         1,
         2
@@ -329,7 +329,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-array-events-missing",
+      "name": "malformed-array-events-missing", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": 1,
         "refill": 1
@@ -337,7 +337,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-bool-capacity",
+      "name": "malformed-bool-capacity", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": true,
         "refill": 1,
@@ -346,7 +346,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-float-refill",
+      "name": "malformed-float-refill", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": 2,
         "refill": 1.5,
@@ -355,7 +355,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-negative-capacity",
+      "name": "malformed-negative-capacity", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": -1,
         "refill": 1,
@@ -364,7 +364,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-negative-refill",
+      "name": "malformed-negative-refill", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": 1,
         "refill": -2,
@@ -373,7 +373,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-events-not-array",
+      "name": "malformed-events-not-array", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": 1,
         "refill": 1,
@@ -382,7 +382,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-unknown-event",
+      "name": "malformed-unknown-event", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": 2,
         "refill": 1,
@@ -394,7 +394,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-string-capacity",
+      "name": "malformed-string-capacity", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": "2",
         "refill": 1,
@@ -403,7 +403,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-null-refill",
+      "name": "malformed-null-refill", "ac": ["AC-RL-05"],
       "payload": {
         "capacity": 2,
         "refill": null,

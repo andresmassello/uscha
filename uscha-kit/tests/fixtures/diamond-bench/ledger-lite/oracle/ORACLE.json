@@ -2,7 +2,7 @@
   "_generated_by": "hand-designed cases from the canonical SPEC BEFORE any compilation (ADR-029); expectations produced by a two-module reference that is NOT a bench compilation and is never committed. WITHHELD from every compiler. Run through the ENTRY unit (cli) with the source dir on the module path.",
   "cases": [
     {
-      "name": "empty-batch",
+      "name": "empty-batch", "ac": ["AC-LG-04"],
       "payload": [],
       "expected_json": {
         "balances": {},
@@ -10,7 +10,7 @@
       }
     },
     {
-      "name": "single-balanced",
+      "name": "single-balanced", "ac": ["AC-LG-01"],
       "payload": [
         {
           "id": "p1",
@@ -35,7 +35,7 @@
       }
     },
     {
-      "name": "three-line-balanced",
+      "name": "three-line-balanced", "ac": ["AC-LG-01"],
       "payload": [
         {
           "id": "p1",
@@ -65,7 +65,7 @@
       }
     },
     {
-      "name": "accumulate-same-account",
+      "name": "accumulate-same-account", "ac": ["AC-LG-01"],
       "payload": [
         {
           "id": "p1",
@@ -104,7 +104,7 @@
       }
     },
     {
-      "name": "unbalanced-rejected",
+      "name": "unbalanced-rejected", "ac": ["AC-LG-02"],
       "payload": [
         {
           "id": "p1",
@@ -128,7 +128,7 @@
       }
     },
     {
-      "name": "unbalanced-isolated-others-post",
+      "name": "unbalanced-isolated-others-post", "ac": ["AC-LG-02"],
       "payload": [
         {
           "id": "p1",
@@ -182,7 +182,7 @@
       }
     },
     {
-      "name": "one-line-rejected",
+      "name": "one-line-rejected", "ac": ["AC-LG-02"],
       "payload": [
         {
           "id": "p1",
@@ -202,7 +202,7 @@
       }
     },
     {
-      "name": "empty-lines-rejected-not-error",
+      "name": "empty-lines-rejected-not-error", "ac": ["AC-LG-02", "AC-LG-05"],
       "payload": [
         {
           "id": "p1",
@@ -217,7 +217,7 @@
       }
     },
     {
-      "name": "zero-amount-lines-accepted",
+      "name": "zero-amount-lines-accepted", "ac": ["AC-LG-01"],
       "payload": [
         {
           "id": "p1",
@@ -242,7 +242,7 @@
       }
     },
     {
-      "name": "duplicate-id-second-rejected",
+      "name": "duplicate-id-second-rejected", "ac": ["AC-LG-03"],
       "payload": [
         {
           "id": "p1",
@@ -282,7 +282,7 @@
       }
     },
     {
-      "name": "duplicate-of-rejected-still-rejected",
+      "name": "duplicate-of-rejected-still-rejected", "ac": ["AC-LG-03"],
       "payload": [
         {
           "id": "p1",
@@ -316,7 +316,7 @@
       }
     },
     {
-      "name": "rejected-account-absent-from-balances",
+      "name": "rejected-account-absent-from-balances", "ac": ["AC-LG-04"],
       "payload": [
         {
           "id": "p1",
@@ -352,7 +352,7 @@
       }
     },
     {
-      "name": "rejected-order-is-input-order",
+      "name": "rejected-order-is-input-order", "ac": ["AC-LG-04"],
       "payload": [
         {
           "id": "z",
@@ -531,21 +531,21 @@
       }
     },
     {
-      "name": "malformed-not-array",
+      "name": "malformed-not-array", "ac": ["AC-LG-05"],
       "payload": {
         "id": "x"
       },
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-element-not-object",
+      "name": "malformed-element-not-object", "ac": ["AC-LG-05"],
       "payload": [
         1
       ],
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-missing-id",
+      "name": "malformed-missing-id", "ac": ["AC-LG-05"],
       "payload": [
         {
           "lines": [
@@ -563,7 +563,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-id-not-string",
+      "name": "malformed-id-not-string", "ac": ["AC-LG-05"],
       "payload": [
         {
           "id": 1,
@@ -582,7 +582,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-lines-not-array",
+      "name": "malformed-lines-not-array", "ac": ["AC-LG-05"],
       "payload": [
         {
           "id": "p1",
@@ -592,7 +592,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-line-not-object",
+      "name": "malformed-line-not-object", "ac": ["AC-LG-05"],
       "payload": [
         {
           "id": "p1",
@@ -605,7 +605,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-bool-amount",
+      "name": "malformed-bool-amount", "ac": ["AC-LG-05"],
       "payload": [
         {
           "id": "p1",
@@ -624,7 +624,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-float-amount",
+      "name": "malformed-float-amount", "ac": ["AC-LG-05"],
       "payload": [
         {
           "id": "p1",
@@ -643,7 +643,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-account-not-string",
+      "name": "malformed-account-not-string", "ac": ["AC-LG-05"],
       "payload": [
         {
           "id": "p1",
