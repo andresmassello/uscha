@@ -32,19 +32,41 @@
           "iteration": 1,
           "at": "2026-08-11T10:00:00+00:00",
           "tool": "code-review",
-          "category": "agent"
+          "category": "agent",
+          "n": 142,
+          "reported": 4,
+          "gated_reported": 4,
+          "fixed": 4
         },
         {
           "iteration": 2,
           "at": "2026-08-11T10:40:00+00:00",
           "tool": "judgment-day",
-          "category": "agent"
+          "category": "agent",
+          "n": 143,
+          "reported": 3,
+          "gated_reported": 3,
+          "fixed": 1
         },
         {
           "iteration": 3,
           "at": "2026-08-11T11:20:00+00:00",
           "tool": "improve",
-          "category": "agent"
+          "category": "agent",
+          "n": 145,
+          "reported": 0,
+          "gated_reported": 0,
+          "fixed": 0
+        },
+        {
+          "n": 146,
+          "iteration": 3,
+          "at": "2026-08-11T11:25:00+00:00",
+          "tool": "gate:sast",
+          "category": "static-gate",
+          "reported": 2,
+          "gated_reported": 2,
+          "fixed": 0
         }
       ]
     }
@@ -54,8 +76,69 @@
     "snapshots": [],
     "iterations": []
   },
-  "steps": [],
-  "escalations": [],
+  "steps": [
+    {
+      "n": 141,
+      "at": "2026-08-11T09:59:00+00:00",
+      "kind": "snapshot",
+      "repo": "backend-api",
+      "phase": "pre"
+    },
+    {
+      "n": 142,
+      "at": "2026-08-11T10:00:00+00:00",
+      "kind": "qa-step",
+      "repo": "backend-api",
+      "tool": "code-review",
+      "iteration": 1
+    },
+    {
+      "n": 143,
+      "at": "2026-08-11T10:40:00+00:00",
+      "kind": "qa-step",
+      "repo": "backend-api",
+      "tool": "judgment-day",
+      "iteration": 2
+    },
+    {
+      "n": 144,
+      "at": "2026-08-11T11:05:00+00:00",
+      "kind": "gate-not-run",
+      "repo": "backend-api",
+      "tool": "gate:license",
+      "iteration": 2
+    },
+    {
+      "n": 145,
+      "at": "2026-08-11T11:20:00+00:00",
+      "kind": "qa-step",
+      "repo": "backend-api",
+      "tool": "improve",
+      "iteration": 3
+    },
+    {
+      "n": 146,
+      "at": "2026-08-11T11:25:00+00:00",
+      "kind": "static-gate",
+      "repo": "backend-api",
+      "tool": "gate:sast",
+      "iteration": 3
+    },
+    {
+      "n": 147,
+      "at": "2026-08-11T11:30:00+00:00",
+      "kind": "escalation",
+      "repo": "backend-api"
+    }
+  ],
+  "escalations": [
+    {
+      "n": 147,
+      "at": "2026-08-11T11:30:00+00:00",
+      "repo": "backend-api",
+      "reason": "spec doubt raised mid-loop; human gate open"
+    }
+  ],
   "production_findings": [],
   "spec_doubts": [],
   "spec_change_requests": [],
@@ -74,6 +157,6 @@
     }
   ],
   "integrity": {
-    "sha256": "1beace8f2983c8a9f1e4fb0b2973a89695b7069bef4b43094d10901fe75f8b3c"
+    "sha256": "6c29cd35bad31da353d0e676eef397518482ca744f94268222981421fca0fba2"
   }
 }

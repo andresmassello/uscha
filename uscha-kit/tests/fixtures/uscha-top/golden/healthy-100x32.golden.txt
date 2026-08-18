@@ -19,13 +19,13 @@ score trend  ▅▆▆▇▇  (readiness score, not closed obligations)
 
 
 
-
-
-
-
-
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-feed · the live event tail is M2; nothing is invented here
+feed · no ledger step recorded yet (nothing to show)
+
+
+
+
+
 
 
 

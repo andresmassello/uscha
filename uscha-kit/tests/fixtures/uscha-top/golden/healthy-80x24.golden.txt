@@ -12,12 +12,12 @@ score trend  ▅▆▆▇▇  (readiness score, not closed obligations)
   AC-4    junit    MEASURED_PASS      1/1    —  —
   AC-5    junit    MEASURED_PASS      1/1    —  —
   AC-6    junit    MEASURED_PASS      1/1    —  —
-
-
-
-
 ────────────────────────────────────────────────────────────────────────────────
-feed · the live event tail is M2; nothing is invented here
+feed · no ledger step recorded yet (nothing to show)
+
+
+
+
 
 
 

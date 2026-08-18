@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-032: The engine computes the whole projection — one read-only subcommand `top --json` emits every state, cardinality, median and feed line already derived, and a field with no honest source is `null`, never invented
 
-## Status: Accepted (M1 shipped in 1.86.0; nullable fields per ADR-035; curated 2026-08-17)
+## Status: Accepted (M1 shipped in 1.86.0; feed derivation amended and shipped in 1.88.0 for M2; nullable fields per ADR-035; curated 2026-08-17)
 
 ## Context
 Decision #1 of this work: the engine computes everything and the TUI only renders
@@ -121,10 +121,49 @@ Handoff ladder: `UNMEASURED → TRACED → TAGGED → MEASURED_PASS ↘ MEASURED
 The rule: `TRACED`/`TAGGED` are never faked into existence and never rendered as `MEASURED_PASS`. They
 render in their own gray (INV-TOP-02) exactly because the ledger does not carry their facts yet.
 
-**Events feed derivation.** `events_tail[]` is built from `ledger["steps"]` (fields `n, at, kind,
-repo` exist, L1943…). `level` and `text` do **not** exist and are derived per `kind` by a fixed map
-in `cmd_top` (e.g. an oracle-pass step → `level:"pass"`), so the derivation lives once in the engine,
-not in the TUI.
+**Events feed derivation** *(amended 1.88.0, M2 — the map below is the shipped one).*
+`events_tail[]` is built from `ledger["steps"]` (fields `n, at, kind, repo` exist, L1943…). `level`
+and `text` do **not** exist and are derived per `kind` by a fixed map in `cmd_top` (`_top_events`),
+so the derivation lives once in the engine, not in the TUI.
+
+- **Order and size:** the last **8** steps, **newest first** (the board reads top-down, so the most
+  recent line is the one at the top of the pane). The TUI renders as many as fit and says `5/7` when
+  it shows fewer — a feed that silently drops lines is a feed that can hide the red one.
+- **`ts`:** the step's `at` as `HH:MM:SS` in **UTC**. A stamp carrying an offset is normalized to
+  UTC; it is never converted to the LOCAL zone, which would make one ledger read differently on two
+  boxes and break the golden frames. An unparseable stamp yields `null` → the TUI renders `—`.
+- **`level`** ∈ `{pass, fail, human, unmeasured, info}`:
+
+  | `kind` | `level` | refined from |
+  |---|---|---|
+  | `snapshot` | `info` → `fail` if the snapshot recorded red tests | the snapshot record with the same `(repo, at)` |
+  | `qa-step` | `info` → `pass` if 0 reported, or all reported were fixed | the iteration record with the same `n` |
+  | `static-gate` | `pass`/`fail` by `gated_reported` (≥1 → `fail`) | the iteration record with the same `n` |
+  | `gate-not-run` | `unmeasured` | — (a gate nobody ran is not a pass) |
+  | `cleanroom` | `pass`/`fail` by the record's `ok`, and only when it carries both a `status` and an `ok` | the k-th `clean_room` record of that repo |
+  | `escalation` | `human` | the escalation with the same `n` (its `reason` is the line's tail) |
+  | `escalation-resolved` | `human` | — (it takes a FRESH counter, so there is no record to look up: the line says what happened and nothing more) |
+  | `production-finding`, `spec-doubt`, `spec-change-request` (+ their `:resolve` twins) | `human` | — |
+  | `fastpath-eval` | `info` | the `fast_path` entry with the same `n` (its `verdict`) |
+  | anything else | `info` | — (an unclassified step is never a green one) |
+
+  The correlations are the ones the ledger really supports — by `n` where the writer copies the
+  counter into both records, in order where step and record are appended in the same call, by
+  `(repo, at)` for snapshots. **A miss degrades that one line to its neutral level, never to a
+  verdict**: the failure mode of the feed is under-claiming, by construction. The same rule covers
+  a malformed ledger: the file is JSON on disk, so any field can arrive as a list or a dict from a
+  hand edit, and one unreadable step becomes one `info` line naming its `kind` — the read-only
+  readout never raises and never drops the JSON the board depends on.
+- **`text`** is a short English line built only from step fields (`kind`, `repo`, the one or two
+  salient fields of the correlated record), capped at 72 characters. It is the **only free-text
+  field of the contract that reaches a terminal**, and it carries ledger prose (an escalation
+  reason, a tool name) that came from a human or a CLI, so the control characters are stripped
+  here, in the engine — and again in the renderer on the way out. Two cheap guards over one
+  surface. **What is filtered in v0.1 is precisely the C0 range (`\x00`-`\x1f`) and DEL
+  (`\x7f`)**; 8-bit C1 introducers (`\x9b` and friends) and Unicode format characters (bidi
+  overrides, zero-width joiners) are **not** filtered — a terminal that decodes C1 from UTF-8 is
+  outside what this guard measures, and saying so is cheaper than implying a completeness the
+  code does not have.
 
 ## Consequences / Risks
 + One JSON, one derivation. The TUI is a pure function of this object (ADR-034); a change to a KPI is
@@ -137,7 +176,7 @@ not in the TUI.
   the JSON shape is the contract the golden frames and the ACs both measure against.
 
 ## Verification
-- [ ] `qa_ledger.py top --json` emits the contract shape; every KPI/cardinality/median/feed line is computed by the engine and asserted by the smoke suite (AC-T-01..06, AC-T-09, AC-T-10)
+- [ ] `qa_ledger.py top --json` emits the contract shape; every KPI/cardinality/median/feed line is computed by the engine and asserted by the smoke suite (AC-T-01..06, AC-T-09, AC-T-10, AC-T-11)
 - [ ] the TUI computes no KPI: a frame rendered from a frozen `top --json` fixture traces every number to a JSON field (AC-T-24)
 - [ ] TRACED/TAGGED render in the UNMEASURED gray class, never as PASS (AC-T-08)
 

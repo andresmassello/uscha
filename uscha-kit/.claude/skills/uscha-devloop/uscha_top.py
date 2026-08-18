@@ -13,8 +13,8 @@ Truth-pass (INV-TOP-05): a field the engine emits as null renders as an em dash,
 zero and never as a guess. In v0.1 that is ETA, every AGE, drift, and the trace column --
 each with its deferred wiring recorded in ADR-035.
 
-M1 scope: the read-only BOARD. The live feed (M2) and VERDICTS mode (M3) are not wired; the
-panes that will hold them are labelled as such rather than faked.
+M2 scope: the read-only BOARD plus the live feed and its mtime poll. VERDICTS mode (M3) is
+not wired; the pane that will hold it is labelled as such rather than faked.
 
 Stdlib only. Python 3.8+. Runnable directly or via `python -m uscha_top`.
 """
@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 
 DEFAULT_LEDGER = "QA-LEDGER.json"
 FALLBACK_SIZE = (100, 32)
@@ -32,8 +33,9 @@ FALLBACK_SIZE = (100, 32)
 # Lines the board always spends on chrome: the title, 3 rules, 4 KPI lines, the table
 # header, the feed label and the key hint. Everything else is table rows + feed.
 CHROME_LINES = 11
-FEED_MAX = 3
+FEED_MAX = 8            # = the engine's events_tail length; a short terminal shows fewer
 BURNUP_MAX = 24
+MIN_REFRESH = 0.5       # a poll faster than this is a busy loop, not a refresh
 
 # ANSI SGR by obligation state. TRACED and TAGGED deliberately share the UNMEASURED gray:
 # the v0.1 engine has no source for either rung (ADR-032), so they must read as "not
@@ -51,6 +53,19 @@ DASH = "—"          # the honest "no source" marker (INV-TOP-05)
 MID = "·"
 RULE = "─"
 BLOCKS = "▁▂▃▄▅▆▇█"
+
+# Feed levels: one letter and one colour each. The LETTER carries the level on the plain
+# path (golden frames, pipes, CI) and the colour only decorates that same letter on a real
+# terminal -- so both paths have identical geometry and a snapshot compares text, never
+# terminal control codes. `info` is deliberately uncoloured: it is the level an unclassified
+# step falls back to, and it must not look like a verdict.
+FEED_LEVELS = {
+    "pass": ("P", "32"),
+    "fail": ("F", "31"),
+    "human": ("H", "33"),
+    "unmeasured": ("U", "90"),
+    "info": ("I", ""),
+}
 
 # What the reader is expected to DO about a row. Presentation, not a KPI: no number here.
 ACTIONS = {
@@ -121,12 +136,16 @@ def _burnup_line(burnup, cols):
 def _spec_pin_text(spec_pin):
     """git HEAD, labelled for what it is. There is no pinned-spec concept in the engine yet
     (ADR-035/4): an unverified sha must SAY it is unverified, and a non-git tree shows the
-    em dash rather than a fabricated pin (AC-T-06, INV-TOP-05)."""
+    em dash rather than a fabricated pin (AC-T-06, INV-TOP-05).
+
+    The sha is state-supplied text like any other, so it goes through `_safe`: it shares a
+    line with no colour of its own, but a frozen state carrying an escape here would put one
+    in the header, and the header is the one line every frame has."""
     if not spec_pin or not spec_pin.get("sha"):
         return "spec_pin " + DASH
     mark = ("clean-room verified" if spec_pin.get("clean_room_verified")
             else "not clean-room verified")
-    return "spec_pin %s (%s)" % (spec_pin["sha"], mark)
+    return "spec_pin %s (%s)" % (_safe(spec_pin["sha"]), mark)
 
 
 def _cases_text(ob):
@@ -139,9 +158,28 @@ def _cases_text(ob):
 def _row(ob, selected):
     gutter = "> " if selected else "  "
     return "%s%-8s%-9s%-15s%7s%5s  %s" % (
-        gutter, str(ob.get("id") or "?")[:8], str(ob.get("gate") or DASH)[:8],
-        str(ob.get("state") or "?")[:14], _cases_text(ob),
+        gutter, _safe(ob.get("id") or "?")[:8], _safe(ob.get("gate") or DASH)[:8],
+        _safe(ob.get("state") or "?")[:14], _cases_text(ob),
         _num(ob.get("age_hours")), ACTIONS.get(ob.get("state"), DASH))
+
+
+def _safe(text):
+    """No control character reaches the terminal through the feed. The engine already
+    strips them where the text is derived (`_top_event_text`); this is the second guard on
+    the same surface, because the renderer also accepts a frozen state file a human wrote,
+    and one ESC in it would be a control sequence the board obeys instead of prints."""
+    return "".join(c for c in str(text or "") if ord(c) >= 32 and ord(c) != 127)
+
+
+def _feed_line(ev, cols, plain):
+    """`HH:MM:SS  L  text` -- the level letter is the level, the colour only decorates it,
+    so the plain frame carries exactly the same information as the coloured one."""
+    letter, sgr = FEED_LEVELS.get(ev.get("level"), FEED_LEVELS["info"])
+    line = _fit("  %s  %s  %s" % (_safe(ev.get("ts")) or DASH, letter,
+                                  _safe(ev.get("text"))), cols)
+    if plain or not sgr:
+        return line
+    return line.replace("  %s  " % letter, "  \x1b[%sm%s%s  " % (sgr, letter, RESET), 1)
 
 
 def _colorize(line, state):
@@ -167,9 +205,14 @@ def render(state, size, sel=0, plain=True):
     debtors = state.get("debtors") or {}
     honesty = state.get("honesty") or {}
 
+    # every string the STATE supplies goes through _safe on its way into a line (project,
+    # spec_pin, the row cells, the feed): after that the only escapes in a frame are the
+    # ones this renderer put there, which is what lets the final width pass leave coloured
+    # lines alone without a state file being able to smuggle one in (or widen a line).
     out = []
-    out.append(_spread("uscha top %s %s" % (MID, state.get("project") or "(unnamed project)"),
-                       "step #%s" % _num(state.get("step")), cols))
+    out.append(_spread("uscha top %s %s"
+                       % (MID, _safe(state.get("project")) or "(unnamed project)"),
+                       "step #%s" % _safe(_num(state.get("step"))), cols))
     out.append(RULE * cols)
     out.append(_pct_line(terminado))
     out.append("machine owes %s %s you owe %s %s untagged %s %s ETA %s"
@@ -177,9 +220,12 @@ def render(state, size, sel=0, plain=True):
                   _num(debtors.get("untagged")), MID, _num(state.get("eta_min"))))
     # honesty travels BESIDE done on purpose (INV-TOP-04): a thin denominator has to be
     # visible at the same glance as the number it flatters.
-    out.append("honesty %s/%s (%s%%) measured %s %s"
-               % (_num(honesty.get("measured")), _num(honesty.get("total")),
-                  _num(honesty.get("pct")), MID, _spec_pin_text(state.get("spec_pin"))))
+    # fitted HERE, at construction, not only by the pass at the end: this line carries the
+    # longest state-supplied string of the header, and the end pass skips coloured lines.
+    out.append(_fit("honesty %s/%s (%s%%) measured %s %s"
+                    % (_num(honesty.get("measured")), _num(honesty.get("total")),
+                       _num(honesty.get("pct")), MID,
+                       _spec_pin_text(state.get("spec_pin"))), cols))
     out.append(_burnup_line(state.get("burnup"), cols))
     out.append(RULE * cols)
     out.append("  %-8s%-9s%-15s%7s%5s  %s"
@@ -214,17 +260,31 @@ def render(state, size, sel=0, plain=True):
     pad = avail - len(table[:max(1, table_n)]) - feed_n
     out.extend([""] * max(0, pad))
     out.append(RULE * cols)
-    events = state.get("events_tail") or []
-    out.append("feed %s the live event tail is M2; nothing is invented here" % MID)
+    events = [e for e in (state.get("events_tail") or []) if isinstance(e, dict)]
+    shown = events[:feed_n]
+    if not events:
+        # honest empty label: a ledger with no steps has nothing to feed, and saying so is
+        # not the same statement as an idle feed with the lines scrolled away (INV-TOP-05).
+        out.append("feed %s no ledger step recorded yet (nothing to show)" % MID)
+    elif not shown:
+        # the board is served first (AC-T-21), so at the 80x24 floor with a long table the
+        # feed can lose every line. It says so; it does not pretend the ledger is quiet.
+        out.append("feed %s 0/%d %s no room at this size (the board is served first)"
+                   % (MID, len(events), MID))
+    else:
+        # `3/8` says out loud that the pane is showing three of the eight steps the engine
+        # sent: a feed that silently drops lines is a feed that can hide the red one.
+        out.append("feed %s %d/%d %s newest first %s P/F/H/U/I = pass/fail/human/"
+                   "unmeasured/info" % (MID, len(shown), len(events), MID, MID))
     for i in range(feed_n):
-        if i < len(events):
-            ev = events[i]
-            out.append(_fit("  %s  %s" % (ev.get("ts") or DASH, ev.get("text") or ""), cols))
-        else:
-            out.append("")
+        out.append(_feed_line(shown[i], cols, plain) if i < len(shown) else "")
     out.append("[j/k] move %s [r] reload %s [q] quit %s [v] verdicts (M3) %s "
                "[d]/[o] phase 2" % (MID, MID, MID, MID))
-    out = [_fit(line, cols) for line in out]
+    # a coloured line was already fitted BEFORE its escape bytes went in (table rows and
+    # feed lines both), and re-fitting it here would count those bytes as visible width --
+    # cutting the coloured frame ~9 characters shorter than the plain one it is supposed to
+    # match. Fit only what carries no escapes; the golden frames are that path exactly.
+    out = [line if "\x1b" in line else _fit(line, cols) for line in out]
     # exactly `rows` lines: a frame that drifts in height is a frame no snapshot can pin
     out = out[:rows] + [""] * max(0, rows - len(out))
     return out
@@ -313,6 +373,63 @@ def read_key():
         termios.tcsetattr(fd, termios.TCSADRAIN, saved)
 
 
+def wait_key(timeout):
+    """One keypress, or "" when `timeout` seconds pass first. This is what makes the poll
+    possible without a busy loop AND without a key that waits for the next tick to be seen:
+    POSIX blocks in `select` (raw mode held for the whole window, so a single byte is
+    readable the instant it arrives), Windows walks `msvcrt.kbhit` in short slices."""
+    if os.name == "nt":
+        import msvcrt
+        deadline = time.time() + max(0.0, timeout)
+        while True:
+            if msvcrt.kbhit():
+                return read_key()
+            if time.time() >= deadline:
+                return ""
+            time.sleep(0.03)
+    import select
+    import termios
+    import tty
+    fd = sys.stdin.fileno()
+    try:
+        saved = termios.tcgetattr(fd)
+    except Exception:
+        return ""                                    # no terminal to read: never block
+    try:
+        tty.setraw(fd)
+        ready, _, _ = select.select([sys.stdin], [], [], max(0.0, timeout))
+        return sys.stdin.read(1) if ready else ""
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+
+
+def _changed(paths, seen):
+    """(changed?, new snapshot) for a set of files, by (mtime, size).
+
+    The whole of the M2 poll: no server, no watcher, no thread (ADR-031). Kept as a small
+    pure-ish function on purpose -- it is the piece the suite can actually drive (AC-T-12),
+    while a real TTY session is not. A path that cannot be stat'ed records None instead of
+    raising: a ledger deleted under the app is a CHANGE, not a crash."""
+    now = {}
+    for path in paths or []:
+        if not path:
+            continue
+        try:
+            st = os.stat(path)
+            now[path] = (st.st_mtime, st.st_size)
+        except OSError:
+            now[path] = None
+    return now != (seen if seen is not None else {}), now
+
+
+def watch_paths(args):
+    """What the poll watches: the frozen state file when one is given, otherwise the ledger
+    the engine reads. Nothing else -- `discovery/CANDIDATE-DELTA.json` is NOT watched in
+    v0.1 (the state carries no path to it), so a `discover` run that leaves the ledger
+    untouched is seen on the next `r`, not on the next tick. Under-claim, then wire."""
+    return [args.state] if getattr(args, "state", None) else [getattr(args, "ledger", None)]
+
+
 def dispatch(key, sel, count):
     """Key -> (new selection, quit?, reload?). Pure, so the keymap is testable without a
     terminal: the driver below is not what is under test, this dispatch is (ADR-034)."""
@@ -339,20 +456,48 @@ def _print_frame(lines):
     sys.stdout.flush()
 
 
+def _reload(state, args):
+    """Re-read, or keep what is on screen. A poll that catches the ledger MID-WRITE reads a
+    truncated file; the last good board plus a retry next tick is honest, a traceback over
+    a working terminal is not."""
+    try:
+        return load_state(args.state, args.ledger)
+    except (OSError, ValueError, RuntimeError):
+        return state
+
+
 def _loop(state, args):
     sel = 0
+    interval = max(MIN_REFRESH, float(args.refresh or 0))
+    paths = watch_paths(args)
+    _seed, seen = _changed(paths, {})          # the first frame is already current
+    dirty = True
     sys.stdout.write("\x1b[?25l")
     try:
         while True:
-            frame = render(state, terminal_size(args.cols, args.rows), sel=sel, plain=False)
-            sys.stdout.write("\x1b[H\x1b[2J" + "\n".join(frame))
-            sys.stdout.flush()
-            sel, quit_now, reload_now = dispatch(
-                read_key(), sel, len(state.get("obligations") or []))
-            if quit_now:
-                return 0
-            if reload_now:
-                state = load_state(args.state, args.ledger)
+            if dirty:
+                frame = render(state, terminal_size(args.cols, args.rows),
+                               sel=sel, plain=False)
+                sys.stdout.write("\x1b[H\x1b[2J" + "\n".join(frame))
+                sys.stdout.flush()
+                dirty = False
+            # one wait serves both jobs: a key answers immediately, and the deadline is the
+            # `--refresh` tick that re-reads only when a watched file actually moved.
+            key = wait_key(interval)
+            if key:
+                sel, quit_now, reload_now = dispatch(
+                    key, sel, len(state.get("obligations") or []))
+                if quit_now:
+                    return 0
+                if reload_now:
+                    state = _reload(state, args)
+                    _fresh, seen = _changed(paths, seen)
+                dirty = True
+                continue
+            moved, seen = _changed(paths, seen)
+            if moved:
+                state = _reload(state, args)
+                dirty = True
     except KeyboardInterrupt:
         return 0
     finally:
@@ -374,7 +519,8 @@ def build_parser():
     parser.add_argument("--plain", action="store_true",
                         help="never emit escape sequences")
     parser.add_argument("--refresh", type=float, default=2.0,
-                        help="reserved for the M2 timed poll; M1 re-reads on the `r` key")
+                        help="seconds between mtime polls of the ledger (default: 2, "
+                             "floor %.1f); `r` still forces a re-read" % MIN_REFRESH)
     parser.add_argument("--cols", type=int, default=None)
     parser.add_argument("--rows", type=int, default=None)
     return parser

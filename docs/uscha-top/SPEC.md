@@ -163,9 +163,18 @@ Each milestone closes with a full turn of the method (spec pinned → compile �
 - [ ] AC-T-09 — the `GATE` column shows `junit` or `curation` (never `oracle`) for a general project.
 - [ ] AC-T-10 — the `AGE` column renders `—` for every obligation in v0.1 (no first-seen timestamp,
   ADR-035).
-- [ ] AC-T-11 — the feed shows the last ≤N ledger events with timestamp and per-level color.
-- [ ] AC-T-12 — `mtime` polling every `--refresh` s (default 2); a disk change re-renders within ≤1
-  cycle.
+- [x] AC-T-11 — the engine derives `events_tail`: the last ≤8 `ledger["steps"]`, newest first, each
+  `{ts, level, text}` with `level` from the fixed per-kind map (ADR-032, amended for M2), `ts` the
+  step's `at` as UTC `HH:MM:SS`, and `text` stripped of C0 controls and DEL (8-bit C1 and Unicode
+  format characters are not filtered in v0.1 — ADR-032); a ledger with no
+  steps yields `[]`. Measured by T137 over a synthetic ledger carrying one step per kind, an unknown
+  kind, an offset timestamp and an injected ESC sequence.
+- [x] AC-T-12 — the `mtime` poll: `_changed(paths, seen)` flips on a real disk change (write, touch,
+  delete) and only then; `--refresh` defaults to 2 s with a 0.5 s floor; a `--once` frame renders the
+  derived feed with its timestamp and level letter (colour decorates the letter, so the plain and
+  coloured frames keep identical geometry). **What is measured is the polling primitive plus the
+  rendered frame, not a driven TTY session** — the interactive loop needs a terminal the suite does
+  not have, and a test that claimed one would be the over-claim the golden frames exist to prevent.
 - [ ] AC-T-13 — `v` enters VERDICTS listing only uncurated OBS, age-descending order.
 - [ ] AC-T-14 — selecting an OBS shows candidate and evidence side by side, claims not truncated.
 - [ ] AC-T-15 — `p`/`f`/`u` shells out to `curate` once per keypress (never batched) in the current

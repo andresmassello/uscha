@@ -545,12 +545,13 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   specific combination; it does not corrupt the `qa_ledger.py` or auxiliary-script figures
   above, which come from separate data files untouched by that collision.
 
-## uscha top v0.1, M1 (ADR-031/032/034) - closes on green `AC-T-nn` smoke assertions and golden frames
+## uscha top v0.1, M1+M2 (ADR-031/032/034) - closes on green `AC-T-nn` smoke assertions and golden frames
 
-Shipped in 1.86.0 (M1 = read-only board). Criteria authored in `docs/uscha-top/SPEC.md` s7 and curated
-before code; measured by T137 (engine `top --json` contract) and T138 (pure `render`, golden frames)
-through the acceptance sidecar. M2/M3 ids stay UNMEASURED (skipped testcase, never a silent pass)
-until their milestone ships. They close by the suite, like every other family prefix — and since
+Shipped in 1.86.0 (M1 = read-only board) and extended in 1.88.0 (M2 = the live feed and its mtime
+poll). Criteria authored in `docs/uscha-top/SPEC.md` s7 and curated before code; measured by T137
+(engine `top --json` contract, including the derived feed) and T138 (pure `render`, golden frames,
+the poll primitive) through the acceptance sidecar. M3 ids stay UNMEASURED (skipped testcase, never
+a silent pass) until their milestone ships. They close by the suite, like every other family prefix — and since
 1.87.0 (ADR-036) the engine also READS those family ids, so the green ones enter the measured
 pipeline instead of counting as untagged (the gap ADR-035 item 6 recorded is closed).
 
@@ -564,8 +565,8 @@ pipeline instead of counting as untagged (the gap ADR-035 item 6 recorded is clo
 - [x] AC-T-08 - TRACED and TAGGED render in the UNMEASURED-class gray, never as PASS (INV-TOP-02).
 - [x] AC-T-09 - the GATE column shows `junit` or `curation` for a general project.
 - [x] AC-T-10 - the AGE column renders `-` for every obligation in v0.1 (ADR-035).
-- [ ] AC-T-11 - (M2) the feed shows the last <=N ledger events with timestamp and per-level colour.
-- [ ] AC-T-12 - (M2) mtime polling every `--refresh` s; a disk change re-renders within <=1 cycle.
+- [x] AC-T-11 - (M2) the engine derives `events_tail`: the last <=8 steps, newest first, each `{ts, level, text}` with `level` from the fixed per-kind map, `ts` the step's `at` as UTC HH:MM:SS, `text` stripped of C0 controls and DEL (8-bit C1 and Unicode format chars are not filtered in v0.1); no steps -> `[]`.
+- [x] AC-T-12 - (M2) the mtime poll: `_changed()` flips on a real disk change and only then, `--refresh` defaults to 2 s with a 0.5 s floor, and a `--once` frame renders the derived feed with timestamp and level letter. Measures the polling PRIMITIVE plus the rendered frame, not a driven TTY session.
 - [ ] AC-T-13 - (M3) `v` enters VERDICTS listing only uncurated OBS, age-descending.
 - [ ] AC-T-14 - (M3) selecting an OBS shows candidate and evidence side by side, claims not truncated.
 - [ ] AC-T-15 - (M3) `p`/`f`/`u` shells out to `curate` once per keypress and advances; empty queue returns to BOARD.

@@ -8232,6 +8232,168 @@ def _top_ac_key(cid):
         return (2, str(cid), 0)
 
 
+TOP_EVENTS_TAIL = 8          # how many steps the feed carries; the TUI shows what fits
+TOP_EVENT_WIDTH = 72         # one feed line, short enough to survive the 80-column floor
+
+# kind -> level, the FIXED map ADR-032 (amended 1.88.0, M2) requires. `level` and `text` do
+# not exist in `ledger["steps"]`; they are derived here, once, so the TUI renders a feed it
+# did not author (ADR-034). A kind absent from this map reads `info`: an unclassified step
+# is never a green one. Four kinds get their level REFINED below from the record the step
+# announces (the iteration/escalation with the same `n`, the k-th clean-room record of the
+# repo) -- and when that correlation misses, the level stays at its neutral value instead of
+# guessing a verdict.
+TOP_EVENT_LEVELS = {
+    "snapshot": "info",                      # -> fail when the snapshot recorded red tests
+    "qa-step": "info",                       # -> pass when nothing was reported, or all fixed
+    "static-gate": "info",                   # -> pass/fail by the gated finding count
+    "cleanroom": "info",                     # -> pass/fail by the record's `ok`
+    "fastpath-eval": "info",
+    "gate-not-run": "unmeasured",            # a gate nobody ran is UNMEASURED, not a pass
+    "escalation": "human",
+    "escalation-resolved": "human",
+    "production-finding": "human",
+    "production-finding:resolve": "human",
+    "spec-doubt": "human",
+    "spec-doubt:resolve": "human",
+    "spec-change-request": "human",
+    "spec-change-request:resolve": "human",
+}
+
+
+def _top_ts(iso):
+    """HH:MM:SS in UTC, or None. A stamp carrying an offset is normalized to UTC (machine-
+    independent); it is never converted to the LOCAL zone, which would make the same ledger
+    read differently on two boxes and break the golden frames."""
+    dt = _top_dt(iso)
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%H:%M:%S")
+
+
+def _top_key(value):
+    """A dict key that cannot raise. The writers always put a scalar in `n`, `at` and `repo`,
+    but the ledger is JSON on disk and a hand edit can leave a list or a dict there --
+    `unhashable type` is not how a read-only readout gets to report that."""
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return repr(value)
+
+
+def _top_event_text(*parts):
+    """One feed line: the only free text of the whole contract that reaches a terminal.
+
+    Its ingredients are ledger prose (an escalation reason, a tool name) -- human and CLI
+    input -- so an ESC or a C0 byte inside one would be a control sequence the board prints
+    verbatim. Every control character is dropped HERE, in the engine, and the renderer drops
+    them again on the way out: two cheap guards over one attack surface."""
+    txt = " · ".join(str(p) for p in parts if p not in (None, "", "?"))
+    txt = "".join(" " if c in ("\t", "\n", "\r") else c for c in txt)
+    txt = "".join(c for c in txt if ord(c) >= 32 and ord(c) != 127)
+    txt = " ".join(txt.split())
+    if len(txt) > TOP_EVENT_WIDTH:
+        txt = txt[:TOP_EVENT_WIDTH - 1] + "…"
+    return txt
+
+
+def _top_events(ledger, limit=TOP_EVENTS_TAIL):
+    """events_tail[]: the last `limit` steps as {ts, level, text}, NEWEST FIRST.
+
+    Deterministic given the ledger and read-only, like the rest of `cmd_top`. The step
+    records carry `n, at, kind, repo` plus a few per-kind fields; everything else the feed
+    shows comes from the record that step announces, correlated the way the ledger really
+    supports it: by `n` for iterations, escalations and fast-path entries (the writer copies
+    the counter into both), in ORDER for clean-room records (step and record are appended in
+    the same call), and by `(repo, at)` for snapshots. A miss degrades that one line to
+    `info` -- under-claiming a verdict, never inventing one."""
+    nodes = dict(ledger.get("repos") or {})
+    nodes["integration"] = ledger.get("integration") or {}
+    iters, snaps = {}, {}
+    for rname, node in nodes.items():
+        for it in (node or {}).get("iterations") or []:
+            if isinstance(it, dict) and it.get("n") is not None:
+                iters[(rname, _top_key(it.get("n")))] = it
+        for sn in (node or {}).get("snapshots") or []:
+            if isinstance(sn, dict):
+                snaps.setdefault((rname, _top_key(sn.get("at"))), sn)
+    esc = {_top_key(e.get("n")): e for e in ledger.get("escalations") or []
+           if isinstance(e, dict) and e.get("n") is not None}
+    fastp = {_top_key(e.get("n")): e for e in ledger.get("fast_path") or []
+             if isinstance(e, dict) and e.get("n") is not None}
+    crs = {}
+    for rec in ledger.get(CLEAN_ROOM_KEY) or []:
+        if isinstance(rec, dict):
+            crs.setdefault(str(rec.get("repo") or ""), []).append(rec)
+    cr_seen = {}
+
+    events = []
+    for st in ledger.get("steps") or []:
+        if not isinstance(st, dict):
+            continue
+        kind = str(st.get("kind") or "")
+        level = TOP_EVENT_LEVELS.get(kind, "info")
+        try:
+            repo = str(st.get("repo") or "")
+            n = _top_key(st.get("n"))
+            head, tail = kind or "step", None
+
+            if kind == "snapshot":
+                head = "snapshot " + repo if repo else "snapshot"
+                tail = "phase %s" % st.get("phase") if st.get("phase") else None
+                tests = (snaps.get((repo, _top_key(st.get("at")))) or {}).get("tests") or {}
+                red = (tests.get("failures") or 0) + (tests.get("errors") or 0)
+                if tests.get("report_found") and red:
+                    level, tail = "fail", "%d red test(s)" % red
+            elif kind in ("qa-step", "static-gate", "gate-not-run"):
+                head = "%s %s" % (kind, "/".join(str(p) for p in (repo, st.get("tool")) if p))
+                it = iters.get((repo, n)) or {}
+                rep, fixed = it.get("reported"), it.get("fixed")
+                gated = it.get("gated_reported")
+                if kind == "gate-not-run":
+                    tail = "not run — nobody measured it"
+                elif kind == "static-gate" and isinstance(gated, int):
+                    level = "fail" if gated >= 1 else "pass"
+                    tail = "%d gated finding(s)" % gated if gated else "clean"
+                elif kind == "qa-step" and isinstance(rep, int):
+                    if rep == 0 or (isinstance(fixed, int) and fixed >= rep):
+                        level = "pass"
+                    tail = "%d reported, %s fixed" % (rep,
+                                                      fixed if fixed is not None else "?")
+            elif kind == "cleanroom":
+                head = "cleanroom " + repo if repo else "cleanroom"
+                queue = crs.get(repo) or []
+                idx = cr_seen.get(repo, 0)
+                cr_seen[repo] = idx + 1
+                rec = queue[idx] if idx < len(queue) else {}
+                if rec.get("status") and rec.get("ok") is not None:
+                    level = "pass" if rec.get("ok") else "fail"
+                    tail = str(rec.get("status"))
+            elif kind == "fastpath-eval":
+                head = "fastpath-eval " + repo if repo else "fastpath-eval"
+                tail = (fastp.get(n) or {}).get("verdict")
+            elif kind in ("escalation", "escalation-resolved"):
+                head = "%s %s" % (kind, repo) if repo else kind
+                # `escalation-resolved` gets a FRESH counter of its own, so there is no
+                # record to look up: it says what happened and nothing more.
+                tail = (esc.get(n) or {}).get("reason") if kind == "escalation" else None
+            else:
+                head = "%s %s" % (kind, repo) if repo else (kind or "step")
+                tail = st.get("id")
+            text = _top_event_text(head, tail)
+        except Exception:
+            # a ledger is JSON on disk: any field can arrive as a list, a dict or a number
+            # from a hand edit. ONE unreadable step degrades to a neutral line naming its
+            # kind -- the readout never raises and never loses the JSON the board needs
+            # (the same fail-soft rule _top_dt already applies to timestamps).
+            level, text = "info", _top_event_text(kind or "step")
+
+        events.append({"ts": _top_ts(st.get("at")), "level": level, "text": text})
+
+    events.reverse()                          # newest first, as the board reads top-down
+    return events[:max(0, int(limit))]
+
+
 def cmd_top(args):
     """`uscha top` — the WHOLE projection of the ledger as one read-only JSON (ADR-032).
 
@@ -8348,7 +8510,9 @@ def cmd_top(args):
         "generated_at": _now(),
         "obligations": obligations,
         "observations": observations,
-        "events_tail": [],                # the live feed is M2; the key ships empty, not absent
+        # the live feed (M2): the last steps, newest first, with `level`/`text` derived by the
+        # fixed per-kind map above -- in the engine, so the TUI authors no verdict of its own.
+        "events_tail": _top_events(ledger),
         "counts": {"measured_pass": done, "measured_fail": fail, "quarantine": quar,
                    "unmeasured": _n("UNMEASURED"), "traced": 0, "tagged": 0, "total": total},
         "terminado": {"done": done, "total": total, "pct": pct, "unmeasured": unmeasured},

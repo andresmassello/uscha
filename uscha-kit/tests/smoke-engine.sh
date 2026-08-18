@@ -6826,7 +6826,9 @@ for n in NAMES:
         ok = False
     if (s.get("medians") or {}).get("verdict_min") is not None:
         ok = False
-    if s.get("events_tail") != []:
+    # the feed key is always a list (it shipped empty in M1 and carries the tail since M2 --
+    # what AC-T-03 owns here is only that ETA stays null, not what the feed holds)
+    if not isinstance(s.get("events_tail"), list):
         ok = False
 res["AC-T-03"] = bool(ok)
 
@@ -7052,6 +7054,147 @@ if "skipped for quarantine scan" not in r.stderr or "ghost-repo" not in r.stderr
     ok = False
 res["reg-unreachable-repo-named-not-silent"] = bool(ok)
 
+# AC-T-11 (M2): the feed is derived BY THE ENGINE. level and text do not exist in
+# ledger["steps"] -- the fixed per-kind map in cmd_top makes them, once, so the TUI can
+# never be the place a step turns green. Asserted here over a synthetic ledger that carries
+# one step of every kind that matters, an unknown kind, an offset timestamp and an injected
+# control sequence: the tail must be the last 8 newest-first, each level must come from the
+# record the step announces, every ts must be UTC HH:MM:SS, and no control byte may survive.
+led = json.loads(io.open(os.path.join(FIX, "fixture-stale-quarantine",
+                                      "QA-LEDGER.json"), encoding="utf-8").read())
+led.pop("integrity", None)
+POISON = chr(27) + "[31m" + chr(0) + chr(7) + "spec doubt"
+node = led["repos"]["backend-api"]
+node["snapshots"] = [{"at": "2026-08-12T10:02:00+00:00",
+                      "tests": {"report_found": True, "passed": 4, "failures": 1,
+                                "errors": 0, "executed": 5}}]
+node["iterations"] = [
+    {"n": 3, "iteration": 1, "at": "2026-08-12T10:03:00+00:00", "tool": "code-review",
+     "category": "agent", "reported": 2, "fixed": 2},
+    {"n": 4, "iteration": 1, "at": "2026-08-12T10:04:00+00:00", "tool": "gate:sast",
+     "category": "static-gate", "reported": 3, "gated_reported": 3, "fixed": 0}]
+led["escalations"] = [{"n": 6, "at": "2026-08-12T10:06:00+00:00", "repo": "backend-api",
+                       "reason": "human gate open " + POISON + (" y" * 70)}]
+led["clean_room"] = [{"repo": "backend-api", "ref": "deadbee", "at": "2026-08-12T10:07:00",
+                      "ok": False, "status": "RED"}]
+led["steps"] = [
+    {"n": 1, "at": "2026-08-12T10:01:00+00:00", "kind": "fastpath-eval", "repo": "backend-api"},
+    {"n": 2, "at": "2026-08-12T10:02:00+00:00", "kind": "snapshot", "repo": "backend-api",
+     "phase": "pre"},
+    {"n": 3, "at": "2026-08-12T10:03:00+00:00", "kind": "qa-step", "repo": "backend-api",
+     "tool": "code-review", "iteration": 1},
+    {"n": 4, "at": "2026-08-12T10:04:00+00:00", "kind": "static-gate", "repo": "backend-api",
+     "tool": "gate:sast", "iteration": 1},
+    {"n": 5, "at": "2026-08-12T10:05:00+00:00", "kind": "gate-not-run", "repo": "backend-api",
+     "tool": "gate:license", "iteration": 1},
+    {"n": 6, "at": "2026-08-12T10:06:00+00:00", "kind": "escalation", "repo": "backend-api"},
+    {"n": 7, "at": "2026-08-12T10:07:00+00:00", "kind": "cleanroom", "repo": "backend-api"},
+    {"n": 8, "at": "2026-08-12T10:08:00+00:00", "kind": "a-kind-no-engine-writes",
+     "repo": "backend-api"},
+    {"n": 9, "at": "2026-08-12T07:09:00-03:00", "kind": "spec-doubt", "repo": "backend-api",
+     "id": "SD-0001"},
+]
+tmp_feed = tempfile.mkdtemp(prefix="uscha-top-feed-")
+io.open(os.path.join(tmp_feed, "QA-LEDGER.json"), "w", encoding="utf-8").write(
+    json.dumps(led))
+r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                   cwd=tmp_feed, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   text=True, encoding="utf-8", errors="replace")
+try:
+    ev = (json.loads(r.stdout) or {}).get("events_tail")
+except ValueError:
+    ev = None
+ok = r.returncode == 0 and isinstance(ev, list) and len(ev) == 8
+if ok:
+    # newest first, and the NINE steps are cut to the last eight -- the oldest is the one
+    # that goes, never a silent reordering
+    if [e.get("ts") for e in ev] != ["10:09:00", "10:08:00", "10:07:00", "10:06:00",
+                                     "10:05:00", "10:04:00", "10:03:00", "10:02:00"]:
+        ok = False
+    # one level per kind, each from the record the step announces: spec-doubt is a human
+    # debt, an unknown kind is info (never green), a red snapshot and a gated static gate
+    # and a RED clean room are failures, a gate nobody ran is UNMEASURED, and a qa-step that
+    # fixed everything it reported passes.
+    if [e.get("level") for e in ev] != ["human", "info", "fail", "human",
+                                        "unmeasured", "fail", "pass", "fail"]:
+        ok = False
+    if [str(e.get("text")).split(" ")[0] for e in ev] != [
+            "spec-doubt", "a-kind-no-engine-writes", "cleanroom", "escalation",
+            "gate-not-run", "static-gate", "qa-step", "snapshot"]:
+        ok = False
+    for e in ev:
+        if sorted(e) != ["level", "text", "ts"] or len(e.get("text") or "") > 72:
+            ok = False
+        # the ONE free-text field that reaches a terminal: no ESC, no C0, no DEL survives
+        for ch in str(e.get("text") or ""):
+            if ord(ch) < 32 or ord(ch) == 127:
+                ok = False
+    if chr(27) in json.dumps(ev) or "u001b" in json.dumps(ev):
+        ok = False
+    # the 72-char cap is a real cut, not a hope: the escalation reason above is far longer,
+    # so its line must come back exactly 72 characters ending in the truncation marker
+    longer = [e for e in ev if str(e.get("text")).startswith("escalation ")]
+    if len(longer) != 1 or len(longer[0]["text"]) != 72:
+        ok = False
+    elif not longer[0]["text"].endswith(chr(8230)):
+        ok = False
+
+# a hand-edited ledger can put a dict where a string belongs. The read-only readout must
+# still exit 0 with a full tail: an unreadable step degrades to ONE neutral line, it never
+# raises a TypeError over the whole board and never drops the JSON. Its own case, because
+# its own failure is its own sentence: "the feed crashed the readout", not "the map is wrong".
+okm = True
+led["repos"]["backend-api"]["iterations"].append(
+    {"n": {"not": "a number"}, "iteration": 9, "at": "2026-08-12T10:10:00+00:00"})
+led["clean_room"][0]["repo"] = ["backend-api"]
+led["steps"].extend([
+    {"n": 10, "at": "2026-08-12T10:10:00+00:00", "kind": "qa-step", "repo": "backend-api",
+     "tool": {"deep": [1, 2]}, "iteration": 1},
+    {"n": [11], "at": "2026-08-12T10:11:00+00:00", "kind": "snapshot",
+     "repo": {"name": "backend-api"}, "phase": ["pre"]},
+    {"n": 12, "at": "2026-08-12T10:12:00+00:00", "kind": "cleanroom",
+     "repo": "backend-api"},
+])
+io.open(os.path.join(tmp_feed, "QA-LEDGER.json"), "w", encoding="utf-8").write(
+    json.dumps(led))
+r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                   cwd=tmp_feed, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   text=True, encoding="utf-8", errors="replace")
+try:
+    ev = (json.loads(r.stdout) or {}).get("events_tail")
+except ValueError:
+    ev = None
+if r.returncode != 0 or not isinstance(ev, list) or len(ev) != 8:
+    okm = False
+else:
+    LEVELS = ("pass", "fail", "human", "unmeasured", "info")
+    for e in ev:
+        if e.get("level") not in LEVELS or not isinstance(e.get("text"), str):
+            okm = False
+        for ch in e.get("text") or "":
+            if ord(ch) < 32 or ord(ch) == 127:
+                okm = False
+    # the three malformed steps are the newest three, and each still NAMES its kind
+    if [str(e.get("text")).split(" ")[0] for e in ev[:3]] != ["cleanroom", "snapshot",
+                                                              "qa-step"]:
+        okm = False
+res["reg-top-events-malformed-fields-degrade"] = bool(okm)
+
+# a ledger with no steps feeds nothing -- an empty list, not an absent key and not a line
+# invented to fill the pane
+led["steps"] = []
+io.open(os.path.join(tmp_feed, "QA-LEDGER.json"), "w", encoding="utf-8").write(
+    json.dumps(led))
+r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                   cwd=tmp_feed, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   text=True, encoding="utf-8", errors="replace")
+try:
+    if (json.loads(r.stdout) or {}).get("events_tail") != []:
+        ok = False
+except ValueError:
+    ok = False
+res["AC-T-11"] = bool(ok)
+
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 io.open(os.path.join(side, ".top-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
@@ -7060,7 +7203,7 @@ print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
 )
 case "$T137" in
-  OK*) PASS=$((PASS+1)); echo "  ok   uscha-top contract (AC-T-01,02,03,04,05,06,09,10,24): $T137";;
+  OK*) PASS=$((PASS+1)); echo "  ok   uscha-top contract (AC-T-01,02,03,04,05,06,09,10,11,24): $T137";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T137";;
 esac
 
@@ -7210,8 +7353,8 @@ res["AC-T-07"] = bool(ok)
 
 # AC-T-18: stdlib only, importable, and runnable through python -m -- the kit ships no
 # dependency and this criterion is what keeps it that way.
-STDLIB = {"argparse", "json", "os", "shutil", "subprocess", "sys", "ctypes", "msvcrt",
-          "termios", "tty"}
+STDLIB = {"argparse", "json", "os", "shutil", "subprocess", "sys", "time", "ctypes",
+          "msvcrt", "select", "termios", "tty"}
 tree = ast.parse(io.open(TUI, encoding="utf-8").read())
 imported = set()
 for node in ast.walk(tree):
@@ -7280,6 +7423,134 @@ if uv38:
     ok38 = (r.returncode == 0 and got == piped)
 res["AC-T-19b"] = bool(ok38)
 
+# AC-T-12 (M2): the mtime poll. What is measured here is the POLLING PRIMITIVE and the
+# rendered feed -- NOT a driven TTY session: the interactive loop needs a terminal this
+# suite does not have, and a test that pretended otherwise would be the over-claim the
+# golden frames exist to prevent. The primitive is where the honesty lives anyway: it must
+# flip on a real disk change and must NOT flip otherwise, or the board either misses a
+# write or re-reads the ledger forever.
+ok = True
+tmp_poll = tempfile.mkdtemp(prefix="uscha-top-poll-")
+watched = os.path.join(tmp_poll, "QA-LEDGER.json")
+io.open(watched, "w", encoding="utf-8").write("{}")
+moved, seen = uscha_top._changed([watched], {})
+if not moved:
+    ok = False                    # the first look at a file that exists IS news
+moved, seen = uscha_top._changed([watched], seen)
+if moved:
+    ok = False                    # nobody touched it: no re-read, no busy loop
+stt = os.stat(watched)
+os.utime(watched, (stt.st_atime + 5, stt.st_mtime + 5))
+moved, seen = uscha_top._changed([watched], seen)
+if not moved:
+    ok = False                    # a disk change is seen on the NEXT cycle
+moved, seen = uscha_top._changed([watched], seen)
+if moved:
+    ok = False
+# SIZE is half the snapshot on purpose: a coarse filesystem clock can hand back the very
+# same mtime for a rewrite that happened inside its resolution, and a poll that watched the
+# clock alone would show a stale board with no way to notice.
+stt = os.stat(watched)
+io.open(watched, "w", encoding="utf-8").write("{" + chr(34) + "a" + chr(34) + ": 1}")
+os.utime(watched, (stt.st_atime, stt.st_mtime))
+moved, seen = uscha_top._changed([watched], seen)
+if not moved:
+    ok = False                    # same mtime, different length: still a change
+os.remove(watched)
+moved, seen = uscha_top._changed([watched], seen)
+if not moved:
+    ok = False                    # a ledger deleted under the app is a change, not a crash
+if uscha_top._changed([watched], seen)[0]:
+    ok = False                    # and a path that stays missing stays quiet
+
+
+class _Args(object):
+    ledger = "L.json"
+    state = None
+
+
+if uscha_top.watch_paths(_Args()) != ["L.json"]:
+    ok = False
+_Args.state = "S.json"
+if uscha_top.watch_paths(_Args()) != ["S.json"]:
+    ok = False
+if uscha_top.build_parser().parse_args([]).refresh != 2.0:
+    ok = False
+if uscha_top.MIN_REFRESH != 0.5:
+    ok = False
+
+# the other half of the same criterion: one --once frame over a fixture WITH steps carries
+# the feed the engine derived -- timestamp, level letter, text -- and not one escape byte.
+d2 = os.path.join(FIX, "fixture-stale-quarantine")
+r = subprocess.run([sys.executable, TUI, "--ledger", "QA-LEDGER.json", "--once",
+                    "--cols", "100", "--rows", "32"],
+                   cwd=d2, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+frame = r.stdout.decode("utf-8").replace(chr(13), "").split(chr(10))[:-1]
+if r.returncode != 0 or chr(27).encode("ascii") in r.stdout:
+    ok = False
+sq = state("stale-quarantine")
+evs = sq.get("events_tail") or []
+LETTER = {"pass": "P", "fail": "F", "human": "H", "unmeasured": "U", "info": "I"}
+if len(evs) < 5 or len(set(e.get("level") for e in evs)) < 5:
+    ok = False                    # a fixture that misses a level proves nothing about it
+for e in evs:
+    if "  %s  %s  %s" % (e.get("ts"), LETTER[e.get("level")], e.get("text")) not in frame:
+        ok = False
+if not any(ln.startswith("feed ") and "newest first" in ln for ln in frame):
+    ok = False
+# per-level colour belongs to the coloured path, and it colours the LETTER, so that frame
+# and the plain one keep identical geometry and the golden oracle still compares text
+col = uscha_top.render(sq, (100, 32), sel=0, plain=False)
+if not any(chr(27) + "[31mF" in ln for ln in col):
+    ok = False
+if not any(chr(27) + "[33mH" in ln for ln in col):
+    ok = False
+if any(chr(27) in ln for ln in uscha_top.render(sq, (100, 32), sel=0, plain=True)):
+    ok = False
+# the SECOND sanitizer, the one in the renderer: render() also takes a frozen state file a
+# human wrote, so a control byte arriving in an event text must die on the way out too
+poisoned = json.loads(json.dumps(sq))
+poisoned["events_tail"][0]["text"] = "boom" + chr(27) + "[31m" + chr(0) + "tail"
+pf = uscha_top.render(poisoned, (100, 32), sel=0, plain=True)
+if any(chr(27) in ln or chr(0) in ln for ln in pf):
+    ok = False
+if not any("boom" in ln for ln in pf):
+    ok = False                    # sanitized, not swallowed
+# the "no room" label: at the 80x24 floor a long board leaves the feed no line at all, and
+# the pane says so instead of reading like a quiet ledger. Synthetic on purpose (the
+# obligations of N1 with the events of F2) -- no shipped fixture has both at once.
+crowded = json.loads(json.dumps(state("honesty-negative")))
+crowded["events_tail"] = sq.get("events_tail") or []
+cf = uscha_top.render(crowded, (80, 24), sel=0, plain=True)
+if not any(ln.startswith("feed ") and "no room at this size" in ln for ln in cf):
+    ok = False
+if len(cf) != 24 or max(len(ln) for ln in cf) > 80:
+    ok = False
+res["AC-T-12"] = bool(ok)
+
+# render() promises no line wider than the terminal. Every string the STATE supplies is a
+# way to falsify that promise -- and to smuggle an escape into a frame the golden oracle
+# compares as text -- because the final width pass leaves coloured lines alone. A state
+# built to break both must come back fitted and clean at every size.
+hostile = json.loads(json.dumps(state("stale-quarantine")))
+hostile["spec_pin"] = {"sha": chr(27) + "[7m" + ("Q" * 300), "clean_room_verified": False}
+hostile["project"] = chr(27) + "[5m" + ("P" * 200)
+hostile["obligations"][0]["id"] = chr(27) + "[1mZZ"
+hostile["obligations"][0]["gate"] = chr(0) + "junit"
+hostile["events_tail"][0]["text"] = "x" * 400 + chr(27) + "[1m"
+hostile["events_tail"][0]["ts"] = chr(27) + "[2m00:00:00"
+ok = True
+for cols, rows in SIZES:
+    hf = uscha_top.render(hostile, (cols, rows), sel=0, plain=True)
+    if len(hf) != rows or max(len(ln) for ln in hf) > cols:
+        ok = False
+    if any(chr(27) in ln or chr(0) in ln for ln in hf):
+        ok = False
+    hc = uscha_top.render(hostile, (cols, rows), sel=0, plain=False)
+    if len(hc) != rows:
+        ok = False
+res["reg-top-render-state-text-cannot-widen-or-escape"] = bool(ok)
+
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 sp = os.path.join(side, ".top-cases.json")
@@ -7294,7 +7565,7 @@ print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
 )
 case "$T138" in
-  OK*) PASS=$((PASS+1)); echo "  ok   uscha-top golden frames (AC-T-07,08,18,19,20,21,22,23): $T138";;
+  OK*) PASS=$((PASS+1)); echo "  ok   uscha-top golden frames (AC-T-07,08,12,18,19,20,21,22,23): $T138";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T138";;
 esac
 
@@ -8935,8 +9206,8 @@ for _rtid in ("AC-RT-01", "AC-RT-02", "AC-RT-03"):
     else:
         results.append((_rtid, "round-trip", "T136 case failed or missing"))
 
-# uscha top criteria (ADR-031..034): M1 ids measured by T137/T138 through the same sidecar
-# contract; M2/M3 ids (11..17) are SKIP = UNMEASURED on purpose until their milestone ships.
+# uscha top criteria (ADR-031..034): M1+M2 ids measured by T137/T138 through the same
+# sidecar contract; M3 ids (13..17) are SKIP = UNMEASURED on purpose until M3 ships.
 def _top_cases():
     p = os.path.join(kit, "reports", "junit", ".top-cases.json")
     try:

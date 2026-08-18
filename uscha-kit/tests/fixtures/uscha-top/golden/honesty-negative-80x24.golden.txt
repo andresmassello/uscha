@@ -20,5 +20,5 @@ score trend  ▆▇█  (readiness score, not closed obligations)
   AC-12   junit    MEASURED_PASS      1/1    —  —
   — 12 more obligation(s) not shown (j/k to move)
 ────────────────────────────────────────────────────────────────────────────────
-feed · the live event tail is M2; nothing is invented here
+feed · no ledger step recorded yet (nothing to show)
 [j/k] move · [r] reload · [q] quit · [v] verdicts (M3) · [d]/[o] phase 2

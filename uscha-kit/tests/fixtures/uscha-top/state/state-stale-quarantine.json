@@ -143,7 +143,43 @@
       "age_hours": null
     }
   ],
-  "events_tail": [],
+  "events_tail": [
+    {
+      "ts": "11:30:00",
+      "level": "human",
+      "text": "escalation backend-api · spec doubt raised mid-loop; human gate open"
+    },
+    {
+      "ts": "11:25:00",
+      "level": "fail",
+      "text": "static-gate backend-api/gate:sast · 2 gated finding(s)"
+    },
+    {
+      "ts": "11:20:00",
+      "level": "pass",
+      "text": "qa-step backend-api/improve · 0 reported, 0 fixed"
+    },
+    {
+      "ts": "11:05:00",
+      "level": "unmeasured",
+      "text": "gate-not-run backend-api/gate:license · not run — nobody measured it"
+    },
+    {
+      "ts": "10:40:00",
+      "level": "info",
+      "text": "qa-step backend-api/judgment-day · 3 reported, 1 fixed"
+    },
+    {
+      "ts": "10:00:00",
+      "level": "pass",
+      "text": "qa-step backend-api/code-review · 4 reported, 4 fixed"
+    },
+    {
+      "ts": "09:59:00",
+      "level": "info",
+      "text": "snapshot backend-api · phase pre"
+    }
+  ],
   "counts": {
     "measured_pass": 2,
     "measured_fail": 1,

@@ -6,7 +6,7 @@ governs:
 ---
 # ADR-031: `uscha top` is a raw-ANSI terminal projection of the ledger — no curses, no server, wired the way `mirador` is, so the programmer meets the method where they already live
 
-## Status: Accepted (M1 shipped in 1.86.0; curated 2026-08-17)
+## Status: Accepted (M1 shipped in 1.86.0; the `mtime` poll shipped in 1.88.0 for M2; curated 2026-08-17)
 
 ## Context
 The existing `mirador` (`uscha-mirador`) renders a static HTML dashboard post-hoc. It is a report:
@@ -77,6 +77,7 @@ Constraints inherited from the kit and confirmed against the engine audit:
 - [ ] no TTY -> `--once` prints one plain frame and exits 0 (AC-T-20)
 - [ ] Windows legacy conhost: VT enabled via `SetConsoleMode` (ctypes); on failure the app degrades to the `--once` plain frame, never raw escapes (AC-T-22)
 - [ ] 80x24 degradation keeps the layout intact, feed shortens first (AC-T-21)
+- [ ] no server: the state is re-read only when a watched file's `mtime`/size moved, polled every `--refresh` s (default 2, floor 0.5); the primitive is asserted directly, the TTY session is not (AC-T-12)
 
 ## What this ADR does NOT decide
 - The JSON shape or the per-obligation state ladder — **ADR-032**.

@@ -19,14 +19,14 @@ score trend  ▄▅▅  (readiness score, not closed obligations)
 
 
 
-
-
-
-
-
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-feed · the live event tail is M2; nothing is invented here
-
-
+feed · 7/7 · newest first · P/F/H/U/I = pass/fail/human/unmeasured/info
+  11:30:00  H  escalation backend-api · spec doubt raised mid-loop; human gate open
+  11:25:00  F  static-gate backend-api/gate:sast · 2 gated finding(s)
+  11:20:00  P  qa-step backend-api/improve · 0 reported, 0 fixed
+  11:05:00  U  gate-not-run backend-api/gate:license · not run — nobody measured it
+  10:40:00  I  qa-step backend-api/judgment-day · 3 reported, 1 fixed
+  10:00:00  P  qa-step backend-api/code-review · 4 reported, 4 fixed
+  09:59:00  I  snapshot backend-api · phase pre
 
 [j/k] move · [r] reload · [q] quit · [v] verdicts (M3) · [d]/[o] phase 2
