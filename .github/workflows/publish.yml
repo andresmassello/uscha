@@ -21,6 +21,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: read      # to read the smoke run recorded for this exact SHA (see below)
 
 jobs:
   publish:
@@ -67,13 +68,38 @@ jobs:
             exit 1
           }
 
-      # The full 6-cell matrix already ran on the COMMIT this tag points at. Trusting that
-      # it did would be narrating. Publishing is irreversible (npm unpublish is a 72h
-      # courtesy, not an undo), so the bytes about to ship are measured HERE, once more,
-      # in the job that ships them. T44 inside this suite also re-checks that all version
-      # surfaces agree -- the guard above only compares one of them to the tag.
-      - name: Smoke suite (the bytes being published must be green in THIS job)
+      # The full 6-cell matrix runs on every push to main. Publishing is irreversible (npm
+      # unpublish is a 72h courtesy, not an undo), so the bytes about to ship must be green
+      # -- and "green" has to be a MEASURED fact about THESE bytes, never a belief. Same SHA
+      # = same bytes, so a completed, successful `smoke` run recorded by GitHub for exactly
+      # this commit IS that measurement (a fact in GitHub's ledger, not a narration). When
+      # such a run exists, it is cited as the receipt and the suite is not repeated here
+      # (~30 min saved per release, decided 2026-08-18). When it does not -- a tag on an
+      # untested commit, an in-progress or failed run, an API hiccup -- this job FAILS CLOSED
+      # into running the suite itself, exactly as it always did.
+      - name: Find the smoke run recorded for THIS SHA
+        id: prior
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&per_page=50"                  --jq '[.workflow_runs[] | select(.name=="smoke" and .status=="completed" and .conclusion=="success")] | sort_by(.run_number) | last | .html_url // empty' 2>/dev/null || true)"
+          if [ -n "${RUN}" ]; then
+            echo "smoke already green for ${GITHUB_SHA}: ${RUN}"
+            echo "reuse=true" >> "$GITHUB_OUTPUT"
+            echo "url=${RUN}" >> "$GITHUB_OUTPUT"
+          else
+            echo "no completed+successful smoke run recorded for ${GITHUB_SHA} -- the suite runs here (fail-closed)."
+            echo "reuse=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Smoke suite (only when no green run exists for these exact bytes)
+        if: steps.prior.outputs.reuse != 'true'
         run: bash uscha-kit/tests/smoke-engine.sh
+
+      - name: Receipt of the measurement this publish relies on
+        if: steps.prior.outputs.reuse == 'true'
+        run: echo "publishing on the strength of ${{ steps.prior.outputs.url }} (same SHA, 6/6 cells)"
 
       # What actually leaves the machine. The suite's packaging tests assert the tarball's
       # shape; this prints its real contents so the run log is the receipt of what shipped.
