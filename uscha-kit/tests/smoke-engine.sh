@@ -304,11 +304,30 @@ if [ "${USCHA_COVERAGE:-0}" = "1" ]; then
   # while T117 was measuring nine criteria against it. Same class of blindness as uscha_top,
   # one layer deeper. The fix is coverage.py's own documented multiprocess technique -- the
   # one `cmd_golden_coverage` already uses: a sitecustomize on PYTHONPATH plus
-  # COVERAGE_PROCESS_START, so EVERY python the suite spawns, at any depth, joins the same
-  # parallel data set. The rc file carries the source roots as a LIST (an rc list is
-  # additive; the CLI flag is last-wins, which is why run()/runpy() still pass their own).
-  # Paths go through python so a git-bash /c/... never reaches a Windows interpreter that
-  # cannot read it: argv is MSYS-rewritten, an rc file's contents are not.
+  # COVERAGE_PROCESS_START, so every python the suite spawns TO RUN KIT CODE, at any depth,
+  # joins the same parallel data set. The rc file carries the source roots as a LIST (an rc
+  # list is additive; the CLI flag is last-wins, which is why run()/runpy() still pass their
+  # own). Paths go through python so a git-bash /c/... never reaches a Windows interpreter
+  # that cannot read it: argv is MSYS-rewritten, an rc file's contents are not.
+  #
+  # WHAT THIS SEAM ACTUALLY IS, because it took three instrumented runs to find out (1.90.0):
+  # `COVERAGE_PROCESS_START` alone is the switch. coverage.py 7.x ships its own
+  # `a1_coverage.pth` in site-packages, and a .pth runs BEFORE sitecustomize, so with that
+  # variable exported EVERY python process starts a full Coverage at interpreter start-up --
+  # whether or not this sitecustomize exists, and with no way for this sitecustomize to opt a
+  # process out (by the time it runs, coverage is already started). The file below is the
+  # portable fallback for a coverage build that does not ship that .pth; it is not the filter,
+  # and there cannot be one here.
+  # The blast radius is the point. Most pythons this suite spawns are the diamond-bench
+  # COMPILED IMPLEMENTATIONS the withheld oracle judges -- fixture programs outside every
+  # --source root, so their data is empty by construction. Measured: ~14,000 children,
+  # "Combined 600 files, skipped 13702" -- 96% recorded nothing, each still paying an
+  # `import coverage` and a data file. Late in the run Windows began refusing to create
+  # processes and T136 went red: seven bench archetypes flipped to FAIL because an oracle
+  # child could not start, and a py3.8 interpreter returned 3221225794 (0xC0000142,
+  # STATUS_DLL_INIT_FAILED) with an empty stderr. The fix belongs where the boundary is, not
+  # here: `_judged_env()` in the engine drops the two coverage start-up variables from the
+  # environment of a program the oracle is judging (T119 pins it). The suite keeps the seam.
   COV_RC="$ROOT/.coverage-data/cov.rc"
   COV_SITE="$ROOT/.coverage-data/sitecustomize"
   mkdir -p "$COV_SITE"
@@ -5328,6 +5347,48 @@ res["AC-BS-06"] = (len(recs) == 1 and recs[0].get("oracle_green") is False
                    and len(recs[0].get("failing", [])) > 0
                    and rc_r2 == 0 and rep_r2.get("oracle_green") is True)
 
+# A judged program is measured on its BEHAVIOUR, so the oracle must not hand it the parent's
+# instrumentation (1.90.0). coverage.py 7.x ships `a1_coverage.pth`, which starts a full
+# Coverage in every python process that sees COVERAGE_PROCESS_START -- at interpreter start-up,
+# before the program runs. Under USCHA_COVERAGE=1 that reached ~14,000 fixture children whose
+# data is empty by construction, and Windows eventually refused to create processes (an oracle
+# child that will not start reads as a compilation that failed its cases -- a wrong red about
+# the fixture, produced by the instrument). `_judged_env()` drops the coverage START variables
+# on the way into the child. Measured by RUNNING the oracle with the variable planted: the impl
+# prints what it can see, and the case expects `clean`. Note the honest limit: only
+# COVERAGE_PROCESS_START is planted here -- COVERAGE_PROCESS_CONFIG carries serialized config
+# and a junk value would take down every python in this subtree, so the impl reports the whole
+# COVERAGE_PROCESS_* class instead and the assertion is written against the class.
+envdir = os.path.join(w, "judged-env")
+os.makedirs(os.path.join(envdir, "oracle"))
+io.open(os.path.join(envdir, "impl.py"), "w", encoding="utf-8", newline="\n").write(
+    "import os\nimport sys\n"
+    "sys.stdin.read()\n"
+    "seen = sorted(k for k in os.environ if k.startswith(\x27COVERAGE_PROCESS_\x27))\n"
+    "sys.stdout.write(\x27,\x27.join(seen) or \x27clean\x27)\n")
+io.open(os.path.join(envdir, "oracle", "ORACLE.json"), "w", encoding="utf-8",
+        newline="\n").write(json.dumps({"cases": [
+    {"name": "no coverage start-up hook reaches a judged program",
+     "payload": None, "expected_exit": 0, "expected_stdout": "clean"}]}))
+io.open(os.path.join(envdir, "cov.rc"), "w", encoding="utf-8", newline="\n").write(
+    "[run]\nparallel = True\ndata_file = %s\n"
+    % os.path.join(envdir, ".coverage").replace("\\", "/"))
+env_planted = dict(os.environ)
+env_planted["COVERAGE_PROCESS_START"] = os.path.join(envdir, "cov.rc")
+r_env = subprocess.run([sys.executable, ENG, "bootstrap-oracle",
+                        "--impl", os.path.join(envdir, "impl.py"),
+                        "--oracle", os.path.join(envdir, "oracle", "ORACLE.json"), "--json"],
+                       env=env_planted, capture_output=True, text=True, encoding="utf-8",
+                       errors="replace")
+try:
+    rep_env = json.loads(r_env.stdout)
+except ValueError:
+    rep_env = {}
+res["reg-oracle-child-gets-no-coverage-hook"] = bool(
+    r_env.returncode == 0 and rep_env.get("oracle_green") is True
+    and all(c.get("ok") for c in rep_env.get("results", []))
+    and rep_env.get("total") == 1)
+
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 io.open(os.path.join(side, ".bootstrap-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
@@ -6700,7 +6761,7 @@ def bench_json(dirpath):
     try:
         return json.loads(r.stdout)
     except ValueError:
-        return {}
+        return {"_failed": {"rc": r.returncode, "err": (r.stderr or "")[-400:]}}
 
 def rt_json(dirpath, out=None, py=sys.executable):
     args = ["bench-roundtrip", "--dir", dirpath, "--json"]
@@ -6710,7 +6771,9 @@ def rt_json(dirpath, out=None, py=sys.executable):
     try:
         return json.loads(r.stdout)
     except ValueError:
-        return {}
+        # the process is kept ON the empty result so a red can say WHY it is empty
+        # (exit code + the tail of stderr) instead of only that it is (1.90.0)
+        return {"_failed": {"rc": r.returncode, "err": (r.stderr or "")[-400:]}}
 
 def snapshot(d):
     out = set()
@@ -6770,6 +6833,37 @@ bench_ok = (len(b0.get("raw", [])) == 12
            and all(byarch.get(a, {}).get("verdict") == v for a, v in WANT_VERDICT.items()))
 
 res["AC-RT-01"] = bool(phrase_ok and no_new_ir and all_measured_12 and lang_ok and bench_ok)
+# A criterion that fails by name only is a criterion nobody can act on: this block folds five
+# independent measurements into AC-RT-01 and three into AC-RT-03, so the red carries WHICH of
+# them went red (1.90.0 -- the coverage run reported the two ids and nothing else, and the
+# whole diagnosis had to be reconstructed by hand).
+why = {"AC-RT-01": [n for n, v in (("phrases", phrase_ok), ("no-new-IR", no_new_ir),
+                                   ("12-measured", all_measured_12), ("lang", lang_ok),
+                                   ("bench-verdicts", bench_ok)) if not v]}
+# ...and each failing sub-check carries the measurement that made it fail. A pinned number
+# that moved is only actionable next to the number it moved to.
+if not lang_ok:
+    why["AC-RT-01"].append("lang=%s free-var=%s ctrl-var=%s free-pr=%s ctrl-pr=%s"
+                           % (rep_sh.get("verdict"),
+                              (rep_sh.get("free") or {}).get("variance_score"),
+                              (rep_sh.get("controlled") or {}).get("variance_score"),
+                              (rep_sh.get("free") or {}).get("mean_passrate"),
+                              (rep_sh.get("controlled") or {}).get("mean_passrate")))
+    if rc_sh.returncode != 0:
+        why["AC-RT-01"].append("lang-compare exit %d %s"
+                               % (rc_sh.returncode, (rc_sh.stderr or "")[-200:]))
+if not bench_ok:
+    moved = ["%s got %s want %s" % (a, byarch.get(a, {}).get("verdict"), v)
+             for a, v in sorted(WANT_VERDICT.items())
+             if byarch.get(a, {}).get("verdict") != v]
+    why["AC-RT-01"].append("verdicts moved: " + ("; ".join(moved) or "none, %d entries"
+                                                 % len(b0.get("raw") or [])))
+    if b0.get("_failed"):
+        why["AC-RT-01"].append("bench --json failed: %s" % json.dumps(b0["_failed"]))
+if not no_new_ir:
+    why["AC-RT-01"].append("files appeared: %s" % sorted(after - before)[:6])
+if d0.get("_failed"):
+    why["AC-RT-01"].append("bench-roundtrip --json failed: %s" % json.dumps(d0["_failed"]))
 
 # AC-RT-02: every compilation's per-node accounting is internally consistent, and the manifest
 # footing is never counted as recovered -- the tautology this instrument was built to name.
@@ -6821,16 +6915,38 @@ agg_ok = (agg.get("mean_recoverability") == 0.062 and agg.get("with_edges") == 1
 uv38_candidates = glob.glob(os.path.expanduser(
     "~/AppData/Roaming/uv/python/cpython-3.8*/python.exe"))
 uv38_ok = True
+d38 = {}
 if uv38_candidates:
     d38 = rt_json(BENCH, py=uv38_candidates[0])
     uv38_ok = (d38.get("aggregate") == agg)
 res["AC-RT-03"] = bool(per_entry_ok and agg_ok and uv38_ok)
+why["AC-RT-03"] = [n for n, v in (("per-entry-means", per_entry_ok), ("aggregate", agg_ok),
+                                  ("py38-agrees", uv38_ok)) if not v]
+# the aggregate itself travels with the red: a mean that moved says more in one line than the
+# name of the criterion that noticed
+if not res["AC-RT-03"]:
+    why["AC-RT-03"].append("agg=%s" % json.dumps(agg, sort_keys=True))
+if not per_entry_ok:
+    why["AC-RT-03"].append("means moved: %s"
+                           % "; ".join("%s got %s want %s"
+                                       % (r["archetype"], r.get("recoverability_mean"),
+                                          WANT_MEAN.get(r["archetype"]))
+                                       for r in recs
+                                       if r.get("recoverability_mean")
+                                       != WANT_MEAN.get(r["archetype"])))
+if not uv38_ok:
+    why["AC-RT-03"].append("py38=%s (%s)"
+                           % (json.dumps(d38.get("aggregate"), sort_keys=True),
+                              json.dumps(d38["_failed"]) if d38.get("_failed") else "parsed"))
+    why["AC-RT-03"].append("py38 interpreter %s" % (uv38_candidates[0] if uv38_candidates
+                                                    else "none"))
 
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 io.open(os.path.join(side, ".rt-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
 bad = [k for k, v in res.items() if not v]
-print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(
+    "%s(%s)" % (k, ",".join(why.get(k) or ["?"])) for k in sorted(bad)))
 PY
 )
 case "$T136" in

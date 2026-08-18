@@ -520,22 +520,27 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   choke point the suite drives the engine through — ~370 subprocess calls — and the combined
   Cobertura report lands in `reports/coverage.xml`. Opt-in, so the default suite stays fast
   and needs no `coverage.py`.
-  **Re-measured for 1.82.0** (D-03 widened the seam — see below): `qa_ledger.py` is **58%**
-  (6266 statements, 2656 missed) against a declared threshold of 60 — down from the **84.2%**
+  **Re-measured for 1.82.0** (D-03 widened the seam): `qa_ledger.py` read **58%** (6266
+  statements, 2656 missed) against a declared threshold of 60 — down from the **84.2%**
   recorded on 2026-07-23, and genuinely so: the committed `reports/coverage.xml` from that date
-  shows only 3788 valid lines total, against 6266 statements in `qa_ledger.py` alone today —
-  the engine has grown faster than its smoke coverage since (bench, bench-curate, the
-  controlled-language subsystem). Not a regression this change caused, and not silently
-  patched over: the number now reflects the file as it stands.
-  Since D-03 (kit 1.82.0), the auxiliary scripts route through the same seam via a second
-  choke point (`runpy()`, `uscha-kit/tests/smoke-engine.sh`) and are measured for the first
-  time: `templates/scripts/uscha_progress.py` **86%** (114 stmts, 16 missed),
-  `templates/scripts/uscha_statusline.py` **88%** (65 stmts, 8 missed), and
-  `.claude/skills/uscha-mirador/mirador-render.py` **53%** (91 stmts, 43 missed).
-  `telemetry-extract.py`, in the same skill directory, reports **0%**: present in the seam's
-  `--source` root but never invoked by the suite — D-03 named only the mirador renderer, not
-  this script, so its absence of exercise is unchanged, only now visible instead of silently
-  absent from the report.
+  showed only 3788 valid lines total, against 6266 statements in `qa_ledger.py` alone. Not a
+  regression that change caused, and not silently patched over.
+  **Re-measured again for 1.90.0, and the honest half is WHY it moved: the instrument, not the
+  suite.** Two seams were blind. `uscha_top.py` sat inside the `--source` root but was only
+  ever driven in-process from `python -` heredocs, so it reported 0% while 24 acceptance
+  criteria were measured against it; and the engine children that test blocks spawn from
+  *inside* their own python were plain interpreters, so `cmd_fastpath_eval` read 1/132 covered
+  lines while T117 measured nine criteria against it. Both are closed (a `pyin()` choke point,
+  and coverage.py's documented multiprocess hook). Measured over the same suite:
+  `qa_ledger.py` **86.6%** (6967 statements, 934 missed), `uscha_top.py` **73.2%** (537, 144),
+  `.claude/skills/uscha-mirador/mirador-render.py` **95.6%** (91, 4),
+  `telemetry-extract.py` **95.3%** (85, 4) — it read 0% before, present in the seam's `--source`
+  root but never invoked — `templates/scripts/uscha_progress.py` **87.8%** (115, 14) and
+  `uscha_statusline.py` **87.7%** (65, 8). Whole measured surface: **85.9%**, 7860 valid lines,
+  6752 covered. New behaviour checks shipped in the same release (T142 `telemetry-extract`,
+  T143 the mirador aggregate and its three friendly failures, T144 `uscha top`'s read boundary
+  and refusals) and are worth having, but they are not what moved the number. Same shape as
+  ADR-036, recorded the same way.
   Measuring this surfaced one unrelated pre-existing issue, flagged separately (not part of
   this change): `USCHA_COVERAGE=1` for the full suite made `AC-GM-08` fail, because
   `coverage.py`'s `COVERAGE_FILE` environment variable unconditionally overrides the isolated

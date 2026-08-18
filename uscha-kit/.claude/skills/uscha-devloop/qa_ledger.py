@@ -5477,6 +5477,35 @@ def _static_surface_for(cd, unit):
     return so, []
 
 
+def _judged_env():
+    """The environment a JUDGED program gets: this process's, minus the hooks that would make
+    a third party instrument it.
+
+    The withheld oracle measures a compiled implementation by its exit code and its stdout. A
+    measurement that changes what it measures is a broken measurement, and coverage.py's
+    documented subprocess hook does exactly that: with `COVERAGE_PROCESS_START` in the
+    environment, coverage.py's own `.pth` (`a1_coverage.pth`, shipped in site-packages) starts
+    a full Coverage in EVERY python process, at interpreter start-up, before any of that
+    process's own code runs. The oracle's children are fixture programs that sit outside every
+    `--source` root, so what they record is empty by construction -- pure cost, no measurement.
+
+    That cost is not theoretical (1.90.0). Running this repo's own smoke suite under
+    `USCHA_COVERAGE=1` spawned ~14,000 such children; `coverage combine` reported
+    "Combined 600 files, skipped 13702" -- 96% of them recorded nothing -- and late in the run
+    Windows began refusing to create processes: seven bench archetypes flipped to FAIL because
+    an oracle child could not start, and a py3.8 interpreter came back 3221225794
+    (0xC0000142, STATUS_DLL_INIT_FAILED) with an empty stderr. Nothing was wrong with the
+    engine or the fixtures; the instrument was crushing the machine it measured on.
+
+    Only the two variables that START coverage in a child are dropped. `COVERAGE_FILE` is
+    left alone: it names a data file, it does not turn anything on, and a caller that set it
+    means it. Outside a coverage run this function returns the environment unchanged."""
+    env = dict(os.environ)
+    for key in ("COVERAGE_PROCESS_START", "COVERAGE_PROCESS_CONFIG"):
+        env.pop(key, None)
+    return env
+
+
 def _impl_interpreter(impl_path):
     """Resolve the interpreter argv prefix for one implementation file by extension (ADR-028):
     `.py` runs under this same Python (unchanged); `.js` runs under `node`, resolved from PATH.
@@ -5517,7 +5546,7 @@ def _run_oracle_case(impl_path, case):
         # sibling modules by bare name; single-unit impls are unaffected by their cwd
         r = subprocess.run(interp + [os.path.abspath(impl_path)], input=stdin,
                            capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=_BOOTSTRAP_CASE_TIMEOUT,
+                           timeout=_BOOTSTRAP_CASE_TIMEOUT, env=_judged_env(),
                            cwd=os.path.dirname(os.path.abspath(impl_path)) or None)
         got, out, err = r.returncode, r.stdout, None
     except subprocess.TimeoutExpired:

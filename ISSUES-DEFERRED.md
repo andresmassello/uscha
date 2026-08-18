@@ -124,7 +124,7 @@ silently lost:
 
 ## 1.82.0 hygiene block — measured debt (open, decided by the human)
 
-- **Engine coverage is 58% against a declared threshold of 60** (`qa_ledger.py`, 6266
+- ~~**Engine coverage is 58% against a declared threshold of 60**~~ (`qa_ledger.py`, 6266
   statements, 2656 missed — re-measured through the D-03 seam). The previously committed
   `reports/coverage.xml` read 84.2% but dated from 2026-07-23 (3788 valid lines) and was never
   re-measured across 24 releases while the engine grew: bench, bench-curate, the whole
@@ -134,6 +134,25 @@ silently lost:
   targeting the newest subsystems first (bench/lang-compare/curation branches the suite drives
   only through their happy paths). The threshold stays at 60 — lowering it to match would be
   the narrated fix.
+  **RESOLVED 2026-08-18 (1.90.0), and the honest half of the sentence is WHY it moved:** the
+  gap was the INSTRUMENT far more than the suite. Two choke points were blind. `uscha_top.py`
+  sat inside the `--source` root but was only ever driven in-process from `python -` heredocs,
+  so it reported 0% while 24 acceptance criteria were being measured against it; and every
+  block written since ~T117 drives the engine from INSIDE its own python program
+  (`subprocess.run([sys.executable, ENG, ...])`), whose children were plain interpreters — so
+  `cmd_fastpath_eval` read 1/132 covered lines while T117 measured nine criteria against it.
+  Closed with coverage.py's own documented multiprocess technique (a `sitecustomize` on
+  `PYTHONPATH` plus `COVERAGE_PROCESS_START`, the same mechanism `cmd_golden_coverage` already
+  used) plus a third `pyin()` choke point that spools a heredoc to a file so `coverage run` can
+  take it. Measured after the widening: **`qa_ledger.py` 6967 statements, 934 missed = 86.6%;
+  the whole measured surface 7860 valid / 6752 covered = 85.9%** — against the same suite,
+  with `uscha_top.py` at 73.2% and `telemetry-extract.py` at 95.3% where it read 0%. New behaviour
+  checks were added in the same release (T142 telemetry-extract, T143 the mirador aggregate and
+  its three friendly failures, T144 `uscha top`'s read boundary and refusals), and they are
+  worth having on their own, but they are NOT what moved the number: the instrument is. Same
+  lesson as ADR-036 and recorded the same way — when the number is ugly, fix the instrument or
+  leave the number ugly; when it then jumps, say which of the two happened. The threshold
+  stays at 60.
 - ~~**`USCHA_COVERAGE=1` over the full suite makes `AC-GM-08` fail**~~: `coverage.py`'s
   `COVERAGE_FILE` environment variable unconditionally overrides `cmd_golden_coverage`'s own
   isolated `data_file`, so the golden-coverage capture collides with the suite's data file.
@@ -147,6 +166,33 @@ silently lost:
   runs the capture a SECOND time with a `COVERAGE_FILE` planted in the environment and
   requires the map to come back measured with the planted file's directory still empty; the
   assertion goes red with the fix reverted (verified by mutation).
+- ~~**The instrument changed what it measured: the withheld oracle handed its own coverage
+  hooks to every program it judged**~~ (found and closed inside 1.90.0, three instrumented
+  runs apart). Widening the coverage seam with coverage.py's multiprocess hook made
+  `USCHA_COVERAGE=1` turn T136 red — and only T136, and only under coverage. The chain, once
+  the criterion was made to say *which* of its sub-measurements moved: seven bench archetypes
+  flipped to `FAIL` because an oracle child could not start, and a py3.8 `bench-roundtrip`
+  came back `3221225794` = `0xC0000142` (`STATUS_DLL_INIT_FAILED`) with an empty stderr —
+  Windows refusing to create processes. The cause is not the sitecustomize the suite writes:
+  **coverage.py 7.x ships `a1_coverage.pth` in site-packages, and a `.pth` runs BEFORE
+  `sitecustomize`**, so `COVERAGE_PROCESS_START` alone starts a full `Coverage` in *every*
+  python descendant, at interpreter start-up, and nothing downstream can opt a process out.
+  Most of those descendants are the diamond-bench compiled implementations the oracle judges —
+  fixture programs outside every `--source` root, so their data is empty by construction:
+  `coverage combine` over the first run said *"Combined 600 files, skipped 13702"*, 96%
+  recording nothing while each still paid an `import coverage` and a data file.
+  **RESOLVED**: `_judged_env()` in the engine drops `COVERAGE_PROCESS_START` /
+  `COVERAGE_PROCESS_CONFIG` from the environment of a program `_run_oracle_case` runs — a
+  measurement that alters what it measures is a broken measurement, and this is the boundary
+  where the alteration enters. `COVERAGE_FILE` is deliberately left alone: it names a data
+  file, it does not turn anything on. Measured after: `bench` over the whole fixture leaves 1
+  data file instead of hundreds, the run leaves 1,280 instead of 14,424, and the instrumented
+  suite reads exactly what the plain suite reads (432 ok / 0 fail, 177/178). Pinned by T127's
+  `reg-oracle-child-gets-no-coverage-hook`, which plants the variable in the engine's
+  environment and requires the judged program to report `clean`; red with the guard reverted
+  (verified by mutation). Two lessons, both cheap only in hindsight: a criterion that folds
+  five measurements into one boolean must say which one moved (T136 now does), and an
+  instrument gets a blast radius before it gets a seam.
 
 ## 1.86.1 fresh review (`uscha top` M1) — LOW (deferred, below the severity gate)
 
