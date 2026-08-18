@@ -545,6 +545,43 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   specific combination; it does not corrupt the `qa_ledger.py` or auxiliary-script figures
   above, which come from separate data files untouched by that collision.
 
+## uscha top v0.1, M1 (ADR-031/032/034) - closes on green `AC-T-nn` smoke assertions and golden frames
+
+Shipped in 1.86.0 (M1 = read-only board). Criteria authored in `docs/uscha-top/SPEC.md` s7 and curated
+before code; measured by T137 (engine `top --json` contract) and T138 (pure `render`, golden frames)
+through the acceptance sidecar. M2/M3 ids stay UNMEASURED (skipped testcase, never a silent pass)
+until their milestone ships. Known honest gap: the engine's own `_AC_TAG` cannot read these family
+ids yet (ADR-035 item 6), so they close here by the suite, like every other family prefix.
+
+- [x] AC-T-01 - the header shows `DONE x/N (p%)` from the engine-computed `terminado` block; the TUI derives nothing.
+- [x] AC-T-02 - the header shows `machine owes M · you owe Q · untagged U` from `debtors`.
+- [x] AC-T-03 - ETA renders per SPEC s3; with `medians.verdict_min` null (v0.1) it renders `-`.
+- [x] AC-T-04 - with `terminado.unmeasured >= 1` the percentage carries the suffix `· N unmeasured` (INV-TOP-01).
+- [x] AC-T-05 - the burn-up renders the `kind:"score"` series labelled as a score trend, never as closed obligations.
+- [x] AC-T-06 - `spec_pin` renders git HEAD with a not-clean-room-verified marker; null renders `-`; never fabricated (INV-TOP-05).
+- [x] AC-T-07 - one row per obligation, state-coloured, stable order by id.
+- [x] AC-T-08 - TRACED and TAGGED render in the UNMEASURED-class gray, never as PASS (INV-TOP-02).
+- [x] AC-T-09 - the GATE column shows `junit` or `curation` for a general project.
+- [x] AC-T-10 - the AGE column renders `-` for every obligation in v0.1 (ADR-035).
+- [ ] AC-T-11 - (M2) the feed shows the last <=N ledger events with timestamp and per-level colour.
+- [ ] AC-T-12 - (M2) mtime polling every `--refresh` s; a disk change re-renders within <=1 cycle.
+- [ ] AC-T-13 - (M3) `v` enters VERDICTS listing only uncurated OBS, age-descending.
+- [ ] AC-T-14 - (M3) selecting an OBS shows candidate and evidence side by side, claims not truncated.
+- [ ] AC-T-15 - (M3) `p`/`f`/`u` shells out to `curate` once per keypress and advances; empty queue returns to BOARD.
+- [ ] AC-T-16 - (M3) after a verdict DONE does not change (INV-TOP-03); no auto-rerun moves it.
+- [ ] AC-T-17 - (M3) the appended curation record is byte-identical to a manual `curate` call.
+- [x] AC-T-18 - stdlib-only; runnable via `python -m`; py3.8-clean.
+- [x] AC-T-19 - `render(state, size)` is pure; golden frames byte-identical at 100x32 and 80x24.
+- [x] AC-T-20 - no TTY -> `--once` prints one plain frame and exits 0.
+- [x] AC-T-21 - 80x24 degradation keeps the layout; the feed shortens first.
+- [x] AC-T-22 - Windows legacy conhost: VT via `SetConsoleMode` (ctypes); on failure degrade to the plain frame.
+- [x] AC-T-23 - honesty negative case: 23/24 PASS + 1 UNMEASURED renders 96% with the suffix, never 100%.
+- [x] AC-T-24 - single derivation: a frame rendered from a frozen `top --json` fixture traces every number to a JSON field.
+
+## Dogfooding (repo rule 9) - closes on green `AC-DF-nn` smoke assertions
+
+- [x] AC-DF-01 - the root `QA-LEDGER.json` is re-recorded in or after the last engine change: the commit that last touched `qa_ledger.py` also carries the ledger, or `readiness_history[-1].at` is newer than that commit; no git = UNMEASURED, stale = RED.
+
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".
@@ -560,6 +597,9 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - ADR-012 — Published claims are compiled artifacts of derived facts (SYSTEM-FACTS).
 - ADR-013 — Discovery emits a typed CANDIDATE-DELTA; verdicts become ledger objects.
 - ADR-014 — Fidelity is a vector; an advisory-class dimension can never gate.
+- ADR-031 — `uscha top` is a raw-ANSI terminal projection of the ledger, wired like `mirador`.
+- ADR-032 — One engine subcommand (`top --json`) computes the whole projection; the TUI renders.
+- ADR-034 — `render(state, size)` is pure; golden frames are its oracle, with a negative-honesty fixture.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

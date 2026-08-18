@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="fixture" tests="23">
+  <testcase classname="fx" name="AC-01_green">
+  </testcase>
+  <testcase classname="fx" name="AC-02_green">
+  </testcase>
+  <testcase classname="fx" name="AC-03_green">
+  </testcase>
+  <testcase classname="fx" name="AC-04_green">
+  </testcase>
+  <testcase classname="fx" name="AC-05_green">
+  </testcase>
+  <testcase classname="fx" name="AC-06_green">
+  </testcase>
+  <testcase classname="fx" name="AC-07_green">
+  </testcase>
+  <testcase classname="fx" name="AC-08_green">
+  </testcase>
+  <testcase classname="fx" name="AC-09_green">
+  </testcase>
+  <testcase classname="fx" name="AC-10_green">
+  </testcase>
+  <testcase classname="fx" name="AC-11_green">
+  </testcase>
+  <testcase classname="fx" name="AC-12_green">
+  </testcase>
+  <testcase classname="fx" name="AC-13_green">
+  </testcase>
+  <testcase classname="fx" name="AC-14_green">
+  </testcase>
+  <testcase classname="fx" name="AC-15_green">
+  </testcase>
+  <testcase classname="fx" name="AC-16_green">
+  </testcase>
+  <testcase classname="fx" name="AC-17_green">
+  </testcase>
+  <testcase classname="fx" name="AC-18_green">
+  </testcase>
+  <testcase classname="fx" name="AC-19_green">
+  </testcase>
+  <testcase classname="fx" name="AC-20_green">
+  </testcase>
+  <testcase classname="fx" name="AC-21_green">
+  </testcase>
+  <testcase classname="fx" name="AC-22_green">
+  </testcase>
+  <testcase classname="fx" name="AC-23_green">
+  </testcase>
+</testsuite>

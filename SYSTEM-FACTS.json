@@ -20,7 +20,7 @@
     ]
   },
   "subcommands": {
-    "count": 51,
+    "count": 52,
     "list": [
       "bench",
       "bench-curate",
@@ -72,8 +72,9 @@
       "spec-doubt",
       "spec-drift",
       "summary",
+      "top",
       "waste-check"
     ]
   },
-  "version": "1.85.1"
+  "version": "1.86.0"
 }

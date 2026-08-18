@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "project": "backend-api",
+  "defaults": {
+    "acceptance_file": "ACCEPTANCE.md",
+    "coverage_threshold": 60
+  },
+  "repos": [
+    {
+      "name": "backend-api",
+      "path": "repo",
+      "type": "python"
+    }
+  ],
+  "integration": {
+    "enabled": false
+  }
+}

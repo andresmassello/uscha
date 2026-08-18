@@ -3464,6 +3464,7 @@ rm -f "$KIT/reports/junit/.r2-cases.json"         # same rule for T133
 rm -f "$KIT/reports/junit/.js-cases.json"         # same rule for T134
 rm -f "$KIT/reports/junit/.multi-cases.json"      # same rule for T135
 rm -f "$KIT/reports/junit/.rt-cases.json"         # same rule for T136
+rm -f "$KIT/reports/junit/.top-cases.json"        # same rule for T137/T138
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -6750,6 +6751,430 @@ case "$T136" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T136";;
 esac
 
+echo "== T137 (uscha top M1): the engine computes the WHOLE projection, and a field with no source is null (ADR-032) =="
+# The contract is the gate. Every KPI the terminal board shows is asserted HERE, over the
+# engine JSON alone -- so a renderer cannot be the place a number is invented, and the
+# deferred fields (ETA, ages, drift, trace) are proven ABSENT rather than assumed absent.
+T137=$("$PY" - "$KIT" <<'PY'
+import io, json, os, subprocess, sys
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
+NAMES = ("healthy", "stale-quarantine", "honesty-negative")
+LADDER = ("UNMEASURED", "TRACED", "TAGGED", "MEASURED_PASS", "MEASURED_FAIL", "QUARANTINE")
+res = {}
+
+
+def top(name):
+    d = os.path.join(FIX, "fixture-" + name)
+    r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                       cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                       text=True, encoding="utf-8", errors="replace")
+    try:
+        return json.loads(r.stdout), r.returncode
+    except ValueError:
+        return {}, r.returncode
+
+
+states = {}
+rcs = {}
+for n in NAMES:
+    states[n], rcs[n] = top(n)
+
+# AC-T-01: DONE is computed by the engine and equals the recount of the obligation states.
+ok = all(rcs[n] == 0 for n in NAMES)
+for n in NAMES:
+    s = states.get(n) or {}
+    obs = s.get("obligations") or []
+    t = s.get("terminado") or {}
+    done = sum(1 for o in obs if o.get("state") == "MEASURED_PASS")
+    if not (t.get("done") == done and t.get("total") == len(obs)):
+        ok = False
+    if s.get("schema") != "uscha-top/v0.1" or not isinstance(s.get("step"), int):
+        ok = False
+    if any(o.get("state") not in LADDER for o in obs):
+        ok = False
+    ids = [o.get("id") for o in obs]
+    if ids != sorted(ids, key=lambda i: int(str(i).split("-")[1])):
+        ok = False
+res["AC-T-01"] = bool(ok)
+
+# AC-T-02: the debtor decomposition partitions the remainder exactly once.
+ok = True
+for n in NAMES:
+    s = states.get(n) or {}
+    obs = s.get("obligations") or []
+    d = s.get("debtors") or {}
+    t = s.get("terminado") or {}
+    want = {"machine": sum(1 for o in obs if o.get("state") == "MEASURED_FAIL"),
+            "you": sum(1 for o in obs if o.get("state") == "QUARANTINE"),
+            "untagged": sum(1 for o in obs if o.get("state") in ("UNMEASURED", "TRACED"))}
+    if d != want:
+        ok = False
+    if (t.get("done") or 0) + sum(want.values()) != len(obs):
+        ok = False
+    if t.get("unmeasured") != want["untagged"]:
+        ok = False
+res["AC-T-02"] = bool(ok)
+
+# AC-T-03: ETA and its inputs are null in v0.1, so the header can only render an em dash.
+ok = True
+for n in NAMES:
+    s = states.get(n) or {}
+    if s.get("eta_min") is not None or s.get("drift_pct") is not None:
+        ok = False
+    if (s.get("medians") or {}).get("verdict_min") is not None:
+        ok = False
+    if s.get("events_tail") != []:
+        ok = False
+res["AC-T-03"] = bool(ok)
+
+# AC-T-10: no first-seen timestamp exists anywhere (ADR-035/1), so EVERY age is null and
+# every trace empty -- on obligations and on observations alike. Its own criterion because
+# it is its own claim: the em dash in the AGE column is measured, not assumed.
+ok = True
+for n in NAMES:
+    s = states.get(n) or {}
+    obs = s.get("obligations") or []
+    if not obs:
+        ok = False
+    for o in obs:
+        if o.get("age_hours") is not None or o.get("trace") != []:
+            ok = False
+    for o in s.get("observations") or []:
+        if o.get("age_hours") is not None or o.get("title") is not None:
+            ok = False
+# and the column really renders the em dash, on every row of every frame
+for n in ("healthy", "stale-quarantine", "honesty-negative"):
+    p = os.path.join(FIX, "golden", "%s-100x32.golden.txt" % n)
+    for ln in io.open(p, encoding="utf-8").read().split("\n"):
+        if ln.startswith(("> AC-", "  AC-")) and ln[41:46].strip() != chr(8212):
+            ok = False
+res["AC-T-10"] = bool(ok)
+
+# AC-T-04 + honesty: the negative fixture reads 96, never 100, and honesty travels with it.
+s = states.get("honesty-negative") or {}
+t = s.get("terminado") or {}
+h = s.get("honesty") or {}
+ok = bool(t.get("total") == 24 and t.get("done") == 23 and t.get("pct") == 96
+          and t.get("unmeasured") == 1
+          and h.get("measured") == 23 and h.get("pct") == 96)
+# and the rounding guard itself, straight on the helper: 999 of 1000 must NOT read 100.
+sys.path.insert(0, os.path.dirname(ENG))
+import qa_ledger
+for done, total, want in ((999, 1000, 99), (23, 24, 96), (6, 6, 100), (0, 0, 0),
+                          (1999, 2000, 99), (0, 7, 0)):
+    if qa_ledger._top_pct(done, total) != want:
+        ok = False
+res["AC-T-04"] = bool(ok)
+
+# AC-T-05: the burn-up is the SCORE series and says so; healthy is a legitimate 100.
+ok = True
+for n in NAMES:
+    b = (states.get(n) or {}).get("burnup") or {}
+    if b.get("kind") != "score" or not isinstance(b.get("weeks"), list):
+        ok = False
+    if not all(isinstance(x, (int, float)) for x in b.get("weeks") or []):
+        ok = False
+hp = (states.get("healthy") or {}).get("terminado") or {}
+res["AC-T-05"] = bool(ok and hp.get("pct") == 100 and hp.get("unmeasured") == 0)
+
+# AC-T-06: the pin is a short git sha labelled unverified, or null -- never fabricated.
+ok = True
+for n in NAMES:
+    p = (states.get(n) or {}).get("spec_pin")
+    if p is None:
+        continue
+    if sorted(p) != ["clean_room_verified", "sha"]:
+        ok = False
+    if not isinstance(p.get("sha"), str) or len(p.get("sha") or "") != 7:
+        ok = False
+    if not isinstance(p.get("clean_room_verified"), bool):
+        ok = False
+res["AC-T-06"] = bool(ok)
+
+# AC-T-09: the gate vocabulary is the general project's, never the bench's "oracle".
+ok = True
+q = states.get("stale-quarantine") or {}
+for n in NAMES:
+    for o in (states.get(n) or {}).get("obligations") or []:
+        if o.get("gate") not in ("junit", "curation"):
+            ok = False
+        if o.get("state") == "QUARANTINE" and o.get("gate") != "curation":
+            ok = False
+        if o.get("state") in ("MEASURED_PASS", "MEASURED_FAIL") and o.get("gate") != "junit":
+            ok = False
+seen = {o.get("state") for o in q.get("obligations") or []}
+res["AC-T-09"] = bool(ok and {"MEASURED_PASS", "MEASURED_FAIL", "QUARANTINE",
+                              "UNMEASURED"} <= seen)
+
+# AC-T-24: single derivation -- the contract carries every KPI, counts agree with the rows,
+# TRACED/TAGGED are zero (no source), and a real median comes from real timestamps.
+ok = True
+KEYS = ("schema", "project", "spec_pin", "step", "generated_at", "obligations",
+        "observations", "events_tail", "counts", "terminado", "debtors", "honesty",
+        "eta_min", "medians", "checks", "drift_pct", "burnup")
+for n in NAMES:
+    s = states.get(n) or {}
+    if any(k not in s for k in KEYS):
+        ok = False
+    c = s.get("counts") or {}
+    obs = s.get("obligations") or []
+    if c.get("traced") != 0 or c.get("tagged") != 0:
+        ok = False
+    if c.get("total") != len(obs):
+        ok = False
+    if c.get("measured_pass") != sum(1 for o in obs if o.get("state") == "MEASURED_PASS"):
+        ok = False
+    # checks: the suite-wide run, or null when no repo carries an ingested report. Never a
+    # zeroed object -- "0 of 0 tests" and "nobody measured" are different statements.
+    ch = s.get("checks")
+    if ch is not None:
+        if sorted(ch) != ["fail", "pass", "total"]:
+            ok = False
+        if not all(isinstance(ch.get(k), int) for k in ("pass", "fail", "total")):
+            ok = False
+if (q.get("medians") or {}).get("loop_min") != 40:
+    ok = False
+if (states.get("healthy") or {}).get("medians", {}).get("loop_min") is not None:
+    ok = False
+# read-only: the subcommand must not touch the ledger it reads
+lp = os.path.join(FIX, "fixture-healthy", "QA-LEDGER.json")
+before = io.open(lp, "rb").read()
+top("healthy")
+if io.open(lp, "rb").read() != before:
+    ok = False
+# deterministic: two runs differ only in the timestamp they are honest about
+a, _ = top("stale-quarantine")
+b, _ = top("stale-quarantine")
+a.pop("generated_at", None)
+b.pop("generated_at", None)
+if a != b:
+    ok = False
+res["AC-T-24"] = bool(ok)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".top-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T137" in
+  OK*) PASS=$((PASS+1)); echo "  ok   uscha-top contract (AC-T-01,02,03,04,05,06,09,10,24): $T137";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T137";;
+esac
+
+echo "== T138 (uscha top M1): render() is pure and its oracle is golden frames (ADR-034) =="
+# A renderer nobody snapshots is a renderer free to round 96 up to 100. These frames are the
+# discriminator: byte-identical or red, with the negative-honesty frame carrying the whole
+# invariant on its own line.
+T138=$("$PY" - "$KIT" <<'PY'
+import ast, glob, io, json, os, subprocess, sys, tempfile
+kit = sys.argv[1]
+SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
+TUI = os.path.join(SKILL, "uscha_top.py")
+FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
+GOLD = os.path.join(FIX, "golden")
+res = {}
+
+sys.path.insert(0, SKILL)
+import uscha_top
+
+
+def state(name):
+    with io.open(os.path.join(FIX, "state", "state-%s.json" % name), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def golden(name, cols, rows):
+    p = os.path.join(GOLD, "%s-%dx%d.golden.txt" % (name, cols, rows))
+    with io.open(p, encoding="utf-8") as fh:
+        return fh.read().split("\n")[:-1]
+
+
+NAMES = ("healthy", "stale-quarantine", "honesty-negative", "traced-tagged")
+SIZES = ((100, 32), (80, 24))
+
+# AC-T-19: pure and byte-identical against the committed frames, at both canonical sizes.
+ok = True
+for n in NAMES:
+    s = state(n)
+    frozen = json.dumps(s, sort_keys=True)
+    for cols, rows in SIZES:
+        got = uscha_top.render(s, (cols, rows), sel=0, plain=True)
+        if got != golden(n, cols, rows):
+            ok = False
+        if got != uscha_top.render(s, (cols, rows), sel=0, plain=True):
+            ok = False            # same input twice: not merely equal, IDENTICAL
+    if json.dumps(s, sort_keys=True) != frozen:
+        ok = False                # a pure function does not mutate what it was handed
+# purity is a property, not a promise: render from a directory with no ledger and no engine
+cwd = os.getcwd()
+tmp = tempfile.mkdtemp(prefix="uscha-top-pure-")
+try:
+    os.chdir(tmp)
+    if uscha_top.render(state("healthy"), (100, 32), sel=0, plain=True) != golden("healthy", 100, 32):
+        ok = False
+finally:
+    os.chdir(cwd)
+res["AC-T-19"] = bool(ok)
+
+# AC-T-23: the frame that fails a cheating renderer. Asserted over the LIVE render, not
+# only over the committed snapshot -- a criterion that reads its own golden would be
+# satisfied by regenerating the golden, which is the failure mode it exists to catch.
+ok = True
+for cols, rows in SIZES:
+    frame = uscha_top.render(state("honesty-negative"), (cols, rows), sel=0, plain=True)
+    head = [ln for ln in frame if ln.startswith("DONE ")]
+    if len(head) != 1 or "96%" not in head[0] or "1 unmeasured" not in head[0]:
+        ok = False
+    if any("100%" in ln for ln in head):
+        ok = False
+    if frame != golden("honesty-negative", cols, rows):
+        ok = False
+res["AC-T-23"] = bool(ok)
+
+# AC-T-21: the 80x24 floor -- exact height, nothing wider than the terminal, the BOARD
+# survives and the feed is what gets shortened.
+ok = True
+for n in NAMES:
+    for cols, rows in SIZES:
+        f = uscha_top.render(state(n), (cols, rows), sel=0, plain=True)
+        if len(f) != rows or any(len(ln) > cols for ln in f):
+            ok = False
+    wide = uscha_top.render(state(n), (100, 32), sel=0, plain=True)
+    tight = uscha_top.render(state(n), (80, 24), sel=0, plain=True)
+    rows_wide = [ln for ln in wide if ln.startswith(("> AC-", "  AC-"))]
+    rows_tight = [ln for ln in tight if ln.startswith(("> AC-", "  AC-"))]
+    if not rows_tight or len(rows_tight) > len(rows_wide):
+        ok = False
+    if not any(ln.startswith("DONE ") for ln in tight):
+        ok = False
+res["AC-T-21"] = bool(ok)
+
+# AC-T-08: TRACED and TAGGED wear the UNMEASURED gray, never the PASS green.
+P = uscha_top.PALETTE
+ok = (P["TRACED"] == P["UNMEASURED"] and P["TAGGED"] == P["UNMEASURED"]
+      and P["UNMEASURED"] != P["MEASURED_PASS"])
+colored = uscha_top.render(state("traced-tagged"), (100, 32), sel=0, plain=False)
+green = "\x1b[" + P["MEASURED_PASS"] + "m"
+gray = "\x1b[" + P["UNMEASURED"] + "m"
+for ln in colored:
+    if "TRACED" in ln or "TAGGED" in ln:
+        if green in ln or gray not in ln:
+            ok = False
+res["AC-T-08"] = bool(ok)
+
+# AC-T-07: one row per obligation, stable by id, each state wearing ITS colour. Asserted on
+# the coloured render, because the golden frames are plain by design -- without this the
+# palette would be a claim no criterion measures.
+WANT_SGR = {"MEASURED_PASS": "32", "MEASURED_FAIL": "31", "QUARANTINE": "33",
+            "UNMEASURED": "90"}
+ok = uscha_top.PALETTE == dict(WANT_SGR, TRACED="90", TAGGED="90")
+sq = state("stale-quarantine")
+coloured = uscha_top.render(sq, (100, 32), sel=0, plain=False)
+rows = [ln for ln in coloured if "AC-" in ln and "  ACTION" not in ln]
+if len(rows) != len(sq["obligations"]):
+    ok = False
+for ln, o in zip(rows, sq["obligations"]):
+    if o["id"] not in ln:
+        ok = False                      # stable order: row i is obligation i, by id
+    want = "\x1b[" + WANT_SGR[o["state"]] + "m" + o["state"]
+    if want not in ln:
+        ok = False
+    for st, sgr in WANT_SGR.items():
+        if st != o["state"] and ("\x1b[" + sgr + "m" + st) in ln:
+            ok = False                  # no row wears the colour of another state
+plain_rows = [ln for ln in uscha_top.render(sq, (100, 32), sel=0, plain=True)
+              if ln.startswith(("> AC-", "  AC-"))]
+if [ln[2:10].strip() for ln in plain_rows] != [o["id"] for o in sq["obligations"]]:
+    ok = False
+res["AC-T-07"] = bool(ok)
+
+# AC-T-18: stdlib only, importable, and runnable through python -m -- the kit ships no
+# dependency and this criterion is what keeps it that way.
+STDLIB = {"argparse", "json", "os", "shutil", "subprocess", "sys", "ctypes", "msvcrt",
+          "termios", "tty"}
+tree = ast.parse(io.open(TUI, encoding="utf-8").read())
+imported = set()
+for node in ast.walk(tree):
+    if isinstance(node, ast.Import):
+        for a in node.names:
+            imported.add(a.name.split(".")[0])
+    elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+        imported.add(node.module.split(".")[0])
+ok = imported <= STDLIB
+d = os.path.join(FIX, "fixture-honesty-negative")
+r = subprocess.run([sys.executable, "-m", "uscha_top", "--ledger", "QA-LEDGER.json",
+                    "--once", "--cols", "100", "--rows", "32"],
+                   cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   env=dict(os.environ, PYTHONPATH=SKILL))
+if r.returncode != 0:
+    ok = False
+res["AC-T-18"] = bool(ok)
+
+# AC-T-20: no TTY (a pipe, CI, a redirect) prints ONE plain frame and exits 0 -- no escape
+# byte is ever fired at something that cannot interpret it.
+r = subprocess.run([sys.executable, TUI, "--ledger", "QA-LEDGER.json",
+                    "--cols", "100", "--rows", "32"],
+                   cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+ok = r.returncode == 0 and chr(27).encode("ascii") not in r.stdout
+piped = r.stdout.decode("utf-8").replace(chr(13), "").split(chr(10))[:-1]
+if len(piped) != 32:
+    ok = False                          # ONE frame, exactly the height it was asked for
+if not any(ln.startswith("DONE 23/24 (96%)") for ln in piped):
+    ok = False
+res["AC-T-20"] = bool(ok)
+
+# AC-T-22: the Windows VT gate reports honestly, and the keymap is testable without a
+# terminal (the driver is not what is under test -- the dispatch is).
+ok = isinstance(uscha_top.enable_vt(), bool)
+if os.name != "nt" and uscha_top.enable_vt() is not True:
+    ok = False
+if uscha_top.dispatch("q", 0, 8) != (0, True, False):
+    ok = False
+if uscha_top.dispatch("j", 0, 8) != (1, False, False):
+    ok = False
+if uscha_top.dispatch("k", 0, 8) != (0, False, False):
+    ok = False
+if uscha_top.dispatch("j", 7, 8) != (7, False, False):
+    ok = False
+if uscha_top.dispatch("r", 3, 8) != (3, False, True):
+    ok = False
+res["AC-T-22"] = bool(ok)
+
+# py3.8 is the floor the whole kit ships against: when a 3.8 interpreter is on this box the
+# frame must come out byte-identical there too (same lesson the round-trip aggregate taught).
+uv38 = glob.glob(os.path.expanduser(
+    "~/AppData/Roaming/uv/python/cpython-3.8*/python.exe"))
+ok38 = True
+if uv38:
+    r = subprocess.run([uv38[0], TUI, "--ledger", "QA-LEDGER.json",
+                        "--cols", "100", "--rows", "32"],
+                       cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    got = r.stdout.decode("utf-8").replace(chr(13), "").split(chr(10))[:-1]
+    ok38 = (r.returncode == 0 and got == piped)
+res["AC-T-19b"] = bool(ok38)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+sp = os.path.join(side, ".top-cases.json")
+try:
+    prev = json.loads(io.open(sp, encoding="utf-8").read())
+except (OSError, ValueError):
+    prev = {}
+prev.update({k: v for k, v in res.items() if k != "AC-T-19b"})
+io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T138" in
+  OK*) PASS=$((PASS+1)); echo "  ok   uscha-top golden frames (AC-T-07,08,18,19,20,21,22,23): $T138";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T138";;
+esac
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -8124,6 +8549,70 @@ for _rtid in ("AC-RT-01", "AC-RT-02", "AC-RT-03"):
         results.append((_rtid, "round-trip", None))
     else:
         results.append((_rtid, "round-trip", "T136 case failed or missing"))
+
+# uscha top criteria (ADR-031..034): M1 ids measured by T137/T138 through the same sidecar
+# contract; M2/M3 ids (11..17) are SKIP = UNMEASURED on purpose until their milestone ships.
+def _top_cases():
+    p = os.path.join(kit, "reports", "junit", ".top-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_tpc = _top_cases()
+for _n in range(1, 25):
+    _tid = "AC-T-%02d" % _n
+    if _tpc is None or _tpc.get(_tid) is None:
+        results.append((_tid, "uscha-top", SKIP))
+    elif _tpc.get(_tid) is True:
+        results.append((_tid, "uscha-top", None))
+    else:
+        results.append((_tid, "uscha-top", "T137/T138 case failed or missing"))
+
+# Dogfooding (repo rule 9): the root ledger is re-recorded in or after the last engine change.
+# Same-commit release ritual: the commit that last touched the engine must also carry the ledger,
+# or the ledger's last readiness entry must be newer than that commit. No git = SKIP (UNMEASURED,
+# never a silent pass); a stale ledger is RED.
+def _dogfood():
+    eng = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+    led = os.path.join(root, "QA-LEDGER.json")
+    if not os.path.isfile(led):
+        return "root QA-LEDGER.json missing"
+    try:
+        # A SHALLOW clone cannot answer this question: at depth 1, git log -1 for a path
+        # returns HEAD for every path that exists, so engine and ledger always look like the
+        # same commit and the criterion passes without measuring anything (reproduced on a
+        # local --depth 1 clone: both files reported the same sha). CI checks out full
+        # history for exactly this reason (.github/workflows/smoke.yml); anywhere else a
+        # shallow tree is UNMEASURED, never a silent green.
+        shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=root,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 text=True).stdout.strip()
+        if shallow == "true":
+            return SKIP
+        h_eng = subprocess.run(["git", "log", "-1", "--format=%H %ct", "--", eng], cwd=root,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.split()
+        h_led = subprocess.run(["git", "log", "-1", "--format=%H", "--", led], cwd=root,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.split()
+    except OSError:
+        return SKIP
+    if not h_eng:
+        return SKIP
+    if h_led and h_led[0] == h_eng[0]:
+        return None
+    hist = json.load(open(led, encoding="utf-8")).get("readiness_history") or []
+    if not hist:
+        return "readiness_history empty -- run readiness --record"
+    import datetime as _dt
+    at = hist[-1].get("at", "")
+    try:
+        ts = _dt.datetime.strptime(at[:19], "%Y-%m-%dT%H:%M:%S").replace(
+            tzinfo=_dt.timezone.utc).timestamp()
+    except ValueError:
+        return "unparseable readiness_history[-1].at: %r" % at
+    return None if ts >= int(h_eng[1]) else (
+        "ledger last recorded %s, engine last changed in %s -- stale" % (at, h_eng[0][:7]))
+check("AC-DF-01", "dogfood-ledger-fresh", _dogfood)
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
 skipped = sum(1 for _, _, m in results if m is SKIP)

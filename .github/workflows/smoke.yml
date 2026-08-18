@@ -36,7 +36,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35   # the bench grew to 12 archetypes + r2 + roundtrip; Windows py3.8 crossed 20 (measured 2026-08-16)
     steps:
+      # fetch-depth: 0 is REQUIRED, not tidiness. AC-DF-01 (dogfooding) asks whether the
+      # root ledger was re-recorded in or after the last engine change -- on the default
+      # depth-1 checkout `git log -1 -- <file>` returns HEAD for every path, so the two
+      # commits always match and the criterion would pass without measuring. With full
+      # history it measures; without it, the suite reports UNMEASURED rather than green.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6

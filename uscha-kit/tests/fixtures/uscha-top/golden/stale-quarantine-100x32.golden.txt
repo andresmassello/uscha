@@ -1,0 +1,32 @@
+uscha top · backend-api                                                                    step #147
+────────────────────────────────────────────────────────────────────────────────────────────────────
+DONE 2/8 (25%) · 3 unmeasured
+machine owes 1 · you owe 2 · untagged 3 · ETA —
+honesty 3/8 (38%) measured · spec_pin a41f9c2 (not clean-room verified)
+score trend  ▄▅▅  (readiness score, not closed obligations)
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ID      GATE     STATE            CASES  AGE  ACTION
+> AC-1    junit    MEASURED_PASS      1/1    —  —
+  AC-2    junit    MEASURED_PASS      2/2    —  —
+  AC-3    junit    MEASURED_FAIL      1/2    —  machine: fix, then rerun
+  AC-4    junit    UNMEASURED           —    —  you: tag a test
+  AC-5    curation QUARANTINE           —    —  you: record a verdict
+  AC-6    curation QUARANTINE           —    —  you: record a verdict
+  AC-7    junit    UNMEASURED           —    —  you: tag a test
+  AC-8    junit    UNMEASURED           —    —  you: tag a test
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+feed · the live event tail is M2; nothing is invented here
+
+
+
+[j/k] move · [r] reload · [q] quit · [v] verdicts (M3) · [d]/[o] phase 2

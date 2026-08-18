@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.85.1 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v1.86.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,

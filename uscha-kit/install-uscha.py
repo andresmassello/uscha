@@ -807,6 +807,58 @@ def cmd_mirador(args):
         print("\n[uscha mirador] stopped")
 
 
+def _uscha_top_path():
+    """The `uscha top` renderer inside this kit (either skill-tree layout)."""
+    for rel in (("skills", "uscha-devloop", "uscha_top.py"),
+                (".claude", "skills", "uscha-devloop", "uscha_top.py")):
+        candidate = KIT_ROOT.joinpath(*rel)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _qa_ledger_path():
+    """The engine inside this kit (either skill-tree layout)."""
+    for rel in (("skills", "uscha-devloop", "qa_ledger.py"),
+                (".claude", "skills", "uscha-devloop", "qa_ledger.py")):
+        candidate = KIT_ROOT.joinpath(*rel)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def cmd_top(args):
+    """`uscha top` — the live terminal board of the project's ledger (ADR-031).
+    Wired exactly like `mirador`: resolve the sibling script inside the kit and exec it with
+    this interpreter. `--json` is a passthrough to the engine's own read-only subcommand, so
+    a script can consume the contract without going through the renderer at all."""
+    if not Path(args.ledger).is_file():
+        print("[uscha top] ledger '%s' not found here -- run the dev loop first, or pass "
+              "--ledger" % args.ledger, file=sys.stderr)
+        raise SystemExit(1)
+    if args.json:
+        engine = _qa_ledger_path()
+        if engine is None:
+            print("[uscha top] qa_ledger.py not found in the kit", file=sys.stderr)
+            raise SystemExit(1)
+        rc = subprocess.call([sys.executable, str(engine), "top", "--json",
+                              "--ledger", args.ledger])
+        if rc:
+            raise SystemExit(rc)
+        return
+    renderer = _uscha_top_path()
+    if renderer is None:
+        print("[uscha top] uscha_top.py not found in the kit", file=sys.stderr)
+        raise SystemExit(1)
+    cmd = [sys.executable, str(renderer), "--ledger", args.ledger,
+           "--refresh", str(args.refresh)]
+    if args.once:
+        cmd.append("--once")
+    rc = subprocess.call(cmd)
+    if rc:
+        raise SystemExit(rc)
+
+
 def settings_without_hook(path):
     """Return (new_settings, removed_count): the user's settings with OUR PreToolUse entries
     dropped and nothing else touched. A foreign hook -- including one in the same group -- is
@@ -1006,6 +1058,12 @@ def build_parser():
     mirador.add_argument("--open", dest="force_open", action="store_true",
                          help="open the browser even if mirador.html already existed (you closed the tab)")
     mirador.set_defaults(func=cmd_mirador)
+    top = sub.add_parser("top", help="live terminal board of the project's obligations, read from QA-LEDGER.json")
+    top.add_argument("--ledger", default="QA-LEDGER.json", help="ledger to read (default: the QA-LEDGER.json convention)")
+    top.add_argument("--once", action="store_true", help="print one plain frame and exit (implied without a TTY)")
+    top.add_argument("--refresh", type=float, default=2.0, help="seconds between polls (reserved for M2; M1 re-reads on the `r` key)")
+    top.add_argument("--json", action="store_true", help="print the engine's read-only `top --json` contract instead of rendering it")
+    top.set_defaults(func=cmd_top)
     return parser
 
 

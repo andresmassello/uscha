@@ -1,0 +1,128 @@
+{
+  "schema": "uscha-top/v0.1",
+  "project": "backend-api",
+  "spec_pin": {
+    "sha": "a41f9c2",
+    "clean_room_verified": false
+  },
+  "step": 42,
+  "generated_at": "2026-08-17T12:00:00+00:00",
+  "obligations": [
+    {
+      "id": "AC-1",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-2",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-3",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-4",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-5",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-6",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    }
+  ],
+  "observations": [],
+  "events_tail": [],
+  "counts": {
+    "measured_pass": 6,
+    "measured_fail": 0,
+    "quarantine": 0,
+    "unmeasured": 0,
+    "traced": 0,
+    "tagged": 0,
+    "total": 6
+  },
+  "terminado": {
+    "done": 6,
+    "total": 6,
+    "pct": 100,
+    "unmeasured": 0
+  },
+  "debtors": {
+    "machine": 0,
+    "you": 0,
+    "untagged": 0
+  },
+  "honesty": {
+    "measured": 6,
+    "total": 6,
+    "pct": 100
+  },
+  "eta_min": null,
+  "medians": {
+    "verdict_min": null,
+    "loop_min": null
+  },
+  "checks": null,
+  "drift_pct": null,
+  "burnup": {
+    "kind": "score",
+    "weeks": [
+      61,
+      64,
+      70,
+      78,
+      88
+    ]
+  }
+}

@@ -37,7 +37,16 @@ itself.
 8. **Multi-ADR features get a `docs/<feature>/`** (curated 2026-08-17 with `uscha top`): the
    narrative SPEC + FIXTURES live there while the ADRs are `Proposed`; the ACs are promoted into
    `ACCEPTANCE.md` on acceptance. Single-ADR changes keep the plain `docs/adr/` + `ACCEPTANCE.md` path.
-9. **INV-GOLDEN-01 governs here too**: never write/rename a `.approved`
+9. **Dogfooding is measured, not narrated** (curated 2026-08-17): the root `QA-LEDGER.json` is this
+   repo's own truth. Every kit release runs the ritual on itself -- smoke (writes
+   `reports/junit/uscha-acceptance.xml`) -> `qa_ledger.py snapshot --repo uscha` -> `readiness --record`
+   -> ledger committed in the SAME release commit -- and the smoke suite checks that
+   `readiness_history[-1].at` is not older than the last commit that touched the engine (a stale
+   ledger is a FAIL, not a note). At session start the `uscha-status` skill is shown first, from the
+   ledger. Known honest gap until `_AC_TAG` is widened (ADR-035 item 6): the engine cannot see the
+   family-prefixed criteria, so measured acceptance reads 6/172 (1.86.0) -- that number is TRUE for the
+   engine as it is; fixing the instrument is its own release, never a hand-edit of the ledger.
+10. **INV-GOLDEN-01 governs here too**: never write/rename a `.approved`
    (the kit's hook applies to this repo like any other).
 
 ## Known gotchas

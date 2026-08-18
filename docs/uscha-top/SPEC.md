@@ -66,6 +66,12 @@ renders them, it does not recompute them (single derivation, ADR-032).
   `eta_min` is `null` and the header renders `ETA —`. This overrides the mockup, which shows a live
   ETA; v0.1 cannot honestly compute it. `median_loop` **is** real (from `iterations[].at`).
 - `honesty = (|MEASURED_PASS| + |MEASURED_FAIL|) / |O|` → JSON `honesty {measured, total, pct}`.
+- **Both percentages under-claim on rounding.** `terminado.pct` and `honesty.pct` are computed by the
+  same engine helper and are capped at **99** whenever the numerator is below the denominator: 999 of
+  1000 rounds to 100, and a board reading `100%` while one obligation is outside `MEASURED_PASS` — or
+  `100% measured` while one criterion is unmeasured — is exactly the lie INV-TOP-01 forbids. 100 is
+  emitted only when it is literally true. The cap lives in the engine so no renderer can be the place
+  the rounding happens.
 - Burn-**up**, not burndown → JSON `burnup`. **v0.1 reality:** `kind:"score"` (the real
   `readiness_history` series); obligation-count burn-up needs new persistence (ADR-035), so the TUI
   labels this as a score trend, never as a count of closed obligations.

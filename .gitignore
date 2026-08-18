@@ -16,6 +16,9 @@ QA-LEDGER.json
 # ...but THIS repo now measures itself, so its own root ledger is versioned on
 # purpose: uscha's readiness gets a history like any project it governs.
 !/QA-LEDGER.json
+# ...and so are the `uscha top` fixture ledgers: a fixture git cannot see is a test that
+# passes locally and is simply absent in CI.
+!/uscha-kit/tests/fixtures/uscha-top/*/QA-LEDGER.json
 REBUILD-BASELINE.json
 .claude/settings.local.json
 

@@ -1,0 +1,186 @@
+{
+  "schema": "uscha-top/v0.1",
+  "project": "backend-api",
+  "spec_pin": null,
+  "step": 147,
+  "generated_at": "2026-08-17T12:00:00+00:00",
+  "obligations": [
+    {
+      "id": "AC-1",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-2",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 2,
+      "cases_total": 2,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-3",
+      "kind": "AC",
+      "state": "MEASURED_FAIL",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 2,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-4",
+      "kind": "AC",
+      "state": "TRACED",
+      "gate": "junit",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [
+        "svc/settle.py:88"
+      ],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-5",
+      "kind": "AC",
+      "state": "QUARANTINE",
+      "gate": "curation",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": "OBS-2b837dfd92ec",
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-6",
+      "kind": "AC",
+      "state": "QUARANTINE",
+      "gate": "curation",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": "OBS-21653f98dedb",
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-7",
+      "kind": "AC",
+      "state": "TAGGED",
+      "gate": "junit",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-8",
+      "kind": "AC",
+      "state": "UNMEASURED",
+      "gate": "junit",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    }
+  ],
+  "observations": [
+    {
+      "id": "OBS-21653f98dedb",
+      "ac": "AC-6",
+      "title": null,
+      "candidate": [
+        "AC-06 a refund never exceeds the captured amount"
+      ],
+      "evidence": [
+        "svc/refund.py"
+      ],
+      "age_hours": null
+    },
+    {
+      "id": "OBS-2a9f0dc835ee",
+      "ac": null,
+      "title": null,
+      "candidate": [
+        "the retry budget is exhausted silently after three attempts"
+      ],
+      "evidence": [
+        "svc/retry.py"
+      ],
+      "age_hours": null
+    },
+    {
+      "id": "OBS-2b837dfd92ec",
+      "ac": "AC-5",
+      "title": null,
+      "candidate": [
+        "AC-05 the settlement window rolls to the next business day"
+      ],
+      "evidence": [
+        "svc/settle.py"
+      ],
+      "age_hours": null
+    }
+  ],
+  "events_tail": [],
+  "counts": {
+    "measured_pass": 2,
+    "measured_fail": 1,
+    "quarantine": 2,
+    "unmeasured": 1,
+    "traced": 1,
+    "tagged": 1,
+    "total": 8
+  },
+  "terminado": {
+    "done": 2,
+    "total": 8,
+    "pct": 25,
+    "unmeasured": 3
+  },
+  "debtors": {
+    "machine": 1,
+    "you": 2,
+    "untagged": 3
+  },
+  "honesty": {
+    "measured": 3,
+    "total": 8,
+    "pct": 38
+  },
+  "eta_min": null,
+  "medians": {
+    "verdict_min": null,
+    "loop_min": 40
+  },
+  "checks": null,
+  "drift_pct": null,
+  "burnup": {
+    "kind": "score",
+    "weeks": [
+      44,
+      51,
+      55
+    ]
+  }
+}

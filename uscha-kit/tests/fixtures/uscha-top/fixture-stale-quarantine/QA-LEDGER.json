@@ -1,0 +1,79 @@
+{
+  "schema": "dev-loop/qa-ledger@1",
+  "run_id": "20260817-202915",
+  "started_at": "2026-08-17T23:29:15+00:00",
+  "updated_at": "2026-08-17T23:29:15+00:00",
+  "config": {
+    "version": "1.0.0",
+    "project": "backend-api",
+    "defaults": {
+      "acceptance_file": "ACCEPTANCE.md",
+      "coverage_threshold": 60
+    },
+    "repos": [
+      {
+        "name": "backend-api",
+        "path": "repo",
+        "type": "python"
+      }
+    ],
+    "integration": {
+      "enabled": false
+    }
+  },
+  "step_counter": 147,
+  "repos": {
+    "backend-api": {
+      "type": "python",
+      "path": "repo",
+      "snapshots": [],
+      "iterations": [
+        {
+          "iteration": 1,
+          "at": "2026-08-11T10:00:00+00:00",
+          "tool": "code-review",
+          "category": "agent"
+        },
+        {
+          "iteration": 2,
+          "at": "2026-08-11T10:40:00+00:00",
+          "tool": "judgment-day",
+          "category": "agent"
+        },
+        {
+          "iteration": 3,
+          "at": "2026-08-11T11:20:00+00:00",
+          "tool": "improve",
+          "category": "agent"
+        }
+      ]
+    }
+  },
+  "integration": {
+    "type": "maven",
+    "snapshots": [],
+    "iterations": []
+  },
+  "steps": [],
+  "escalations": [],
+  "production_findings": [],
+  "spec_doubts": [],
+  "spec_change_requests": [],
+  "readiness_history": [
+    {
+      "at": "2026-08-01T10:00:00+00:00",
+      "score": 44
+    },
+    {
+      "at": "2026-08-06T10:00:00+00:00",
+      "score": 51
+    },
+    {
+      "at": "2026-08-11T10:00:00+00:00",
+      "score": 55
+    }
+  ],
+  "integrity": {
+    "sha256": "1beace8f2983c8a9f1e4fb0b2973a89695b7069bef4b43094d10901fe75f8b3c"
+  }
+}

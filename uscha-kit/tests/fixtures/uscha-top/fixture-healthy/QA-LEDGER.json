@@ -1,0 +1,68 @@
+{
+  "schema": "dev-loop/qa-ledger@1",
+  "run_id": "20260817-202914",
+  "started_at": "2026-08-17T23:29:14+00:00",
+  "updated_at": "2026-08-17T23:29:14+00:00",
+  "config": {
+    "version": "1.0.0",
+    "project": "backend-api",
+    "defaults": {
+      "acceptance_file": "ACCEPTANCE.md",
+      "coverage_threshold": 60
+    },
+    "repos": [
+      {
+        "name": "backend-api",
+        "path": "repo",
+        "type": "python"
+      }
+    ],
+    "integration": {
+      "enabled": false
+    }
+  },
+  "step_counter": 42,
+  "repos": {
+    "backend-api": {
+      "type": "python",
+      "path": "repo",
+      "snapshots": [],
+      "iterations": []
+    }
+  },
+  "integration": {
+    "type": "maven",
+    "snapshots": [],
+    "iterations": []
+  },
+  "steps": [],
+  "escalations": [],
+  "production_findings": [],
+  "spec_doubts": [],
+  "spec_change_requests": [],
+  "readiness_history": [
+    {
+      "at": "2026-08-01T10:00:00+00:00",
+      "score": 61
+    },
+    {
+      "at": "2026-08-04T10:00:00+00:00",
+      "score": 64
+    },
+    {
+      "at": "2026-08-08T10:00:00+00:00",
+      "score": 70
+    },
+    {
+      "at": "2026-08-12T10:00:00+00:00",
+      "score": 78
+    },
+    {
+      "at": "2026-08-15T10:00:00+00:00",
+      "score": 88
+    }
+  ],
+  "integrity": {
+    "sha256": "9f606989292b8e31dc00b4de8a004176f99dabb8d8dcdbcade6a12af7b52a542"
+  }
+}

@@ -6,7 +6,7 @@ governs:
 ---
 # ADR-031: `uscha top` is a raw-ANSI terminal projection of the ledger — no curses, no server, wired the way `mirador` is, so the programmer meets the method where they already live
 
-## Status: Proposed
+## Status: Accepted (M1 shipped in 1.86.0; curated 2026-08-17)
 
 ## Context
 The existing `mirador` (`uscha-mirador`) renders a static HTML dashboard post-hoc. It is a report:

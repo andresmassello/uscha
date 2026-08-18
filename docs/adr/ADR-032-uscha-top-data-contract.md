@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-032: The engine computes the whole projection — one read-only subcommand `top --json` emits every state, cardinality, median and feed line already derived, and a field with no honest source is `null`, never invented
 
-## Status: Proposed
+## Status: Accepted (M1 shipped in 1.86.0; nullable fields per ADR-035; curated 2026-08-17)
 
 ## Context
 Decision #1 of this work: the engine computes everything and the TUI only renders
@@ -82,6 +82,13 @@ writes, never runs tests, never calls a model. Shape:
 }
 ```
 
+**Percentages under-claim on rounding.** `terminado.pct` and `honesty.pct` come from one engine
+helper and are capped at **99** whenever the numerator is below the denominator — 999 of 1000 rounds
+to 100, and a board reading `100%` with an obligation outside `MEASURED_PASS` (or `100% measured`
+with a criterion unmeasured) is precisely the lie INV-TOP-01 exists to forbid. `100` is emitted only
+when it is literally true. The cap belongs to the engine, not the renderer: rounding is a derivation,
+and derivations live in exactly one place.
+
 **Nullability rules (v0.1 — each traces to an audit finding):**
 
 | Field | v0.1 value | Why (audit ref) |
@@ -94,6 +101,7 @@ writes, never runs tests, never calls a model. Shape:
 | `eta_min` | `null` | `ETA = you × median_verdict + machine × median_loop`; `median_verdict` is null (below), so ETA is null → `—`. (§3, E.5) |
 | `medians.verdict_min` | `null` | No timestamp for "entered quarantine"; only `curation[].at` exists. Throughput between curations is a *different* metric, not per-item wait — not substituted silently. (A/`medians.verdict_min`, C) |
 | `medians.loop_min` | integer or `null` | Honestly computable from `ledger["repos"][r]["iterations"][*].at` (median gap between consecutive iterations); `null` if fewer than two iterations. (A/`medians.loop_min`) |
+| `checks` | `{pass,fail,total}` or `null` | Mapped from the LATEST snapshot's `tests` block per repo (`pass = passed`, `fail = failures+errors`, `total = executed`), summed across repos. `null` — not a zeroed object — when no repo carries an ingested report: "0 of 0 tests ran" and "nobody measured" are different statements, and only one of them is true. Never conflated with `cases_pass/cases_total`, which is the AC-tagged subset. (A/`checks`) |
 | `drift_pct` | `null` | `spec_drift` stores per-file verdicts, not an aggregate. A percentage would be a *new metric definition*, deferred to ADR-035. (A/`drift_pct`, E.7) |
 | `burnup` | `{kind:"score", weeks:[…]}` | Only the **score** series is real (`readiness_history`, L8238). Obligation-count burn-up needs new persistence (ADR-035); v0.1 ships the score burn-up and labels `kind` so the TUI never implies it is a count of closed obligations. (A/`burnup_weeks`, E.6) |
 

@@ -7,7 +7,7 @@ governs:
 ---
 # ADR-034: `render(state, size)` is a pure function and its oracle is golden frames — the same discipline the kit uses on itself, so a cheating renderer that shows 100% is caught by a snapshot, not by trust
 
-## Status: Proposed
+## Status: Accepted (M1 shipped in 1.86.0; curated 2026-08-17)
 
 ## Context
 Decision #5, and handoff §1.5: `render(state, size) -> list[str]` is a pure function with no I/O.

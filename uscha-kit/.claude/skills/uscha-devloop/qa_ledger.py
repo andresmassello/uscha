@@ -7616,6 +7616,14 @@ def _mirador_adrs(adr_dir):
     return out
 
 
+def _project_name(cfg):
+    """Project label: DECLARED by the human in config (project/name); otherwise derived by
+    joining the configured repo names; None when there is nothing to join. One derivation,
+    shared by `dashboard` and `top` -- two readouts must never disagree about the name."""
+    names = [r.get("name") for r in cfg.get("repos", []) if r.get("name")]
+    return cfg.get("project") or cfg.get("name") or (" + ".join(names) if names else None)
+
+
 def cmd_dashboard(args):
     """mirador — vista bird's-eye del estado. Agrega SOLO hechos que el ledger ya tiene
     al contrato DATA del template. Read-only, determinista, cero narracion. Campos sin
@@ -7780,10 +7788,9 @@ def cmd_dashboard(args):
                   "reached": _reached_index(h.get("score"))}
                  for h in ledger.get("readiness_history", [])]
 
-    names = [r.get("name") for r in cfg.get("repos", []) if r.get("name")]
     # nombre de proyecto: lo declara el humano en config (project/name); si no,
     # se deriva juntando los repos. Truth-pass: nombre puesto si existe, si no derivado.
-    project = cfg.get("project") or cfg.get("name") or (" + ".join(names) if names else None)
+    project = _project_name(cfg)
     adrs = _mirador_adrs(getattr(args, "adr_dir", "docs/adr"))
 
     # evidence (kit 1.50.0): RECEIPTS. The template shipped a click-a-milestone drawer
@@ -8001,6 +8008,260 @@ def cmd_dashboard(args):
     print(f"  {sum(1 for p in phases if p['status'] == 'done')}/8 fases . "
           f"{len(loops)} loop(s) . {len(out['adrs'])} ADR . "
           f"{len(snapshots)} snapshot(s) en el time-lapse")
+
+
+TOP_SCHEMA = "uscha-top/v0.1"
+
+# `uscha top` state ladder (ADR-032). TRACED and TAGGED are declared here and NEVER emitted
+# in v0.1: no general-project source exists for either (the only "does source name this AC"
+# scan is bench-wired, and JUnit has no "written but unexecuted" case). They keep their names
+# so the renderer can class them gray instead of inventing them into PASS (INV-TOP-02).
+TOP_STATES = ("UNMEASURED", "TRACED", "TAGGED", "MEASURED_PASS", "MEASURED_FAIL",
+              "QUARANTINE")
+
+
+def _top_dt(iso):
+    """Tolerant ISO-8601 -> datetime, or None. Never raises: a malformed timestamp in one
+    ledger record must degrade that record, not the read-only readout."""
+    if not isinstance(iso, str) or not iso.strip():
+        return None
+    txt = iso.strip()
+    if txt.endswith("Z"):                 # py3.8's fromisoformat does not take the Z suffix
+        txt = txt[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(txt)
+    except ValueError:
+        return None
+
+
+def _top_loop_median_min(ledger):
+    """medians.loop_min: the median gap in MINUTES between consecutive QA iterations, over
+    the timestamps the ledger already carries (repos[r].iterations[*].at, grouped by
+    iteration number). Fewer than two iterations -> None: an honest absence, never a zero
+    (audit A/medians.loop_min)."""
+    gaps = []
+    for node in (ledger.get("repos") or {}).values():
+        first = {}
+        for s in node.get("iterations") or []:
+            it, at = s.get("iteration"), _top_dt(s.get("at"))
+            if it is None or at is None:
+                continue
+            if it not in first or at < first[it]:
+                first[it] = at
+        ordered = [first[k] for k in sorted(first)]
+        for a, b in zip(ordered, ordered[1:]):
+            gaps.append((b - a).total_seconds() / 60.0)
+    if not gaps:
+        return None
+    gaps.sort()
+    mid = len(gaps) // 2
+    return int(round(gaps[mid] if len(gaps) % 2 else (gaps[mid - 1] + gaps[mid]) / 2.0))
+
+
+def _top_checks(ledger):
+    """checks{pass,fail,total} from the LATEST snapshot per repo -- the whole suite's run,
+    NOT the AC-tagged subset (which travels per obligation as cases_pass/cases_total).
+    None when no repo carries an ingested report: no evidence, no number."""
+    got = False
+    tot = {"pass": 0, "fail": 0, "total": 0}
+    for node in (ledger.get("repos") or {}).values():
+        snaps = node.get("snapshots") or []
+        if not snaps:
+            continue
+        t = snaps[-1].get("tests") or {}
+        if not t.get("report_found"):
+            continue
+        got = True
+        tot["pass"] += t.get("passed") or 0
+        tot["fail"] += (t.get("failures") or 0) + (t.get("errors") or 0)
+        tot["total"] += t.get("executed") or 0
+    return tot if got else None
+
+
+def _top_spec_pin(ledger):
+    """spec_pin (v0.1): git HEAD of the FIRST configured repo, labelled NOT clean-room
+    verified unless a clean_room GREEN record exists at that exact sha. There is no pinned-
+    spec concept in the engine yet (a designed pin is ADR-035); this is the honest interim
+    proxy, and a non-git tree returns None so the TUI renders an em dash rather than a
+    fabricated sha (INV-TOP-05)."""
+    repos = (ledger.get("config", {}) or {}).get("repos") or []
+    if not repos:
+        return None
+    name, path = repos[0].get("name"), repos[0].get("path", ".")
+    sha = (_evidence_origin(path) or {}).get("commit")
+    if not sha:
+        return None
+    cr = _cr_latest(ledger, name, sha) if name else None
+    return {"sha": sha[:7],
+            "clean_room_verified": bool(cr and cr.get("status") == "GREEN")}
+
+
+def _top_pct(done, total):
+    """A whole-number percentage with INV-TOP-01 enforced AT THE SOURCE: 999 of 1000 rounds
+    to 100, and a board reading 100% while one obligation sits outside MEASURED_PASS is the
+    exact lie the invariant forbids. Capped at 99 until the last one is really measured --
+    in the engine, so no renderer can be the place the rounding happens. The same cap covers
+    the honesty ratio: "100% measured" with one criterion unmeasured is the same lie."""
+    if not total:
+        return 0
+    pct = int(round(done * 100.0 / total))
+    return 99 if (done < total and pct >= 100) else pct
+
+
+def _top_ac_num(cid):
+    """Stable numeric order for the normalized 'AC-<n>' ids _parse_acceptance_items emits."""
+    try:
+        return int(str(cid).split("-")[1])
+    except (IndexError, ValueError):
+        return 0
+
+
+def cmd_top(args):
+    """`uscha top` — the WHOLE projection of the ledger as one read-only JSON (ADR-032).
+
+    Single derivation: every state, cardinality, median and percentage the TUI shows is
+    computed HERE, from the same helpers readiness/dashboard use (_parse_acceptance_items,
+    _ac_tags, _delta_state, _cr_latest, _evidence_origin). The renderer (uscha_top.py) is a
+    pure function of this object and computes no KPI of its own (ADR-034, AC-T-24).
+
+    Read-only and truth-pass: it never writes, never runs tests, never calls a model, and a
+    field with no honest source is null -- eta_min, medians.verdict_min, drift_pct, every
+    age_hours, and every trace[] are null/empty in v0.1 BY DESIGN, each with its deferred
+    wiring recorded in ADR-035. Under-claim, then wire, then re-claim."""
+    ledger = _load(args.ledger)
+    cfg = ledger.get("config", {}) or {}
+    acc_path = args.acceptance or (cfg.get("defaults") or {}).get("acceptance_file")
+    acc_items, _acc_found = _parse_acceptance_items(acc_path, args.section)
+
+    # measured evidence: the SAME helper readiness closes criteria with (_ac_tags), summed
+    # across repos exactly as cmd_readiness sums it. Re-deriving it here would be the 1.48.1
+    # mirador sin (two derivations of one number, free to disagree).
+    ac_tags = {}
+    for rcfg in cfg.get("repos", []):
+        rtags, _stale = _ac_tags(rcfg.get("path", "."), rcfg.get("type", "maven"))
+        for cid, v in rtags.items():
+            d = ac_tags.setdefault(cid, {"green": 0, "red": 0})
+            d["green"] += v.get("green", 0)
+            d["red"] += v.get("red", 0)
+
+    # quarantine: UNCURATED observations whose statement literally names an AC id. The link
+    # is `canonical_match`, a heuristic TEXT match (_match_canonical) -- not a designed
+    # AC<->OBS field -- so an observation that matches nothing carries ac: null rather than
+    # a guessed criterion (audit A/quarantine_obs).
+    quarantine, observations = {}, []
+    for rname in (ledger.get("repos") or {}):
+        try:
+            path = _scope_path(ledger, rname)
+            dstate = _delta_state(ledger, rname, path)
+        except SystemExit as exc:
+            # a repo the scan cannot reach is NAMED on stderr, never dropped in silence: a
+            # missing quarantine row would read as "nothing to curate here" (the one lie a
+            # debtor column must never tell). stdout stays pure JSON.
+            print("[qa_ledger] top: repo %s skipped for quarantine scan: %s"
+                  % (rname, exc or "unknown scope"), file=sys.stderr)
+            continue
+        if not dstate:
+            continue
+        delta, errors = _load_delta(path)
+        if errors or not delta:
+            continue                       # a malformed delta is named by the gates, not here
+        uncurated = set(dstate.get("uncurated") or [])
+        for o in delta.get("observations") or []:
+            if o.get("id") not in uncurated:
+                continue
+            cid = o.get("canonical_match")
+            if cid and cid not in quarantine:
+                quarantine[cid] = o["id"]
+            observations.append({
+                "id": o.get("id"), "ac": cid,
+                # no separate short label exists on an observation; `statement` is the only
+                # prose field, so `title` is null and the TUI may head-truncate candidate[0]
+                "title": None,
+                "candidate": [o.get("statement")],
+                "evidence": list((o.get("provenance") or {}).get("files") or []),
+                "age_hours": None})
+    observations.sort(key=lambda o: o.get("id") or "")
+
+    # obligations: one row per DISTINCT tagged criterion of the acceptance file. kind is
+    # "AC" for all of them -- there is no per-INV ledger in the general path (the mirador's
+    # INV list is a fixed hand-mapped set, audit A/obligations), so no INV row is invented.
+    ids, seen = [], set()
+    for it in acc_items:
+        if it.get("id") and it["id"] not in seen:
+            seen.add(it["id"])
+            ids.append(it["id"])
+    obligations = []
+    for cid in sorted(ids, key=_top_ac_num):
+        tag, obs = ac_tags.get(cid), quarantine.get(cid)
+        # red evidence VETOES (fail-closed, the same rule _ac_closed applies). Measured
+        # evidence outranks the lateral QUARANTINE rung so the four buckets partition the
+        # board exactly once: done + machine + you + untagged == total.
+        if tag and tag["red"] >= 1:
+            state, gate = "MEASURED_FAIL", "junit"
+        elif tag and tag["green"] >= 1:
+            state, gate = "MEASURED_PASS", "junit"
+        elif obs:
+            state, gate = "QUARANTINE", "curation"
+        else:
+            state, gate = "UNMEASURED", "junit"
+        obligations.append({
+            "id": cid, "kind": "AC", "state": state,
+            # never "oracle": for a general project the gate that closes a criterion is
+            # JUnit-tag ingestion or curation. "oracle" is Diamond-bench vocabulary and
+            # would mislead here (audit A/gate, ADR-032).
+            "gate": gate,
+            "cases_pass": (tag or {}).get("green", 0),
+            "cases_total": (tag or {}).get("green", 0) + (tag or {}).get("red", 0),
+            "trace": [],                  # no general AC->implementation map yet (ADR-035/5)
+            "quarantine_obs": obs,
+            "ac": None,                   # contract slot with no second honest meaning here
+            "age_hours": None})           # no first-seen timestamp exists (ADR-035/1)
+
+    def _n(st):
+        return sum(1 for o in obligations if o["state"] == st)
+
+    total = len(obligations)
+    done, fail, quar = _n("MEASURED_PASS"), _n("MEASURED_FAIL"), _n("QUARANTINE")
+    unmeasured = _n("UNMEASURED") + _n("TRACED")
+    pct = _top_pct(done, total)
+    measured = done + fail
+    out = {
+        "schema": TOP_SCHEMA,
+        "project": _project_name(cfg),
+        "spec_pin": _top_spec_pin(ledger),
+        # the engine's GLOBAL step counter -- not a build number and not a QA-loop pass
+        # count (that is _repo_loop_count); the TUI labels it `step #N` (audit A/run).
+        "step": ledger.get("step_counter"),
+        "generated_at": _now(),
+        "obligations": obligations,
+        "observations": observations,
+        "events_tail": [],                # the live feed is M2; the key ships empty, not absent
+        "counts": {"measured_pass": done, "measured_fail": fail, "quarantine": quar,
+                   "unmeasured": _n("UNMEASURED"), "traced": 0, "tagged": 0, "total": total},
+        "terminado": {"done": done, "total": total, "pct": pct, "unmeasured": unmeasured},
+        "debtors": {"machine": fail, "you": quar, "untagged": unmeasured},
+        "honesty": {"measured": measured, "total": total,
+                    "pct": _top_pct(measured, total)},
+        # ETA = you x median_verdict + machine x median_loop. median_verdict is null in v0.1
+        # (no per-OBS first-seen timestamp), so the product is null and the header reads
+        # `ETA -`. A partial ETA computed from half the formula would be a fabrication.
+        "eta_min": None,
+        "medians": {"verdict_min": None, "loop_min": _top_loop_median_min(ledger)},
+        "checks": _top_checks(ledger),
+        "drift_pct": None,                # spec_drift is per-file; an aggregate is ADR-035/3
+        # the ONLY real series is the readiness SCORE history; an obligation-count burn-up
+        # needs new persistence (ADR-035/2), so `kind` is emitted for the TUI to label it a
+        # score trend and never as a count of closed obligations.
+        "burnup": {"kind": "score",
+                   "weeks": [h.get("score") for h in ledger.get("readiness_history", [])
+                             if isinstance(h.get("score"), (int, float))]},
+    }
+    if getattr(args, "json", False):
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return
+    print("TOP %s: DONE %d/%d (%d%%) · %d unmeasured — `top --json` prints the full "
+          "contract; `uscha top` renders it live"
+          % (out["project"] or "?", done, total, pct, unmeasured))
 
 
 def cmd_readiness(args):
@@ -11159,6 +11420,17 @@ def build_parser():
                        help="directory globbed for ADR markdown (mirador ADR panel)")
     pdash.add_argument("--json", action="store_true")
     pdash.set_defaults(func=cmd_dashboard)
+
+    ptop = sub.add_parser("top",
+                          help="uscha top: the whole projection of the ledger as one "
+                               "read-only JSON (obligations, debtors, medians) — the "
+                               "contract the terminal view renders (ADR-032)")
+    add_ledger(ptop)
+    ptop.add_argument("--acceptance", default=None,
+                      help="acceptance task list (markdown); overrides config default")
+    ptop.add_argument("--section", default=None)
+    ptop.add_argument("--json", action="store_true")
+    ptop.set_defaults(func=cmd_top)
 
     pb = sub.add_parser("rebuild",
                         help="rebuild test: is the SPEC complete enough to "

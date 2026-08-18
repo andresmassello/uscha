@@ -1,0 +1,26 @@
+# ACCEPTANCE
+
+- [x] AC-01 - the honesty board closes criterion 1
+- [x] AC-02 - the honesty board closes criterion 2
+- [x] AC-03 - the honesty board closes criterion 3
+- [x] AC-04 - the honesty board closes criterion 4
+- [x] AC-05 - the honesty board closes criterion 5
+- [x] AC-06 - the honesty board closes criterion 6
+- [x] AC-07 - the honesty board closes criterion 7
+- [x] AC-08 - the honesty board closes criterion 8
+- [x] AC-09 - the honesty board closes criterion 9
+- [x] AC-10 - the honesty board closes criterion 10
+- [x] AC-11 - the honesty board closes criterion 11
+- [x] AC-12 - the honesty board closes criterion 12
+- [x] AC-13 - the honesty board closes criterion 13
+- [x] AC-14 - the honesty board closes criterion 14
+- [x] AC-15 - the honesty board closes criterion 15
+- [x] AC-16 - the honesty board closes criterion 16
+- [x] AC-17 - the honesty board closes criterion 17
+- [x] AC-18 - the honesty board closes criterion 18
+- [x] AC-19 - the honesty board closes criterion 19
+- [x] AC-20 - the honesty board closes criterion 20
+- [x] AC-21 - the honesty board closes criterion 21
+- [x] AC-22 - the honesty board closes criterion 22
+- [x] AC-23 - the honesty board closes criterion 23
+- [x] AC-24 - the honesty board closes criterion 24

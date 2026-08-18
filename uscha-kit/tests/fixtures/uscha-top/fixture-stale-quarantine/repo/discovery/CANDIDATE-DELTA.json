@@ -1,0 +1,53 @@
+{
+  "_generated_by": "fixture (shaped exactly as qa_ledger.py discover emits)",
+  "_integrity": "458b25f422d18a10f083cb70a121e4ec1392af8f0baa801e5ae0c1e100a3372e",
+  "repo": "backend-api",
+  "observations": [
+    {
+      "id": "OBS-21653f98dedb",
+      "type": "invariant",
+      "statement": "AC-06 a refund never exceeds the captured amount",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "svc/refund.py"
+        ],
+        "derivation": "fixture",
+        "tool": "fixture"
+      },
+      "canonical_match": "AC-6"
+    },
+    {
+      "id": "OBS-2a9f0dc835ee",
+      "type": "contract",
+      "statement": "the retry budget is exhausted silently after three attempts",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "svc/retry.py"
+        ],
+        "derivation": "fixture",
+        "tool": "fixture"
+      },
+      "canonical_match": null
+    },
+    {
+      "id": "OBS-2b837dfd92ec",
+      "type": "behavior",
+      "statement": "AC-05 the settlement window rolls to the next business day",
+      "evidence_class": "static",
+      "provenance": {
+        "files": [
+          "svc/settle.py"
+        ],
+        "derivation": "fixture",
+        "tool": "fixture"
+      },
+      "canonical_match": "AC-5"
+    }
+  ],
+  "static_unsupported": {
+    "files": 0,
+    "note": "fixture"
+  }
+}

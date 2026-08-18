@@ -1,0 +1,342 @@
+{
+  "schema": "uscha-top/v0.1",
+  "project": "backend-api",
+  "spec_pin": {
+    "sha": "a41f9c2",
+    "clean_room_verified": false
+  },
+  "step": 233,
+  "generated_at": "2026-08-17T12:00:00+00:00",
+  "obligations": [
+    {
+      "id": "AC-1",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-2",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-3",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-4",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-5",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-6",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-7",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-8",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-9",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-10",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-11",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-12",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-13",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-14",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-15",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-16",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-17",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-18",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-19",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-20",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-21",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-22",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-23",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-24",
+      "kind": "AC",
+      "state": "UNMEASURED",
+      "gate": "junit",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    }
+  ],
+  "observations": [],
+  "events_tail": [],
+  "counts": {
+    "measured_pass": 23,
+    "measured_fail": 0,
+    "quarantine": 0,
+    "unmeasured": 1,
+    "traced": 0,
+    "tagged": 0,
+    "total": 24
+  },
+  "terminado": {
+    "done": 23,
+    "total": 24,
+    "pct": 96,
+    "unmeasured": 1
+  },
+  "debtors": {
+    "machine": 0,
+    "you": 0,
+    "untagged": 1
+  },
+  "honesty": {
+    "measured": 23,
+    "total": 24,
+    "pct": 96
+  },
+  "eta_min": null,
+  "medians": {
+    "verdict_min": null,
+    "loop_min": null
+  },
+  "checks": null,
+  "drift_pct": null,
+  "burnup": {
+    "kind": "score",
+    "weeks": [
+      70,
+      82,
+      91
+    ]
+  }
+}

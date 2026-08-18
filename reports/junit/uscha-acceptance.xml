@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="147" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="172" failures="0" errors="0" skipped="7">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -293,5 +293,62 @@
   <testcase classname="uscha.acceptance" name="AC-RT-02_round-trip">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-RT-03_round-trip">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-01_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-02_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-03_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-04_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-05_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-06_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-07_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-08_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-09_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-10_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-11_uscha-top">
+    <skipped message="no source configured for this criterion"/>
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-12_uscha-top">
+    <skipped message="no source configured for this criterion"/>
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-13_uscha-top">
+    <skipped message="no source configured for this criterion"/>
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-14_uscha-top">
+    <skipped message="no source configured for this criterion"/>
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-15_uscha-top">
+    <skipped message="no source configured for this criterion"/>
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-16_uscha-top">
+    <skipped message="no source configured for this criterion"/>
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-17_uscha-top">
+    <skipped message="no source configured for this criterion"/>
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-18_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-19_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-20_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-21_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-22_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-23_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-T-24_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
   </testcase>
 </testsuite>

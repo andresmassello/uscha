@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="fixture" tests="5">
+  <testcase classname="fx" name="AC-01_green">
+  </testcase>
+  <testcase classname="fx" name="AC-02_green">
+  </testcase>
+  <testcase classname="fx" name="AC-02_second_green">
+  </testcase>
+  <testcase classname="fx" name="AC-03_red">
+    <failure message="red"/>
+  </testcase>
+  <testcase classname="fx" name="AC-03_green">
+  </testcase>
+</testsuite>

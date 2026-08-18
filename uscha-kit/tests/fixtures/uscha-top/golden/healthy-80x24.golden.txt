@@ -1,0 +1,24 @@
+uscha top · backend-api                                                 step #42
+────────────────────────────────────────────────────────────────────────────────
+DONE 6/6 (100%)
+machine owes 0 · you owe 0 · untagged 0 · ETA —
+honesty 6/6 (100%) measured · spec_pin a41f9c2 (not clean-room verified)
+score trend  ▅▆▆▇▇  (readiness score, not closed obligations)
+────────────────────────────────────────────────────────────────────────────────
+  ID      GATE     STATE            CASES  AGE  ACTION
+> AC-1    junit    MEASURED_PASS      1/1    —  —
+  AC-2    junit    MEASURED_PASS      1/1    —  —
+  AC-3    junit    MEASURED_PASS      1/1    —  —
+  AC-4    junit    MEASURED_PASS      1/1    —  —
+  AC-5    junit    MEASURED_PASS      1/1    —  —
+  AC-6    junit    MEASURED_PASS      1/1    —  —
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+feed · the live event tail is M2; nothing is invented here
+
+
+
+[j/k] move · [r] reload · [q] quit · [v] verdicts (M3) · [d]/[o] phase 2
