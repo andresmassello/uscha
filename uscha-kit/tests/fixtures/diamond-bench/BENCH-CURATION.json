@@ -747,6 +747,231 @@
       "note": "human verdict given interactively in session 2026-08-15",
       "entry": "worker",
       "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-c85ee6953e50",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:00:05+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "scheduler",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-178debda075a",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:00:05+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "scheduler",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-715a294b7d55",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:00:05+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "scheduler",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-95bca8f7f21b",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:00:05+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "scheduler",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-b35ba463f165",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:00:58+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "scheduler",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-b2b9b99186b0",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:00:58+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "scheduler",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-64b31e28e093",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:00:58+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "scheduler",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-c8bf742ac581",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:46+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-4b3ae11bd605",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:47+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-070cecfd7d9d",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:47+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-4948155eb894",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:48+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-b3001aa02443",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:49+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-c8d0e47b21b1",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:49+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-8ca282f95932",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:50+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-279d8d1a6986",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:50+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-422052716f1e",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:51+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-c851bd2fe53e",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:52+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-8cd1e97f4f5a",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:52+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-df275d647b2d",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:02:53+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "rate-limiter",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-7b0a0add0e9c",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:06:03+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "ledger-lite",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-304f90e28341",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:06:03+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "ledger-lite",
+      "dir": "c-haiku"
+    },
+    {
+      "obs_id": "OBS-fa5a78249866",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:06:04+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "ledger-lite",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-d98a3481b09f",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:06:04+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "ledger-lite",
+      "dir": "c-opus"
+    },
+    {
+      "obs_id": "OBS-081f81c3a288",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:06:04+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "ledger-lite",
+      "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-4a1063a969fc",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-08-18T16:06:05+00:00",
+      "note": "human verdict given interactively in session 2026-08-18",
+      "entry": "ledger-lite",
+      "dir": "c-sonnet"
     }
   ]
 }
