@@ -842,6 +842,10 @@ def cmd_top(args):
     # and uscha_top.py falls back to $USERNAME/$USER, then to curate's own default.
     if getattr(args, "human", None):
         cmd += ["--human", args.human]
+    # and so does the rerun command (1.91.0, ADR-037): `o` runs what the HUMAN passed at
+    # launch and nothing else -- the launcher forwards the string, it never supplies one.
+    if getattr(args, "rerun_cmd", None):
+        cmd += ["--rerun-cmd", args.rerun_cmd]
     rc = subprocess.call(cmd)
     if rc:
         raise SystemExit(rc)
@@ -1051,6 +1055,7 @@ def build_parser():
     top.add_argument("--once", action="store_true", help="print one plain frame and exit (implied without a TTY)")
     top.add_argument("--refresh", type=float, default=2.0, help="seconds between mtime polls of the ledger (default: 2, floor 0.5); `r` still forces a re-read")
     top.add_argument("--human", default=None, help="who is at the keyboard: the name recorded on every verdict this session writes (default: $USERNAME/$USER, then `curate`'s own default)")
+    top.add_argument("--rerun-cmd", default=None, help="the shell command `o` reruns in the first configured repo (e.g. \"pytest -q\"); never guessed and never read from config -- without it `o` is inert. The engine's own `snapshot` ingests the report afterwards, red runs included")
     top.add_argument("--json", action="store_true", help="print the engine's read-only `top --json` contract instead of rendering it")
     top.set_defaults(func=cmd_top)
     return parser
