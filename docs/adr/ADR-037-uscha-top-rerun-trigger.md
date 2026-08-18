@@ -6,7 +6,7 @@ governs:
 ---
 # ADR-037: `o` rerun in `uscha top` — the TUI may TRIGGER the engine with a command the human supplied at launch; it never decides what to run and never writes the ledger itself (proposal for phase 2, M4)
 
-## Status: Proposed
+## Status: Proposed — option B chosen by the maintainer (2026-08-18); becomes Accepted when phase 2 ships it
 
 ## Context
 `uscha top` v0.1 (ADR-031..034, shipped 1.86.0–1.89.0) reads everything and writes exactly one
@@ -51,7 +51,7 @@ call site for each engine subcommand the TUI spawns, none inside a loop.
 would show a narrated outcome next to measured ones. Named only so it is not proposed again.
 
 ## Recommendation
-**B.** It keeps every invariant that matters — the TUI never writes, the engine never guesses,
+**B** — chosen by the maintainer on 2026-08-18 (curated interactively). It keeps every invariant that matters — the TUI never writes, the engine never guesses,
 the ingest is the real one, the human supplied the command and pressed the key — and it closes
 the loop the mockup promised (`fix → rerun → DONE moves`) inside the terminal. ADR-033's title
 sentence would be restated as: *the TUI itself never writes; it invokes at most two engine
