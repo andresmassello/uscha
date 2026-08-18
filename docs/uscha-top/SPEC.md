@@ -77,6 +77,9 @@ renders them, it does not recompute them (single derivation, ADR-032).
   labels this as a score trend, never as a count of closed obligations.
 - `spec_pin` → git `HEAD`, marked *not clean-room verified* unless a `clean_room` GREEN record exists
   at that SHA; `null` (non-git) renders `—`. This overrides the mockup's authoritative-looking pin.
+  `spec_pin` is the HEAD of the git work tree that **versions the repo path** — a subdirectory of a
+  repo (a monorepo subproject) pins that repo's HEAD, which is honest: those files are versioned
+  there. Only a path outside any git work tree at all yields `null`.
 - `AGE` column and per-OBS ages → `—` for every row in v0.1 (no first-seen timestamp).
 
 ---

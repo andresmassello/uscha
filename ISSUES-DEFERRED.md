@@ -141,3 +141,13 @@ silently lost:
   it). Fix candidate: `cmd_golden_coverage` should `os.environ.pop("COVERAGE_FILE")` (or set
   it explicitly) for its child process. Until then the acceptance number under
   `USCHA_COVERAGE=1` reads 128/129, and the plain suite is the gate.
+
+## 1.86.1 fresh review (`uscha top` M1) — LOW (deferred, below the severity gate)
+
+- **`uscha_top._fit`/`_spread` measure width in codepoints, not display columns.** `len(text)`
+  counts Python codepoints; a CJK project name or a wide-glyph string occupies 2 terminal
+  columns per codepoint on most terminals, so a name near the column budget can overflow the
+  frame's fixed width and break the "never wider than the terminal" invariant the golden
+  frames pin. Deferred: no fixture exercises a wide-char project name today and no user has
+  hit it. Fix candidate: an `east_asian_width`-aware measurement (stdlib `unicodedata.east_asian_width`)
+  plus a wide-char golden fixture to pin the corrected behavior.

@@ -1,0 +1,24 @@
+uscha top · backend-api                                                  step #0
+────────────────────────────────────────────────────────────────────────────────
+DONE 0/0 (0%)
+machine owes 0 · you owe 0 · untagged 0 · ETA —
+honesty 0/0 (0%) measured · spec_pin —
+score trend  —  (no `readiness --record` history yet)
+────────────────────────────────────────────────────────────────────────────────
+  ID      GATE     STATE            CASES  AGE  ACTION
+  no tagged criterion in the acceptance file (nothing to measure yet)
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+feed · the live event tail is M2; nothing is invented here
+
+
+
+[j/k] move · [r] reload · [q] quit · [v] verdicts (M3) · [d]/[o] phase 2

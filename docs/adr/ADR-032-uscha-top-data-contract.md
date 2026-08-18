@@ -93,7 +93,7 @@ and derivations live in exactly one place.
 
 | Field | v0.1 value | Why (audit ref) |
 |---|---|---|
-| `spec_pin` | `{sha, clean_room_verified:false}` or `null` | No pinned-spec concept exists. v0.1 shells to git for `HEAD`, labels it *not clean-room verified*; `clean_room_verified:true` only if a `clean_room` GREEN record exists at that SHA (`_cr_latest`, L3451). Not a git repo → `null`. A designed pin is ADR-035. (A/`spec_pin`, E.1) |
+| `spec_pin` | `{sha, clean_room_verified:false}` or `null` | No pinned-spec concept exists. v0.1 shells to git for `HEAD`, labels it *not clean-room verified*; `clean_room_verified:true` only if a `clean_room` GREEN record exists at that SHA (`_cr_latest`, L3451). `spec_pin` is the HEAD of the git work tree that VERSIONS the repo path — a subdirectory of a repo (monorepo subproject) pins that repo's HEAD, which is honest: those files ARE versioned there. Only a path outside any git work tree at all yields `null`. A designed pin is ADR-035. (A/`spec_pin`, E.1) |
 | `obligations[].trace` | `[]` | No general AC→implementation map exists; `_rt_ids_in`/`_RT_ID_RE` is bench-wired only. Deferred to ADR-035; until then the array is empty, never fabricated. (A/`trace`, E.3) |
 | `obligations[].ac`, `.quarantine_obs` | OBS id or `null` | The AC↔OBS link is a heuristic text match (`canonical_match`, L4374), not a designed field. `null` when no match — carried honestly. (A/`quarantine_obs`, C) |
 | `obligations[].age_hours`, `observations[].age_hours` | `null` | No per-observation/first-seen timestamp; CANDIDATE-DELTA.json is rewritten wholesale each `discover` run, so `mtime` is not a valid "first seen" proxy. (A/`age_hours`, E.5) |

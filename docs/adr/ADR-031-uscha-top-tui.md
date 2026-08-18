@@ -25,7 +25,7 @@ Constraints inherited from the kit and confirmed against the engine audit:
 - **CLI wiring precedent (audit E.8, corrected):** `bin/uscha.js` does **not** route subcommands to
   `qa_ledger.py` — it forwards `process.argv` to `install-uscha.py`'s own `argparse`, which knows
   only `version|install|doctor|init|uninstall|mirador`. The real precedent is `cmd_mirador`
-  (`_mirador_render_path`, L761-768; `subprocess.call` with `sys.executable`, L771-807): it resolves
+  (`_kit_script_path`, L761-768; `subprocess.call` with `sys.executable`, L771-807): it resolves
   a sibling script inside the kit tree across both skill-tree layouts and execs it. Wiring `uscha
   top` means adding a `top` subparser to `install-uscha.py` that mirrors `mirador` exactly — not a
   change to `bin/uscha.js`.
@@ -35,7 +35,7 @@ Constraints inherited from the kit and confirmed against the engine audit:
 ## Decision
 - **A new terminal application `uscha top`**, launched by a `top` subparser added to
   `install-uscha.py` that resolves and execs a new entry script `uscha_top.py`, resolving it exactly
-  as `_mirador_render_path` resolves the mirador renderer (both skill-tree layouts:
+  as `_kit_script_path` resolves the mirador renderer (both skill-tree layouts:
   `.claude/skills/uscha-devloop/` and the `skills/` twin, kept byte-identical per AC-01).
 - **Raw ANSI/VT renderer, no curses.** The renderer emits VT100/VT sequences directly to stdout.
   Input is read per-platform, detected at runtime: `termios`+`tty` on POSIX, `msvcrt` on Windows.

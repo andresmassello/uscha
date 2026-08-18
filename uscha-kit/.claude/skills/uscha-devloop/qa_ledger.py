@@ -142,7 +142,7 @@ def _integrity_hash(data):
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def _load(path):
+def _load(path, what="ledger", flag="--ledger"):
     """Carga blindada (kit 1.13.0, Topic 34: los recursos compartidos mutables
     incluyen ARCHIVOS). JSON corrupto/truncado = hecho bloqueante con mensaje
     de recuperacion, no un traceback. Si el archivo trae campo integrity
@@ -153,6 +153,12 @@ def _load(path):
     try:
         with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
+    except FileNotFoundError:
+        # what/flag name the file kind and the flag that points at it (1.86.1 re-judge: a
+        # hardcoded "ledger ... --ledger" misled the very first command of a fresh clone,
+        # init --config, and rebuild --baseline).
+        hint = " -- run the dev loop first, or pass --ledger" if what == "ledger" else f" -- pass {flag}"
+        raise SystemExit(f"[qa_ledger] {what} '{path}' not found here{hint}")
     except json.JSONDecodeError as exc:
         raise SystemExit(
             f"[qa_ledger] {path} corrupto (JSON invalido: {exc}). Es un artefacto "
@@ -818,6 +824,24 @@ def _ac_tags(repo_path, repo_type):
                                        "report": f.replace("\\", "/"),
                                        "ok": status == "green"})
     return tags, stale
+
+
+def _sum_ac_tags(ledger):
+    """One derivation of "how many green/red JUnit testcases does AC-n have, summed across
+    every configured repo" -- shared by cmd_readiness (which also keeps up to 8 example case
+    receipts per AC and the combined stale-report list) and cmd_top (which only needs
+    green/red). One place, so the two readouts of the same fact cannot silently disagree."""
+    ac_tags = {}
+    stale_reports = []
+    for rcfg in (ledger.get("config") or {}).get("repos", []):
+        rtags, rstale = _ac_tags(rcfg.get("path", "."), rcfg.get("type", "maven"))
+        for cid, v in rtags.items():
+            d = ac_tags.setdefault(cid, {"green": 0, "red": 0, "cases": []})
+            d["green"] += v["green"]
+            d["red"] += v["red"]
+            d["cases"] = (d["cases"] + v.get("cases", []))[:8]
+        stale_reports.extend(rstale)
+    return ac_tags, sorted(set(stale_reports))
 
 
 def junit_test_count(repo_path, extra_files=None):
@@ -1832,7 +1856,7 @@ def _validate_log_step_counts(args):
 
 
 def cmd_init(args):
-    cfg = _load(args.config)
+    cfg = _load(args.config, what="config", flag="--config")
     _validate_init_config(cfg)
     defaults = cfg.get("defaults", {})
     ledger = {
@@ -6892,6 +6916,9 @@ def cmd_facts(args):
             except OSError as exc:
                 problems.append((path, 0, "file", "unreadable: %s" % exc, ""))
                 continue
+            in_table = False
+            table_names = []
+            table_start = 0
             for n, line in enumerate(lines, 1):
                 # an HTML comment is not a published claim -- the first live run flagged a
                 # section marker (a comment reading "2 Skills") as a drifted count
@@ -6905,6 +6932,28 @@ def cmd_facts(args):
                         actual = _fact_value(facts, key)
                         if claimed != actual:
                             problems.append((path, n, key, claimed, actual))
+                # the parser-surface table (Subcommand/Subcomando header, one `<td class="t">`
+                # row per subcommand) is a claim too, just not a numeric one -- a row can go
+                # missing while the count beside it stays correct (the `top` row did, once).
+                if not in_table:
+                    if re.search(r"<th>Sub ?comm?ando?s?</th>", line, re.I):
+                        in_table, table_names, table_start = True, [], n
+                    continue
+                if "</table>" in line:
+                    in_table = False
+                    want = set(facts["subcommands"]["list"])
+                    got = set(table_names)
+                    for name in sorted(want - got):
+                        problems.append((path, table_start,
+                                         "subcommand table: %s" % name,
+                                         "absent", "present (engine subcommand list)"))
+                    for name in sorted(got - want):
+                        problems.append((path, table_start,
+                                         "subcommand table: %s" % name,
+                                         "present", "absent (not an engine subcommand)"))
+                    continue
+                for m in re.finditer(r'<td class="t">([^<]+)</td>', line):
+                    table_names.append(m.group(1).strip())
         if problems:
             print("FACTUAL DRIFT: %d claim(s) disagree with the derived facts"
                   % len(problems))
@@ -8133,16 +8182,10 @@ def cmd_top(args):
     acc_path = args.acceptance or (cfg.get("defaults") or {}).get("acceptance_file")
     acc_items, _acc_found = _parse_acceptance_items(acc_path, args.section)
 
-    # measured evidence: the SAME helper readiness closes criteria with (_ac_tags), summed
-    # across repos exactly as cmd_readiness sums it. Re-deriving it here would be the 1.48.1
-    # mirador sin (two derivations of one number, free to disagree).
-    ac_tags = {}
-    for rcfg in cfg.get("repos", []):
-        rtags, _stale = _ac_tags(rcfg.get("path", "."), rcfg.get("type", "maven"))
-        for cid, v in rtags.items():
-            d = ac_tags.setdefault(cid, {"green": 0, "red": 0})
-            d["green"] += v.get("green", 0)
-            d["red"] += v.get("red", 0)
+    # measured evidence: the SAME helper readiness closes criteria with (_ac_tags via
+    # _sum_ac_tags), summed across repos exactly as cmd_readiness sums it. Re-deriving it
+    # here would be the 1.48.1 mirador sin (two derivations of one number, free to disagree).
+    ac_tags, _stale = _sum_ac_tags(ledger)
 
     # quarantine: UNCURATED observations whose statement literally names an AC id. The link
     # is `canonical_match`, a heuristic TEXT match (_match_canonical) -- not a designed
@@ -8213,7 +8256,10 @@ def cmd_top(args):
             "cases_pass": (tag or {}).get("green", 0),
             "cases_total": (tag or {}).get("green", 0) + (tag or {}).get("red", 0),
             "trace": [],                  # no general AC->implementation map yet (ADR-035/5)
-            "quarantine_obs": obs,
+            # red/green evidence outranks the lateral QUARANTINE rung (the state ladder just
+            # above), so an OBS that merely NAMES this AC must not travel into the JSON once
+            # the criterion is already measured -- only a state of QUARANTINE ever carries it.
+            "quarantine_obs": obs if state == "QUARANTINE" else None,
             "ac": None,                   # contract slot with no second honest meaning here
             "age_hours": None})           # no first-seen timestamp exists (ADR-035/1)
 
@@ -8291,18 +8337,7 @@ def cmd_readiness(args):
     # cierra solo con >=1 testcase verde taggeado en los reportes JUnit ya
     # ingeridos (y 0 rojos). El checkbox es RELATO; el testcase es HECHO.
     ac_ids = [i for i in acc_items if i["id"]]
-    ac_tags = {}
-    stale_reports = []
-    for rcfg in ledger["config"].get("repos", []):
-        rtags, rstale = _ac_tags(rcfg.get("path", "."),
-                                 rcfg.get("type", "maven"))
-        for cid, v in rtags.items():
-            d = ac_tags.setdefault(cid, {"green": 0, "red": 0, "cases": []})
-            d["green"] += v["green"]
-            d["red"] += v["red"]
-            d["cases"] = (d["cases"] + v.get("cases", []))[:8]
-        stale_reports.extend(rstale)
-    stale_reports = sorted(set(stale_reports))
+    ac_tags, stale_reports = _sum_ac_tags(ledger)
 
     def _ac_closed(cid):
         d = ac_tags.get(cid)
@@ -8827,7 +8862,7 @@ def cmd_rebuild(args):
 
 
 def _rebuild_baseline(args):
-    cfg = _load(args.config)
+    cfg = _load(args.config, what="config", flag="--config")
     defaults = cfg.get("defaults", {})
     acc_default = args.acceptance or defaults.get("acceptance_file")
     tol = (args.coverage_tolerance if args.coverage_tolerance is not None
@@ -8853,7 +8888,7 @@ def _rebuild_baseline(args):
 
 
 def _rebuild_compare(args):
-    base = _load(args.baseline)
+    base = _load(args.baseline, what="baseline", flag="--baseline")
     tol = base.get("coverage_tolerance", DEFAULT_COVERAGE_TOLERANCE)
     acc_path = args.acceptance or base.get("acceptance_file")
     section = args.section if args.section is not None else base.get("section")

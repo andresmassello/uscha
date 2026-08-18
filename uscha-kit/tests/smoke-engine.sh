@@ -6756,7 +6756,7 @@ echo "== T137 (uscha top M1): the engine computes the WHOLE projection, and a fi
 # engine JSON alone -- so a renderer cannot be the place a number is invented, and the
 # deferred fields (ETA, ages, drift, trace) are proven ABSENT rather than assumed absent.
 T137=$("$PY" - "$KIT" <<'PY'
-import io, json, os, subprocess, sys
+import io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
@@ -6852,6 +6852,7 @@ for n in ("healthy", "stale-quarantine", "honesty-negative"):
             ok = False
 res["AC-T-10"] = bool(ok)
 
+# the JSON contract only -- the rendered suffix itself is proven by AC-T-23 in T138.
 # AC-T-04 + honesty: the negative fixture reads 96, never 100, and honesty travels with it.
 s = states.get("honesty-negative") or {}
 t = s.get("terminado") or {}
@@ -6953,6 +6954,103 @@ if a != b:
     ok = False
 res["AC-T-24"] = bool(ok)
 
+# regression: a criterion that is BOTH junit-green AND named by an uncurated observation
+# must read MEASURED_PASS with quarantine_obs NULL -- red/green evidence outranks the
+# lateral QUARANTINE rung, and the field must agree with the state, not just the state
+# itself (the dict literal once set quarantine_obs unconditionally to the matched OBS id).
+sys.path.insert(0, os.path.dirname(ENG))
+import qa_ledger as _ql
+
+tmp_both = tempfile.mkdtemp(prefix="uscha-top-both-")
+repo_both = os.path.join(tmp_both, "repo")
+os.makedirs(os.path.join(repo_both, "reports"))
+os.makedirs(os.path.join(repo_both, "discovery"))
+io.open(os.path.join(repo_both, "reports", "junit.xml"), "w", encoding="utf-8").write(
+    '<testsuite name="fixture" tests="1">'
+    '<testcase classname="fx" name="AC-01_green"></testcase>'
+    '</testsuite>')
+_stmt = "AC-01 both green and named by an observation"
+_files = ["svc/both.py"]
+_obs = [{"id": _ql._obs_id("invariant", _stmt, _files[0]), "type": "invariant",
+        "statement": _stmt, "evidence_class": "static",
+        "provenance": {"files": _files, "derivation": "fixture", "tool": "fixture"},
+        "canonical_match": "AC-1"}]
+_delta = {"_generated_by": "fixture (T137 both-green-and-named, in-memory)",
+         "_integrity": _ql._delta_seal(_obs, "both-repo", None), "repo": "both-repo",
+         "observations": _obs, "static_unsupported": {"files": 0, "note": "fixture"}}
+io.open(os.path.join(repo_both, "discovery", "CANDIDATE-DELTA.json"), "w",
+       encoding="utf-8").write(json.dumps(_delta))
+io.open(os.path.join(tmp_both, "ACCEPTANCE.md"), "w", encoding="utf-8").write(
+    "# ACCEPTANCE\n\n- [ ] AC-01 - both green and quarantined\n")
+_cfg = {"version": "1.0.0", "project": "both-repo",
+       "defaults": {"acceptance_file": "ACCEPTANCE.md", "coverage_threshold": 60},
+       "repos": [{"name": "both-repo", "path": "repo", "type": "python"}],
+       "integration": {"enabled": False}}
+_led = {"schema": "dev-loop/qa-ledger@1", "run_id": "t137-both", "started_at": "2026-08-17T00:00:00+00:00",
+       "updated_at": "2026-08-17T00:00:00+00:00", "config": _cfg, "step_counter": 1,
+       "repos": {"both-repo": {"type": "python", "path": "repo", "snapshots": [], "iterations": []}},
+       "steps": [], "escalations": [], "production_findings": [], "spec_doubts": [],
+       "spec_change_requests": [], "readiness_history": [], "curation": []}
+io.open(os.path.join(tmp_both, "QA-LEDGER.json"), "w", encoding="utf-8").write(json.dumps(_led))
+r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                   cwd=tmp_both, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   text=True, encoding="utf-8", errors="replace")
+ok = r.returncode == 0
+try:
+    sboth = json.loads(r.stdout)
+except ValueError:
+    sboth, ok = {}, False
+ob = next((o for o in (sboth.get("obligations") or []) if o.get("id") == "AC-1"), None)
+if not ob or ob.get("state") != "MEASURED_PASS" or ob.get("quarantine_obs") is not None:
+    ok = False
+res["reg-quarantine-obs-null-on-measured"] = bool(ok)
+
+# INV-TOP-05 null path for spec_pin: only a directory git itself denies is ANY work tree
+# yields null (a subdirectory of a repo still pins that repo's own HEAD -- ADR-032/SPEC.md
+# clarify that is honest, not a bug). tempfile.mkdtemp() usually lands outside every work
+# tree; the fixture PROVES it rather than assuming it.
+tmp_ng = tempfile.mkdtemp(prefix="uscha-top-nogit-")
+try:
+    gitchk = subprocess.run(["git", "-C", tmp_ng, "rev-parse", "--is-inside-work-tree"],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    ok = gitchk.returncode != 0
+except OSError:
+    ok = True                          # no git on PATH: cannot verify the precondition
+shutil.copytree(os.path.join(FIX, "fixture-healthy"), tmp_ng, dirs_exist_ok=True)
+r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                   cwd=tmp_ng, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   text=True, encoding="utf-8", errors="replace")
+try:
+    sng = json.loads(r.stdout)
+except ValueError:
+    sng, ok = {}, False
+if r.returncode != 0 or sng.get("spec_pin") is not None:
+    ok = False
+res["reg-spec-pin-null-outside-worktree"] = bool(ok)
+
+# a repo the LEDGER tracks but whose config entry is gone (renamed/removed) must be NAMED
+# on stderr, never dropped in silence -- the debtor column has no other way to say "I could
+# not look here" (cmd_top's own comment). stdout stays pure JSON regardless.
+ghost_led = json.loads(io.open(os.path.join(FIX, "fixture-stale-quarantine",
+                                            "QA-LEDGER.json"), encoding="utf-8").read())
+ghost_led.pop("integrity", None)
+ghost_led["repos"]["ghost-repo"] = {"type": "python", "path": "nowhere",
+                                    "snapshots": [], "iterations": []}
+tmp_ghost = tempfile.mkdtemp(prefix="uscha-top-ghost-")
+io.open(os.path.join(tmp_ghost, "QA-LEDGER.json"), "w", encoding="utf-8").write(
+    json.dumps(ghost_led))
+r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                   cwd=tmp_ghost, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   text=True, encoding="utf-8", errors="replace")
+ok = r.returncode == 0
+try:
+    json.loads(r.stdout)
+except ValueError:
+    ok = False
+if "skipped for quarantine scan" not in r.stderr or "ghost-repo" not in r.stderr:
+    ok = False
+res["reg-unreachable-repo-named-not-silent"] = bool(ok)
+
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 io.open(os.path.join(side, ".top-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
@@ -7019,6 +7117,23 @@ try:
 finally:
     os.chdir(cwd)
 res["AC-T-19"] = bool(ok)
+
+# a genuinely empty project (zero tagged obligations) is its own honesty case, not merely
+# "unmeasured": DONE 0/0 (0%) with no suffix, the "nothing to measure yet" line, and never a
+# fabricated 100%.
+ok = True
+for cols, rows in SIZES:
+    frame = uscha_top.render(state("empty"), (cols, rows), sel=0, plain=True)
+    if frame != golden("empty", cols, rows):
+        ok = False
+    if not any("nothing to measure yet" in ln for ln in frame):
+        ok = False
+    head = [ln for ln in frame if ln.startswith("DONE ")]
+    if len(head) != 1 or "DONE 0/0 (0%)" not in head[0] or "unmeasured" in head[0]:
+        ok = False
+    if any("100%" in ln for ln in frame):
+        ok = False
+res["reg-empty-project-honest"] = bool(ok)
 
 # AC-T-23: the frame that fails a cheating renderer. Asserted over the LIVE render, not
 # only over the committed snapshot -- a criterion that reads its own golden would be
@@ -7144,6 +7259,13 @@ if uscha_top.dispatch("r", 3, 8) != (3, False, True):
     ok = False
 res["AC-T-22"] = bool(ok)
 
+# missing ledger: a friendly message on stderr, exit 1, no traceback -- the ledger-not-found
+# path is the FIRST thing a fresh clone hits, so it must not read as a crash.
+r = subprocess.run([sys.executable, TUI, "--once", "--ledger", "DOES-NOT-EXIST.json"],
+                   cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+res["reg-ledger-not-found"] = bool(
+    r.returncode == 1 and b"not found" in r.stderr and b"Traceback" not in r.stdout)
+
 # py3.8 is the floor the whole kit ships against: when a 3.8 interpreter is on this box the
 # frame must come out byte-identical there too (same lesson the round-trip aggregate taught).
 uv38 = glob.glob(os.path.expanduser(
@@ -7175,6 +7297,21 @@ case "$T138" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T138";;
 esac
 
+# 1.86.1 re-judge: _load names the file KIND and the flag that points at it -- a hardcoded
+# "ledger ... --ledger" misled init --config (the first command of a fresh clone) and rebuild
+# --baseline. Pinned: config / ledger / baseline each get their own message, no traceback.
+"$PY" -c "
+import subprocess, sys, tempfile, os
+ql = sys.argv[1]; d = tempfile.mkdtemp()
+def run(*a):
+    r = subprocess.run([sys.executable, ql] + list(a), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
+    return r.returncode, r.stdout + r.stderr
+ok = True
+rc, out = run('init', '--config', 'NOPE.json'); ok &= rc != 0 and 'config ' in out and '--config' in out and 'Traceback' not in out
+rc, out = run('top', '--json', '--ledger', 'NOPE.json'); ok &= rc != 0 and 'ledger ' in out and '--ledger' in out and 'Traceback' not in out
+rc, out = run('rebuild', '--mode', 'compare', '--baseline', 'NOPE.json'); ok &= rc != 0 and 'baseline ' in out and '--baseline' in out and 'Traceback' not in out
+sys.exit(0 if ok else 1)" "$QL"   && { PASS=$((PASS+1)); echo "  ok   _load names the missing file kind and its flag (config/ledger/baseline), never a traceback"; }   || { FAIL=$((FAIL+1)); echo "  FAIL _load missing-file message is wrong for config/ledger/baseline"; }
+
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -7193,6 +7330,56 @@ chk "site+README+manifests+docs claims match SYSTEM-FACTS" 0 \
     "$ROOT/docs/uscha-claude-code-doc.html" "$ROOT/docs/uscha-claude-code-doc-EN.html" \
     "$ROOT/site/docs/uscha-claude-code-doc.html" "$ROOT/site/docs/uscha-claude-code-doc-EN.html" \
     --out "$ROOT/SYSTEM-FACTS.json"
+
+echo "== T139 (facts table drift): a doc's parser-surface table missing a subcommand row fails facts --check by name =="
+# The table is a claim too, not just the numeric count beside it (the founding T0-live gate
+# only ever compared numbers) -- the `top` row was once missing here while the count stayed
+# correct. A doctored copy with one row removed must fail BY NAME; the real doc must still pass.
+T139=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import io, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+QL = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+doc = os.path.join(root, "docs", "uscha-claude-code-doc-EN.html")
+bad = []
+d = tempfile.mkdtemp(prefix="uscha-facts-table-")
+try:
+    lines = io.open(doc, encoding="utf-8").read().split("\n")
+    removed = False
+    out = []
+    for ln in lines:
+        if not removed and '<td class="t">top</td>' in ln:
+            removed = True
+            continue
+        out.append(ln)
+    if not removed:
+        bad.append("fixture setup: no top row found in the real doc to remove")
+    doctored = os.path.join(d, "doctored.html")
+    io.open(doctored, "w", encoding="utf-8").write("\n".join(out))
+    facts_out = os.path.join(d, "SYSTEM-FACTS.json")
+    subprocess.run([sys.executable, QL, "facts", "--out", facts_out], cwd=root,
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    rd = subprocess.run([sys.executable, QL, "facts", "--check", doctored,
+                        "--out", facts_out], cwd=root,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if rd.returncode == 0:
+        bad.append("doctored doc (missing the top row) passed facts --check")
+    if "top" not in rd.stdout:
+        bad.append("drift report did not name the missing subcommand: %r" % rd.stdout)
+    rr = subprocess.run([sys.executable, QL, "facts", "--check", doc,
+                        "--out", facts_out], cwd=root,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if rr.returncode != 0:
+        bad.append("the real (unmodified) doc failed facts --check: %s" % rr.stdout)
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+print("OK" if not bad else "BAD " + " | ".join(bad))
+PY
+)
+if [ "$T139" = "OK" ]; then
+  PASS=$((PASS+1)); echo "  ok   a doc missing the top table row fails facts --check by name, the real doc passes"
+else
+  FAIL=$((FAIL+1)); echo "  FAIL $T139"
+fi
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no

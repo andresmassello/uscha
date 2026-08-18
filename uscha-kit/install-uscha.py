@@ -758,10 +758,12 @@ def _open_best_effort(path):
         pass  # the renderer already printed the absolute path
 
 
-def _mirador_render_path():
-    """The mirador renderer inside this kit (either skill-tree layout)."""
-    for rel in (("skills", "uscha-mirador", "mirador-render.py"),
-                (".claude", "skills", "uscha-mirador", "mirador-render.py")):
+def _kit_script_path(skill_dir, filename):
+    """A script inside this kit, in either skill-tree layout (`skills/<skill_dir>/` or
+    `.claude/skills/<skill_dir>/`) -- the one resolution every sibling script lookup in this
+    file shares, and the same both-layouts precedent `uscha_top.py::engine_path()` uses on
+    its own side of the lookup."""
+    for rel in (("skills", skill_dir, filename), (".claude", "skills", skill_dir, filename)):
         candidate = KIT_ROOT.joinpath(*rel)
         if candidate.is_file():
             return candidate
@@ -772,7 +774,7 @@ def cmd_mirador(args):
     """`uscha mirador` — one command to render + open the project's dashboard.
     No paths, no python: the renderer self-resolves its engine/template siblings, and the
     ledger defaults to the QA-LEDGER.json convention in the current directory."""
-    render = _mirador_render_path()
+    render = _kit_script_path("uscha-mirador", "mirador-render.py")
     if render is None:
         print("[uscha mirador] mirador-render.py not found in the kit", file=sys.stderr)
         raise SystemExit(1)
@@ -807,26 +809,6 @@ def cmd_mirador(args):
         print("\n[uscha mirador] stopped")
 
 
-def _uscha_top_path():
-    """The `uscha top` renderer inside this kit (either skill-tree layout)."""
-    for rel in (("skills", "uscha-devloop", "uscha_top.py"),
-                (".claude", "skills", "uscha-devloop", "uscha_top.py")):
-        candidate = KIT_ROOT.joinpath(*rel)
-        if candidate.is_file():
-            return candidate
-    return None
-
-
-def _qa_ledger_path():
-    """The engine inside this kit (either skill-tree layout)."""
-    for rel in (("skills", "uscha-devloop", "qa_ledger.py"),
-                (".claude", "skills", "uscha-devloop", "qa_ledger.py")):
-        candidate = KIT_ROOT.joinpath(*rel)
-        if candidate.is_file():
-            return candidate
-    return None
-
-
 def cmd_top(args):
     """`uscha top` — the live terminal board of the project's ledger (ADR-031).
     Wired exactly like `mirador`: resolve the sibling script inside the kit and exec it with
@@ -837,7 +819,7 @@ def cmd_top(args):
               "--ledger" % args.ledger, file=sys.stderr)
         raise SystemExit(1)
     if args.json:
-        engine = _qa_ledger_path()
+        engine = _kit_script_path("uscha-devloop", "qa_ledger.py")
         if engine is None:
             print("[uscha top] qa_ledger.py not found in the kit", file=sys.stderr)
             raise SystemExit(1)
@@ -846,7 +828,7 @@ def cmd_top(args):
         if rc:
             raise SystemExit(rc)
         return
-    renderer = _uscha_top_path()
+    renderer = _kit_script_path("uscha-devloop", "uscha_top.py")
     if renderer is None:
         print("[uscha top] uscha_top.py not found in the kit", file=sys.stderr)
         raise SystemExit(1)

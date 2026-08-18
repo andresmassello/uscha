@@ -27,7 +27,6 @@ import subprocess
 import sys
 
 DEFAULT_LEDGER = "QA-LEDGER.json"
-DEFAULT_SIZE = (100, 32)
 FALLBACK_SIZE = (100, 32)
 
 # Lines the board always spends on chrome: the title, 3 rules, 4 KPI lines, the table
@@ -257,6 +256,9 @@ def load_state(state_path=None, ledger=DEFAULT_LEDGER, engine=None):
     if state_path:
         with open(state_path, "r", encoding="utf-8") as fh:
             return json.load(fh)
+    if not os.path.isfile(ledger):
+        raise RuntimeError("ledger '%s' not found here -- run the dev loop first, or pass "
+                           "--ledger" % ledger)
     eng = engine or engine_path()
     if not eng:
         raise RuntimeError("qa_ledger.py not found next to uscha_top.py")
