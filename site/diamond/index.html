@@ -261,7 +261,7 @@
         <tr><td>Round-trip by ID coverage (which specs are traceable in the code?)</td>
             <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
         <tr><td>Semantic round-trip (does the code <em>say the same thing</em> as the spec?)</td>
-            <td><span class="chip real">REAL</span> (measured, bounded)</td><td>recoverability 0.062 measured, behaviour UNMEASURED — anchors names, not semantics · 1.85 · ADR-030</td></tr>
+            <td><span class="chip real">REAL</span> (measured, bounded)</td><td>recoverability 0.828 measured, behaviour measured in 12/12 — anchors names and behaviour · 1.90 · ADR-030 (amended)</td></tr>
         <tr><td>Implementation replaceability, demonstrated on bounded systems — independent models regenerate the same system from the canonical package, a withheld oracle certifies it</td>
             <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 archetypes (11 Python + 1 JavaScript, one multi-unit): 9 PASS, 3 PARTIAL · 1.74–1.85 · ADR-017/018/020/025/028/029</td></tr>
         <tr><td>Per-compiler fidelity (reverse discovery over each compiled artifact) + human curation of machine-generated code, one verdict per observation</td>
@@ -287,12 +287,12 @@
     the only thing worth migrating.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      State verified against kit 1.89.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016–ADR-030,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.89.0 · the REAL/VISION
+      State verified against kit 1.90.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016–ADR-030,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.90.0 · the REAL/VISION
       labels follow the repo's INV-TRUTH-01 rule.
     </p>
 
-    <h2>07 · The program, measured — T0 → 1.89.0</h2>
+    <h2>07 · The program, measured — T0 → 1.90.0</h2>
     <p>The Diamond program ran as eight releases of the kit measuring itself. Every number
     below comes from a committed, regenerable report in the repo — none is narrated:</p>
     <table>
@@ -314,8 +314,8 @@
             <td>The bench's first IR with real edges (3, extracted from the seam decision): PASS 24/24 × 3, entry unit routed through the CLI over both units, static surface main+post — the seam holds under 3 independent compilers; the wrong/ that breaks the seam (balance logic moved into the CLI) and the one that ignores the model unit entirely both read red.</td>
             <td>1.85</td></tr>
         <tr><td>Round-trip recoverability — how much of the pinned IR the mechanical reverse organs anchor, over 12 archetypes × 3 compilers each</td>
-            <td>Mean recoverability 0.062, measured — the reverse organs anchor names, not semantics; the manifest footing would read 1.000 and is excluded as tautological (it is what the compiler CLAIMED, not what was recovered); the behaviour dimension is UNMEASURED in 12/12 (no oracle case is tagged with an AC id yet). The diamond's reverse half is a measurement with a stated ceiling, not a promise.</td>
-            <td>1.85</td></tr>
+            <td>Mean recoverability 0.828, measured — the reverse organs anchor names and behaviour; the manifest footing would read 1.000 and is excluded as tautological (it is what the compiler CLAIMED, not what was recovered). It read 0.062 with the behaviour dimension UNMEASURED in 12/12 until the 12 oracles were curated with per-case AC tags (1.90, ADR-030 amended): a named absence, not a zero, and what moved the number was the tagging — payloads and expectations untouched. The diamond's reverse half is a measurement with a stated ceiling, not a promise.</td>
+            <td>1.90</td></tr>
         <tr><td>Fidelity per compiler — the M1 static extractor applied to each compiled artifact</td>
             <td>Behaviourally near-identical compilers expose visibly different surfaces: 19–21/23 on the same oracle through 5, 4 and 8 public functions.</td>
             <td>1.79</td></tr>
@@ -348,7 +348,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../es/diamond/index.html">Versión en español</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.89.0</p>
+    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.90.0</p>
   </div>
 </footer>
 

@@ -5479,7 +5479,8 @@ def _static_surface_for(cd, unit):
 
 def _judged_env():
     """The environment a JUDGED program gets: this process's, minus the hooks that would make
-    a third party instrument it.
+    a third party instrument it, plus the one setting that keeps it from leaving anything
+    behind in the tree it is judged from.
 
     The withheld oracle measures a compiled implementation by its exit code and its stdout. A
     measurement that changes what it measures is a broken measurement, and coverage.py's
@@ -5499,10 +5500,21 @@ def _judged_env():
 
     Only the two variables that START coverage in a child are dropped. `COVERAGE_FILE` is
     left alone: it names a data file, it does not turn anything on, and a caller that set it
-    means it. Outside a coverage run this function returns the environment unchanged."""
+    means it.
+
+    `PYTHONDONTWRITEBYTECODE` is SET, and that one is not about coverage (1.90.0, ADR-030
+    amended). A multi-unit compilation imports its sibling module, so running it writes
+    `__pycache__/*.pyc` INTO the fixture directory -- and the round trip's own criterion is
+    that the instrument regenerates nothing under the bench tree (AC-RT-01 snapshots the file
+    list before and after). It only became reachable when the behaviour dimension started
+    running cases: measured on a clean tree, `bench-roundtrip` left three `.pyc` files behind.
+    In the suite the earlier `bench` block had already warmed the cache, so the red would have
+    waited for a fresh CI clone to appear -- an ordering dependency, which is the kind of
+    green worth nothing. Judging a program must not modify what is being judged."""
     env = dict(os.environ)
     for key in ("COVERAGE_PROCESS_START", "COVERAGE_PROCESS_CONFIG"):
         env.pop(key, None)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     return env
 
 
@@ -6345,6 +6357,41 @@ def _rt_ids_in(text):
     return out
 
 
+def _rt_ac_key(cid):
+    """ONE spelling for comparing an AC id, so the round-trip's footings cannot disagree over
+    punctuation (ADR-030, amended 1.90.0).
+
+    The three footings read ids from three places that spell them differently: an IR node id is
+    written the way a human wrote the acceptance line and keeps its padding (`AC-DD-07`), a
+    source comment or a curated oracle tag may write `AC-DD-7` or `AC_DD_07`, and `_rt_ids_in`
+    only upper-cases what it finds. Comparing those raw was a match that depended on a zero.
+    The normal form is ADR-036's OWN grammar (`_ac_tag_ids`, family + integer, padding and
+    separator dropped) -- reused rather than reimplemented, because a second grammar for the
+    same id is the drift this function exists to prevent. It is applied to BOTH sides of the
+    behaviour comparison and nowhere else: `per_node["id"]`, the static footing and the
+    manifest footing keep the IR's own spelling, so no report changes shape. A non-AC id
+    (INV-*, ADR-*) has no behaviour footing at all and falls through upper-cased."""
+    ids = _ac_tag_ids(str(cid or ""))
+    return ids[0] if ids else str(cid or "").upper().replace("_", "-")
+
+
+def _rt_case_tags(case):
+    """Every AC id ONE withheld-oracle case is tagged with, normalised (ADR-030, amended
+    1.90.0): the ids literally referenced in its `name`, plus the ids in its curated `ac` list.
+
+    `ac` is a human-curated field on the case (provenance:
+    `tests/fixtures/diamond-bench/ORACLE-TAGS-CURATED.json`) -- the payload and the expectations
+    are untouched by it, so tagging cannot change what a case MEASURES, only what the id map
+    says it measures. Absence stays absence: a missing key, a null, a non-list, or a list with
+    nothing usable in it yields no tags, and an entry whose cases carry none is still
+    behaviour-UNMEASURED rather than behaviour-zero."""
+    out = set(_rt_ids_in(case.get("name", "")))
+    raw = case.get("ac")
+    if isinstance(raw, (list, tuple)):
+        out |= {t for t in (str(x).strip() for x in raw if isinstance(x, str)) if t}
+    return {_rt_ac_key(t) for t in out}
+
+
 def _rt_read_source(cd, unit):
     try:
         with open(os.path.join(cd, unit.replace("/", os.sep)), encoding="utf-8",
@@ -6359,8 +6406,9 @@ def _rt_compilation(entry_dir, cd, ir_graph, cases):
     IR node, whether the mechanical reverse organs find footing for it in the artifact --
     (a) static: a source unit's text or a static observation literally references the id;
     (b) manifest: the compiler's validated trace manifest maps the node to a unit that exists;
-    (c) behaviour: for AC nodes, at least one withheld-oracle case tagged with the id passes
-    (UNMEASURED when no case carries any AC tag). It regenerates NOTHING: no IR', no spec --
+    (c) behaviour: for AC nodes, at least one withheld-oracle case tagged with the id passes --
+    tagged in the case NAME or in its curated `ac` list (ADR-030 amended 1.90.0), and
+    UNMEASURED when no case carries any tag at all. It regenerates NOTHING: no IR', no spec --
     a coverage over the human-authored IR, plus the list of nodes nothing anchors."""
     cj = os.path.join(cd, "COMPILATION.json")
     try:
@@ -6385,26 +6433,40 @@ def _rt_compilation(entry_dir, cd, ir_graph, cases):
         if e.get("unit") in units:
             for nid in e.get("implements") or []:
                 manifest_ids.add(str(nid).upper())
-    # (c) behaviour footing: oracle cases whose NAME carries an AC id (payload tags are not a
-    # convention the bench oracles use today -- absence named, not faked)
+    # (c) behaviour footing: the oracle cases an id is tagged with -- in the case NAME, and
+    # since 1.90.0 in the case's curated `ac` list as well (ADR-030 amended). Before the
+    # curation there was no tag anywhere in this fixture and the whole dimension read
+    # UNMEASURED: a named absence, which is what it was, and it is now measured instead.
     tagged = {}
-    for case in cases:
-        for cid in _rt_ids_in(case.get("name", "")):
-            tagged.setdefault(cid, []).append(case)
-    behaviour_measured = bool(tagged)
+    for i, case in enumerate(cases):
+        for cid in _rt_case_tags(case):
+            tagged.setdefault(cid, []).append(i)
+    # MEASURED only when at least one tag names an AC node of THIS entry's IR (1.90.0 review):
+    # a typo, a stray ADR/INV id or a tag from another archetype anchors nothing, and a tag
+    # that anchors nothing must leave the dimension a named absence, never a measured zero.
+    ir_ac_keys = {_rt_ac_key(n) for n in node_ids if str(n).upper().startswith("AC")}
+    behaviour_measured = any(_rt_ac_key(k) in ir_ac_keys for k in tagged)
     behaviour_ids = set()
     entry_unit = _entry_unit(c.get("source") or [])
     impl = os.path.join(cd, entry_unit.replace("/", os.sep)) if entry_unit else None
     if behaviour_measured and impl and os.path.isfile(impl):
-        for cid, cs in tagged.items():
-            if any(_run_oracle_case(impl, case).get("ok") for case in cs):
+        # one RUN per case, not one per tag: a case tagged with three ids used to be executed
+        # three times, and running a judged program more often than the oracle asked is both
+        # slower and a different experiment
+        verdicts = {}
+        for cid, idxs in tagged.items():
+            for i in idxs:
+                if i not in verdicts:
+                    verdicts[i] = bool(_run_oracle_case(impl, cases[i]).get("ok"))
+            if any(verdicts[i] for i in idxs):
                 behaviour_ids.add(cid)
     per_node = []
     anchored = 0
     for nid in node_ids:
         a_s = nid in static_ids
         a_m = nid in manifest_ids
-        a_b = (nid in behaviour_ids) if (behaviour_measured and nid.startswith("AC-")) else None
+        a_b = ((_rt_ac_key(nid) in behaviour_ids)
+               if (behaviour_measured and nid.startswith("AC-")) else None)
         anchored_any = a_s or a_m or bool(a_b)
         # the MEASURED footing excludes the manifest: the manifest is what the compiler
         # CLAIMED (and the prompt handed it the ids), so counting it as recovered would be
@@ -6461,6 +6523,26 @@ def _rt_entry(entry_dir, name):
     return rec
 
 
+def _rt_behaviour_note(agg):
+    """The report's closing sentence about the behaviour dimension, DERIVED from the aggregate
+    instead of asserted (1.90.0).
+
+    It used to end 'which today is every entry' -- true when written, false the moment the
+    diamond-bench oracles were curated with per-case `ac` tags, and nothing would have caught
+    it: a generated document is exactly where a hardcoded claim rots unseen. Three honest
+    states, one of them chosen by the number beside it."""
+    measured, total = agg.get("behaviour_measured") or 0, agg.get("measured") or 0
+    if not total or not measured:
+        return ("which today is every entry: the honest state of reverse discovery is that it "
+                "anchors names, not semantics, until oracles carry per-AC tags")
+    if measured == total:
+        return ("which today is no entry: every oracle here carries per-AC tags, so this "
+                "dimension is measured rather than named absent, and what it attributes is "
+                "behaviour and not merely a name")
+    return ("which today is %d of the %d measured entries -- the rest carry per-AC tags and "
+            "are attributed by behaviour" % (total - measured, total))
+
+
 def _render_rt_md(recs, agg):
     lines = ["<!-- GENERATED by qa_ledger.py bench-roundtrip (ADR-030) -- measured run; do not hand-edit. -->",
              "", "# DIAMOND-ROUNDTRIP -- how much of the pinned IR the reverse organs can anchor in each compiled artifact", "",
@@ -6498,10 +6580,8 @@ def _render_rt_md(recs, agg):
               "", "*The manifest dimension is what the compiler CLAIMED (validated for shape, "
               "not truth) and is excluded from recoverability; the static dimension is what the "
               "artifact literally names; the behaviour dimension is what the withheld oracle can "
-              "attribute per AC -- and it is UNMEASURED wherever oracle cases are not tagged with "
-              "AC ids, which today is every entry: the honest state of reverse discovery is that "
-              "it anchors names, not semantics, until oracles carry per-AC tags. None of the three "
-              "is a spec.*", ""]
+              "attribute per AC -- UNMEASURED wherever the entry's oracle cases carry no AC tag, "
+              "%s. None of the three is a spec.*" % _rt_behaviour_note(agg), ""]
     return "\n".join(lines)
 
 

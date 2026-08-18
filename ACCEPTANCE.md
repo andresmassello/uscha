@@ -493,20 +493,33 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 - [x] AC-RT-02 - for every compilation of every entry: `recoverability` is between 0 and 1;
   `anchored` never exceeds `static_anchored + behaviour` (when behaviour is measured) and never
   falls below the larger of the two, allowing overlap; `claimed` (the manifest footing) is
-  always `>= anchored`; `behaviour` reads the literal string `UNMEASURED` for every compilation
-  today (no oracle case is tagged with an AC id yet); `edges_recovered <= edges`; `unanchored`
-  is a list whose length equals `ir_nodes - anchored`; per-node detail carries the keys
-  `id`/`static`/`manifest`/`behaviour`/`anchored`/`claimed`; `ledger-lite` - the bench's only
-  entry with edges - reports `edges == 3` for every compilation and `edges_recovered_mean ==
-  0.33`.
+  always `>= anchored`; `behaviour` is an integer count between 0 and `ir_nodes` for every
+  compilation - it read the literal string `UNMEASURED` until the diamond-bench oracles were
+  curated with per-case `ac` tags (ADR-030 amended, 1.90.0); `edges_recovered <= edges`;
+  `unanchored` is a list whose length equals `ir_nodes - anchored`; per-node detail carries the
+  keys `id`/`static`/`manifest`/`behaviour`/`anchored`/`claimed`; `ledger-lite` - the bench's
+  only entry with edges - reports `edges == 3` for every compilation and
+  `edges_recovered_mean == 1.00` (it was 0.33 while static footing was the only one that
+  anchored anything).
 - [x] AC-RT-03 - the aggregate is pinned to today's measured state: 12 entries measured, mean
-  `recoverability` 0.062, 1 entry with edges, behaviour measured in 0 of 12 entries; the
-  per-entry `recoverability_mean` is pinned exactly: `crud-store 0.000, guard 0.125, ledger-lite
-  0.148, parser 0.000, protocol-adapter 0.000, rate-limiter 0.048, rest-handler 0.048, scheduler
-  0.000, state-machine 0.000, transformer 0.286, ui-render 0.095, worker 0.000`; the instrument
-  is id-regex + file reads + oracle runs with no AST involved, so the same aggregate is
-  reproduced under a second Python interpreter (3.8) where available - measured directly, not
-  assumed, before being pinned as a single cross-interpreter expectation.
+  `recoverability` in `[0.82, 0.83]`, 1 entry with edges, behaviour measured in 12 of 12
+  entries, and `behaviour` an integer in every compilation of every entry; the per-entry
+  `recoverability_mean` is pinned exactly: `crud-store 0.857, guard 0.875, ledger-lite 0.704,
+  parser 0.714, protocol-adapter 0.714, rate-limiter 0.762, rest-handler 0.905, scheduler 0.875,
+  state-machine 0.857, transformer 0.905, ui-render 0.905, worker 0.857`; the instrument is
+  id-regex + file reads + oracle runs with no AST involved, so a second Python interpreter (3.8)
+  reproduces the per-entry means EXACTLY - measured, not assumed. The aggregate is pinned as a
+  RANGE and never as a float: the twelve means sum to 9.930 and `9.930 / 12` is 0.8275 exactly,
+  a rounding boundary that lands on 0.828 under 3.13 and 0.827 under 3.8, so the cross-interpreter
+  expectation is "within one thousandth", compared in integer thousandths.
+- [x] AC-RT-04 - the curated `ac` tag is what is READ, and a tag asks a question rather than
+  answering it. Over a TEMP COPY of one entry (the committed fixture is never written):
+  stripping every `ac` field returns `behaviour` to the literal `UNMEASURED` in every
+  compilation and the entry's mean to its static-only `0.000`; in one oracle carrying both, a
+  tag on a case that PASSES anchors its node and a tag on a case that FAILS does not - the only
+  difference between the two ids being the verdict of the case; and a tag written `ac_cs_1`
+  matches the IR node `AC-CS-01`, because the comparison is made on ADR-036's normal form on
+  both sides and the zero padding is not part of the identity.
 
 ## Out of scope for measurement here
 

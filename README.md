@@ -40,7 +40,7 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.89.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v1.90.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -82,10 +82,10 @@ automatic tool can perform: a human verdict.
                                               system (= 100% drift)
 
    round trip · bench-roundtrip — how much of the asset the reverse organs re-anchor
-   from the compiled code: 0.062 measured (12 archetypes) — names, not yet semantics
+   from the compiled code: 0.828 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (kit 1.89.0, 52 subcommands, all measured):**
+**What each arrow is, in the engine (kit 1.90.0, 52 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|
@@ -94,13 +94,17 @@ automatic tool can perform: a human verdict.
 | Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 9 PASS · 3 PARTIAL**, three models, JS included (M4/M5, ADR-017/018/028/029) |
 | Reverse, facts | `discover`, `golden-diff` (+ the `/uscha-characterize` skill) | system map + mechanically captured golden; typed candidate observations with evidence class (M1, ADR-013) |
 | Reverse, the human gate | `curate`, `promote`, `curation-check`, `bench-curate` | one verdict per candidate, append-only ledger verified against git; unjudged → `pr-ready` blocked naming it (ADR-009/010, INV-CURATION-01) |
-| Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.062**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |
+| Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.828**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |
 
 **Read the numbers the way the repo does.** 9 of 12 archetypes regenerate to the same system
-under an oracle the compilers never saw — that is the closed loop working. 0.062 is the mean
+under an oracle the compilers never saw — that is the closed loop working. 0.828 is the mean
 *recoverability* of the asset from compiled code counting only static and behavioural
-footing, with the behaviour dimension still `UNMEASURED` — it says the reverse organs anchor
-**names, not yet semantics**, and it is published rather than smoothed. And `bench-r2` measured
+footing. It read **0.062** until 1.90.0, with the behaviour dimension `UNMEASURED`, because no
+oracle case carried an AC tag — a named absence, not a zero. The 12 bench oracles are now
+curated per case (`ORACLE-TAGS-CURATED.json`, human-authored; payloads and expectations
+untouched), so the dimension is measured and the number says the reverse organs anchor **names
+and behaviour**. Both numbers are published rather than smoothed, and what moved between them
+was the tagging, not the code under test. And `bench-r2` measured
 that same-model reruns differ structurally about as much as different models do (aggregate
 `NOISY`) — so one earlier variance narrative was **retracted**. Every claim above is a subcommand
 you can run; every unmeasured part is labeled. That honesty is the method applied to itself.

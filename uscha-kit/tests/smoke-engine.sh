@@ -6745,7 +6745,7 @@ esac
 
 echo "== T136 (1.85.0): the round trip gets its honest number -- reverse organs anchor facts, never a spec (ADR-030) =="
 T136=$("$PY" - "$KIT" "$ROOT" <<'PY'
-import glob, io, json, os, subprocess, sys, tempfile
+import glob, io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
@@ -6882,7 +6882,11 @@ for r in recs:
             per_ok = False
         if not (c.get("claimed") >= anchored):
             per_ok = False
-        if beh != "UNMEASURED":
+        # behaviour is now a COUNT, not the word UNMEASURED (ADR-030 amended, 1.90.0): the
+        # diamond-bench oracles carry curated per-case `ac` tags, so every compilation
+        # attributes some nodes by behaviour. It can never exceed the node count, and the
+        # anchored total above already bounds it against static.
+        if not (isinstance(beh, int) and 0 <= beh <= c.get("ir_nodes")):
             per_ok = False
         if not (c.get("edges_recovered") <= c.get("edges")):
             per_ok = False
@@ -6895,22 +6899,35 @@ for r in recs:
     if r["archetype"] == "ledger-lite":
         if not all(c.get("edges") == 3 for c in r.get("compilations", [])):
             ll_edges_ok = False
-        if r.get("edges_recovered_mean") != 0.33:
+        # 3 edges, and BOTH endpoints of all three are anchored since the behaviour dimension
+        # started attributing nodes (ADR-030 amended, 1.90.0 -- it read 0.33 while only the
+        # static footing existed). This is the bench's only entry with IR edges, so it is the
+        # only place the edge arithmetic is exercised at all.
+        if r.get("edges_recovered_mean") != 1.0:
             ll_edges_ok = False
 res["AC-RT-02"] = bool(per_ok and ll_edges_ok)
 
-# AC-RT-03: the aggregate pinned to today's measured state -- behaviour UNMEASURED everywhere
-# (no oracle case is tagged with an AC id yet), the id-regex + file-read + oracle-run path
-# carries no AST, so it is expected interpreter-stable; measured first, pinned second.
+# AC-RT-03: the aggregate pinned to today's measured state. Behaviour is MEASURED in every
+# entry since 1.90.0 (ADR-030 amended: the 12 diamond-bench oracles carry curated per-case
+# `ac` tags), which is what moved the mean from 0.062 -- static footing alone -- to ~0.83.
+# The per-entry means ARE interpreter-stable and pinned exactly: the id-regex + file-read +
+# oracle-run path carries no AST. The AGGREGATE is pinned as a RANGE and never as a float,
+# because it is a rounding boundary: the twelve pinned means sum to 9.930, /12 = 0.8275
+# exactly, and `round(0.8275, 3)` lands on 0.828 under python 3.13 and 0.827 under 3.8 --
+# same inputs, different last binary digit. A float pin there would be a red about IEEE754.
 WANT_MEAN = {
-    "crud-store": 0.000, "guard": 0.125, "ledger-lite": 0.148, "parser": 0.000,
-    "protocol-adapter": 0.000, "rate-limiter": 0.048, "rest-handler": 0.048,
-    "scheduler": 0.000, "state-machine": 0.000, "transformer": 0.286, "ui-render": 0.095,
-    "worker": 0.000,
+    "crud-store": 0.857, "guard": 0.875, "ledger-lite": 0.704, "parser": 0.714,
+    "protocol-adapter": 0.714, "rate-limiter": 0.762, "rest-handler": 0.905,
+    "scheduler": 0.875, "state-machine": 0.857, "transformer": 0.905, "ui-render": 0.905,
+    "worker": 0.857,
 }
 per_entry_ok = all(r.get("recoverability_mean") == WANT_MEAN.get(r["archetype"]) for r in recs)
-agg_ok = (agg.get("mean_recoverability") == 0.062 and agg.get("with_edges") == 1
-         and agg.get("behaviour_measured") == 0 and agg.get("measured") == 12)
+agg_ok = (0.82 <= (agg.get("mean_recoverability") or 0) <= 0.83 and agg.get("with_edges") == 1
+         and agg.get("behaviour_measured") == 12 and agg.get("measured") == 12)
+# ...and behaviour is a COUNT everywhere, never the word: the dimension is measured, not named
+# absent, in every compilation of every entry.
+beh_measured_ok = bool(recs) and all(
+    isinstance(c.get("behaviour"), int) for r in recs for c in r.get("compilations", []))
 
 uv38_candidates = glob.glob(os.path.expanduser(
     "~/AppData/Roaming/uv/python/cpython-3.8*/python.exe"))
@@ -6918,9 +6935,24 @@ uv38_ok = True
 d38 = {}
 if uv38_candidates:
     d38 = rt_json(BENCH, py=uv38_candidates[0])
-    uv38_ok = (d38.get("aggregate") == agg)
-res["AC-RT-03"] = bool(per_entry_ok and agg_ok and uv38_ok)
+    a38 = d38.get("aggregate") or {}
+    # the per-entry means must be IDENTICAL across interpreters -- that is the real stability
+    # claim -- while the aggregate is only required to land in the same band and within one
+    # thousandth of this interpreter's, for the rounding reason above
+    m38 = {r["archetype"]: r.get("recoverability_mean") for r in d38.get("raw") or []}
+    uv38_ok = (m38 == {r["archetype"]: r.get("recoverability_mean") for r in recs}
+               and a38.get("measured") == agg.get("measured")
+               and a38.get("with_edges") == agg.get("with_edges")
+               and a38.get("behaviour_measured") == agg.get("behaviour_measured")
+               # compared in integer THOUSANDTHS, the unit the engine already rounds to: the
+               # obvious `abs(a - b) <= 0.001` is itself a float trap -- 0.828 - 0.827 is
+               # 0.0010000000000000009 in IEEE754 and fails a test that is arithmetically true
+               and abs(int(round((a38.get("mean_recoverability") or 0) * 1000))
+                       - int(round((agg.get("mean_recoverability") or 0) * 1000))) <= 1
+               and 0.82 <= (a38.get("mean_recoverability") or 0) <= 0.83)
+res["AC-RT-03"] = bool(per_entry_ok and agg_ok and beh_measured_ok and uv38_ok)
 why["AC-RT-03"] = [n for n, v in (("per-entry-means", per_entry_ok), ("aggregate", agg_ok),
+                                  ("behaviour-is-a-count", beh_measured_ok),
                                   ("py38-agrees", uv38_ok)) if not v]
 # the aggregate itself travels with the red: a mean that moved says more in one line than the
 # name of the criterion that noticed
@@ -6940,6 +6972,106 @@ if not uv38_ok:
                               json.dumps(d38["_failed"]) if d38.get("_failed") else "parsed"))
     why["AC-RT-03"].append("py38 interpreter %s" % (uv38_candidates[0] if uv38_candidates
                                                     else "none"))
+
+# AC-RT-04 (1.90.0, ADR-030 amended): the curated `ac` tag is what is READ, and a tag is a
+# question, not an answer. Four discriminations over a TEMP COPY of one entry -- the committed
+# fixture is never written -- because "behaviour is measured now" is only a fact if removing
+# the tags takes it away and a failing case refuses to anchor.
+rt4 = []
+w4 = tempfile.mkdtemp(prefix="uscha-rt-tags-")
+src_entry = os.path.join(BENCH, "crud-store")
+shutil.copytree(src_entry, os.path.join(w4, "crud-store"))
+o4 = os.path.join(w4, "crud-store", "oracle", "ORACLE.json")
+base_cases = json.loads(io.open(o4, encoding="utf-8").read())["cases"]
+
+
+def write_oracle(cases):
+    io.open(o4, "w", encoding="utf-8", newline="\n").write(
+        json.dumps({"cases": cases}, ensure_ascii=False))
+
+
+def entry_of(d):
+    for r in d.get("raw") or []:
+        if r.get("archetype") == "crud-store":
+            return r
+    return {}
+
+
+def node_beh(rec, nid):
+    """Is `nid` behaviour-anchored in EVERY compilation of this entry?"""
+    out = []
+    for c in rec.get("compilations") or []:
+        for n in c.get("nodes") or []:
+            if n.get("id") == nid:
+                out.append(n.get("behaviour"))
+    return out
+
+
+d4_tagged = rt_json(w4)
+r4_tagged = entry_of(d4_tagged)
+if not (r4_tagged.get("recoverability_mean") == 0.857
+        and all(isinstance(c.get("behaviour"), int) and c["behaviour"] > 0
+                for c in r4_tagged.get("compilations") or [])):
+    rt4.append("the untouched copy did not reproduce the committed entry: %s"
+               % r4_tagged.get("recoverability_mean"))
+
+# (1) strip every `ac` field -> the dimension goes back to a NAMED ABSENCE, and the mean falls
+# to the static-only number this entry had before the curation (0.000)
+write_oracle([dict((k, v) for k, v in c.items() if k != "ac") for c in base_cases])
+r4_bare = entry_of(rt_json(w4))
+if not all(c.get("behaviour") == "UNMEASURED" for c in r4_bare.get("compilations") or []):
+    rt4.append("stripping the ac tags left behaviour measured: %s"
+               % [c.get("behaviour") for c in r4_bare.get("compilations") or []])
+if r4_bare.get("recoverability_mean") != 0.000:
+    rt4.append("stripped mean %s, expected the static-only 0.000"
+               % r4_bare.get("recoverability_mean"))
+
+# (2) a tag on a case that PASSES anchors its node; (3) a tag on a case that FAILS does not.
+# Both ids are carried by the SAME oracle in the same run, so the only difference between them
+# is the verdict of the case -- not the presence of a tag, not the shape of the file.
+passing = dict(base_cases[0])
+passing["ac"] = ["AC-CS-01"]
+failing = dict(base_cases[1])
+failing["ac"] = ["AC-CS-04"]
+failing["expected_json"] = [{"ok": "this can never be produced"}]
+write_oracle([passing, failing])
+r4_mix = entry_of(rt_json(w4))
+beh_pass = node_beh(r4_mix, "AC-CS-01")
+beh_fail = node_beh(r4_mix, "AC-CS-04")
+if not (beh_pass and all(b is True for b in beh_pass)):
+    rt4.append("a PASSING tagged case did not anchor its node: %s" % beh_pass)
+if not (beh_fail and all(b is False for b in beh_fail)):
+    rt4.append("a FAILING tagged case anchored its node anyway: %s" % beh_fail)
+
+# (4) the id is compared on ADR-036's normal form, so the zero padding is not part of the
+# identity: the IR node is `AC-CS-01` and the tag below is `ac_cs_1`. Written as a criterion
+# because it is the one place three spellings of the same id have to agree.
+odd = dict(base_cases[0])
+odd["ac"] = ["ac_cs_1"]
+write_oracle([odd])
+beh_odd = node_beh(entry_of(rt_json(w4)), "AC-CS-01")
+if not (beh_odd and all(b is True for b in beh_odd)):
+    rt4.append("an unpadded/underscored tag did not match the padded IR node id: %s" % beh_odd)
+
+# (5) a tag that names NO node of this entry's IR (a typo, an id from another archetype) is
+# not a measurement: the dimension must stay UNMEASURED, never read as a measured zero
+# (1.90.0 review). Every real ac tag is stripped and one bogus tag planted.
+bogus = []
+for cc in base_cases:
+    cc2 = dict(cc)
+    cc2.pop("ac", None)
+    bogus.append(cc2)
+bogus[0]["ac"] = ["totally-bogus-tag", "AC-ZZ-99"]
+write_oracle(bogus)
+r_bog = entry_of(rt_json(w4))
+comps_bog = r_bog.get("compilations") or []
+if not comps_bog or not all(c.get("behaviour") == "UNMEASURED" for c in comps_bog):
+    rt4.append("a tag naming no IR node still switched behaviour to MEASURED: %s"
+               % [c.get("behaviour") for c in comps_bog])
+
+res["AC-RT-04"] = not rt4
+why["AC-RT-04"] = rt4
+shutil.rmtree(w4, ignore_errors=True)
 
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
@@ -10359,7 +10491,7 @@ def _rt_cases():
     except (OSError, ValueError):
         return None
 _rtc = _rt_cases()
-for _rtid in ("AC-RT-01", "AC-RT-02", "AC-RT-03"):
+for _rtid in ("AC-RT-01", "AC-RT-02", "AC-RT-03", "AC-RT-04"):
     if _rtc is None or _rtc.get(_rtid) is None:
         results.append((_rtid, "round-trip", SKIP))
     elif _rtc.get(_rtid) is True:

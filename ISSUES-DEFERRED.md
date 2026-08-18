@@ -187,7 +187,8 @@ silently lost:
   where the alteration enters. `COVERAGE_FILE` is deliberately left alone: it names a data
   file, it does not turn anything on. Measured after: `bench` over the whole fixture leaves 1
   data file instead of hundreds, the run leaves 1,280 instead of 14,424, and the instrumented
-  suite reads exactly what the plain suite reads (432 ok / 0 fail, 177/178). Pinned by T127's
+  suite read exactly what the plain suite read at the time of the fix (432 ok / 0 fail, 177/178 —
+  measured mid-release, before AC-RT-04 and T142–T144 were added). Pinned by T127's
   `reg-oracle-child-gets-no-coverage-hook`, which plants the variable in the engine's
   environment and requires the judged program to report `clean`; red with the guard reverted
   (verified by mutation). Two lessons, both cheap only in hindsight: a criterion that folds

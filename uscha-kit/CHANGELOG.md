@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.90.0** — [measured debt paid: the round trip reads behaviour (0.062 → 0.828), coverage 85.9% said honestly, three deferred issues closed (2026-08-18)](CHANGELOG-1.90.0.md)
 - **1.89.0** — [`uscha top` M3: the human's verdict, from the terminal, through the one write path that already existed (2026-08-18)](CHANGELOG-1.89.0.md)
 - **1.88.0** — [`uscha top` M2: the ledger's feed reaches the terminal, and the board redraws when the disk moves (2026-08-18)](CHANGELOG-1.88.0.md)
 - **1.87.0** — [the instrument reads family-prefixed criteria: the kit's own ledger goes from 6/172 measured to the truth (2026-08-18)](CHANGELOG-1.87.0.md)

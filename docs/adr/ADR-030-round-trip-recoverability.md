@@ -58,8 +58,9 @@ human's judgment left where it belongs.
   round trip becomes a measurement with a stated ceiling instead of a promise.
 + Multi-unit entries (E1) finally exercise edge recovery.
 - The number will be modest (static facts anchor names, not semantics; behaviour anchoring
-  needs tagged oracle cases, which today's oracles mostly lack → UNMEASURED there). That is the
-  honest state of reverse discovery, published as such.
+  needs tagged oracle cases, which the 1.85.0 oracles lacked → UNMEASURED there; closed in
+  1.90.0, see the amendment below). That was the honest state of reverse discovery, published
+  as such.
 
 ## Verification
 - [ ] `bench-roundtrip` runs over the whole bench; every existing instrument's output is
@@ -71,3 +72,55 @@ human's judgment left where it belongs.
   edges_recovered computed (AC-RT-02)
 - [ ] The aggregate and per-entry numbers are pinned over the committed fixtures,
   interpreter-stable; no IR′ file is ever written (AC-RT-03)
+
+## Amended 1.90.0 — the behaviour dimension is measured, because the oracles were tagged
+
+The consequence above said the number would be modest "because today's oracles mostly lack
+tagged cases → UNMEASURED there". That was a **named absence with a stated next step**, and
+this amendment is that step taken — not a change of definition to make a number look better.
+
+**What changed.** A case's tags are now read from two places, unioned: the ids literally
+referenced in the case **`name`** (unchanged, the original source) and a curated **`ac`** list
+on the case — `{"name": "create-read", "ac": ["AC-CS-01", "AC-CS-02"], ...}`. The mapping is
+**human-curated**, with its provenance and per-case rationale committed beside the fixtures in
+`uscha-kit/tests/fixtures/diamond-bench/ORACLE-TAGS-CURATED.json` (201 of 216 cases tagged; the
+untagged ones are the cases no single criterion owns). Nothing else about a case moved:
+**`payload`, `raw_stdin` and every `expected_*` are untouched**, so tagging cannot change what a
+case measures — only what the id map says it measures. A case still anchors a node only by
+**passing**; a tagged case that fails anchors nothing (AC-RT-04 measures exactly that).
+
+**One spelling for one id.** The three footings read ids from three places that punctuate them
+differently — an IR node keeps the human's padding (`AC-DD-07`), a source comment or a curated
+tag may write `AC-DD-7` or `AC_DD_07`. The behaviour comparison is therefore made on **ADR-036's
+own normal form** (`_ac_tag_ids`: family + integer, separator and zero padding dropped), applied
+to **both sides** and **only** to that comparison — `per_node["id"]`, the static footing and the
+manifest footing keep the IR's spelling, so no report changes shape. Reusing ADR-036's grammar
+rather than writing a second one is deliberate: two grammars for one id is the drift the
+normalisation exists to prevent.
+
+**What it moved.** Mean recoverability over the 12 bench entries goes from **0.062** (static
+footing alone) to **0.828**, with the behaviour dimension **measured in 12/12** entries and
+`ledger-lite`'s `edges_recovered_mean` from 0.33 to 1.00. `DIAMOND-ROUNDTRIP.md` is regenerated
+from the measured run, and its closing sentence about the behaviour dimension is now **derived
+from the aggregate** instead of asserted — it used to end "which today is every entry", a
+hardcoded claim inside a generated document, which is precisely where such a claim rots unseen.
+Still advisory: **no bench verdict changes** (AC-RT-01 re-pins all twelve).
+
+**Judging must not modify what is judged.** Running cases in this instrument made a latent
+hazard reachable: a multi-unit compilation imports its sibling module, so executing it wrote
+`__pycache__/*.pyc` into the bench tree — and AC-RT-01's own promise is that a run regenerates
+nothing there. Measured on a clean tree, three `.pyc` files appeared; in the suite an earlier
+`bench` block had already warmed the cache, so the red would have waited for a fresh CI clone.
+The judged program's environment now carries `PYTHONDONTWRITEBYTECODE=1` (alongside the
+coverage start-up hooks it already drops), and a clean-tree run leaves nothing behind.
+
+**How the aggregate is pinned.** As a **range**, never a float. The twelve per-entry means are
+interpreter-stable and pinned exactly, but they sum to 9.930 and `9.930 / 12` is 0.8275 — a
+rounding boundary that lands on 0.828 under python 3.13 and 0.827 under 3.8. A float pin there
+would be a red about IEEE754, not about the round trip.
+
+**The honest reading.** What changed is what the instrument can **attribute**, not what the
+compiled artifacts **do**. The compilations are byte-identical to the ones that scored 0.062;
+the reverse organs are the same. An absence that was named is allowed to be closed, and the
+release says which of the two numbers moved and why — the alternative, quietly publishing 0.828
+as though the reverse half had improved, is the narrated fix this ADR exists to refuse.

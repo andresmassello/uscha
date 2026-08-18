@@ -2,7 +2,7 @@
   "_generated_by": "hand-designed cases from the canonical SPEC BEFORE any compilation (ADR-025); expectations produced by a reference implementation that is NOT a bench compilation and is never committed. WITHHELD from every compiler. Discrimination checked pre-compilation against a degenerate stub and one wrong/ implementation per rule.",
   "cases": [
     {
-      "name": "empty",
+      "name": "empty", "ac": ["AC-SC-06"],
       "payload": [],
       "expected_json": {
         "events": [],
@@ -45,7 +45,7 @@
       }
     },
     {
-      "name": "zero-duration",
+      "name": "zero-duration", "ac": ["AC-SC-05"],
       "payload": [
         {
           "id": 1,
@@ -79,7 +79,7 @@
       }
     },
     {
-      "name": "idle-gap-before-arrival",
+      "name": "idle-gap-before-arrival", "ac": ["AC-SC-05"],
       "payload": [
         {
           "id": 1,
@@ -123,7 +123,7 @@
       }
     },
     {
-      "name": "two-sequential-by-priority",
+      "name": "two-sequential-by-priority", "ac": ["AC-SC-02"],
       "payload": [
         {
           "id": 1,
@@ -179,7 +179,7 @@
       }
     },
     {
-      "name": "preempt-then-resume",
+      "name": "preempt-then-resume", "ac": ["AC-SC-03"],
       "payload": [
         {
           "id": 1,
@@ -245,7 +245,7 @@
       }
     },
     {
-      "name": "preempt-keeps-remaining",
+      "name": "preempt-keeps-remaining", "ac": ["AC-SC-03"],
       "payload": [
         {
           "id": 1,
@@ -311,7 +311,7 @@
       }
     },
     {
-      "name": "no-preempt-on-equal-priority",
+      "name": "no-preempt-on-equal-priority", "ac": ["AC-SC-03"],
       "payload": [
         {
           "id": 1,
@@ -367,7 +367,7 @@
       }
     },
     {
-      "name": "no-preempt-on-lower-priority",
+      "name": "no-preempt-on-lower-priority", "ac": ["AC-SC-03"],
       "payload": [
         {
           "id": 1,
@@ -423,7 +423,7 @@
       }
     },
     {
-      "name": "double-preempt-chain",
+      "name": "double-preempt-chain", "ac": ["AC-SC-03"],
       "payload": [
         {
           "id": 1,
@@ -521,7 +521,7 @@
       }
     },
     {
-      "name": "tie-arrival-then-id",
+      "name": "tie-arrival-then-id", "ac": ["AC-SC-02"],
       "payload": [
         {
           "id": 3,
@@ -599,7 +599,7 @@
       }
     },
     {
-      "name": "tie-earlier-arrival-wins",
+      "name": "tie-earlier-arrival-wins", "ac": ["AC-SC-02"],
       "payload": [
         {
           "id": 9,
@@ -655,7 +655,7 @@
       }
     },
     {
-      "name": "deadline-exact-completion-ok",
+      "name": "deadline-exact-completion-ok", "ac": ["AC-SC-04"],
       "payload": [
         {
           "id": 1,
@@ -690,7 +690,7 @@
       }
     },
     {
-      "name": "deadline-missed-while-running",
+      "name": "deadline-missed-while-running", "ac": ["AC-SC-04"],
       "payload": [
         {
           "id": 1,
@@ -725,7 +725,7 @@
       }
     },
     {
-      "name": "deadline-missed-while-preempted",
+      "name": "deadline-missed-while-preempted", "ac": ["AC-SC-04"],
       "payload": [
         {
           "id": 1,
@@ -788,7 +788,7 @@
       }
     },
     {
-      "name": "deadline-at-arrival-tick-missed",
+      "name": "deadline-at-arrival-tick-missed", "ac": ["AC-SC-04"],
       "payload": [
         {
           "id": 1,
@@ -828,7 +828,7 @@
       }
     },
     {
-      "name": "deadline-far-never-missed",
+      "name": "deadline-far-never-missed", "ac": ["AC-SC-04"],
       "payload": [
         {
           "id": 1,
@@ -863,7 +863,7 @@
       }
     },
     {
-      "name": "two-missed-ascending-id",
+      "name": "two-missed-ascending-id", "ac": ["AC-SC-04", "AC-SC-06"],
       "payload": [
         {
           "id": 2,
@@ -916,7 +916,7 @@
       }
     },
     {
-      "name": "arrivals-ascending-id-order",
+      "name": "arrivals-ascending-id-order", "ac": ["AC-SC-01"],
       "payload": [
         {
           "id": 5,
@@ -972,7 +972,7 @@
       }
     },
     {
-      "name": "negative-priority-allowed",
+      "name": "negative-priority-allowed", "ac": ["AC-SC-07"],
       "payload": [
         {
           "id": 1,
@@ -1028,7 +1028,7 @@
       }
     },
     {
-      "name": "late-high-priority-after-idle",
+      "name": "late-high-priority-after-idle", "ac": ["AC-SC-05"],
       "payload": [
         {
           "id": 1,
@@ -1205,14 +1205,14 @@
       }
     },
     {
-      "name": "malformed-not-array",
+      "name": "malformed-not-array", "ac": ["AC-SC-07"],
       "payload": {
         "id": 1
       },
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-missing-field",
+      "name": "malformed-missing-field", "ac": ["AC-SC-07"],
       "payload": [
         {
           "id": 1,
@@ -1223,7 +1223,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-bool-priority",
+      "name": "malformed-bool-priority", "ac": ["AC-SC-07"],
       "payload": [
         {
           "id": 1,
@@ -1235,7 +1235,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-negative-duration",
+      "name": "malformed-negative-duration", "ac": ["AC-SC-07"],
       "payload": [
         {
           "id": 1,
@@ -1247,7 +1247,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-negative-arrival",
+      "name": "malformed-negative-arrival", "ac": ["AC-SC-07"],
       "payload": [
         {
           "id": 1,
@@ -1259,7 +1259,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-duplicate-id",
+      "name": "malformed-duplicate-id", "ac": ["AC-SC-07"],
       "payload": [
         {
           "id": 1,
@@ -1277,7 +1277,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-string-deadline",
+      "name": "malformed-string-deadline", "ac": ["AC-SC-07"],
       "payload": [
         {
           "id": 1,
@@ -1290,7 +1290,7 @@
       "expected_stdout": "ERROR"
     },
     {
-      "name": "malformed-element-not-object",
+      "name": "malformed-element-not-object", "ac": ["AC-SC-07"],
       "payload": [
         {
           "id": 1,
