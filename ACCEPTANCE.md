@@ -550,8 +550,9 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 Shipped in 1.86.0 (M1 = read-only board). Criteria authored in `docs/uscha-top/SPEC.md` s7 and curated
 before code; measured by T137 (engine `top --json` contract) and T138 (pure `render`, golden frames)
 through the acceptance sidecar. M2/M3 ids stay UNMEASURED (skipped testcase, never a silent pass)
-until their milestone ships. Known honest gap: the engine's own `_AC_TAG` cannot read these family
-ids yet (ADR-035 item 6), so they close here by the suite, like every other family prefix.
+until their milestone ships. They close by the suite, like every other family prefix — and since
+1.87.0 (ADR-036) the engine also READS those family ids, so the green ones enter the measured
+pipeline instead of counting as untagged (the gap ADR-035 item 6 recorded is closed).
 
 - [x] AC-T-01 - the header shows `DONE x/N (p%)` from the engine-computed `terminado` block; the TUI derives nothing.
 - [x] AC-T-02 - the header shows `machine owes M · you owe Q · untagged U` from `debtors`.
@@ -578,6 +579,21 @@ ids yet (ADR-035 item 6), so they close here by the suite, like every other fami
 - [x] AC-T-23 - honesty negative case: 23/24 PASS + 1 UNMEASURED renders 96% with the suffix, never 100%.
 - [x] AC-T-24 - single derivation: a frame rendered from a frozen `top --json` fixture traces every number to a JSON field.
 
+## Family-prefixed criteria (ADR-036) - closes on green `AC-FA-nn` smoke assertions
+
+Shipped in 1.87.0. The instrument now reads `AC-<FAMILY>-<n>` beside the bare `AC-<n>`, so the 166
+family-prefixed criteria above stop reading as untagged: measured acceptance for this repo goes from
+6/172 to 165/172 without a single new test — the evidence already existed, the engine could not see
+it. The bare form is pinned byte-identical against the previous engine (AC-FA-03) before any new
+form is claimed. Measured by T140 through the acceptance sidecar.
+
+- [x] AC-FA-01 - `_parse_acceptance_items` over a file mixing `AC-01`, `**AC-BC-07**`, `AC-T-24`, `ac_dd_3` and `AC-7-x` yields `AC-1, AC-BC-7, AC-T-24, AC-DD-3, AC-7` in that order (a numeric "family" is not one).
+- [x] AC-FA-02 - `_ac_tags` over testcase names `AC-BC-01_x`, `test_ac_bc_1_y`, `AC-01_z`, `testAC01Q`, `testACBC07x` and a skipped `AC-T-11_w` yields exactly `AC-BC-1` (2 green) and `AC-1` (2 green): no spurious bare tag beside a family one, no camelCase family, no key for a skipped case.
+- [x] AC-FA-03 - the bare form is unchanged: `readiness` and `dashboard --json` (minus the wall clock) from the committed HEAD engine and from this one, over a bare-id fixture, are byte-identical.
+- [x] AC-FA-04 - the statusline agrees with the ledger it summarizes: `uscha_progress.py` counts the same done/total `_parse_acceptance_items` counts (3 done / 5 total) over the AC-FA-01 file.
+- [x] AC-FA-05 - `top --json` over a ledger mixing both grammars emits the normalized obligation ids, `MEASURED_PASS` where a green testcase tags them, in the documented order (bare by number, then families alphabetically).
+- [x] AC-FA-06 - `discover` reads family ids too: its canonical map no longer assumes a bare id (it crashed on `AC-DD-07` on the first 1.87.0 run, caught by T125), and an observation whose statement names a family id anchors that criterion (`canonical_match`) exactly as a bare mention does.
+
 ## Dogfooding (repo rule 9) - closes on green `AC-DF-nn` smoke assertions
 
 - [x] AC-DF-01 - the root `QA-LEDGER.json` is re-recorded in or after the last engine change: the commit that last touched `qa_ledger.py` also carries the ledger, or `readiness_history[-1].at` is newer than that commit; no git = UNMEASURED, stale = RED.
@@ -600,6 +616,7 @@ ids yet (ADR-035 item 6), so they close here by the suite, like every other fami
 - ADR-031 — `uscha top` is a raw-ANSI terminal projection of the ledger, wired like `mirador`.
 - ADR-032 — One engine subcommand (`top --json`) computes the whole projection; the TUI renders.
 - ADR-034 — `render(state, size)` is pure; golden frames are its oracle, with a negative-honesty fixture.
+- ADR-036 — The instrument reads family-prefixed criteria (`AC-<FAMILY>-<n>`); the bare form is unchanged.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

@@ -3465,6 +3465,7 @@ rm -f "$KIT/reports/junit/.js-cases.json"         # same rule for T134
 rm -f "$KIT/reports/junit/.multi-cases.json"      # same rule for T135
 rm -f "$KIT/reports/junit/.rt-cases.json"         # same rule for T136
 rm -f "$KIT/reports/junit/.top-cases.json"        # same rule for T137/T138
+rm -f "$KIT/reports/junit/.fa-cases.json"         # same rule for T140
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -7381,6 +7382,203 @@ else
   FAIL=$((FAIL+1)); echo "  FAIL $T139"
 fi
 
+echo "== T140 (ADR-036): family-prefixed AC ids enter the measured pipeline; the bare form is unchanged =="
+# The instrument could not see 166 of this repo's own 172 criteria: _AC_ID/_AC_TAG matched only
+# the bare AC-<n>. Widening them re-counts every family kit-wide, so the BARE form is pinned
+# byte-identical against the previous engine (AC-FA-03) before any new form is claimed.
+T140=$("$PY" - "$KIT" "$ROOT" <<'PY'
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+_spec = importlib.util.spec_from_file_location("ql140", ENG)
+q = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(q)
+res = {}
+d = tempfile.mkdtemp(prefix="uscha-fa-")
+
+def _led(repo_path):
+    return {"schema": "dev-loop/qa-ledger@1", "run_id": "fa", "step_counter": 0,
+            "started_at": "2026-08-18T00:00:00+00:00",
+            "updated_at": "2026-08-18T00:00:00+00:00",
+            "config": {"version": "1.0.0", "project": "fa",
+                       "defaults": {"acceptance_file": "ACCEPTANCE.md"},
+                       "repos": [{"name": "r", "path": repo_path, "type": "python"}]},
+            "repos": {"r": {"type": "python", "path": repo_path,
+                            "snapshots": [], "iterations": []}},
+            "integration": {"type": "maven", "snapshots": [], "iterations": []},
+            "steps": [], "escalations": [], "production_findings": []}
+
+# --- AC-FA-01: the ACCEPTANCE side reads both grammars, and a NUMERIC "family" is NOT one:
+# AC-7-x stays the bare AC-7 followed by text, exactly as it read before this change.
+ACC = ("# ACCEPTANCE\n\n"
+       "- [x] AC-01 - a\n"
+       "- [ ] **AC-BC-07** - b\n"
+       "- [x] AC-T-24 - c\n"
+       "- [x] ac_dd_3 - d\n"
+       "- [ ] AC-7-x\n")
+acc_p = os.path.join(d, "ACCEPTANCE.md")
+io.open(acc_p, "w", encoding="utf-8").write(ACC)
+items, found = q._parse_acceptance_items(acc_p)
+res["AC-FA-01"] = bool(found and [i["id"] for i in items]
+                       == ["AC-1", "AC-BC-7", "AC-T-24", "AC-DD-3", "AC-7"])
+
+# --- AC-FA-02: the JUnit side tags both grammars from the testcase NAME, with no spurious bare
+# tag beside a family one; a camelCase family (testACBC07x) has no honest split and stays
+# unmatched; a skipped family testcase counts for neither side (no key at all).
+rp = os.path.join(d, "repo")
+os.makedirs(os.path.join(rp, "reports"))
+XML = ('<testsuites><testsuite name="s">'
+       '<testcase classname="C" name="AC-BC-01_x"/>'
+       '<testcase classname="C" name="test_ac_bc_1_y"/>'
+       '<testcase classname="C" name="AC-01_z"/>'
+       '<testcase classname="C" name="testAC01Q"/>'
+       '<testcase classname="C" name="testACBC07x"/>'
+       '<testcase classname="C" name="AC-T-11_w"><skipped message="m"/></testcase>'
+       '</testsuite></testsuites>')
+io.open(os.path.join(rp, "reports", "junit.xml"), "w", encoding="utf-8").write(XML)
+tg, _stale = q._ac_tags(rp, "python")
+res["AC-FA-02"] = bool(
+    set(tg) == set(["AC-BC-1", "AC-1"])
+    and (tg["AC-BC-1"]["green"], tg["AC-BC-1"]["red"]) == (2, 0)
+    and (tg["AC-1"]["green"], tg["AC-1"]["red"]) == (2, 0))
+
+# --- AC-FA-03: the bare form is BYTE-IDENTICAL to the LAST PRE-WIDENING engine (tag v1.86.1),
+# over a bare-id fixture: readiness and dashboard --json (minus the wall clock) must not move a
+# single byte. Anchoring to HEAD would compare the new engine with itself after the release
+# commit (1.87.0 review). No git / tag not fetched -> UNMEASURED, never a silent pass.
+FIX = os.path.join(kit, "tests", "fixtures", "uscha-top", "fixture-honesty-negative")
+gsh = subprocess.run(["git", "show",
+                      "v1.86.1:uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"],
+                     cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+if gsh.returncode != 0 or not gsh.stdout or not os.path.isdir(FIX):
+    res["AC-FA-03"] = None
+else:
+    old = os.path.join(d, "old_engine.py")
+    io.open(old, "wb").write(gsh.stdout)
+    def run_in_fix(engine, *a):
+        r = subprocess.run([sys.executable, engine] + list(a), cwd=FIX,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           text=True, encoding="utf-8", errors="replace")
+        return r.returncode, r.stdout
+    def no_clock(s):
+        try:
+            j = json.loads(s)
+        except ValueError:
+            return None
+        j.pop("generated", None)
+        return json.dumps(j, sort_keys=True)
+    rc_o, o_rd = run_in_fix(old, "readiness", "--ledger", "QA-LEDGER.json")
+    rc_n, n_rd = run_in_fix(ENG, "readiness", "--ledger", "QA-LEDGER.json")
+    same = (rc_o == rc_n and o_rd == n_rd and "acceptance" in o_rd)
+    rc_o, o_db = run_in_fix(old, "dashboard", "--json", "--ledger", "QA-LEDGER.json")
+    rc_n, n_db = run_in_fix(ENG, "dashboard", "--json", "--ledger", "QA-LEDGER.json")
+    same = (same and rc_o == rc_n and no_clock(o_db) is not None
+            and no_clock(o_db) == no_clock(n_db))
+    res["AC-FA-03"] = bool(same)
+
+# --- AC-FA-04: the statusline agrees with the ledger it summarizes. uscha_progress.py counts the
+# SAME criteria _parse_acceptance_items counts over the AC-FA-01 file (3 done / 5 total); a
+# statusline blind to a family the engine can see would contradict the truth it claims to show.
+PROG = os.path.join(kit, "templates", "scripts", "uscha_progress.py")
+sd = os.path.join(d, "statusline")
+os.makedirs(sd)
+shutil.copyfile(acc_p, os.path.join(sd, "ACCEPTANCE.md"))
+io.open(os.path.join(sd, "uscha.config.json"), "w", encoding="utf-8").write(json.dumps(
+    {"version": "1.0.0", "project": "fa",
+     "defaults": {"acceptance_file": "ACCEPTANCE.md"},
+     "repos": [{"name": "r", "path": ".", "type": "python", "label": "FA"}]}))
+env = dict(os.environ)
+env["CLAUDE_PROJECT_DIR"] = sd
+rp4 = subprocess.run([sys.executable, PROG], cwd=sd, stdout=subprocess.PIPE,
+                     stderr=subprocess.PIPE, env=env)
+try:
+    st4 = json.loads(io.open(os.path.join(sd, ".claude", "uscha-progress.json"),
+                             encoding="utf-8").read())
+except (OSError, ValueError):
+    st4 = {}
+want_done = sum(1 for i in items if i["checked"])
+res["AC-FA-04"] = bool(rp4.returncode == 0
+                       and (want_done, len(items)) == (3, 5)
+                       and st4.get("done") == want_done
+                       and st4.get("total") == len(items))
+
+# --- AC-FA-05: the board. Obligation ids are the NORMALIZED forms, a green family testcase
+# closes MEASURED_PASS, and the order is stable: bare by number, then families alphabetically.
+td = os.path.join(d, "topmix")
+os.makedirs(os.path.join(td, "repo", "reports"))
+io.open(os.path.join(td, "ACCEPTANCE.md"), "w", encoding="utf-8").write(
+    "- [x] AC-02 - bare two\n- [x] AC-01 - bare one\n"
+    "- [x] AC-T-24 - family t\n- [ ] AC-BC-07 - family bc\n")
+io.open(os.path.join(td, "repo", "reports", "junit.xml"), "w", encoding="utf-8").write(
+    '<testsuites><testsuite name="s">'
+    '<testcase classname="C" name="AC-01_ok"/>'
+    '<testcase classname="C" name="AC-T-24_ok"/>'
+    '</testsuite></testsuites>')
+io.open(os.path.join(td, "QA-LEDGER.json"), "w", encoding="utf-8").write(
+    json.dumps(_led("repo")))
+r5 = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                    cwd=td, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, encoding="utf-8", errors="replace")
+try:
+    obl = (json.loads(r5.stdout) or {}).get("obligations") or []
+except ValueError:
+    obl = []
+sts = dict((o.get("id"), o.get("state")) for o in obl)
+res["AC-FA-05"] = bool(
+    r5.returncode == 0
+    and [o.get("id") for o in obl] == ["AC-1", "AC-2", "AC-BC-7", "AC-T-24"]
+    and sts.get("AC-1") == "MEASURED_PASS" and sts.get("AC-T-24") == "MEASURED_PASS"
+    and sts.get("AC-2") == "UNMEASURED" and sts.get("AC-BC-7") == "UNMEASURED")
+
+# --- AC-FA-06: discover reads family ids too. Its canonical map used to do
+# int(id.split("-")[1]) and crashed on AC-DD-07 (caught by T125 on the first 1.87.0 run); now
+# a statement that names a family id anchors that criterion, exactly like a bare mention.
+dd = os.path.join(d, "disc")
+os.makedirs(os.path.join(dd, "r", "src"))
+io.open(os.path.join(dd, "r", "ACCEPTANCE.md"), "w", encoding="utf-8").write(
+    "- [x] AC-01 - bare\n- [ ] AC-DD-07 - family dd\n")
+io.open(os.path.join(dd, "r", "src", "app.py"), "w", encoding="utf-8").write("def f():\n    return 1\n")
+genv = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@x", GIT_COMMITTER_NAME="t",
+            GIT_COMMITTER_EMAIL="t@x")
+gok = True
+for ga in (["git", "init", "-q"], ["git", "add", "-A"], ["git", "commit", "-qm", "i"]):
+    gr = subprocess.run(ga, cwd=os.path.join(dd, "r"), stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, env=genv)
+    gok = gok and gr.returncode == 0
+io.open(os.path.join(dd, "cfg.json"), "w", encoding="utf-8").write(json.dumps(
+    {"version": "0", "repos": [{"name": "r", "path": "r", "type": "python"}]}))
+io.open(os.path.join(dd, "narr.json"), "w", encoding="utf-8").write(json.dumps(
+    [{"type": "behavior", "statement": "Verifies AC-DD-07 for the bounded scan",
+      "files": ["src/app.py:1"]}]))
+if gok:
+    subprocess.run([sys.executable, ENG, "init", "--config", "cfg.json", "--out", "L.json"],
+                   cwd=dd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    r6 = subprocess.run([sys.executable, ENG, "discover", "--ledger", "L.json", "--repo", "r",
+                         "--narrated", "narr.json"], cwd=dd, stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    try:
+        dl6 = json.load(io.open(os.path.join(dd, "r", "discovery", "CANDIDATE-DELTA.json"),
+                                encoding="utf-8"))
+        cm6 = {o.get("canonical_match") for o in dl6.get("observations") or []}
+    except (OSError, ValueError):
+        cm6 = set()
+    res["AC-FA-06"] = bool(r6.returncode == 0 and "Traceback" not in r6.stderr
+                           and "AC-DD-7" in cm6)
+else:
+    res["AC-FA-06"] = None      # no usable git here -> UNMEASURED, never a silent pass
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+io.open(os.path.join(side, ".fa-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+shutil.rmtree(d, ignore_errors=True)
+bad = [k for k, v in res.items() if v is False]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T140" in
+  OK*) PASS=$((PASS+1)); echo "  ok   family AC ids measured, bare form byte-identical (AC-FA-01..05): $T140";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T140";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -8755,6 +8953,25 @@ for _n in range(1, 25):
         results.append((_tid, "uscha-top", None))
     else:
         results.append((_tid, "uscha-top", "T137/T138 case failed or missing"))
+
+# Family-prefixed criteria (ADR-036): measured by T140, same sidecar contract. AC-FA-03 (the
+# bare form pinned byte-identical against the previous engine) reports None without git or the
+# HEAD copy -> emitted as skipped = UNMEASURED, never a silent pass.
+def _fa_cases():
+    p = os.path.join(kit, "reports", "junit", ".fa-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_fac = _fa_cases()
+for _faid in ("AC-FA-01", "AC-FA-02", "AC-FA-03", "AC-FA-04", "AC-FA-05", "AC-FA-06"):
+    if _fac is None or _fac.get(_faid) is None:
+        results.append((_faid, "family-ids", SKIP))
+    elif _fac.get(_faid) is True:
+        results.append((_faid, "family-ids", None))
+    else:
+        results.append((_faid, "family-ids", "T140 case failed or missing"))
 
 # Dogfooding (repo rule 9): the root ledger is re-recorded in or after the last engine change.
 # Same-commit release ritual: the commit that last touched the engine must also carry the ledger,

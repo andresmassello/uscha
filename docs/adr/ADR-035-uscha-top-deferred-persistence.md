@@ -63,7 +63,10 @@ retroactively change how the kit's own `AC-FP`/`AC-SD`/… criteria are counted)
 future work, deliberately **not** taken for v0.1 — v0.1 does not depend on it. **Curated
 2026-08-17 (maintainer):** confirmed — `AC-T-nn` close via smoke assertions now; the widening ships as
 its **own engine release** with its own ADR revision and curation (the retroactive re-count of the
-kit's 23 family prefixes deserves its own turn), never coupled to any `uscha top` milestone.
+kit's 28 family prefixes deserves its own turn), never coupled to any `uscha top` milestone.
+**Taken up in 1.87.0 as ADR-036** (Accepted) — the grammar, the disjointness of the two forms, the
+retroactive blast radius and the byte-identical anchoring of the bare form are decided there;
+items 1-5 above remain deferred.
 
 ## Consequences / Risks
 + Every `—` in v0.1 has a designed path to a real value; none will be back-filled by invention.

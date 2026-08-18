@@ -12,7 +12,9 @@ cardinality, median and feed line, and the TUI's `render(state, size)` (ADR-034)
 > narrative SPEC + FIXTURES; ACs are promoted to `ACCEPTANCE.md` on acceptance). Also curated: v0.1
 > renders `—` where the engine has no honest source (ETA, AGE, count burn-up — ADR-035); `AC-T-nn`
 > close via smoke assertions + golden frames now, and the `_AC_TAG` widening ships as its own
-> engine release (ADR-035 item 6), never coupled to M1.
+> engine release (ADR-035 item 6), never coupled to M1. **Shipped 1.87.0 as ADR-036:** the
+> widening landed on its own; the `AC-T-nn` criteria still close by smoke assertion, and the
+> engine can now also READ them.
 
 This spec restates the handoff's KPI formulas (§3) over the **real derivable fields** and fixes the
 UI honesty invariants. Where the handoff and the engine's reality conflict, reality wins and the
@@ -135,6 +137,10 @@ Each milestone closes with a full turn of the method (spec pinned → compile �
 > ingestion, because `_AC_TAG` matches only bare `AC-<n>` (audit B.1; widening it is ADR-035 future
 > work, deliberately not taken for v0.1). Each criterion is measurable by an assertion over `top
 > --json` output or a golden frame.
+>
+> **Superseded 1.87.0 (ADR-036)**: `_AC_TAG`/`_AC_ID` now read `AC-<FAMILY>-<n>` too, so these ids
+> DO enter the measured pipeline. What closes them is unchanged — the smoke assertions and golden
+> frames still produce the evidence; the engine can now read the testcases they emit.
 
 ```md
 ## uscha top v0.1 (ADR-031..035) - closes on green `AC-T-nn` smoke assertions and golden frames

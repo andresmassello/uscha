@@ -764,11 +764,43 @@ def _test_evidence_provenance(repo_path, repo_type):
 _AC_TAG = re.compile(
     r"(?:(?<![A-Za-z0-9])[Aa][Cc]|(?<=[a-z])AC)[-_]?0*(\d+)(?!\d)")
 
+# kit 1.87.0 (ADR-036): the FAMILY grammar 'AC-<FAMILY>-<n>' (AC-BC-07, AC-T-24,
+# ac_dd_3). Same explicit boundaries as the bare form, plus a MANDATORY separator
+# on BOTH sides of the family — 'AC-BC-07', 'ac_bc_7', 'AC_T_1'. camelCase families
+# are deliberately NOT supported: 'testACBC07' has no honest split into family +
+# number and stays unmatched.
+# Kept as its OWN pattern so the bare pattern above (and every tag it already
+# produced) stays byte-identical. The two are disjoint by construction: a family
+# must start with a LETTER, so 'AC-01' can never match this one, and the digits of
+# 'AC-BC-07' do not follow 'AC', so it can never match the bare one.
+_AC_TAG_FAM = re.compile(
+    r"(?:(?<![A-Za-z0-9])[Aa][Cc]|(?<=[a-z])AC)"
+    r"[-_]([A-Za-z][A-Za-z0-9]*)[-_]0*(\d+)(?!\d)")
+
+
+def _ac_canon(family, num):
+    """Canonical criterion id for both grammars (ADR-036): 'AC-<int>' for the bare
+    form (AC-01 == AC_1 == ac1) and 'AC-<FAMILY>-<int>' for the family form
+    (AC-T-01 == AC-T-1 == ac_t_1) — python/go test names cannot carry '-', so the
+    separator and the zero padding are never part of the identity."""
+    if family:
+        return "AC-%s-%d" % (family.upper(), int(num))
+    return "AC-%d" % int(num)
+
+
+def _ac_tag_ids(name):
+    """Every criterion id a testcase NAME tags, normalized. Family form first, then
+    bare; the two patterns are disjoint, so the order fixes only the output order."""
+    ids = [_ac_canon(fam, num) for fam, num in _AC_TAG_FAM.findall(name)]
+    ids.extend(_ac_canon(None, num) for num in _AC_TAG.findall(name))
+    return ids
+
 
 def _ac_tags(repo_path, repo_type):
     """Tags AC-n leidos de los NOMBRES de testcase en los reportes JUnit que el
     engine ya ingiere. Devuelve (tags, stale) donde tags = {'AC-n': {'green': x,
-    'red': y}} y stale = [rutas de reportes descartados por viejos]. Un criterio
+    'red': y}} (o 'AC-FAM-n' para la forma con familia, ADR-036 / kit 1.87.0)
+    y stale = [rutas de reportes descartados por viejos]. Un criterio
     cierra MEDIDO solo con >=1 testcase verde y 0 rojos (evidencia roja veta:
     fail-closed). Testcases skipped no cuentan para ningun lado.
 
@@ -812,9 +844,8 @@ def _ac_tags(repo_path, repo_type):
             # cuyo nombre matchea 'ACn' por coincidencia (test_ac3_flow.py) no
             # debe taggear los OTROS tests del mismo archivo/clase.
             blob = tc.get("name") or ""
-            for num in _AC_TAG.findall(blob):
-                d = tags.setdefault(f"AC-{int(num)}",
-                                    {"green": 0, "red": 0, "cases": []})
+            for cid in _ac_tag_ids(blob):
+                d = tags.setdefault(cid, {"green": 0, "red": 0, "cases": []})
                 d[status] += 1
                 # RECEIPT (kit 1.50.0): keep WHICH testcase in WHICH report backed the
                 # verdict -- the name and path were always in scope here and were being
@@ -4213,15 +4244,20 @@ def _canonical_ids(repo_path, acceptance_file):
     except Exception:
         return {}
     for it in items or []:
-        if it.get("id"):                          # normalized "AC-<n>" (numeric ids only)
-            ids[int(it["id"].split("-")[1])] = it["id"]
+        if it.get("id"):
+            # normalized id of EITHER grammar (ADR-036): "AC-<n>" or "AC-<FAMILY>-<n>". Keyed by
+            # the canonical id itself; a bare and a family id can never collide.
+            ids[it["id"]] = it["id"]
     return ids
 
 
 def _match_canonical(statement, canon_ids):
-    m = re.search(r"(?i)\bAC[-_]?0*(\d+)\b", statement)
-    if m and int(m.group(1)) in canon_ids:
-        return canon_ids[int(m.group(1))]
+    """The canonical id an observation's statement names, if any -- read with the same
+    grammar as ACCEPTANCE.md and the JUnit tags (ADR-036), so a statement that mentions
+    'AC-DD-07' anchors the criterion AC-DD-7 exactly as one that mentions 'AC-7' anchors AC-7."""
+    for cid in _ac_tag_ids(statement or ""):
+        if cid in canon_ids:
+            return canon_ids[cid]
     return None
 
 
@@ -7175,12 +7211,34 @@ def _band(score):
 
 _AC_ID = re.compile(r"(?i)^[*_`]*\s*AC[-_]?0*(\d+)\b[*_`]*[\s.:—–·-]*")
 
+# kit 1.87.0 (ADR-036): the family grammar, same tolerated wrappers/separators.
+# A family starts with a LETTER, so a numeric "family" is not one: '- [ ] AC-7-x'
+# falls through to the bare pattern and reads as AC-7 followed by the text 'x' (the
+# trailing-separator class eats the hyphen, exactly as before ADR-036).
+_AC_ID_FAM = re.compile(
+    r"(?i)^[*_`]*\s*AC[-_]([A-Za-z][A-Za-z0-9]*)[-_]0*(\d+)\b[*_`]*[\s.:—–·-]*")
+
+
+def _ac_id_of(body):
+    """(canonical id, end offset) of the leading AC id of a checkbox body, or
+    (None, 0). The FAMILY form is tried first; the bare form is the fallback, so
+    every id the engine read before ADR-036 still reads exactly the same."""
+    m = _AC_ID_FAM.match(body)
+    if m:
+        return _ac_canon(m.group(1), m.group(2)), m.end()
+    m = _AC_ID.match(body)
+    if m:
+        return _ac_canon(None, m.group(1)), m.end()
+    return None, 0
+
 
 def _parse_acceptance_items(path, section=None):
     """Checkboxes markdown de ACCEPTANCE, con ID trazable opcional por criterio
     ('- [ ] AC-01 — cuando X entonces Y'). Los IDs se normalizan por numero
-    (AC-01 == AC_1 == ac1 — los nombres de test de python/go no admiten '-').
-    Devuelve (items, found); item = {'id': 'AC-n'|None, 'checked', 'text'}."""
+    (AC-01 == AC_1 == ac1 — los nombres de test de python/go no admiten '-') y,
+    desde kit 1.87.0 (ADR-036), tambien por FAMILIA ('- [ ] AC-BC-07 — ...',
+    AC-T-01 == AC-T-1 == ac_t_1). Devuelve (items, found);
+    item = {'id': 'AC-n'|'AC-FAM-n'|None, 'checked', 'text'}."""
     if not path or not os.path.exists(path):
         return [], False
     items = []
@@ -7203,10 +7261,10 @@ def _parse_acceptance_items(path, section=None):
                 else:
                     continue
                 body = s[5:].strip()
-                m = _AC_ID.match(body)
-                items.append({"id": f"AC-{int(m.group(1))}" if m else None,
+                cid, end = _ac_id_of(body)
+                items.append({"id": cid,
                               "checked": checked,
-                              "text": body[m.end():].strip() if m else body})
+                              "text": body[end:].strip()})
     except OSError:
         return [], False
     return items, True
@@ -8157,12 +8215,21 @@ def _top_pct(done, total):
     return 99 if (done < total and pct >= 100) else pct
 
 
-def _top_ac_num(cid):
-    """Stable numeric order for the normalized 'AC-<n>' ids _parse_acceptance_items emits."""
+def _top_ac_key(cid):
+    """Stable order for the normalized ids _parse_acceptance_items emits: the BARE
+    'AC-<n>' criteria first by number, then each letter FAMILY alphabetically and by
+    number inside it (ADR-036). An id in neither shape sorts last instead of raising —
+    the board must still render when the acceptance file carries something unexpected."""
+    parts = str(cid).split("-")
+    if len(parts) >= 3:
+        try:
+            return (1, parts[1].upper(), int(parts[2]))
+        except ValueError:
+            return (2, str(cid), 0)
     try:
-        return int(str(cid).split("-")[1])
+        return (0, "", int(parts[1]))
     except (IndexError, ValueError):
-        return 0
+        return (2, str(cid), 0)
 
 
 def cmd_top(args):
@@ -8234,7 +8301,7 @@ def cmd_top(args):
             seen.add(it["id"])
             ids.append(it["id"])
     obligations = []
-    for cid in sorted(ids, key=_top_ac_num):
+    for cid in sorted(ids, key=_top_ac_key):
         tag, obs = ac_tags.get(cid), quarantine.get(cid)
         # red evidence VETOES (fail-closed, the same rule _ac_closed applies). Measured
         # evidence outranks the lateral QUARANTINE rung so the four buckets partition the
@@ -8346,13 +8413,13 @@ def cmd_readiness(args):
     # IDs duplicados (ACCEPTANCE mal numerado) cuentan UNA sola vez — si no,
     # un solo test verde cierra "medido" tantos criterios como copias del ID.
     id_list = [i["id"] for i in ac_ids]
-    dupe_ids = sorted({cid for cid in id_list if id_list.count(cid) > 1})
-    unique_ids = sorted(set(id_list))
+    dupe_ids = sorted({cid for cid in id_list if id_list.count(cid) > 1}, key=_top_ac_key)
+    unique_ids = sorted(set(id_list), key=_top_ac_key)
     measured_closed = [cid for cid in unique_ids if _ac_closed(cid)]
     narrated_only = sorted({i["id"] for i in ac_ids
-                            if i["checked"] and not _ac_closed(i["id"])})
+                            if i["checked"] and not _ac_closed(i["id"])}, key=_top_ac_key)
     measured_unchecked = sorted({i["id"] for i in ac_ids
-                                 if not i["checked"] and _ac_closed(i["id"])})
+                                 if not i["checked"] and _ac_closed(i["id"])}, key=_top_ac_key)
     ac_untagged = total - len(ac_ids)
     acc_traceable = bool(ac_ids)
     if acc_traceable:
@@ -8627,8 +8694,9 @@ def cmd_readiness(args):
               f"(--section {args.section!r} matched nothing in the file?) — "
               f"adr/acceptance dimensions at 0")
     if acc_found and total and not acc_traceable:
-        print("  ! acceptance has no traceable IDs ('- [ ] AC-01 — ...') — the "
-              "acceptance dimension falls back to the checkbox ratio (NARRATED, not measured)")
+        print("  ! acceptance has no traceable IDs ('- [ ] AC-01 — ...' or "
+              "'- [ ] AC-BC-01 — ...') — the acceptance dimension falls back to the "
+              "checkbox ratio (NARRATED, not measured)")
     if dupe_ids:
         print(f"  ! duplicate IDs in acceptance (normalized): {', '.join(dupe_ids)} "
               f"— each ID counts ONCE in the acceptance dimension")
@@ -10102,8 +10170,9 @@ def _spec_check_text(text):
 def _acceptance_traceability(path):
     """Trazabilidad del ACCEPTANCE (kit 1.10.0): estructura = FACT.
     Bloquea: archivo ausente, cero criterios, CERO criterios con AC-ID, IDs
-    duplicados (tras normalizar: AC-01 == AC-1). Aconseja: criterios sueltos
-    sin ID (no podran cerrar MEDIDO)."""
+    duplicados (tras normalizar: AC-01 == AC-1, y desde kit 1.87.0 / ADR-036
+    AC-BC-07 == AC-BC-7). Aconseja: criterios sueltos sin ID (no podran cerrar
+    MEDIDO)."""
     blockers, advisory = [], []
     items, found = _parse_acceptance_items(path)
     if not found:
@@ -10115,7 +10184,8 @@ def _acceptance_traceability(path):
     ids = [i["id"] for i in items if i["id"]]
     if not ids:
         blockers.append("cero criterios trazables — cada criterio lleva ID "
-                        "estable: '- [ ] AC-01 — cuando X entonces Y'")
+                        "estable: '- [ ] AC-01 — cuando X entonces Y' "
+                        "(o con familia: '- [ ] AC-BC-01 — ...')")
         return blockers, advisory
     dupes = sorted({x for x in ids if ids.count(x) > 1})
     if dupes:
@@ -10835,7 +10905,8 @@ def cmd_doctor(args):
                 elif items:
                     warn(f"ACCEPTANCE without traceable AC-IDs ({len(items)} criterion(s))",
                          "generate it with /uscha-discovery or /uscha-adr-refine "
-                         "(format '- [ ] AC-01 - ...') - without IDs the dominant readiness "
+                         "(format '- [ ] AC-01 - ...', or with a family "
+                         "'- [ ] AC-BC-01 - ...') - without IDs the dominant readiness "
                          "dimension falls back to the checkbox ratio")
                 else:
                     warn(f"ACCEPTANCE {acc} has no criteria (zero checkboxes)")

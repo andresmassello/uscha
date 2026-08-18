@@ -535,7 +535,10 @@ once logged it caps readiness ≤65 and blocks convergence until resolved with
 criterion carries a stable ID: `- [ ] AC-01 — when X then Y`. A criterion counts as
 CLOSED only when ≥1 GREEN testcase whose name carries the tag (`test_ac1_x`,
 `testAC01X`, `"AC-01: ..."` — IDs normalize by number, `AC-01 == AC_1 == ac1`) exists
-in the ingested JUnit reports AND no tagged testcase is red. The checkbox is the
+in the ingested JUnit reports AND no tagged testcase is red. Since kit 1.87.0 (ADR-036)
+a FAMILY prefix is read the same way: `- [ ] AC-BC-07 — ...` closes on `AC-BC-07_x`,
+`test_ac_bc_7_y` or `AC_BC_7` (normalized to `AC-BC-7`; the family needs a separator on
+both sides — camelCase `testACBC07` is NOT a tag, and `AC-7-x` is still the bare `AC-7`). The checkbox is the
 NARRATIVE; the testcase is the FACT — a checked box without a green tagged test shows
 up as `narrated_only` and does NOT close (measured beats narrated, per criterion).
 A JUnit report older than the repo's source code is treated as STALE (the code changed

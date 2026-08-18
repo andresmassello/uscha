@@ -146,4 +146,5 @@ not in the TUI.
 - The write path — ADR-033.
 - The new persistence any nullable field would need to become non-null — ADR-035.
 - Widening `_AC_TAG` so `AC-T`-family ids enter the measured pipeline — ADR-035 (position (b));
-  v0.1 does not depend on it.
+  v0.1 does not depend on it. *(Taken up in 1.87.0 by ADR-036; v0.1's contract is unchanged by
+  it — the same obligations, now with the family ids readable.)*

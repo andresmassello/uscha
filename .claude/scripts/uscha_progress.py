@@ -20,7 +20,12 @@ CONFIG = ROOT / "uscha.config.json"
 OUT = ROOT / ".claude" / "uscha-progress.json"
 
 # tolerant of bold/plain AC ids -- mirrors qa_ledger.py:_AC_ID (AC-01, **AC-01**, `AC_1`)
-_AC = r"[*_`]*\s*AC[-_]?\d+[*_`]*"
+# and, since kit 1.87.0 (ADR-036), the FAMILY form too (AC-BC-07, AC-T-24, `ac_dd_3`).
+# A family starts with a LETTER, so 'AC-7-x' stays the bare AC-7 followed by text --
+# the same fallback order the engine applies. The statusline must never count a
+# criterion the ledger cannot see, nor miss one it can.
+_AC_CORE = r"AC(?:[-_][A-Za-z][A-Za-z0-9]*[-_]|[-_]?)\d+"
+_AC = r"[*_`]*\s*" + _AC_CORE + r"[*_`]*"
 
 
 def _statusline_repo(cfg):
@@ -91,7 +96,8 @@ def _acceptance(state, cfg):
         # a narrated number with the same face as a measured one is the exact dishonesty
         # this kit exists to remove (kit 1.48.1).
         state["acceptance_source"] = "narrated"
-    m = re.search(r"- \[ \]\s*[*_`]*\s*(AC[-_]?\d+)[*_`]*\s*[—–-]\s*(.+)", text, re.IGNORECASE)
+    m = re.search(r"- \[ \]\s*[*_`]*\s*(" + _AC_CORE + r")[*_`]*\s*[—–-]\s*(.+)",
+                  text, re.IGNORECASE)
     if m:
         nxt = re.sub(r"[*_`]", "", m.group(2)).strip()
         state["next"] = f"{m.group(1)}: {nxt[:44]}"

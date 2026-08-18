@@ -43,9 +43,12 @@ itself.
    -> ledger committed in the SAME release commit -- and the smoke suite checks that
    `readiness_history[-1].at` is not older than the last commit that touched the engine (a stale
    ledger is a FAIL, not a note). At session start the `uscha-status` skill is shown first, from the
-   ledger. Known honest gap until `_AC_TAG` is widened (ADR-035 item 6): the engine cannot see the
-   family-prefixed criteria, so measured acceptance reads 6/172 (1.86.0) -- that number is TRUE for the
-   engine as it is; fixing the instrument is its own release, never a hand-edit of the ledger.
+   ledger. The honest gap that made measured acceptance read 6/172 in 1.86.0 was the INSTRUMENT, not
+   the evidence: `_AC_TAG`/`_AC_ID` could not see the family-prefixed criteria. **Widened in 1.87.0
+   (ADR-036)** -- measured acceptance now reads `171/178` (the 7 unmeasured are the M2/M3 `uscha top` ids,
+   skipped on purpose) -- and it shipped as its own release,
+   never as a hand-edit of the ledger. That stays the rule: when the number is ugly, fix the
+   instrument or leave the number ugly.
 10. **INV-GOLDEN-01 governs here too**: never write/rename a `.approved`
    (the kit's hook applies to this repo like any other).
 

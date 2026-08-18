@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.87.0** — [the instrument reads family-prefixed criteria: the kit's own ledger goes from 6/172 measured to the truth (2026-08-18)](CHANGELOG-1.87.0.md)
 - **1.86.1** — [what four blind judges found in 1.86.0, fixed the same day (2026-08-18)](CHANGELOG-1.86.1.md)
 - **1.86.0** — [`uscha top` M1: the ledger gets a terminal, and the repo starts eating its own dog food (2026-08-17)](CHANGELOG-1.86.0.md)
 - **1.85.1** — [the ledger records WHY a score was capped, not only that it was — issue #1 (2026-08-17)](CHANGELOG-1.85.1.md)
