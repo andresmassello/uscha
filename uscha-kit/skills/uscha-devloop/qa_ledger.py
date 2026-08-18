@@ -3423,6 +3423,15 @@ def cmd_golden_coverage(args):
 
         env = dict(os.environ)
         env["COVERAGE_PROCESS_START"] = rc
+        # COVERAGE_FILE is set EXPLICITLY, not merely inherited. coverage.py resolves its
+        # data_file with the environment variable AFTER the rc file, so an inherited
+        # COVERAGE_FILE (the shape the kit's own suite has under USCHA_COVERAGE=1) silently
+        # overrode the isolated data_file above and the capture landed in the caller's shared
+        # file -- the map then read as "covers nothing" and AC-GM-08 went red under coverage
+        # while passing plain. Writing it here pins the child to OUR file whether or not the
+        # caller has one; the parent's own Coverage(data_file=...) already wins over the
+        # environment because constructor arguments are applied last.
+        env["COVERAGE_FILE"] = data_file
         env["PYTHONPATH"] = tmp + os.pathsep + env.get("PYTHONPATH", "")
         env["PYTHONIOENCODING"] = "utf-8"
         r = subprocess.run([sys.executable, harness], cwd=root, env=env,
@@ -8288,9 +8297,17 @@ def _top_clean(text):
     observation statement, a tool name) -- human and CLI input -- so an ESC or a C0 byte
     inside one would be a control sequence the board obeys instead of prints. It dies HERE,
     in the engine, and the renderer drops it again on the way out: two cheap guards over one
-    attack surface. What is filtered is exactly C0 and DEL (ADR-032)."""
+    attack surface.
+
+    Filtered (1.90.0): C0 and DEL, the C1 range U+0080-U+009F (a terminal decoding the text
+    as latin-1 reads those as CSI/OSC introducers, so they are the same attack in one byte
+    less), and every Unicode format character (category `Cf`) -- U+200B and friends occupy no
+    column but do occupy a codepoint, and U+202E reverses the rest of the line. A character
+    that cannot be seen must not be able to move what is."""
     txt = "".join(" " if c in ("\t", "\n", "\r") else c for c in str(text))
-    txt = "".join(c for c in txt if ord(c) >= 32 and ord(c) != 127)
+    txt = "".join(c for c in txt
+                  if ord(c) >= 32 and ord(c) != 127 and not 0x80 <= ord(c) <= 0x9F
+                  and unicodedata.category(c) != "Cf")
     return " ".join(txt.split())
 
 

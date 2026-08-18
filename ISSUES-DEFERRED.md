@@ -134,20 +134,31 @@ silently lost:
   targeting the newest subsystems first (bench/lang-compare/curation branches the suite drives
   only through their happy paths). The threshold stays at 60 — lowering it to match would be
   the narrated fix.
-- **`USCHA_COVERAGE=1` over the full suite makes `AC-GM-08` fail**: `coverage.py`'s
+- ~~**`USCHA_COVERAGE=1` over the full suite makes `AC-GM-08` fail**~~: `coverage.py`'s
   `COVERAGE_FILE` environment variable unconditionally overrides `cmd_golden_coverage`'s own
   isolated `data_file`, so the golden-coverage capture collides with the suite's data file.
-  Reproduces on the unmodified 1.81.0 baseline (pre-existing, surfaced by D-03, not caused by
-  it). Fix candidate: `cmd_golden_coverage` should `os.environ.pop("COVERAGE_FILE")` (or set
-  it explicitly) for its child process. Until then the acceptance number under
-  `USCHA_COVERAGE=1` reads 128/129, and the plain suite is the gate.
+  Reproduced on the unmodified 1.81.0 baseline (pre-existing, surfaced by D-03, not caused by
+  it). **RESOLVED 2026-08-18 (1.90.0)**: `cmd_golden_coverage` now writes
+  `COVERAGE_FILE` explicitly into the child's environment, pinned to the isolated `data_file`
+  (set, not popped: popping leaves the rc file to win, which is right only while nothing else
+  in the chain sets it, whereas setting is correct under both plain and `USCHA_COVERAGE=1`).
+  The parent's own `coverage.Coverage(data_file=...)` was already safe -- constructor
+  arguments are applied after the environment in `coverage/config.py`. T117's AC-GM-08 now
+  runs the capture a SECOND time with a `COVERAGE_FILE` planted in the environment and
+  requires the map to come back measured with the planted file's directory still empty; the
+  assertion goes red with the fix reverted (verified by mutation).
 
 ## 1.86.1 fresh review (`uscha top` M1) — LOW (deferred, below the severity gate)
 
-- **`uscha_top._fit`/`_spread` measure width in codepoints, not display columns.** `len(text)`
+- ~~**`uscha_top._fit`/`_spread` measure width in codepoints, not display columns.**~~ `len(text)`
   counts Python codepoints; a CJK project name or a wide-glyph string occupies 2 terminal
   columns per codepoint on most terminals, so a name near the column budget can overflow the
   frame's fixed width and break the "never wider than the terminal" invariant the golden
-  frames pin. Deferred: no fixture exercises a wide-char project name today and no user has
-  hit it. Fix candidate: an `east_asian_width`-aware measurement (stdlib `unicodedata.east_asian_width`)
-  plus a wide-char golden fixture to pin the corrected behavior.
+  frames pin. Deferred while no fixture exercised a wide-char project name.
+  **RESOLVED 2026-08-18 (1.90.0)**: `_dw` (East Asian Wide/Fullwidth = 2, combining marks = 0,
+  everything else including East Asian *Ambiguous* = 1) is now the measurement behind `_fit`,
+  `_cut`, `_pad`, `_spread`, `_wrap`, `_row`, `_obs_row`, `_pane` and `_burnup_line`; a wide
+  character is dropped whole rather than split. The fixture the deferral asked for exists:
+  `tests/fixtures/uscha-top/state/state-wide.json` with golden frames at 100x32 and 80x24,
+  and T138 sweeps every width from 20 to 120 asserting display width <= cols. Ambiguous
+  counting 1 is what keeps every pre-existing golden byte-identical (`_dw == len` on ASCII).

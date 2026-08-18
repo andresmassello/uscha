@@ -169,8 +169,8 @@ Each milestone closes with a full turn of the method (spec pinned → compile �
   ADR-035).
 - [x] AC-T-11 — the engine derives `events_tail`: the last ≤8 `ledger["steps"]`, newest first, each
   `{ts, level, text}` with `level` from the fixed per-kind map (ADR-032, amended for M2), `ts` the
-  step's `at` as UTC `HH:MM:SS`, and `text` stripped of C0 controls and DEL (8-bit C1 and Unicode
-  format characters are not filtered in v0.1 — ADR-032); a ledger with no
+  step's `at` as UTC `HH:MM:SS`, and `text` stripped of C0 controls, DEL, the 8-bit C1 range and
+  every Unicode format character (category `Cf`) — ADR-032, widened in 1.90.0; a ledger with no
   steps yields `[]`. Measured by T137 over a synthetic ledger carrying one step per kind, an unknown
   kind, an offset timestamp and an injected ESC sequence.
 - [x] AC-T-12 — the `mtime` poll: `_changed(paths, seen)` flips on a real disk change (write, touch,

@@ -537,13 +537,16 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   this script, so its absence of exercise is unchanged, only now visible instead of silently
   absent from the report.
   Measuring this surfaced one unrelated pre-existing issue, flagged separately (not part of
-  this change): `USCHA_COVERAGE=1` for the full suite makes `AC-GM-08` fail, because
+  this change): `USCHA_COVERAGE=1` for the full suite made `AC-GM-08` fail, because
   `coverage.py`'s `COVERAGE_FILE` environment variable unconditionally overrides the isolated
   `data_file` the golden-coverage capture (`cmd_golden_coverage`) sets for itself — confirmed
-  in `coverage/config.py`, reproduced on the unmodified 1.81.0 baseline. It costs ~5 harmless
-  lines of test-fixture noise in the combined total and two red criteria under this
-  specific combination; it does not corrupt the `qa_ledger.py` or auxiliary-script figures
-  above, which come from separate data files untouched by that collision.
+  in `coverage/config.py`, reproduced on the unmodified 1.81.0 baseline. Under that
+  combination the acceptance number read 128/129 and the plain suite was the gate.
+  **Resolved in 1.90.0**: `cmd_golden_coverage` now sets `COVERAGE_FILE` explicitly on the
+  child's environment, pinning the capture to its own data file whether or not the caller has
+  one of its own. T117 asserts it directly — the same capture is run a second time with a
+  `COVERAGE_FILE` planted in the environment, and the map must still come back MEASURED with
+  the caller's file untouched.
 
 ## uscha top v0.1, M1+M2+M3 (ADR-031/032/033/034) - closes on green `AC-T-nn` smoke assertions and golden frames
 
@@ -568,7 +571,7 @@ pipeline instead of counting as untagged (the gap ADR-035 item 6 recorded is clo
 - [x] AC-T-08 - TRACED and TAGGED render in the UNMEASURED-class gray, never as PASS (INV-TOP-02).
 - [x] AC-T-09 - the GATE column shows `junit` or `curation` for a general project.
 - [x] AC-T-10 - the AGE column renders `-` for every obligation in v0.1 (ADR-035).
-- [x] AC-T-11 - (M2) the engine derives `events_tail`: the last <=8 steps, newest first, each `{ts, level, text}` with `level` from the fixed per-kind map, `ts` the step's `at` as UTC HH:MM:SS, `text` stripped of C0 controls and DEL (8-bit C1 and Unicode format chars are not filtered in v0.1); no steps -> `[]`.
+- [x] AC-T-11 - (M2) the engine derives `events_tail`: the last <=8 steps, newest first, each `{ts, level, text}` with `level` from the fixed per-kind map, `ts` the step's `at` as UTC HH:MM:SS, `text` stripped of C0 controls, DEL, the 8-bit C1 range and every Unicode format char (category `Cf`) -- widened in 1.90.0; no steps -> `[]`.
 - [x] AC-T-12 - (M2) the mtime poll: `_changed()` flips on a real disk change and only then, `--refresh` defaults to 2 s with a 0.5 s floor, and a `--once` frame renders the derived feed with timestamp and level letter. Measures the polling PRIMITIVE plus the rendered frame, not a driven TTY session.
 - [x] AC-T-13 - (M3) `v` enters VERDICTS and the queue is exactly the uncurated observations the engine emitted, in its documented order: the criterion each anchors first, the unanchored after, the content-addressed id as the tie-break. NOT age-descending as first drafted - every `age_hours` is null, so there is no age to sort by (ADR-032 amended). `t`/`Esc` returns to BOARD; a curated OBS leaves the queue and only that one.
 - [x] AC-T-14 - (M3) candidate and evidence side by side at 100 columns, stacked at the 80-column floor, and a claim longer than either column comes back whole across the pane's lines. A pane too short to hold it NAMES the shortfall instead of cutting in silence; the one-line queue label above may carry the engine's `…` cap, the claim in the pane may not.

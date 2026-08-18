@@ -183,11 +183,15 @@ so the derivation lives once in the engine, not in the TUI.
   field of the contract that reaches a terminal**, and it carries ledger prose (an escalation
   reason, a tool name) that came from a human or a CLI, so the control characters are stripped
   here, in the engine — and again in the renderer on the way out. Two cheap guards over one
-  surface. **What is filtered in v0.1 is precisely the C0 range (`\x00`-`\x1f`) and DEL
-  (`\x7f`)**; 8-bit C1 introducers (`\x9b` and friends) and Unicode format characters (bidi
-  overrides, zero-width joiners) are **not** filtered — a terminal that decodes C1 from UTF-8 is
-  outside what this guard measures, and saying so is cheaper than implying a completeness the
-  code does not have.
+  surface. **What is filtered since 1.90.0 is the C0 range (`\x00`-`\x1f`), DEL (`\x7f`), the
+  8-bit C1 range (`\x80`-`\x9f`) and every Unicode format character (category `Cf`)** — bidi
+  overrides, zero-width joiners and friends. C1 and `Cf` were explicitly **not** filtered in
+  v0.1 and that was recorded as a named gap, not implied completeness; it is closed now
+  because both are the same attack in a cheaper disguise: a terminal decoding the stream as
+  latin-1 reads `\x9b` as a CSI introducer, `U+200B` spends a codepoint and no column, and
+  `U+202E` reverses everything drawn after it. A character that cannot be seen must not be
+  able to move what is. Both guards do the same filtering, on purpose: `_top_clean` in the
+  engine, `_safe` in the renderer.
 
 ## Consequences / Risks
 + One JSON, one derivation. The TUI is a pure function of this object (ADR-034); a change to a KPI is

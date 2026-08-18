@@ -1,0 +1,106 @@
+{
+  "schema": "uscha-top/v0.1",
+  "project": "後端接口服務 中文專案名稱測試 全形寬度基準",
+  "spec_pin": {
+    "sha": "9d3b71c",
+    "clean_room_verified": false
+  },
+  "step": 77,
+  "generated_at": "2026-08-18T12:00:00+00:00",
+  "obligations": [
+    {
+      "id": "AC-1",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-2",
+      "kind": "AC",
+      "state": "MEASURED_FAIL",
+      "gate": "測試門檻閘道",
+      "cases_pass": 0,
+      "cases_total": 2,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": 12
+    },
+    {
+      "id": "AC-3",
+      "kind": "AC",
+      "state": "UNMEASURED",
+      "gate": null,
+      "cases_pass": null,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    }
+  ],
+  "observations": [],
+  "events_tail": [
+    {
+      "ts": "12:00:00",
+      "level": "fail",
+      "text": "驗收條件失敗 全形文字的顯示寬度是每字兩欄 這一行必須被裁切而不是被截半"
+    },
+    {
+      "ts": "11:58:00",
+      "level": "human",
+      "text": "人工判定 混合 mixed ASCII 與中文 的一行"
+    },
+    {
+      "ts": "11:55:00",
+      "level": "info",
+      "text": "ＡＢＣ fullwidth plus combining é plus zwsp​ c1 shy­ tail"
+    }
+  ],
+  "counts": {
+    "measured_pass": 1,
+    "measured_fail": 1,
+    "quarantine": 0,
+    "unmeasured": 1,
+    "traced": 0,
+    "tagged": 0,
+    "total": 3
+  },
+  "terminado": {
+    "done": 1,
+    "total": 3,
+    "pct": 33,
+    "unmeasured": 1
+  },
+  "debtors": {
+    "machine": 1,
+    "you": 0,
+    "untagged": 1
+  },
+  "honesty": {
+    "measured": 2,
+    "total": 3,
+    "pct": 66
+  },
+  "eta_min": null,
+  "medians": {
+    "verdict_min": null,
+    "loop_min": null
+  },
+  "checks": null,
+  "drift_pct": null,
+  "burnup": {
+    "kind": "score",
+    "weeks": [
+      55,
+      61,
+      66
+    ]
+  }
+}

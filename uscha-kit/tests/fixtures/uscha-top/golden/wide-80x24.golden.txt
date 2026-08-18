@@ -1,0 +1,24 @@
+uscha top · 後端接口服務 中文專案名稱測試 全形寬度基準                  step #77
+────────────────────────────────────────────────────────────────────────────────
+DONE 1/3 (33%) · 1 unmeasured
+machine owes 1 · you owe 0 · untagged 1 · ETA —
+honesty 2/3 (66%) measured · spec_pin 9d3b71c (not clean-room verified)
+score trend  ▅▅▆  (readiness score, not closed obligations)
+────────────────────────────────────────────────────────────────────────────────
+  ID      GATE     STATE            CASES  AGE  ACTION
+> AC-1    junit    MEASURED_PASS      1/1    —  —
+  AC-2    測試門檻 MEASURED_FAIL      0/2   12  machine: fix, then rerun
+  AC-3    —        UNMEASURED           —    —  you: tag a test
+
+
+────────────────────────────────────────────────────────────────────────────────
+feed · 3/3 · newest first · P/F/H/U/I = pass/fail/human/unmeasured/info
+  12:00:00  F  驗收條件失敗 全形文字的顯示寬度是每字兩欄 這一行必須被裁切而不是…
+  11:58:00  H  人工判定 混合 mixed ASCII 與中文 的一行
+  11:55:00  I  ＡＢＣ fullwidth plus combining é plus zwsp c1 shy tail
+
+
+
+
+
+[j/k] move · [r] reload · [q] quit · [v] verdicts · [d]/[o] phase 2

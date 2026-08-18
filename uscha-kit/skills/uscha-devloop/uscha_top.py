@@ -30,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 
 DEFAULT_LEDGER = "QA-LEDGER.json"
 FALLBACK_SIZE = (100, 32)
@@ -105,21 +106,71 @@ ACTIONS = {
 # --------------------------------------------------------------------------- #
 # pure rendering                                                              #
 # --------------------------------------------------------------------------- #
+def _dw(text):
+    """Display width in TERMINAL COLUMNS, not codepoints.
+
+    `len()` counts codepoints, and the frame's whole contract is columns: a CJK project name
+    or a full-width event text takes two columns per codepoint, so a line `len()` called
+    exactly `cols` wide draws twice that and the frame every golden pins stops being a frame
+    (1.86.1 fresh review, LOW, deferred until a fixture existed -- `state-wide.json` is it).
+
+    Three classes, and no font metric anywhere: East Asian Wide and Fullwidth cost 2, a
+    combining mark costs 0 (it draws on the previous cell), everything else costs 1. East
+    Asian *Ambiguous* deliberately counts 1 -- that is the class the renderer's own glyphs
+    fall into (`…`, `·`, `─`, `│`, `▁`, `—`), so on an ASCII state `_dw` is `len` and every
+    frame captured before this function existed stays byte-identical."""
+    width = 0
+    for ch in str(text):
+        if unicodedata.combining(ch):
+            continue
+        width += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return width
+
+
+def _cut(text, width):
+    """The longest PREFIX of `text` that fits in `width` columns, whole characters only.
+
+    A wide character is never split: half a glyph is not half a column, it is a cell the
+    terminal fills however it likes and a frame nobody can snapshot."""
+    if width <= 0:
+        return ""
+    out, used = [], 0
+    for ch in str(text):
+        w = 0 if unicodedata.combining(ch) else (
+            2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1)
+        if used + w > width:
+            break
+        out.append(ch)
+        used += w
+    return "".join(out)
+
+
+def _pad(text, width):
+    """`str.ljust` measured in columns. Padding by codepoints puts a wide cell's second
+    column inside the next field and every column after it walks."""
+    return str(text) + " " * max(0, width - _dw(text))
+
+
 def _fit(text, cols):
     """One line, never wider than the terminal. Wrapping would break the frame's row
-    accounting, so an over-long line is cut and marked."""
+    accounting, so an over-long line is cut and marked.
+
+    Measured and cut in COLUMNS (`_dw`/`_cut`): cutting by codepoints was the bug. Note the
+    cut may leave one column short rather than land exactly on `cols - 1` -- when the
+    character at the boundary is wide it is dropped whole, and a frame one column narrow is
+    correct where a frame one column wide is not."""
     if cols <= 0:
         return ""
-    if len(text) <= cols:
+    if _dw(text) <= cols:
         return text
-    return text[:cols - 1] + "…" if cols > 1 else text[:cols]
+    return _cut(text, cols - 1) + "…" if cols > 1 else _cut(text, cols)
 
 
 def _spread(left, right, cols):
     """left ... right on one line, right-aligned, degrading to just `left` when tight."""
-    if len(left) + len(right) + 1 > cols:
+    if _dw(left) + _dw(right) + 1 > cols:
         return _fit(left, cols)
-    return left + " " * (cols - len(left) - len(right)) + right
+    return left + " " * (cols - _dw(left) - _dw(right)) + right
 
 
 def _num(value):
@@ -151,7 +202,7 @@ def _burnup_line(burnup, cols):
     note = "  (readiness score, not closed obligations)"
     if not points:
         return label + DASH + "  (no `readiness --record` history yet)"
-    room = max(4, min(BURNUP_MAX, cols - len(label) - len(note)))
+    room = max(4, min(BURNUP_MAX, cols - _dw(label) - _dw(note)))
     bars = "".join(BLOCKS[min(len(BLOCKS) - 1, max(0, int(p) * len(BLOCKS) // 101))]
                    for p in points[-room:])
     return label + bars + note
@@ -180,10 +231,13 @@ def _cases_text(ob):
 
 
 def _row(ob, selected):
+    # the three left columns are cut and padded in COLUMNS: an id or state carrying wide
+    # characters used to eat its neighbour's field and walk every column after it.
     gutter = "> " if selected else "  "
-    return "%s%-8s%-9s%-15s%7s%5s  %s" % (
-        gutter, _safe(ob.get("id") or "?")[:8], _safe(ob.get("gate") or DASH)[:8],
-        _safe(ob.get("state") or "?")[:14], _cases_text(ob),
+    return "%s%s%s%s%7s%5s  %s" % (
+        gutter, _pad(_cut(_safe(ob.get("id") or "?"), 8), 8),
+        _pad(_cut(_safe(ob.get("gate") or DASH), 8), 9),
+        _pad(_cut(_safe(ob.get("state") or "?"), 14), 15), _cases_text(ob),
         _num(ob.get("age_hours")), ACTIONS.get(ob.get("state"), DASH))
 
 
@@ -191,8 +245,22 @@ def _safe(text):
     """No control character reaches the terminal through the feed. The engine already
     strips them where the text is derived (`_top_event_text`); this is the second guard on
     the same surface, because the renderer also accepts a frozen state file a human wrote,
-    and one ESC in it would be a control sequence the board obeys instead of prints."""
-    return "".join(c for c in str(text or "") if ord(c) >= 32 and ord(c) != 127)
+    and one ESC in it would be a control sequence the board obeys instead of prints.
+
+    Dropped (1.90.0), matching the engine's `_top_clean` exactly: C0 and DEL, the C1 range
+    U+0080-U+009F (a terminal reading the stream as latin-1 takes those for CSI/OSC), and
+    every Unicode format character (category `Cf`) -- U+200B costs a codepoint and no column,
+    U+202E reverses everything after it. A character that cannot be seen must not be able to
+    move what is."""
+    out = []
+    for ch in str(text or ""):
+        code = ord(ch)
+        if code < 32 or code == 127 or 0x80 <= code <= 0x9F:
+            continue
+        if unicodedata.category(ch) == "Cf":
+            continue
+        out.append(ch)
+    return "".join(out)
 
 
 def _feed_line(ev, cols, plain):
@@ -355,14 +423,17 @@ def _wrap(text, width):
     for word in _safe(text).split():
         if not line:
             line = word
-        elif len(line) + 1 + len(word) <= width:
+        elif _dw(line) + 1 + _dw(word) <= width:
             line += " " + word
         else:
             out.append(line)
             line = word
-        while len(line) > width:
-            out.append(line[:width])
-            line = line[width:]
+        # the hard split is measured in columns too, and `_cut` never breaks a wide
+        # character in half -- so a wide token continues on the next line, whole.
+        while _dw(line) > width:
+            head = _cut(line, width)
+            out.append(head)
+            line = line[len(head):]
     if line:
         out.append(line)
     return out or [""]
@@ -374,10 +445,10 @@ def _obs_row(i, ob, selected, cols):
     gutter = "> " if selected else "  "
     idx = "[%d]" % (i + 1) if i < VERDICT_LIST_MAX else "   "
     tail = " %s %s %s pending" % (MID, _safe(ob.get("ac")) or ("AC " + DASH), MID)
-    head = "%s%-4s%-18s" % (gutter, idx, _safe(ob.get("id"))[:18])
-    room = max(4, cols - len(head) - len(tail))
+    head = "%s%-4s%s" % (gutter, idx, _pad(_cut(_safe(ob.get("id")), 18), 18))
+    room = max(4, cols - _dw(head) - _dw(tail))
     title = _fit(_safe(ob.get("title")) or DASH, room)
-    return head + title.ljust(room) + tail
+    return head + _pad(title, room) + tail
 
 
 def _column_widths(cols):
@@ -412,7 +483,7 @@ def _pane(ob, cols, height):
             pad = max(len(left), len(right))
             left += [""] * (pad - len(left))
             right += [""] * (pad - len(right))
-            body = head + [("  %s │ %s" % (l.ljust(lw), r)).rstrip()
+            body = head + [("  %s │ %s" % (_pad(l, lw), r)).rstrip()
                            for l, r in zip(left, right)]
         else:
             body = (head + ["  CANDIDATE"] + ["  " + ln for ln in block("candidate", cols - 2)]

@@ -264,11 +264,15 @@ if [ "${USCHA_COVERAGE:-0}" = "1" ]; then
   # (1) git-bash/MSYS rewrites only the FIRST POSIX path embedded in an argument, so a
   #     comma-joined list arrives at Windows Python as C:/... , /c/... , /c/... -- the tail
   #     entries are unresolvable and coverage warns once per call;
-  # (2) coverage.py does not report never-imported files under a --source directory anyway,
-  #     so extra roots buy nothing.
+  # (2) an extra root buys nothing that a second single-source call does not buy better.
   # What gets measured is what the suite EXECUTES through this seam: the engine. The twin
   # tree (uscha-kit/skills) is absent from the report because the suite never runs it --
   # $QL points at .claude/skills -- not because a flag excluded it.
+  # Correction (1.90.0), because this comment used to claim the opposite: coverage.py DOES
+  # report a never-imported file that sits under a --source directory, and it reports it at
+  # 0%. That is why `uscha_top.py` and `telemetry-extract.py` were dragging the total down
+  # while nothing was wrong with them -- they were in a --source root with no seam reaching
+  # them. A file under --source is therefore a PROMISE to exercise it, not a free pass.
   COV_SRC="$KIT/.claude/skills/uscha-devloop"
   run() { PYTHONIOENCODING=utf-8 "$PY" -m coverage run --parallel-mode \
             --source="$COV_SRC" "$QL" "$@"; }
@@ -285,9 +289,70 @@ if [ "${USCHA_COVERAGE:-0}" = "1" ]; then
   runpy() { local script="$1"; shift
             PYTHONIOENCODING=utf-8 "$PY" -m coverage run --parallel-mode \
               --source="$(dirname "$script")" "$script" "$@"; }
+  # Third choke point (1.90.0). `uscha_top.py` sits in the SAME --source directory as the
+  # engine and the suite drives it hard -- but IN PROCESS, from `"$PY" - <<PY` blocks that
+  # import it, and through bare `sys.executable` subprocesses. Neither passes run(), so the
+  # report listed the module at 0% while 24 acceptance criteria were being measured against
+  # it: an instrument blind spot, not an untested module (the same class of gap ADR-036
+  # closed for the AC ids). `coverage run` cannot take a program on stdin, so pyin() spools
+  # the heredoc to a temp file and runs THAT under the same --source. The temp file is
+  # outside --source, so the test code itself is never counted -- only the subject.
+  # Fourth choke point (1.90.0), and the one that explains the ugliest numbers. run() only
+  # sees the engine calls the SHELL makes. Most blocks written since ~T117 drive the engine
+  # from INSIDE their python program -- `subprocess.run([sys.executable, ENG, ...])` -- and
+  # those children are plain interpreters, so `cmd_fastpath_eval` read 1/132 lines covered
+  # while T117 was measuring nine criteria against it. Same class of blindness as uscha_top,
+  # one layer deeper. The fix is coverage.py's own documented multiprocess technique -- the
+  # one `cmd_golden_coverage` already uses: a sitecustomize on PYTHONPATH plus
+  # COVERAGE_PROCESS_START, so EVERY python the suite spawns, at any depth, joins the same
+  # parallel data set. The rc file carries the source roots as a LIST (an rc list is
+  # additive; the CLI flag is last-wins, which is why run()/runpy() still pass their own).
+  # Paths go through python so a git-bash /c/... never reaches a Windows interpreter that
+  # cannot read it: argv is MSYS-rewritten, an rc file's contents are not.
+  COV_RC="$ROOT/.coverage-data/cov.rc"
+  COV_SITE="$ROOT/.coverage-data/sitecustomize"
+  mkdir -p "$COV_SITE"
+  "$PY" - "$COV_RC" "$COV_DATA" "$COV_SITE" \
+        "$KIT/.claude/skills/uscha-devloop" \
+        "$KIT/.claude/skills/uscha-mirador" \
+        "$KIT/templates/scripts" <<'PY'
+import io, os, sys
+rc, data, site = (os.path.realpath(p) for p in sys.argv[1:4])
+roots = [os.path.realpath(p) for p in sys.argv[4:]]
+with io.open(rc, "w", encoding="utf-8", newline="\n") as fh:
+    fh.write("[run]\nparallel = True\ndata_file = %s\nsource =\n%s\n"
+             % (data.replace("\\", "/"),
+                "\n".join("    " + r.replace("\\", "/") for r in roots)))
+with io.open(os.path.join(site, "sitecustomize.py"), "w", encoding="utf-8",
+             newline="\n") as fh:
+    fh.write("import coverage\ncoverage.process_startup()\n")
+print(site + os.pathsep)
+PY
+  COV_SITE_SEP="$("$PY" -c "import os;print(os.pathsep)")"
+  export COVERAGE_PROCESS_START="$("$PY" -c "import os,sys;print(os.path.realpath(sys.argv[1]))" "$COV_RC")"
+  COV_SITE_NATIVE="$("$PY" -c "import os,sys;print(os.path.realpath(sys.argv[1]))" "$COV_SITE")"
+  if [ -n "${PYTHONPATH:-}" ]; then
+    export PYTHONPATH="$COV_SITE_NATIVE$COV_SITE_SEP$PYTHONPATH"
+  else
+    export PYTHONPATH="$COV_SITE_NATIVE"
+  fi
+  PYIN_DIR="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/uscha-pyin-$$")"
+  mkdir -p "$PYIN_DIR"
+  # ONE fixed name is enough and is why there is no counter: every call site is a command
+  # substitution (its own subshell, so a counter would never advance), the suite is serial,
+  # and the file is removed as soon as the program has run.
+  pyin() { local prog rc
+           prog="$PYIN_DIR/pyin.py"
+           cat > "$prog"
+           PYTHONIOENCODING=utf-8 "$PY" -m coverage run --parallel-mode \
+             --source="$COV_SRC" "$prog" "$@"
+           rc=$?
+           rm -f "$prog"
+           return $rc; }
 else
   run() { PYTHONIOENCODING=utf-8 "$PY" "$QL" "$@"; }
   runpy() { local script="$1"; shift; PYTHONIOENCODING=utf-8 "$PY" "$script" "$@"; }
+  pyin() { PYTHONIOENCODING=utf-8 "$PY" - "$@"; }
 fi
 
 cat > uscha.config.json <<'EOF'
@@ -3882,10 +3947,31 @@ if have_cov:
     if os.path.isfile(p8):
         m = json.load(io.open(p8, encoding="utf-8"))
     entry = (m.get("goldens") or {}).get(GOLD) or {}
-    res["AC-GM-08"] = (r8.returncode == 0 and "lib.py" in entry.get("files", [])
-                       and "other.py" not in entry.get("files", [])
-                       and bool(entry.get("captured_at_commit"))
-                       and entry.get("tool", "").startswith("coverage.py"))
+    plain_ok = (r8.returncode == 0 and "lib.py" in entry.get("files", [])
+                and "other.py" not in entry.get("files", [])
+                and bool(entry.get("captured_at_commit"))
+                and entry.get("tool", "").startswith("coverage.py"))
+    # ...and the SAME capture with a COVERAGE_FILE already in the environment -- the shape a
+    # caller measuring its own coverage has (the kit's suite under USCHA_COVERAGE=1). The
+    # environment used to override the isolated data_file, the child wrote into the caller's
+    # shared file, and the map came back empty -> exit 2. The isolation is the criterion:
+    # the map must still be MEASURED, and the caller's file must stay untouched.
+    os.remove(p8)
+    outside = os.path.join(w, "outside-cov", ".coverage")
+    os.makedirs(os.path.dirname(outside), exist_ok=True)
+    env9 = dict(os.environ)
+    env9["COVERAGE_FILE"] = outside
+    r9 = subprocess.run([sys.executable, ENG, "golden-coverage", "--harness", "h.py",
+                         "--golden", GOLD, "--dir", "."], cwd=repo, env=env9,
+                        capture_output=True, text=True)
+    m9 = {}
+    if os.path.isfile(p8):
+        m9 = json.load(io.open(p8, encoding="utf-8"))
+    entry9 = (m9.get("goldens") or {}).get(GOLD) or {}
+    leaked = os.listdir(os.path.dirname(outside))
+    isolated_ok = (r9.returncode == 0 and "lib.py" in entry9.get("files", [])
+                   and "other.py" not in entry9.get("files", []) and not leaked)
+    res["AC-GM-08"] = bool(plain_ok and isolated_ok)
 else:
     res["AC-GM-08"] = None       # UNMEASURED without the capture-time dependency
 
@@ -6756,7 +6842,7 @@ echo "== T137 (uscha top M1): the engine computes the WHOLE projection, and a fi
 # The contract is the gate. Every KPI the terminal board shows is asserted HERE, over the
 # engine JSON alone -- so a renderer cannot be the place a number is invented, and the
 # deferred fields (ETA, ages, drift, trace) are proven ABSENT rather than assumed absent.
-T137=$("$PY" - "$KIT" <<'PY'
+T137=$(pyin "$KIT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
@@ -7216,8 +7302,8 @@ echo "== T138 (uscha top M1): render() is pure and its oracle is golden frames (
 # A renderer nobody snapshots is a renderer free to round 96 up to 100. These frames are the
 # discriminator: byte-identical or red, with the negative-honesty frame carrying the whole
 # invariant on its own line.
-T138=$("$PY" - "$KIT" <<'PY'
-import ast, glob, io, json, os, subprocess, sys, tempfile
+T138=$(pyin "$KIT" <<'PY'
+import ast, glob, io, json, os, subprocess, sys, tempfile, unicodedata
 kit = sys.argv[1]
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 TUI = os.path.join(SKILL, "uscha_top.py")
@@ -7240,7 +7326,11 @@ def golden(name, cols, rows):
         return fh.read().split("\n")[:-1]
 
 
-NAMES = ("healthy", "stale-quarantine", "honesty-negative", "traced-tagged")
+# "wide" (1.90.0) is the fixture the display-width work needed and did not have: a CJK
+# project name, a full-width gate cell and a CJK feed line, so every width computation is
+# exercised in COLUMNS and not in codepoints. It travels with the others through the golden
+# oracle (AC-T-19) and the frame-geometry criterion (AC-T-21).
+NAMES = ("healthy", "stale-quarantine", "honesty-negative", "traced-tagged", "wide")
 SIZES = ((100, 32), (80, 24))
 
 # AC-T-19: pure and byte-identical against the committed frames, at both canonical sizes.
@@ -7312,11 +7402,14 @@ res["AC-T-23"] = bool(ok)
 
 # AC-T-21: the 80x24 floor -- exact height, nothing wider than the terminal, the BOARD
 # survives and the feed is what gets shortened.
+# "wider than the terminal" is measured in DISPLAY COLUMNS (1.90.0): len() counts codepoints,
+# and a CJK line len() calls 80 draws 160 -- the exact hole this criterion used to have.
+DW = uscha_top._dw
 ok = True
 for n in NAMES:
     for cols, rows in SIZES:
         f = uscha_top.render(state(n), (cols, rows), sel=0, plain=True)
-        if len(f) != rows or any(len(ln) > cols for ln in f):
+        if len(f) != rows or any(DW(ln) > cols for ln in f):
             ok = False
     wide = uscha_top.render(state(n), (100, 32), sel=0, plain=True)
     tight = uscha_top.render(state(n), (80, 24), sel=0, plain=True)
@@ -7326,7 +7419,75 @@ for n in NAMES:
         ok = False
     if not any(ln.startswith("DONE ") for ln in tight):
         ok = False
+# ...and the width promise holds at EVERY size, not only the two canonical ones: the wide
+# fixture swept across the whole usable range is where a codepoint measurement shows up as a
+# frame twice the terminal.
+wide_state = state("wide")
+for cols in range(20, 121):
+    f = uscha_top.render(wide_state, (cols, 32), sel=0, plain=True)
+    if len(f) != 32 or any(DW(ln) > cols for ln in f):
+        ok = False
 res["AC-T-21"] = bool(ok)
+
+# The measurement itself, and the cut built on it. Three classes and no font metric: Wide and
+# Fullwidth cost 2, a combining mark costs 0, everything else 1 -- and East Asian *Ambiguous*
+# costs 1, which is why the frames captured before _dw existed are still byte-identical.
+ok = (DW("A") == 1 and DW(chr(0x4E2D)) == 2 and DW(chr(0xFF21)) == 2
+      and DW("e" + chr(0x301)) == 1 and DW("") == 0
+      and all(DW(g) == 1 for g in (chr(0x2026), chr(0xB7), chr(0x2500), chr(0x2502),
+                                   chr(0x2581), chr(0x2014))))
+# _cut fits, and never spends a column it did not have to: a wide character at the boundary
+# is dropped WHOLE (one column short is correct, half a glyph is not), so the cut lands on
+# the width asked for or exactly one below it -- never lower, never over.
+sample = chr(0x4E2D) * 6 + "abc" + chr(0xFF21) * 3      # 21 columns, 12 codepoints
+for w in range(0, 30):
+    piece = uscha_top._cut(sample, w)
+    # at or below the string's own width the cut must spend everything it can: short by one
+    # column when a wide character straddles the boundary, never short by two
+    if DW(piece) > w or (0 < w <= DW(sample) and DW(piece) < w - 1):
+        ok = False
+    if w > DW(sample) and piece != sample:
+        ok = False                    # room to spare cuts nothing at all
+    if not sample.startswith(piece):
+        ok = False                    # a prefix, never a re-encoding
+# _pad completes to the width in columns, so the next field starts where the header says
+if DW(uscha_top._pad(chr(0x4E2D) * 2, 9)) != 9 or DW(uscha_top._pad("ab", 9)) != 9:
+    ok = False
+# _wrap hard-splits a single over-wide token without halving a character, and drops nothing
+long_word = chr(0x4E2D) * 20
+wrapped = uscha_top._wrap(long_word, 9)
+if "".join(wrapped) != long_word or any(DW(ln) > 9 for ln in wrapped):
+    ok = False
+res["reg-top-display-width-in-columns"] = bool(ok)
+
+# C1 and the format characters: invisible input must not be able to move what IS visible.
+# Both guards are asserted -- the engine's `_top_clean`, where the text is derived, and the
+# renderer's `_safe`, which also sees a frozen state file a human wrote.
+INVISIBLE = chr(0x200B) + chr(0x9B) + chr(0xAD) + chr(0x202E) + chr(0x80)
+
+
+def _has_invisible(s):
+    return any(0x80 <= ord(c) <= 0x9F or unicodedata.category(c) == "Cf" for c in s)
+
+
+ok = (not _has_invisible(uscha_top._safe("a" + INVISIBLE + "b"))
+      and uscha_top._safe("a" + INVISIBLE + "b") == "ab")
+import qa_ledger as _ql
+if _ql._top_clean("a" + INVISIBLE + "b") != "ab":
+    ok = False
+# and none of it survives into a frame: the wide fixture carries the whole set in one event
+poisoned_w = json.loads(json.dumps(wide_state))
+poisoned_w["project"] = "proj" + INVISIBLE
+poisoned_w["events_tail"][0]["text"] = "head" + INVISIBLE + "tail"
+for cols, rows in SIZES:
+    pw = uscha_top.render(poisoned_w, (cols, rows), sel=0, plain=True)
+    if any(_has_invisible(ln) for ln in pw):
+        ok = False
+    if not any("headtail" in ln for ln in pw):
+        ok = False                    # stripped, not swallowed
+    if not any("proj" in ln for ln in pw):
+        ok = False
+res["reg-top-c1-and-format-chars-stripped"] = bool(ok)
 
 # AC-T-08: TRACED and TAGGED wear the UNMEASURED gray, never the PASS green.
 P = uscha_top.PALETTE
@@ -7370,7 +7531,7 @@ res["AC-T-07"] = bool(ok)
 # AC-T-18: stdlib only, importable, and runnable through python -m -- the kit ships no
 # dependency and this criterion is what keeps it that way.
 STDLIB = {"argparse", "json", "os", "shutil", "subprocess", "sys", "time", "ctypes",
-          "msvcrt", "select", "termios", "tty"}
+          "msvcrt", "select", "termios", "tty", "unicodedata"}
 tree = ast.parse(io.open(TUI, encoding="utf-8").read())
 imported = set()
 for node in ast.walk(tree):
@@ -7540,7 +7701,7 @@ crowded["events_tail"] = sq.get("events_tail") or []
 cf = uscha_top.render(crowded, (80, 24), sel=0, plain=True)
 if not any(ln.startswith("feed ") and "no room at this size" in ln for ln in cf):
     ok = False
-if len(cf) != 24 or max(len(ln) for ln in cf) > 80:
+if len(cf) != 24 or max(uscha_top._dw(ln) for ln in cf) > 80:
     ok = False
 res["AC-T-12"] = bool(ok)
 
@@ -7550,20 +7711,36 @@ res["AC-T-12"] = bool(ok)
 # built to break both must come back fitted and clean at every size.
 hostile = json.loads(json.dumps(state("stale-quarantine")))
 hostile["spec_pin"] = {"sha": chr(27) + "[7m" + ("Q" * 300), "clean_room_verified": False}
-hostile["project"] = chr(27) + "[5m" + ("P" * 200)
-hostile["obligations"][0]["id"] = chr(27) + "[1mZZ"
-hostile["obligations"][0]["gate"] = chr(0) + "junit"
-hostile["events_tail"][0]["text"] = "x" * 400 + chr(27) + "[1m"
+# the widening half of the same attack (1.90.0): full-width text is 300 codepoints and 600
+# columns, so a renderer measuring len() emits a frame twice the terminal without one escape
+hostile["project"] = chr(27) + "[5m" + (chr(0xFF30) * 200)
+hostile["obligations"][0]["id"] = chr(27) + "[1m" + chr(0x4E2D) * 20
+hostile["obligations"][0]["gate"] = chr(0) + chr(0x4E2D) * 20
+hostile["events_tail"][0]["text"] = chr(0x4E2D) * 400 + chr(27) + "[1m"
 hostile["events_tail"][0]["ts"] = chr(27) + "[2m00:00:00"
 ok = True
 for cols, rows in SIZES:
     hf = uscha_top.render(hostile, (cols, rows), sel=0, plain=True)
-    if len(hf) != rows or max(len(ln) for ln in hf) > cols:
+    if len(hf) != rows or max(uscha_top._dw(ln) for ln in hf) > cols:
         ok = False
     if any(chr(27) in ln or chr(0) in ln for ln in hf):
         ok = False
     hc = uscha_top.render(hostile, (cols, rows), sel=0, plain=False)
     if len(hc) != rows:
+        ok = False
+# VERDICTS mode has its own geometry (the queue rows and the two-column pane), so it needs
+# the same hostile state pushed through it: the pane is where the claim the human judges is
+# wrapped, and a wrap measured in codepoints spills the right column past the frame.
+for o in hostile.get("observations") or []:
+    o["id"] = chr(0x4E2D) * 30
+    o["title"] = chr(0xFF30) * 120
+    o["candidate"] = [chr(0x4E2D) * 200]
+    o["evidence"] = [chr(0xFF30) * 200, "ascii tail"]
+for cols, rows in SIZES:
+    vf = uscha_top.render(hostile, (cols, rows), sel=0, plain=True, mode="verdicts")
+    if len(vf) != rows or max(uscha_top._dw(ln) for ln in vf) > cols:
+        ok = False
+    if any(chr(27) in ln or chr(0) in ln for ln in vf):
         ok = False
 res["reg-top-render-state-text-cannot-widen-or-escape"] = bool(ok)
 
@@ -7872,7 +8049,7 @@ echo "== T141 (uscha top M3): VERDICTS mode -- the ONE write, made by the engine
 # the ledger is the one a manual call would have written, and DONE does not move because a
 # verdict is a judgement and not a measurement (INV-TOP-03). Every write in this block happens
 # on a TEMP COPY of the fixture -- the committed one stays read-only like the rest of the suite.
-T141=$("$PY" - "$KIT" <<'PY'
+T141=$(pyin "$KIT" <<'PY'
 import ast, io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
@@ -8365,6 +8542,357 @@ PY
 case "$T141" in
   OK*) PASS=$((PASS+1)); echo "  ok   uscha-top verdicts, the single write (AC-T-13,14,15,16,17): $T141";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T141";;
+esac
+
+echo "== T142 (1.90.0): telemetry-extract -- upsert by session, best-effort parsing, nothing appended without usage =="
+# The mirador's vendor adapter ships in the kit and NOTHING measured it: the D-03 seam reported
+# it at 0%, "present but never invoked", which is an honest number about an unexercised file
+# rather than a passing one. Its contract has three claims worth pinning, and every one of them
+# is a way the mirador's cost strip could lie: the upsert (a watch loop re-running the same
+# session must REPLACE its line, never inflate the totals), the best-effort parse (a truncated
+# or schema-drifted transcript degrades, never crashes), and the refusal to append a line for a
+# transcript that carries no usage at all. Driven through runpy() so the seam sees it.
+T142D="$SB/telemetry"
+mkdir -p "$T142D"
+TEL="$KIT/.claude/skills/uscha-mirador/telemetry-extract.py"
+# one transcript: two models, cache tokens on both counters, a malformed line, a record with no
+# usage, a zero-token usage record, and timestamps that bracket a known wall time
+"$PY" - "$T142D" <<'PY'
+import io, json, os, sys
+d = sys.argv[1]
+recs = [
+    {"timestamp": "2026-08-18T10:00:00Z",
+     "message": {"model": "model-a", "usage": {"input_tokens": 100,
+                                               "cache_read_input_tokens": 10,
+                                               "cache_creation_input_tokens": 5,
+                                               "output_tokens": 20}}},
+    {"timestamp": "2026-08-18T10:00:30Z", "message": {"model": "model-a",
+                                                      "usage": {"input_tokens": 1,
+                                                                "output_tokens": 2}}},
+    {"timestamp": "2026-08-18T10:01:00Z", "message": {"model": "model-b",
+                                                      "usage": {"input_tokens": 7,
+                                                                "output_tokens": 3}}},
+    # ignored, each for its own reason: no usage, zero usage, an unparseable timestamp
+    {"timestamp": "2026-08-18T10:00:10Z", "message": {"model": "model-a", "text": "hi"}},
+    {"timestamp": "2026-08-18T10:00:20Z", "message": {"model": "model-a",
+                                                      "usage": {"input_tokens": 0,
+                                                                "output_tokens": 0}}},
+    {"timestamp": "not-a-timestamp", "message": {"model": "model-b",
+                                                 "usage": {"output_tokens": 4}}},
+]
+with io.open(os.path.join(d, "session.jsonl"), "w", encoding="utf-8", newline="\n") as fh:
+    for r in recs:
+        fh.write(json.dumps(r) + "\n")
+    fh.write("{ this is not json\n")        # best-effort: skipped, never fatal
+    fh.write("\n")                          # blank line: skipped too
+# and a transcript with no usage anywhere
+with io.open(os.path.join(d, "empty.jsonl"), "w", encoding="utf-8", newline="\n") as fh:
+    fh.write(json.dumps({"timestamp": "2026-08-18T10:00:00Z", "message": {"text": "no usage"}})
+             + "\n")
+PY
+T142_SIDE="$T142D/.uscha/telemetry.jsonl"
+runpy "$TEL" "$T142D/session.jsonl" --sidecar "$T142_SIDE" --note "first pass" >/dev/null 2>&1
+T142_RC1=$?
+# the SAME session again: the upsert claim. An appending adapter doubles the totals here.
+runpy "$TEL" "$T142D/session.jsonl" --sidecar "$T142_SIDE" >/dev/null 2>&1
+T142_RC2=$?
+# a second, named session lands beside it instead of replacing it
+runpy "$TEL" "$T142D/session.jsonl" --sidecar "$T142_SIDE" --session other >/dev/null 2>&1
+# no usage: a message on stderr, exit 0, and NOT one more line in the sidecar
+T142_EMPTY=$(runpy "$TEL" "$T142D/empty.jsonl" --sidecar "$T142_SIDE" 2>&1 >/dev/null)
+T142_RC3=$?
+T142=$("$PY" - "$T142D" "$T142_RC1" "$T142_RC2" "$T142_RC3" "$T142_EMPTY" <<'PY'
+import io, json, os, sys
+d, rc1, rc2, rc3, empty_msg = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+side = os.path.join(d, ".uscha", "telemetry.jsonl")
+lines = [json.loads(x) for x in io.open(side, encoding="utf-8").read().split("\n") if x.strip()]
+bad = []
+if (rc1, rc2, rc3) != ("0", "0", "0"):
+    bad.append("exit codes %s/%s/%s" % (rc1, rc2, rc3))
+if "no usage data found" not in empty_msg:
+    bad.append("silent on a transcript with no usage: %r" % empty_msg[:80])
+# exactly two lines: the default session (written twice, upserted once) and the named one
+if len(lines) != 2:
+    bad.append("expected 2 session lines, got %d" % len(lines))
+by = dict((r.get("session"), r) for r in lines)
+if sorted(by) != ["other", "session.jsonl"]:
+    bad.append("sessions %s" % sorted(by))
+main = by.get("session.jsonl") or {}
+# 100+10+5 + 1 + 7 = 123 in, 20+2+3+4 = 29 out. Both cache counters are part of tokens_in; the
+# usage-less and all-zero records contribute nothing; and the record whose TIMESTAMP is
+# unparseable still contributes its tokens -- only the stamp is dropped, not the cost.
+if (main.get("tokens_in"), main.get("tokens_out")) != (123, 29):
+    bad.append("totals %s/%s (upsert inflated them, or the cache counters were dropped)"
+               % (main.get("tokens_in"), main.get("tokens_out")))
+if main.get("model") != "model-a+model-b":
+    bad.append("multi-model label %r" % main.get("model"))
+if [b.get("model") for b in main.get("by_model") or []] != ["model-a", "model-b"]:
+    bad.append("by_model %s" % main.get("by_model"))
+if [b.get("tokens_in") for b in main.get("by_model") or []] != [116, 7]:
+    bad.append("per-model split %s" % main.get("by_model"))
+# 10:00:00 -> 10:01:00 is 60s of wall time, and the unparseable stamp did not widen it
+if main.get("ms") != 60000:
+    bad.append("ms %s" % main.get("ms"))
+if main.get("at") != "2026-08-18T10:01:00+00:00":
+    bad.append("at %s" % main.get("at"))
+# the note belonged to the FIRST run; the upsert replaced that line, so it is gone
+if "note" in main:
+    bad.append("the upsert kept a stale note instead of replacing the line")
+if (by.get("other") or {}).get("tokens_in") != 123:
+    bad.append("the named session did not get its own line")
+print("OK 5 cases" if not bad else "BAD " + " | ".join(bad))
+PY
+)
+case "$T142" in
+  OK*) PASS=$((PASS+1)); echo "  ok   telemetry-extract: $T142";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T142";;
+esac
+
+echo "== T143 (1.90.0): the vendor strip end to end -- the sidecar the extractor wrote is what the mirador aggregates =="
+# The other half of the same untested surface. T79/T80 render the mirador with no sidecar at
+# all, so `aggregate_telemetry` -- the merge that produces the cost strip -- was never run, and
+# neither were the three friendly failures of the renderer. Both matter for the same reason:
+# the strip is VENDOR-reported, so a silent merge bug shows up as a plausible number nobody can
+# trace, and a renderer that dies with a traceback on a bad engine path reads as a kit bug.
+MIR="$KIT/.claude/skills/uscha-mirador/mirador-render.py"
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > tel-cfg.json
+run init --config tel-cfg.json --out L-tel.json >/dev/null 2>&1
+# a stub engine that SUCCEEDS and answers with something that is not JSON: the failure mode
+# a broken engine path cannot reach, and the only way to drive the invalid-JSON branch
+printf 'print("dashboard says hello, not json")\n' > "$T142D/bad-engine.py"
+runpy "$MIR" --engine "$QL" --ledger L-tel.json \
+  --template "$KIT/.claude/skills/uscha-mirador/mirador.template.html" \
+  --out "$T142D/mir.html" --sidecar "$T142_SIDE" --no-open --refresh 0 > "$T142D/mir.out" 2>&1
+T143_RC=$?
+# an EMPTY sidecar is "off", not zero: a file with nothing in it must not invent a cost strip
+: > "$T142D/empty-sidecar.jsonl"
+T143_OFF=$(runpy "$MIR" --engine "$QL" --ledger L-tel.json \
+  --template "$KIT/.claude/skills/uscha-mirador/mirador.template.html" \
+  --out "$T142D/mir-off.html" --sidecar "$T142D/empty-sidecar.jsonl" --no-open --refresh 0 2>&1)
+# the three friendly failures: no engine, an engine that answers with garbage, no template
+T143_E1=$(runpy "$MIR" --engine "$T142D/does-not-exist.py" --ledger L-tel.json \
+  --template "$KIT/.claude/skills/uscha-mirador/mirador.template.html" \
+  --out "$T142D/x1.html" --no-open 2>&1); T143_R1=$?
+T143_E2=$(runpy "$MIR" --engine "$T142D/bad-engine.py" --ledger L-tel.json \
+  --template "$KIT/.claude/skills/uscha-mirador/mirador.template.html" \
+  --out "$T142D/x2.html" --no-open 2>&1); T143_R2=$?
+T143_E3=$(runpy "$MIR" --engine "$QL" --ledger L-tel.json \
+  --template "$T142D/no-such-template.html" \
+  --out "$T142D/x3.html" --no-open 2>&1); T143_R3=$?
+T143=$("$PY" - "$T142D" "$T143_RC" "$T143_OFF" "$T143_E1" "$T143_R1" "$T143_E2" "$T143_R2" \
+       "$T143_E3" "$T143_R3" <<'PY'
+import io, json, os, re, sys
+d = sys.argv[1]
+rc, off, e1, r1, e2, r2, e3, r3 = sys.argv[2:10]
+bad = []
+if rc != "0":
+    bad.append("render exit %s" % rc)
+html = io.open(os.path.join(d, "mir.html"), encoding="utf-8").read()
+m = re.search(r"const DATA = (\{.*?\});\n/\*MIRADOR_DATA_END", html, re.S)
+data = json.loads(m.group(1)) if m else {}
+tel = data.get("telemetry") or {}
+# two sessions in the sidecar, each 123 in / 29 out: the aggregate SUMS across sessions and
+# MERGES by_model. A per-session view would report 123; a merge that keyed on the wrong field
+# would split model-a in two.
+if tel.get("sessions") != 2:
+    bad.append("sessions %s" % tel.get("sessions"))
+if (tel.get("tokens_in"), tel.get("tokens_out")) != (246, 58):
+    bad.append("aggregate %s/%s" % (tel.get("tokens_in"), tel.get("tokens_out")))
+if tel.get("ms") != 120000:
+    bad.append("ms %s" % tel.get("ms"))
+if tel.get("model") != "model-a+model-b":
+    bad.append("model %s" % tel.get("model"))
+by = dict((x.get("model"), (x.get("tokens_in"), x.get("tokens_out")))
+          for x in tel.get("by_model") or [])
+if by != {"model-a": (232, 44), "model-b": (14, 14)}:
+    bad.append("by_model %s" % by)
+if tel.get("source") != "Claude Code":
+    bad.append("source %s" % tel.get("source"))
+# the strip is the ADAPTER's, never the engine's: the ledger the engine rendered carries no
+# telemetry of its own, so a token that reached `readiness` would be the contract breaking
+if "telemetry" in json.dumps(data.get("readiness") or {}):
+    bad.append("telemetry leaked into the engine's own readiness object")
+if "telemetry off" not in off:
+    bad.append("an empty sidecar did not read as off: %r" % off[-120:])
+for label, txt, code, want in (("no engine", e1, r1, "dashboard failed"),
+                               ("garbage engine", e2, r2, "invalid JSON"),
+                               ("no template", e3, r3, "cannot read template")):
+    if code != "1":
+        bad.append("%s exited %s, expected 1" % (label, code))
+    if want not in txt:
+        bad.append("%s did not say %r: %r" % (label, want, txt[-120:]))
+    if "Traceback" in txt:
+        bad.append("%s crashed instead of reporting" % label)
+for stray in ("x1.html", "x2.html", "x3.html"):
+    if os.path.exists(os.path.join(d, stray)):
+        bad.append("a failed render still wrote %s" % stray)
+print("OK 6 cases" if not bad else "BAD " + " | ".join(bad))
+PY
+)
+case "$T143" in
+  OK*) PASS=$((PASS+1)); echo "  ok   mirador telemetry aggregate + friendly failures: $T143";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T143";;
+esac
+
+echo "== T144 (1.90.0): uscha top's READ boundary and its refusals -- every path that says no =="
+# The golden frames pin what the board DRAWS. This pins what it does when there is nothing to
+# draw from, which is the half a snapshot cannot reach: where the engine is found, what a
+# missing ledger says, what a ledger caught mid-write does, and every refusal the write path
+# returns instead of recording. Each one is a sentence a user reads on a bad day, so each one
+# is asserted by its text and not merely by its falsiness.
+T144=$(pyin "$KIT" <<'PY'
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
+FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
+sys.path.insert(0, SKILL)
+import uscha_top
+bad = []
+
+
+def load_copy(dest, name):
+    """uscha_top.py imported from ANOTHER directory: engine_path resolves from the module's
+    own __file__, so the layouts can only be exercised by moving the file."""
+    shutil.copyfile(os.path.join(SKILL, "uscha_top.py"), dest)
+    spec = importlib.util.spec_from_file_location(name, dest)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# --- engine_path: the sibling first, then BOTH shipped skill-tree layouts, then an honest None
+if os.path.realpath(uscha_top.engine_path() or "") != os.path.realpath(
+        os.path.join(SKILL, "qa_ledger.py")):
+    bad.append("engine_path did not prefer the sibling engine")
+w = tempfile.mkdtemp(prefix="uscha-top-read-")
+for layout in (("skills", "uscha-devloop"), (".claude", "skills", "uscha-devloop")):
+    kroot = os.path.join(w, "kit-" + layout[0].strip("."))
+    here = os.path.join(kroot, "a", "b", "c")
+    os.makedirs(here)
+    os.makedirs(os.path.join(kroot, *layout))
+    io.open(os.path.join(kroot, *(layout + ("qa_ledger.py",))), "w").write("# stub\n")
+    mod = load_copy(os.path.join(here, "uscha_top.py"), "utop_" + layout[0].strip("."))
+    got = mod.engine_path()
+    if not got or os.path.realpath(got) != os.path.realpath(
+            os.path.join(kroot, *(layout + ("qa_ledger.py",)))):
+        bad.append("engine_path missed the %s layout (%s)" % ("/".join(layout), got))
+orphan = os.path.join(w, "orphan", "a", "b", "c")
+os.makedirs(orphan)
+mod_none = load_copy(os.path.join(orphan, "uscha_top.py"), "utop_orphan")
+if mod_none.engine_path() is not None:
+    bad.append("engine_path invented an engine where there is none")
+
+# --- load_state: a frozen file is read as-is; a missing ledger and a failing engine each raise
+# with the sentence the user sees, never an empty board
+frozen_p = os.path.join(FIX, "state", "state-healthy.json")
+frozen = uscha_top.load_state(frozen_p)
+if frozen != json.load(io.open(frozen_p, encoding="utf-8")):
+    bad.append("--state did not render the frozen object it was handed")
+try:
+    uscha_top.load_state(None, os.path.join(w, "NOPE.json"))
+    bad.append("a missing ledger produced a board instead of an error")
+except RuntimeError as exc:
+    msg = str(exc)
+    if "NOPE.json" not in msg or "--ledger" not in msg:
+        bad.append("the missing-ledger message names neither the file nor the flag: %r" % msg)
+live = os.path.join(w, "L.json")
+io.open(live, "w", encoding="utf-8").write("{}")
+angry = os.path.join(w, "angry-engine.py")
+io.open(angry, "w", encoding="utf-8").write(
+    "import sys\nsys.stderr.write('the engine refused, and this is why\\n')\nsys.exit(3)\n")
+try:
+    uscha_top.load_state(None, live, engine=angry)
+    bad.append("an engine that failed still produced a board")
+except RuntimeError as exc:
+    if "the engine refused, and this is why" not in str(exc):
+        bad.append("the engine's own message was swallowed: %r" % str(exc))
+quiet = os.path.join(w, "quiet-engine.py")
+io.open(quiet, "w", encoding="utf-8").write("import sys\nsys.exit(4)\n")
+try:
+    uscha_top.load_state(None, live, engine=quiet)
+    bad.append("a silent failing engine still produced a board")
+except RuntimeError as exc:
+    if "top failed" not in str(exc):
+        bad.append("a silent engine failure had no fallback message: %r" % str(exc))
+real = uscha_top.load_state(
+    None, os.path.join(FIX, "fixture-healthy", "QA-LEDGER.json"),
+    engine=os.path.join(SKILL, "qa_ledger.py"))
+if (real.get("schema") or "").split("/")[0] != "uscha-top":
+    bad.append("the live read did not return a top projection: %s" % real.get("schema"))
+
+
+class _A(object):
+    def __init__(self, ledger, state=None, human="operator"):
+        self.ledger = ledger
+        self.state = state
+        self.human = human
+
+
+# --- _reload: a ledger caught MID-WRITE keeps the last good board on screen. A traceback over
+# a working terminal is the one outcome a poll must never produce.
+truncated = os.path.join(w, "half.json")
+io.open(truncated, "w", encoding="utf-8").write('{"schema": "uscha-top/v0.1", "obli')
+kept = uscha_top._reload(frozen, _A(truncated))
+if kept is not frozen:
+    bad.append("a truncated ledger replaced the last good board instead of holding it")
+if uscha_top._reload(frozen, _A(os.path.join(w, "gone.json"))) is not frozen:
+    bad.append("a deleted ledger replaced the last good board")
+# ...and a readable one DOES move: holding forever would be the mirror failure
+moved = uscha_top._reload(frozen, _A(live, state=frozen_p))
+if moved == frozen and moved is frozen:
+    bad.append("_reload never re-reads: the board would be frozen for good")
+
+# --- terminal_size and _print_frame: explicit size wins, the fallback is still a real size
+if uscha_top.terminal_size(77, 21) != (77, 21):
+    bad.append("an explicit --cols/--rows was not honoured")
+c, r = uscha_top.terminal_size()
+if not (isinstance(c, int) and isinstance(r, int) and c > 0 and r > 0):
+    bad.append("the terminal-size fallback returned %r" % ((c, r),))
+buf = io.StringIO()
+saved_out = sys.stdout
+sys.stdout = buf
+try:
+    uscha_top._print_frame(["one", "two"])
+finally:
+    sys.stdout = saved_out
+if buf.getvalue() != "one\ntwo\n":
+    bad.append("_print_frame emitted %r" % buf.getvalue())
+
+# --- apply_verdict: four refusals, each naming its reason, and NONE of them touching a ledger
+ob = {"id": "OBS-1", "repo": "backend-api"}
+for label, args_, obj, want in (
+        ("frozen --state", _A(live, state=frozen_p), ob, "frozen snapshot"),
+        ("no selection", _A(live), None, "nothing to record"),
+        ("no id", _A(live), {"repo": "backend-api"}, "nothing to record"),
+        ("no repo", _A(live), {"id": "OBS-1"}, "curate needs one")):
+    recorded, said = uscha_top.apply_verdict(obj, "preserve", args_,
+                                             engine=os.path.join(SKILL, "qa_ledger.py"))
+    if recorded:
+        bad.append("%s was RECORDED" % label)
+    if want not in said:
+        bad.append("%s did not say why: %r" % (label, said))
+recorded, said = uscha_top.apply_verdict(ob, "preserve", _A(live), engine=None)
+# engine=None falls back to engine_path(), which finds the real sibling here, so this call
+# reaches the engine and must come back as the ENGINE's refusal (an unknown OBS), not a crash
+if recorded:
+    bad.append("a verdict on an unknown observation was recorded")
+if not said:
+    bad.append("the engine's refusal came back empty")
+if io.open(live, encoding="utf-8").read() != "{}":
+    bad.append("a refused verdict still wrote to the ledger")
+
+# --- drain_keys without a terminal drops nothing and does not raise (a pipe has no held key)
+if uscha_top.drain_keys() != 0:
+    bad.append("drain_keys claimed to drop input from a pipe")
+if uscha_top.watch_paths(_A("L.json", state=None)) != ["L.json"]:
+    bad.append("watch_paths did not watch the ledger")
+
+print("OK 8 cases" if not bad else "BAD " + " | ".join(bad))
+PY
+)
+case "$T144" in
+  OK*) PASS=$((PASS+1)); echo "  ok   uscha top read boundary + refusals: $T144";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T144";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
