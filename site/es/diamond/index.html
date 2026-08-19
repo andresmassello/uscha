@@ -269,7 +269,7 @@
         <tr><td>La autoría controlada (EARS+STE) reduce la varianza entre compiladores</td>
             <td><span class="chip real">REAL</span> (medido, comportamiento-primero: los arquetipos densos ayudaron, los simples dieron nulo/daño; la varianza estructural sola ya no sostiene una afirmación — ADR-027)</td><td>deconfundido en 5 arquetipos: REDUCED en 1 (guard −61%, NOISY 0.642), IMPROVED en 1 (scheduler, +1 verde de oráculo), dos nulos, uno WORSE · 1.76–1.84 · ADR-019/021/024/025/026/027</td></tr>
         <tr><td>«El código es <em>totalmente</em> regenerable desde las specs» (sistemas arbitrarios)</td>
-            <td><span class="chip vision">VISIÓN</span></td><td>el bootstrap test corrió (M4/M5): 3 de 4 arquetipos acotados regeneran al mismo sistema, certificado mecánicamente · la regenerabilidad total de sistemas arbitrarios es la frontera abierta</td></tr>
+            <td><span class="chip vision">VISIÓN</span></td><td>la mitad acotada es REAL (fila de arriba): el bench corrió sobre 12 arquetipos, 9 regeneran al mismo sistema bajo un oráculo oculto, 3 PARTIAL. Lo que sigue siendo VISIÓN es la palabra <em>totalmente</em> y las palabras <em>sistemas arbitrarios</em> — generalizar más allá de arquetipos acotados es la frontera abierta que M5 existe para contestar, y ninguna corrida la contestó todavía (ADR-018)</td></tr>
         <tr><td>«Drift = reverse discovery incremental, mismo motor»</td>
             <td><span class="chip vision">VISIÓN</span></td><td>idea válida, arquitectura rechazada · ADR-011</td></tr>
       </tbody>
