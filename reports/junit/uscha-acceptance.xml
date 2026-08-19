@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="195" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="205" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -375,6 +375,26 @@
   <testcase classname="uscha.acceptance" name="AC-CT-10_sealed-terminado">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-CT-11_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-01_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-02_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-03_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-04_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-05_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-06_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-07_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-08_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-09_freshness-content">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FR-10_freshness-content">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-01_family-ids">
   </testcase>
