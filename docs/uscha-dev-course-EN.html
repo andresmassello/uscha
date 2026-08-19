@@ -553,8 +553,10 @@
       <ul>
         <li>Reads code, tests, configs and runtime behavior</li>
         <li>Surfaces implicit rules and edge cases</li>
-        <li>Produces facts only: a system map + a golden captured at the boundaries</li>
-        <li>Never invents requirements — <strong>the human writes the SPEC/ADR reading those facts</strong>; the skill does not infer specs of the old system</li>
+        <li>Produces facts first: a system map + a golden captured at the boundaries</li>
+        <li>Then authors <strong>candidate</strong> claims about behavior — in quarantine, each with typed evidence (test · code · inference) and a confidence</li>
+        <li>Never promotes on its own: <strong>a human gives one verdict per candidate</strong> — <code>preserve</code> · <code>fix</code> · <code>undefined</code> — recorded in <code>BEHAVIOR-LEDGER.md</code></li>
+        <li>The gate is measured: <code>curation-check</code> blocks the PR on any unjudged candidate, naming it (ADR-009, INV-CURATION-01)</li>
       </ul>
     </section>
 
@@ -593,7 +595,7 @@
         <p class="tiny">- The discount is applied before tax</p>
         <p class="tiny">- Rounding: banker's rounding to 2 decimals</p>
       </div>
-      <p class="muted" style="margin-top:1rem;">With these facts, the human writes the new SPEC if we decide to evolve the module.</p>
+      <p class="muted" style="margin-top:1rem;">These become candidates in quarantine. The human judges each one — preserve, fix or undefined — and writes the new SPEC from the <strong>judged</strong> candidates only.</p>
     </section>
 
     <!-- 27 Migration Step 3 -->

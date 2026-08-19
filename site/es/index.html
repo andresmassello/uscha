@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>uscha — el método construye el resto</title>
-<meta name="description" content="Uscha es una metodología spec-driven y tool-agnóstica para desarrollo con agentes de código LLM. El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.">
+<title>uscha — las specs son el código fuente</title>
+<meta name="description" content="Uscha: las specs son el código fuente, el LLM es el compilador, reverse discovery es el decompilador — y el código es un artefacto de build regenerable. Una metodología spec-driven y tool-agnóstica para agentes de código LLM, medida bajo sus propios instrumentos. El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.">
 <link rel="canonical" href="https://uscha.dev/es">
 <link rel="alternate" hreflang="en" href="https://uscha.dev/">
 <link rel="alternate" hreflang="es" href="https://uscha.dev/es">
@@ -35,12 +35,16 @@
   <div class="wrap">
 
     <div class="hero">
-      <div class="kicker">metodología spec-driven para agentes de código LLM</div>
-      <h1>Vos traés la idea.<br>El método construye <em>el resto</em>.</h1>
+      <div class="kicker">los specs compilan · el código se regenera · un humano cura</div>
+      <h1>Las specs son el código fuente.<br>El código es un <em>artefacto de build</em>.</h1>
       <p class="sub">
-        Uscha es una metodología <b>spec-driven y tool-agnóstica</b> para desarrollar con agentes
-        de código. Sin ceremonia donde no la gana — con rigor donde las stakes lo justifican.
-        Su mecanismo central: un ledger determinístico que separa lo <b>medido</b> de lo <b>narrado</b>.
+        Uscha trata el paquete de specs como el fuente y al <b>LLM como el compilador</b>;
+        <b>reverse discovery es el decompilador</b> — recupera intención, no solo estructura, y ninguna
+        candidata se promueve sin un veredicto humano. El código pasa a ser regenerable; el paquete de
+        specs, su behavior ledger y su IR son el activo que le sobrevive. Y la tesis está bajo sus
+        propios instrumentos: sistemas acotados se regeneran al mismo comportamiento bajo un oráculo
+        que los compiladores nunca vieron, y cuánta intención sobrevive el round trip es un
+        <b>número medido</b> — publicado con su techo, no una promesa.
       </p>
       <p class="motto"><b>El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</b></p>
 
@@ -50,8 +54,9 @@
       <p class="install-targets">Targets: <b>claude · codex · cursor · copilot · gemini · cline · pi</b> — o <b>--target all</b></p>
 
       <div class="hero-cta">
-        <a class="btn primary" href="https://github.com/andresmassello/uscha">Ver en GitHub</a>
-        <a class="btn ghost" href="why/index.html">¿Por qué existe? →</a>
+        <a class="btn primary" href="diamond/index.html">La tesis: el diamante →</a>
+        <a class="btn ghost" href="how/index.html">Cómo funciona →</a>
+        <a class="btn ghost" href="https://github.com/andresmassello/uscha">GitHub</a>
       </div>
 
       <div class="badges">
@@ -295,7 +300,7 @@
       <div class="sec-kicker">los números del motor</div>
       <h2 class="sec-title">Lo medido le gana a lo narrado — también acá</h2>
       <div class="stats">
-        <div class="stat"><div class="v">29</div><div class="k">subcomandos del motor</div></div>
+        <div class="stat"><div class="v">52</div><div class="k">subcomandos del motor</div></div>
         <div class="stat"><div class="v">11</div><div class="k">stacks de lenguaje</div></div>
         <div class="stat"><div class="v">9</div><div class="k">skills en el kit</div></div>
         <div class="stat"><div class="v">0</div><div class="k">dependencias runtime</div></div>

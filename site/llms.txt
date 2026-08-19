@@ -29,8 +29,8 @@ Nothing is promoted without a recorded human verdict — preserve, fix or undefi
 in BEHAVIOR-LEDGER.md; the curation-check gate measures this and a candidate with no
 verdict blocks the PR, naming itself (INV-CURATION-01). A fix declares its expected
 divergence, which the golden oracle then checks; an advisory roundtrip report traces
-promoted candidates back into code by id. No semantic matching, no code generation —
-both out of scope (ADR-011) until they can be measured.
+promoted candidates back into code by id. That id-level roundtrip is deliberately not
+semantic matching; the measured semantic round trip is bench-roundtrip (below).
 
 The underlying thesis ("the diamond"): specs are the source code, the LLM is the
 compiler, reverse discovery is the decompiler — and code becomes a regenerable build

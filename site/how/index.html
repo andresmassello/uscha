@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>How uscha works — discovery, reverse discovery, curation</title>
+<title>How uscha works — discovery, reverse discovery, curation, the diamond leg</title>
 <meta name="description" content="Three diagrams: greenfield discovery, brownfield reverse discovery, and the curation mechanism where a single human verdict is the only judgment in the loop.">
 <link rel="canonical" href="https://uscha.dev/how">
 <link rel="alternate" hreflang="en" href="https://uscha.dev/how">
@@ -55,12 +55,13 @@
 <main>
   <div class="diagrams">
     <div class="kicker">how it works</div>
-    <h1>Three flows, one rule: the human judges, the engine measures</h1>
+    <h1>Four flows, one rule: the human judges, the engine measures</h1>
     <p class="intro">
       uscha has a front for new systems and a front for existing ones. Both end at the same place —
-      a human verdict the engine can check. These three diagrams show the greenfield flow, the
-      brownfield flow, and the curation mechanism (kit 1.64–1.65) where a single human decision is
-      the only judgment in the loop.
+      a human verdict the engine can check. These four diagrams show the greenfield flow, the
+      brownfield flow, the curation mechanism (kit 1.64–1.65) where a single human decision is
+      the only judgment in the loop — and the diamond leg (1.72–1.90) they all feed: compile,
+      certify under a withheld oracle, round-trip.
     </p>
 
     <!-- ============ DIAGRAM 1 — DISCOVERY ============ -->
@@ -200,7 +201,7 @@
 
     <!-- ============ DIAGRAM 3 — CURATION / ORACLE ============ -->
     <section class="dgm d3">
-      <div class="tag">3 · the new · 1.64–1.65</div>
+      <div class="tag">3 · curation · 1.64–1.65</div>
       <h2>Curation — one human verdict, everything else measured</h2>
       <p class="cap">This is the differentiator. A candidate is machine-validated; a candidate with no
         verdict <b>blocks the PR, naming itself</b> (INV-CURATION-01). The <b>single human decision</b>
@@ -283,10 +284,71 @@
       </div>
     </section>
 
+
+    <!-- ============ DIAGRAM 4 — THE DIAMOND LEG: COMPILE · ORACLE · BENCH · ROUND TRIP ============ -->
+    <section class="dgm d3">
+      <div class="tag">4 · the diamond leg · 1.72–1.90</div>
+      <h2>Compile, certify, round-trip — the forward leg the three flows feed</h2>
+      <p class="cap">The curated package becomes a typed graph. <b>Any model compiles it</b>; the engine
+        only validates the output contract and never compiles. A <b>withheld oracle</b> — authored before
+        any compilation, never in the prompt — certifies whether the result is the <em>same</em> system.
+        Then the reverse organs try to re-anchor the asset from the compiled code, and that ratio is
+        published with its ceiling.</p>
+
+      <svg viewBox="0 0 620 560" role="img" aria-label="Diamond forward leg: IR, compile, withheld oracle, bench verdict, round trip">
+        <defs>
+          <marker id="ar4" markerWidth="9" markerHeight="9" refX="5" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="#638079"/>
+          </marker>
+        </defs>
+        <g stroke="#638079" stroke-width="1.5" fill="none" marker-end="url(#ar4)">
+          <line x1="310" y1="72" x2="310" y2="100"/>
+          <line x1="310" y1="160" x2="310" y2="188"/>
+          <line x1="310" y1="256" x2="310" y2="284"/>
+          <line x1="310" y1="356" x2="310" y2="384"/>
+          <line x1="310" y1="452" x2="310" y2="480"/>
+        </g>
+        <path d="M78,300 C40,300 40,410 92,410" stroke="#ff6b4a" stroke-width="1.4" fill="none" stroke-dasharray="4 4" marker-end="url(#ar4)"/>
+        <text x="30" y="352" class="svg-tag" fill="#ff6b4a" text-anchor="middle" transform="rotate(-90 30 352)">withheld · never in the prompt</text>
+
+        <g><rect x="150" y="18" width="320" height="54" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="38" text-anchor="middle" class="svg-tag" fill="#4fd6c9">THE ASSET · ir-extract</text>
+          <text x="310" y="59" text-anchor="middle" class="svg-t" font-size="13">spec package + ledger → one typed graph (IR)</text></g>
+        <g><rect x="150" y="100" width="320" height="60" rx="10" fill="#14282b" stroke="#22403f"/>
+          <text x="310" y="120" text-anchor="middle" class="svg-tag" fill="#9db3b0">ANY MODEL · the LLM compiles</text>
+          <text x="310" y="140" text-anchor="middle" class="svg-t" font-size="13">blind compilation → code</text>
+          <text x="310" y="154" text-anchor="middle" class="svg-s" font-size="10">three models, same package, no oracle in sight</text></g>
+        <g><rect x="150" y="188" width="320" height="68" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="208" text-anchor="middle" class="svg-tag" fill="#4fd6c9">MEASURED · compile-validate</text>
+          <text x="310" y="229" text-anchor="middle" class="svg-t" font-size="13">output contract — mechanical only</text>
+          <text x="310" y="246" text-anchor="middle" class="svg-s" font-size="10">exit 2 on violation · the engine never compiles</text></g>
+        <g><rect x="92" y="284" width="436" height="72" rx="10" fill="rgba(255,107,74,.10)" stroke="#ff6b4a" stroke-width="2"/>
+          <text x="310" y="304" text-anchor="middle" class="svg-tag" fill="#ff6b4a">HUMAN-AUTHORED BEFORE ANY COMPILATION · ORACLE.json</text>
+          <text x="310" y="326" text-anchor="middle" class="svg-t" font-size="13">the withheld oracle</text>
+          <text x="310" y="345" text-anchor="middle" class="svg-s" font-size="10">is this the SAME system? · cases tagged per acceptance criterion</text></g>
+        <g><rect x="150" y="384" width="320" height="68" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="404" text-anchor="middle" class="svg-tag" fill="#4fd6c9">MEASURED · bootstrap-oracle · bench</text>
+          <text x="310" y="425" text-anchor="middle" class="svg-t" font-size="13">PASS · PARTIAL · FAIL</text>
+          <text x="310" y="442" text-anchor="middle" class="svg-s" font-size="10">12 archetypes · 9 PASS · 3 PARTIAL · a stub-satisfied oracle downgrades to FAIL</text></g>
+        <g><rect x="150" y="480" width="320" height="62" rx="10" fill="#14282b" stroke="#f5b13d" stroke-dasharray="5 4"/>
+          <text x="310" y="500" text-anchor="middle" class="svg-tag" fill="#f5b13d">ADVISORY · bench-roundtrip · bench-r2</text>
+          <text x="310" y="520" text-anchor="middle" class="svg-t" font-size="12.5">how much of the asset re-anchors from the code</text>
+          <text x="310" y="536" text-anchor="middle" class="svg-s" font-size="10">recoverability 0.828 (names + behaviour) · noise floor NOISY, published</text></g>
+      </svg>
+
+      <div class="legend">
+        <span><i class="lg-gate"></i>measured gate</span>
+        <span><i class="lg-human"></i>human-authored oracle</span>
+        <span><i class="lg-adv"></i>advisory instrument</span>
+        <span><i style="border-color:#22403f"></i>model / skill step</span>
+      </div>
+    </section>
+
     <p class="cap" style="margin-top:32px;color:var(--mute);font-size:13px">
       Every node above maps to a real subcommand or invariant in <code>qa_ledger.py</code> (kit 1.90.0).
-      What is deliberately <em>not</em> here: semantic matching and code generation — both out of scope
-      (ADR-011) until they can be measured.
+      These three flows are the human-judgment layer. The forward leg they feed — the LLM as compiler
+      under a validated contract, blind compilations judged by a withheld oracle, and the measured round
+      trip back — is the <a href="../diamond/index.html">diamond</a>: same doctrine, one level up.
     </p>
 
     <div class="backlinks">

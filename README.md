@@ -5,7 +5,7 @@ the rest.* Uscha gives a coding agent a spec to build against, a QA loop that co
 instead of looping forever, and a deterministic ledger that records what was **measured** —
 never what was claimed.
 
-> The tool executes · the method governs · evidence decides · the human approves.
+> The agent executes · the method governs · evidence decides · the human approves.
 
 **[uscha.dev](https://uscha.dev)** — the method, the five rules, the skills, the library
 (the diamond thesis, how-it-works diagrams, essay, 2-day dev course, reference, paper).

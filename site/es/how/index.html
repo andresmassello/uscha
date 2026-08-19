@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cómo funciona uscha — discovery, reverse discovery, curación</title>
+<title>Cómo funciona uscha — discovery, reverse discovery, curación, la pata del diamante</title>
 <meta name="description" content="Tres diagramas: discovery greenfield, reverse discovery brownfield, y el mecanismo de curación donde un único veredicto humano es el único juicio del loop.">
 <link rel="canonical" href="https://uscha.dev/es/how">
 <link rel="alternate" hreflang="en" href="https://uscha.dev/how">
@@ -54,12 +54,13 @@
 <main>
   <div class="diagrams">
     <div class="kicker">cómo funciona</div>
-    <h1>Tres flujos, una regla: el humano juzga, el motor mide</h1>
+    <h1>Cuatro flujos, una regla: el humano juzga, el motor mide</h1>
     <p class="intro">
       uscha tiene un frente para sistemas nuevos y uno para los que ya existen. Los dos terminan en
-      el mismo lugar — un veredicto humano que el motor puede chequear. Estos tres diagramas muestran
-      el flujo greenfield, el brownfield, y el mecanismo de curación (kit 1.64–1.65) donde una única
-      decisión humana es el único juicio del loop.
+      el mismo lugar — un veredicto humano que el motor puede chequear. Estos cuatro diagramas muestran
+      el flujo greenfield, el brownfield, el mecanismo de curación (kit 1.64–1.65) donde una única
+      decisión humana es el único juicio del loop — y la pata del diamante (1.72–1.90) que los tres
+      alimentan: compilar, certificar bajo un oráculo oculto, round-trip.
     </p>
 
     <!-- ============ DIAGRAMA 1 — DISCOVERY ============ -->
@@ -181,7 +182,7 @@
 
     <!-- ============ DIAGRAMA 3 — CURACIÓN / ORÁCULO ============ -->
     <section class="dgm d3">
-      <div class="tag">3 · lo nuevo · 1.64–1.65</div>
+      <div class="tag">3 · curación · 1.64–1.65</div>
       <h2>Curación — un veredicto humano, todo lo demás medido</h2>
       <p class="cap">Este es el diferenciador. Una candidata se valida a máquina; una candidata sin
         veredicto <b>bloquea el PR, nombrándose a sí misma</b> (INV-CURATION-01). La <b>única decisión
@@ -254,10 +255,71 @@
       </div>
     </section>
 
+
+    <!-- ============ DIAGRAMA 4 — LA PATA DEL DIAMANTE: COMPILAR · CERTIFICAR · ROUND TRIP ============ -->
+    <section class="dgm d3">
+      <div class="tag">4 · la pata del diamante · 1.72–1.90</div>
+      <h2>Compilar, certificar, round-trip — la ida que alimentan los tres flujos</h2>
+      <p class="cap">El paquete curado se vuelve un grafo tipado. <b>Cualquier modelo lo compila</b>; el motor
+        solo valida el contrato de salida y nunca compila. Un <b>oráculo oculto</b> — authoreado antes de
+        cualquier compilación, nunca en el prompt — certifica si el resultado es el <em>mismo</em> sistema.
+        Después los órganos de reversa intentan re-anclar el activo desde el código compilado, y esa
+        proporción se publica con su techo.</p>
+
+      <svg viewBox="0 0 620 560" role="img" aria-label="Pata forward del diamante: IR, compilar, oráculo oculto, veredicto del bench, round trip">
+        <defs>
+          <marker id="ar4" markerWidth="9" markerHeight="9" refX="5" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="#638079"/>
+          </marker>
+        </defs>
+        <g stroke="#638079" stroke-width="1.5" fill="none" marker-end="url(#ar4)">
+          <line x1="310" y1="72" x2="310" y2="100"/>
+          <line x1="310" y1="160" x2="310" y2="188"/>
+          <line x1="310" y1="256" x2="310" y2="284"/>
+          <line x1="310" y1="356" x2="310" y2="384"/>
+          <line x1="310" y1="452" x2="310" y2="480"/>
+        </g>
+        <path d="M78,300 C40,300 40,410 92,410" stroke="#ff6b4a" stroke-width="1.4" fill="none" stroke-dasharray="4 4" marker-end="url(#ar4)"/>
+        <text x="30" y="352" class="svg-tag" fill="#ff6b4a" text-anchor="middle" transform="rotate(-90 30 352)">oculto · nunca en el prompt</text>
+
+        <g><rect x="150" y="18" width="320" height="54" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="38" text-anchor="middle" class="svg-tag" fill="#4fd6c9">EL ACTIVO · ir-extract</text>
+          <text x="310" y="59" text-anchor="middle" class="svg-t" font-size="13">paquete de specs + ledger → un grafo tipado (IR)</text></g>
+        <g><rect x="150" y="100" width="320" height="60" rx="10" fill="#14282b" stroke="#22403f"/>
+          <text x="310" y="120" text-anchor="middle" class="svg-tag" fill="#9db3b0">CUALQUIER MODELO · el LLM compila</text>
+          <text x="310" y="140" text-anchor="middle" class="svg-t" font-size="13">compilación ciega → código</text>
+          <text x="310" y="154" text-anchor="middle" class="svg-s" font-size="10">tres modelos, mismo paquete, sin oráculo a la vista</text></g>
+        <g><rect x="150" y="188" width="320" height="68" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="208" text-anchor="middle" class="svg-tag" fill="#4fd6c9">MEDIDO · compile-validate</text>
+          <text x="310" y="229" text-anchor="middle" class="svg-t" font-size="13">contrato de salida — solo mecánico</text>
+          <text x="310" y="246" text-anchor="middle" class="svg-s" font-size="10">exit 2 ante violación · el motor nunca compila</text></g>
+        <g><rect x="92" y="284" width="436" height="72" rx="10" fill="rgba(255,107,74,.10)" stroke="#ff6b4a" stroke-width="2"/>
+          <text x="310" y="304" text-anchor="middle" class="svg-tag" fill="#ff6b4a">AUTHOREADO POR UN HUMANO ANTES DE COMPILAR · ORACLE.json</text>
+          <text x="310" y="326" text-anchor="middle" class="svg-t" font-size="13">el oráculo oculto</text>
+          <text x="310" y="345" text-anchor="middle" class="svg-s" font-size="10">¿es el MISMO sistema? · casos etiquetados por criterio de aceptación</text></g>
+        <g><rect x="150" y="384" width="320" height="68" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
+          <text x="310" y="404" text-anchor="middle" class="svg-tag" fill="#4fd6c9">MEDIDO · bootstrap-oracle · bench</text>
+          <text x="310" y="425" text-anchor="middle" class="svg-t" font-size="13">PASS · PARTIAL · FAIL</text>
+          <text x="310" y="442" text-anchor="middle" class="svg-s" font-size="10">12 arquetipos · 9 PASS · 3 PARTIAL · un oráculo que un stub satisface baja a FAIL</text></g>
+        <g><rect x="150" y="480" width="320" height="62" rx="10" fill="#14282b" stroke="#f5b13d" stroke-dasharray="5 4"/>
+          <text x="310" y="500" text-anchor="middle" class="svg-tag" fill="#f5b13d">ADVISORY · bench-roundtrip · bench-r2</text>
+          <text x="310" y="520" text-anchor="middle" class="svg-t" font-size="12.5">cuánto del activo se re-ancla desde el código</text>
+          <text x="310" y="536" text-anchor="middle" class="svg-s" font-size="10">recuperabilidad 0.828 (nombres + comportamiento) · piso de ruido NOISY, publicado</text></g>
+      </svg>
+
+      <div class="legend">
+        <span><i class="lg-gate"></i>gate medido</span>
+        <span><i class="lg-human"></i>oráculo authoreado por humano</span>
+        <span><i class="lg-adv"></i>instrumento advisory</span>
+        <span><i style="border-color:#22403f"></i>paso de modelo / skill</span>
+      </div>
+    </section>
+
     <p class="cap" style="margin-top:32px;color:var(--mute);font-size:13px">
       Cada nodo de arriba mapea a un subcomando o invariante real de <code>qa_ledger.py</code> (kit 1.90.0).
-      Lo que deliberadamente <em>no</em> está acá: matching semántico y generación de código — ambos fuera
-      de alcance (ADR-011) hasta que se puedan medir.
+      Estos tres flujos son la capa de juicio humano. La ida que alimentan — el LLM como compilador bajo
+      un contrato validado, compilaciones ciegas juzgadas por un oráculo oculto, y el round trip medido
+      de vuelta — es el <a href="../diamond/index.html">diamante</a>: la misma doctrina, un nivel arriba.
     </p>
 
     <div class="backlinks">

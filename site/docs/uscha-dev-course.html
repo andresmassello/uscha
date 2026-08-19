@@ -553,8 +553,10 @@
       <ul>
         <li>Lee código, tests, configs y comportamiento en runtime</li>
         <li>Saca a la luz reglas implícitas y casos borde</li>
-        <li>Produce solo hechos: mapa del sistema + golden capturado en los bordes</li>
-        <li>Nunca inventa requisitos — <strong>el humano escribe el SPEC/ADR leyendo esos hechos</strong>; la skill no infiere specs del sistema viejo</li>
+        <li>Produce hechos primero: mapa del sistema + golden capturado en los bordes</li>
+        <li>Después authorea afirmaciones <strong>candidatas</strong> sobre el comportamiento — en cuarentena, cada una con evidencia tipada (test · code · inference) y una confianza</li>
+        <li>Nunca promueve sola: <strong>un humano da un veredicto por candidata</strong> — <code>preserve</code> · <code>fix</code> · <code>undefined</code> — registrado en <code>BEHAVIOR-LEDGER.md</code></li>
+        <li>El gate se mide: <code>curation-check</code> bloquea el PR ante cualquier candidata sin juzgar, nombrándola (ADR-009, INV-CURATION-01)</li>
       </ul>
     </section>
 
@@ -593,7 +595,7 @@
         <p class="tiny">- El descuento se aplica antes del impuesto</p>
         <p class="tiny">- Redondeo: banker's rounding a 2 decimales</p>
       </div>
-      <p class="muted" style="margin-top:1rem;">Con estos hechos, el humano escribe el nuevo SPEC si decidimos evolucionar el módulo.</p>
+      <p class="muted" style="margin-top:1rem;">Estos pasan a ser candidatas en cuarentena. El humano juzga cada una — preserve, fix o undefined — y escribe el nuevo SPEC solo desde las candidatas <strong>ya juzgadas</strong>.</p>
     </section>
 
     <!-- 27 Migracion Paso 3 -->

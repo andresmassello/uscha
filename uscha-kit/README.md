@@ -591,11 +591,7 @@ python3 $QL simplicity-check --diff changes.diff --json        # consumed by usc
 
 ## Ledger subcommands
 
-`doctor - rubric-ingest - init - snapshot - check-coverage - log-step - ingest-gate - phase -
-converged - oscillation - escalate - resolve-escalation - log-gate - flag-blocker -
-production-finding - spec-doubt - spec-change-request - regression-check - summary - readiness -
-execution-policy - dashboard - rebuild - simplicity-check - waste-check - pit-check - gate-check -
-spec-check - golden-diff` - the exact current `qa_ledger.py` parser surface; each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - cleanroom - compile-ingest - compile-validate - converged - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (52 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 The **fact gates** (golden-diff, gate-check, pit-check, simplicity) are PERSISTED with
 `log-gate`: a fail blocks convergence and caps readiness ≤65 via the ledger. A CONSTITUTION

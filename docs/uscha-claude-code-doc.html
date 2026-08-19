@@ -947,7 +947,7 @@ $ python3 .claude/skills/uscha-devloop/qa_ledger.py simplicity-check --diff HEAD
       <tr><td class="t">Python 3.8+</td><td>corre qa_ledger.py (stdlib pura)</td><td><code class="in">python3</code> en PATH</td></tr>
       <tr><td class="t">git</td><td>versionado</td><td>2.x con user.name/email</td></tr>
       <tr><td class="t">gh</td><td>crear repo / abrir PR</td><td>opcional, recomendado</td></tr>
-      <tr><td class="t">skills del kit</td><td>uscha-discovery, uscha-adr-refine, uscha-devloop, uscha-sysdoc, uscha-reverse-discovery, uscha-characterize, uscha-rubric</td><td>en <code class="in">~/.claude/skills/</code></td></tr>
+      <tr><td class="t">skills del kit</td><td>uscha-discovery, uscha-adr-refine, uscha-devloop, uscha-sysdoc, uscha-reverse-discovery, uscha-characterize, uscha-rubric, uscha-mirador, uscha-status</td><td>en <code class="in">~/.claude/skills/</code></td></tr>
       <tr><td class="t">skills de QA</td><td>code-review, judgment-day, improve</td><td>tus skills globales (el uscha-devloop los <strong>orquesta</strong>, no los trae)</td></tr>
       <tr><td class="t">engram (plugin)</td><td>memoria persistente entre sesiones</td><td>marketplace <code class="in">Gentleman-Programming/engram</code></td></tr>
       <tr><td class="t">sonarqube (plugin)</td><td>static gate hosteado (alternativa al java-qa-gate)</td><td>marketplace <code class="in">claude-plugins-official</code></td></tr>
@@ -972,7 +972,7 @@ claude --version &amp;&amp; claude doctor                     <span class="c"># 
   <h2>Las piezas de Claude Code <span class="accent">que lo sostienen.</span></h2>
   <div class="grid2">
     <div class="card"><h3>CLAUDE.md / AGENTS.md</h3><p>Protocolo estable del repo: comandos, no-go zones, DoD, cómo registrar evidencia. Lo permanente vive acá; lo puntual en SPEC/ADR.</p></div>
-    <div class="card"><h3>Skills (/comando)</h3><p>uscha-discovery, uscha-adr-refine, uscha-devloop, uscha-sysdoc, uscha-reverse-discovery, uscha-characterize en <code class="in">.claude/skills/</code>. Invocables, versionables, compartibles con el equipo.</p></div>
+    <div class="card"><h3>Skills (/comando)</h3><p>uscha-discovery, uscha-adr-refine, uscha-devloop, uscha-sysdoc, uscha-reverse-discovery, uscha-characterize, uscha-rubric, uscha-mirador, uscha-status en <code class="in">.claude/skills/</code>. Invocables, versionables, compartibles con el equipo.</p></div>
     <div class="card"><h3>Sub-agentes</h3><p>Paralelizan las tools de QA (review, security, mejoras) sin ensuciar el contexto principal.</p></div>
     <div class="card"><h3>Hooks</h3><p>Corren gates solos: tests post-edit, lint pre-commit. La evidencia se captura por ejecución, no se narra.</p></div>
     <div class="card"><h3>Multi-repo (--add-dir)</h3><p>Montás varios repos en una sesión para QA de integración/contratos (multi-repo).</p></div>

@@ -65,8 +65,9 @@ coding agents organized around a single discipline: <i>gates that read facts
 block; gates that guess over prose advise</i>. The methodology contributes
 (i)&nbsp;two specification fronts &mdash; a greenfield front where the agent
 <i>proposes</i> the system shape under one-question-at-a-time human approval, and
-a brownfield front where the agent may only <i>extract</i> verifiable facts,
-never author a specification of existing behavior; (ii)&nbsp;a deterministic
+a brownfield front where the agent extracts verifiable facts and may author only
+<i>candidate</i> claims in quarantine, promoted to the contract by human verdict
+alone; (ii)&nbsp;a deterministic
 evidence ledger with a two-tier record contract in which measured artifacts
 always override agent self-reports; (iii)&nbsp;a family of executable fact gates
 (golden non-authorship, gate-integrity, simplicity budgets, per-criterion
@@ -76,7 +77,12 @@ qualitative rubrics with mandatory evidence, and deterministic
 clone-vs-repository detection that surfaces the duplication a diff-local
 simplicity gate cannot see) that advises by default and gates only by explicit
 human declaration; and (iv)&nbsp;a strict placement of the human at three fixed
-points: approving the shape, approving the golden baseline, and merging. The
+points: approving the shape, approving the golden baseline, and merging; and
+(v)&nbsp;a closed forward/reverse cycle &mdash; the specification package with its
+behavior ledger and intermediate representation as the canonical asset of a
+system, code as a regenerable build artifact, an LLM as the compiler under a
+validated output contract and reverse discovery as the decompiler &mdash; stated
+as a thesis and put under its own instruments rather than asserted. The
 methodology also applies its own Lean discipline reflexively: a meta-invariant
 that keeps a growing set of good gates from becoming an audit (over-processing
 waste), enforced by collapsing every persisted gate into a single readiness
@@ -490,7 +496,7 @@ instruction file readable by any instruction-following agent; the engine is
 invoked identically from each.</div>
 
 <p>The implementation carries its process in executable form. A smoke suite of
-381 checks exercises the implementation &mdash; the engine against synthetic
+432 checks exercises the implementation &mdash; the engine against synthetic
 ledgers, plus the installer and the distribution router &mdash; including,
 deliberately, the agnosticism claim: the rubric-layer tests fill the grader's
 JSON by hand, with no model in the loop. The engine also reports a passive Lean
@@ -560,7 +566,7 @@ evidence for the methodology's core premise: independent, fresh-context
 checking against recorded criteria catches what the authoring context cannot
 see.</p>
 
-<p><b class="rh">The Diamond program (versions 1.72&ndash;1.85): a bounded
+<p><b class="rh">The Diamond program (versions 1.72&ndash;1.90): a bounded
 controlled evaluation.</b> Between July and August 2026 the methodology's
 central claim &mdash; that a canonical specification package is the source and
 code is a build artifact &mdash; was put under its own instruments. A
@@ -683,7 +689,12 @@ advises about staleness while the other proposes content.</p>
 
 <p>Uscha's contribution is not a new agent architecture but a discipline
 for placing trust: facts block, guesses advise, the measured overrides the
-narrated, and the human decides at exactly three points. The methodology's own
+narrated, and the human decides at exactly three points. Applied one level up,
+that same discipline yields the thesis the reference implementation now
+instruments: the specification package is the source and code is a build
+artifact &mdash; bounded systems regenerate to the same behavior under a withheld
+oracle, and how much of the asset survives the round trip is a published number
+with a published ceiling, not a promise. The methodology's own
 history &mdash; a central principle found inverted by adversarial audit, then
 wired into an engine that now blocks its own author when he crosses the line
 &mdash; suggests that for LLM-assisted development, the difference between a
