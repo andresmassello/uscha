@@ -25,4 +25,4 @@ changed byte with line endings untouched reads altered. On the release machine's
 reads `SEALED … differs from snapshot by non-source files only` and `DONE 205/205` where 1.93.0 read
 `UNSEALED … 0/205`.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 435 checks · 0 fail; acceptance 206/206.
