@@ -137,6 +137,30 @@ renders them, it does not recompute them (single derivation, ADR-032).
     a snapshot old enough to carry no `sha256` — adds no suffix, changes no row and caps
     nothing: absence of a measurement is not evidence of a break (INV-TOP-05), and every
     frozen fixture in `docs/uscha-top/FIXTURES.md` is in exactly that state.
+  - **The seal tolerates commits that touch no source** (amended in 1.93.0, ADR-039). HEAD may
+    differ from the snapshot's `origin.commit` by files outside the engine's source-extension set
+    (`_SRC_EXT`) and outside the named report set — docs, changelogs, the ledger that carries the
+    snapshot being read — and the seal holds, carrying a `note` that names what moved (capped at
+    five paths, null when HEAD IS that commit). A source-relevant difference is still a break and
+    names the first offending path; an unreachable commit keeps the strict verdict. Without this
+    the repo that applies the method to itself can never read sealed: its ledger lives inside the
+    commit it describes.
+  - **What "source-relevant" means is one named set** (`_src_relevant`, shared with the freshness
+    rule): `_SRC_EXT`, plus the adapter's own `SOURCE_EXT[repo_type]`, plus BUILD/HARNESS files —
+    `.sh .bash .ps1 .yml .yaml .toml .sql .tf .gradle .cmake` and the basenames `Makefile`,
+    `pom.xml`, `build.gradle`, `package.json`, `pyproject.toml`, `setup.py`, `Cargo.toml`,
+    `go.mod` — because a commit that rewrites what the suite runs changes what a green report
+    means. Outside it, on purpose: `.md`, `.json`, `.xml`, `.txt`, so docs, changelogs, the
+    ledger and the reports it names are non-source by construction. The LIMIT is the set itself —
+    a project whose source or fixtures live in an extension it does not list gets a seal that
+    tolerates changes to them.
+  - **The hash is over BYTES, so line-ending translation is a false alarm** — fail-closed, but an
+    alarm. A consumer repo that lets git rewrite CRLF on checkout (`core.autocrlf=true`, the
+    Windows default, with no `.gitattributes`) will hash a cloned report differently from the one
+    that was ingested and read `evidence altered after ingest` on a file nobody touched. The fix
+    is one line in `.gitattributes` — `* text=auto eol=lf` — and the kit states it rather than
+    silently normalizing, because a seal that normalized what it hashes would be hashing an
+    interpretation of the evidence instead of the evidence.
   - **The scope is the tracked repo's subtree**, not the whole work tree: the clean check is
     `git status --porcelain -uall -- .` inside the configured repo path, the same per-path
     scoping `evidence_origin` uses (ADR-007), so a monorepo sibling's edit is not this repo's

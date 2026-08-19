@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-039: Evidence freshness is decided by CONTENT and COMMIT, not by the clock alone — a report is current when no source changed since the run that produced it, whatever the files' mtimes say; and the seal tolerates commits that touch no source
 
-## Status: Proposed — approved as written by the maintainer 2026-08-19; becomes Accepted when 1.93.0 ships it
+## Status: Accepted (1.93.0; approved as written by the maintainer 2026-08-19)
 
 ## Context
 The freshness rule (1.31.0) discards a JUnit report older than the newest source file of its repo
@@ -43,8 +43,22 @@ reads `stale seal` forever on the machine that released, although no source chan
   `HEAD <short> differs from snapshot <short> by non-source files only: <list, capped>`. A
   source-relevant difference is still `stale seal`, with the first offending path named.
   `check-terminado` exit codes unchanged (0 / 1 / 2).
-- **`_SRC_EXT` is the one definition of "source" for both rules** — the same set the clock rule
-  already trusts; widening it is a change to both rules at once, never to one.
+- **One definition of "source-relevant" for both rules** — `_src_relevant()`, and widening it is
+  a change to both rules at once, never to one. It is the union of three named sets: the engine's
+  `_SRC_EXT`; the per-adapter `SOURCE_EXT[repo_type]` the clock rule narrows to (unioned in rather
+  than assumed to be contained — `.hh`/`.hxx` were in one and not the other until 1.93.0, and are
+  now in both); and the BUILD/HARNESS set, because a commit that rewrites what the suite runs
+  changes what a green report means as surely as editing the code under test — extensions
+  `.sh .bash .ps1 .yml .yaml .toml .sql .tf .gradle .cmake` plus the basenames `Makefile`,
+  `pom.xml`, `build.gradle`, `package.json`, `pyproject.toml`, `setup.py`, `Cargo.toml`,
+  `go.mod`. Deliberately OUTSIDE it, and this is the whole point of the tolerant seal:
+  `.md`, `.json`, `.xml`, `.txt` — docs, changelogs, and the ledger and JUnit reports
+  themselves, which are non-source by construction.
+- **A snapshot may not launder itself.** `snapshot` records the tree as it is, so on a repo whose
+  code moved and whose tests were never re-run it honestly writes `freshness: stale` — and that
+  record must never become rule (b)'s anchor, or it would answer its own question (its commit is
+  HEAD, its hash was taken over that very file) and turn UNMEASURED into GREEN. A snapshot whose
+  own verdict was `stale`, and any report entry it marked `fresh_by: stale`, is no anchor at all.
 - **Explicit under-claim.** Neither rule reads test *semantics*: a green report whose tests were
   weakened in a commit that IS source-relevant is stale (good); a green report whose fixtures
   live in an extension outside `_SRC_EXT` can be misjudged fresh — the set is the limit, and it
@@ -65,8 +79,14 @@ reads `stale seal` forever on the machine that released, although no source chan
 + Clones, worktrees, merges and CI checkouts stop un-measuring green evidence; the self-applied
   board reads the truth on the release machine too.
 - One git call per ingested report set at read time (diff + status, bounded by the repo subtree).
-- A project that keeps its tests' inputs in an extension outside `_SRC_EXT` gets rule (b)'s
-  blind spot; the rule is named, the set is configurable only by changing the engine (on purpose).
+- A project that keeps its tests' inputs in an extension outside the source-relevant set gets
+  rule (b)'s blind spot; the rule is named, the set is configurable only by changing the engine
+  (on purpose).
+- The two rules can disagree, and the disagreement is BY DESIGN: a report that is clock-fresh but
+  whose bytes no longer match the recorded hash still closes criteria (rule (a) never consulted a
+  hash and does not start now), while the seal reads `evidence altered after ingest` and refuses.
+  Acceptance measures whether the tests were re-run after the code; the seal is what gates
+  TERMINADO, and that is the surface where the swapped log is caught.
 
 ## What this ADR does NOT decide
 Semantic freshness (which tests a source change invalidates) — out of scope; the spec-drift

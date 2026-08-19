@@ -7,7 +7,21 @@ governs:
 ---
 # ADR-038: TERMINADO is sealed to the exact code state — evidence files are content-hashed at ingest, and DONE is not DONE while the seal is broken (INV-T1, ported into the engine)
 
-## Status: Accepted (1.92.0; option B chosen by the maintainer 2026-08-19)
+## Status: Accepted (1.92.0; option B chosen by the maintainer 2026-08-19) — **amended 1.93.0: tolerant seal**
+
+> **Amended in 1.93.0 (ADR-039): the seal tolerates non-source commits.** `sealed.ok` no
+> longer requires `HEAD == evidence_origin.commit`. HEAD may differ from the snapshot's commit
+> by files OUTSIDE the engine's source-extension set (`_SRC_EXT`) and outside the named report
+> set — docs, changelogs, the ledger that carries the very snapshot being read — and the seal
+> then holds and publishes a `note` naming what moved (capped at five paths). A source-relevant
+> difference is still a break, now naming the first offending path instead of two opaque
+> hashes; when the snapshot's commit is unreachable (shallow clone, rewritten history) the
+> strict `stale seal: snapshot at X, HEAD is Y` verdict stands — fail-closed. Why this ADR's
+> own rule had to move: in the repo that applies the method to itself the ledger lives INSIDE
+> the commit it describes, so the release commit is always one ahead of the snapshot it
+> publishes and the board read `stale seal` forever on the machine that released. Exit codes of
+> `check-terminado` are unchanged; `note` is a separate optional key of the seal block, null
+> when HEAD is the snapshot's commit.
 
 ## Context
 An external package (`audits/uscha-cierre/`, kept as reference: three POSIX `sh` scripts + a

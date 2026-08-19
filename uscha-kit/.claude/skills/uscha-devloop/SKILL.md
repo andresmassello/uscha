@@ -466,8 +466,10 @@ python3 $QL check-terminado          # 0 = sealed · 1 = broken · 2 = UNMEASURE
 ```
 
   It recomputes, from the ledger and the tree, whether the recorded evidence still belongs to
-  the code on disk: the repo subtree clean, `HEAD` equal to the last snapshot's commit, every
-  ingested report still hashing to what was recorded. **Exit 1** — do not declare TERMINADO:
+  the code on disk: the repo subtree clean, no source-relevant change since the last
+  snapshot's commit (a non-source difference — docs, the ledger, the reports themselves —
+  seals with a `note` naming what moved; ADR-039), every ingested report still hashing to
+  what was recorded. **Exit 1** — do not declare TERMINADO:
   re-snapshot on the CURRENT state (`snapshot --repo <REPO> --phase post`) and record why the
   seal broke. **Exit 2** — the seal is UNMEASURED (no git, or no snapshot recorded): say so
   plainly; an answer nobody could measure is not a TERMINADO either.
@@ -556,6 +558,12 @@ up as `narrated_only` and does NOT close (measured beats narrated, per criterion
 A JUnit report older than the repo's source code is treated as STALE (the code changed
 after the tests ran) and is DISCARDED — a criterion backed only by stale reports stays
 UNMEASURED, never falsely closed or vetoed (kit 1.31.0; surfaced as `stale_reports`).
+Since 1.93.0 (ADR-039) that clock rule is not the only one: a report the clock rejects is still
+FRESH when its `sha256` matches what the last `snapshot` recorded for it AND git shows no
+source-relevant change since that snapshot's commit — so a clone, a `git worktree add`, a merge
+or a CI checkout, which re-date every file without changing a byte, no longer un-measure green
+evidence. Either rule suffices; with no git, no recorded commit or no recorded hash the clock
+rule decides alone, exactly as before.
 So: when you write the tests for a criterion, put its AC-n in the test name; run
 `spec-check --acceptance ACCEPTANCE.md` up front (zero traceable criteria / duplicate
 IDs block as structural FACTS). Files without IDs fall back to the checkbox ratio

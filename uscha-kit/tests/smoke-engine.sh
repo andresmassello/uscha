@@ -3551,6 +3551,7 @@ rm -f "$KIT/reports/junit/.rt-cases.json"         # same rule for T136
 rm -f "$KIT/reports/junit/.top-cases.json"        # same rule for T137/T138/T141
 rm -f "$KIT/reports/junit/.fa-cases.json"         # same rule for T140
 rm -f "$KIT/reports/junit/.ct-cases.json"         # same rule for T146
+rm -f "$KIT/reports/junit/.fr-cases.json"         # same rule for T147
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -9951,8 +9952,11 @@ a = dict(seal(d))
 b = json.loads(eng(d, "check-terminado", "--ledger", "L.json", "--json").stdout)
 # equal member for member, with no wall clock inside to excuse a difference: the block is
 # deterministic given the ledger and the tree, which is what lets two surfaces publish it
-res["AC-CT-09"] = bool(a == b and a.get("ok") is False
-                       and sorted(a) == ["commit", "ok", "reasons", "repo"])
+# the member list is PINNED, so a key added to the seal has to be a decision: `note` joined it
+# in 1.93.0 (ADR-039) and is null here -- HEAD IS the snapshot commit, so there is nothing to
+# note, and a note on a seal that did not move would be narration.
+res["AC-CT-09"] = bool(a == b and a.get("ok") is False and a.get("note") is None
+                       and sorted(a) == ["commit", "note", "ok", "reasons", "repo"])
 sh(d, "git", "checkout", "--", "src/main.py")
 
 st = json.load(io.open(os.path.join(FIX, "state", "state-unsealed.json"), encoding="utf-8"))
@@ -10016,6 +10020,317 @@ PY
 case "$T146" in
   OK*) PASS=$((PASS+1)); echo "  ok   sealed TERMINADO, INV-T1 (AC-CT-01..11): $T146";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T146";;
+esac
+
+echo "== T147 (1.93.0): freshness by CONTENT and COMMIT, and a seal that tolerates non-source commits (ADR-039) =="
+# Rule (a) reads the clock, and the clock lies whenever a clone, a `git worktree add`, a merge or
+# a CI checkout re-dates every file without changing a byte -- the day INV-T1 shipped, the release
+# machine read 0/195 for exactly that reason. Rule (b) asks git and the recorded hash instead.
+# Driven over a REAL temp git repo through the engine (init -> report -> snapshot), never a
+# hand-written ledger, and the no-git half is pinned BYTE-IDENTICAL against the 1.92.0 engine so
+# "either rule suffices" cannot quietly become "the new rule replaced the old one".
+T147=$(pyin "$KIT" "$ROOT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+
+JUNIT = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+         '<testsuite name="app" tests="1" failures="0" errors="0" skipped="0">\n'
+         '  <testcase classname="t" name="AC-01_content_freshness"/>\n'
+         '</testsuite>\n')
+ACC = "# ACCEPTANCE\n\n- [x] AC-01 - content freshness\n"
+CFG = {"version": "1.0.0", "project": "fresh-app",
+       "defaults": {"acceptance_file": "ACCEPTANCE.md", "coverage_threshold": 60},
+       "repos": [{"name": "app", "path": ".", "type": "python"}],
+       "integration": {"enabled": False}}
+
+
+def sh(d, *a):
+    return subprocess.run(list(a), cwd=d, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
+
+
+def eng(d, *a, **kw):
+    engine = kw.get("engine") or ENG
+    return subprocess.run([sys.executable, engine] + list(a), cwd=d, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+
+def write(path, body):
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(body)
+
+
+TMPS = []
+
+
+def fixture(git=True, with_report=True):
+    d = tempfile.mkdtemp(prefix="uscha-fr-")
+    TMPS.append(d)
+    os.makedirs(os.path.join(d, "src"))
+    os.makedirs(os.path.join(d, "reports"))
+    write(os.path.join(d, "src", "main.py"), "x = 1\n")
+    write(os.path.join(d, "ACCEPTANCE.md"), ACC)
+    write(os.path.join(d, "c.json"), json.dumps(CFG))
+    if with_report:
+        write(os.path.join(d, "reports", "junit.xml"), JUNIT)
+    if git:
+        sh(d, "git", "init", "-b", "main")
+        sh(d, "git", "config", "user.email", "t@t")
+        sh(d, "git", "config", "user.name", "t")
+        # the report is hashed at ingest and re-hashed on disk, so a checkout that rewrites its
+        # line endings would read as "evidence altered". Pinned here so the case under test is
+        # the one named, never the platform default (the limit itself is named in SPEC 4).
+        sh(d, "git", "config", "core.autocrlf", "false")
+        sh(d, "git", "add", "-A")
+        sh(d, "git", "commit", "-m", "v1")
+    if not with_report:
+        return d
+    eng(d, "init", "--config", "c.json", "--out", "L.json")
+    eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+    return d
+
+
+def acc(d, **kw):
+    r = eng(d, "readiness", "--ledger", "L.json", "--json", **kw)
+    try:
+        return json.loads(r.stdout)["acceptance"]
+    except (ValueError, KeyError):
+        return {}
+
+
+def closed(d):
+    a = acc(d)
+    return a.get("measured_closed"), len(a.get("stale_reports") or [])
+
+
+def redate_source(d):
+    """what a checkout, a clone or a merge does: the source is written again, byte for byte
+    unchanged, with a date NEWER than the report. Pinned 60 s past the report instead of
+    "now" so the 1 s tolerance cannot swallow the gap on a fast machine."""
+    rep = os.stat(os.path.join(d, "reports", "junit.xml")).st_mtime
+    os.utime(os.path.join(d, "src", "main.py"), (rep + 60, rep + 60))
+
+
+def seal(d):
+    r = eng(d, "check-terminado", "--ledger", "L.json", "--json")
+    try:
+        return r.returncode, json.loads(r.stdout)
+    except ValueError:
+        return r.returncode, {}
+
+
+d = fixture()
+SRC = os.path.join(d, "src", "main.py")
+
+# --- AC-FR-01: a report the CLOCK rejects (a source re-dated after it, content untouched) is
+# FRESH by content, and the snapshot record says WHY -- the reason names the commit, and the
+# report carries fresh_by content rather than an unexplained pass.
+redate_source(d)
+mc, stale = closed(d)
+eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+snap = (json.load(io.open(os.path.join(d, "L.json"), encoding="utf-8"))
+        ["repos"]["app"]["snapshots"][-1])
+fr = snap["tests"]["freshness"]
+res["AC-FR-01"] = bool(mc == ["AC-1"] and stale == 0 and fr["status"] == "fresh"
+                       and "content unchanged since" in fr["reason"]
+                       and [r["fresh_by"] for r in snap["tests"]["reports"]] == ["content"])
+
+# --- AC-FR-02: a REAL edit of the same file is stale again. Rule (b) reads content, not dates:
+# what re-dating could not break, one changed byte does.
+write(SRC, "x = 2\n")
+mc, stale = closed(d)
+res["AC-FR-02"] = bool(mc == [] and stale == 1)
+sh(d, "git", "checkout", "--", "src/main.py")
+
+# --- AC-FR-03: a commit that touches only docs leaves the evidence current...
+write(os.path.join(d, "NOTES.md"), "release notes\n")
+sh(d, "git", "add", "-A")
+sh(d, "git", "commit", "-m", "docs only")
+redate_source(d)
+mc, stale = closed(d)
+res["AC-FR-03"] = bool(mc == ["AC-1"] and stale == 0)
+
+# --- AC-FR-04: ...and a commit that touches a .py does not. The extension set is the whole
+# difference, and it is the SAME set rule (a) already trusted.
+write(SRC, "x = 3\n")
+sh(d, "git", "add", "-A")
+sh(d, "git", "commit", "-m", "code")
+mc, stale = closed(d)
+res["AC-FR-04"] = bool(mc == [] and stale == 1)
+
+# --- AC-FR-05: the hash guards rule (b). With the clock already rejecting the report, one whose
+# bytes no longer match the ones the snapshot ingested is NOT rescued by content: a log edited
+# after the run keeps its path and can keep its date, and that is the hole 1.92.0 closed.
+d5 = fixture()
+write(os.path.join(d5, "reports", "junit.xml"),
+      JUNIT.replace("</testsuite>", "  <!-- edited after the run -->\n</testsuite>"))
+redate_source(d5)
+mc, stale = closed(d5)
+res["AC-FR-05"] = bool(mc == [] and stale == 1)
+
+# --- AC-FR-06: no git -> rule (a) ALONE, and "alone" is measured against the 1.92.0 engine
+# rather than asserted: readiness text and top --json (minus the wall clock) must not move a
+# single byte, on the committed uscha-top fixtures and on a repo with no work tree.
+# Tag not fetched / no git -> None = UNMEASURED, never a silent pass.
+gsh = subprocess.run(["git", "show",
+                      "v1.92.0:uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"],
+                     cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+FIX = os.path.join(kit, "tests", "fixtures", "uscha-top", "fixture-honesty-negative")
+if gsh.returncode != 0 or not gsh.stdout or not os.path.isdir(FIX):
+    res["AC-FR-06"] = None
+else:
+    _oldd = tempfile.mkdtemp(prefix="uscha-fr-old-")
+    TMPS.append(_oldd)
+    old = os.path.join(_oldd, "old_engine.py")
+    io.open(old, "wb").write(gsh.stdout)
+
+    def no_clock(s):
+        """the payload minus its wall clock, and minus the ONE key 1.93.0 adds: `sealed.note`
+        (ADR-039). It is asserted null here rather than ignored -- an engine that started
+        WRITING a note on a fixture with no snapshot would be a behaviour change hiding
+        behind a comparison that skipped the field."""
+        try:
+            j = json.loads(s)
+        except ValueError:
+            return None
+        j.pop("generated_at", None)
+        j.pop("generated", None)
+        seal_block = (j.get("terminado") or {}).get("sealed")
+        if isinstance(seal_block, dict):
+            if seal_block.pop("note", None) is not None:
+                return None
+        return json.dumps(j, sort_keys=True)
+
+    def pair(where, *a):
+        return eng(where, *a, engine=old), eng(where, *a)
+
+    o, n = pair(FIX, "readiness", "--ledger", "QA-LEDGER.json")
+    same = bool(o.returncode == n.returncode and o.stdout == n.stdout and o.stdout)
+    o, n = pair(FIX, "top", "--json", "--ledger", "QA-LEDGER.json")
+    same = (same and o.returncode == n.returncode and no_clock(o.stdout) is not None
+            and no_clock(o.stdout) == no_clock(n.stdout))
+    # the no-git half: the same fixture this block drives, with its work tree removed, so the
+    # engine reaches rule (b) and finds no git to answer with
+    d6 = fixture()
+    shutil.rmtree(os.path.join(d6, ".git"), ignore_errors=True)
+    redate_source(d6)
+    o, n = pair(d6, "readiness", "--ledger", "L.json")
+    same = same and o.returncode == n.returncode and o.stdout == n.stdout
+    o, n = pair(d6, "top", "--json", "--ledger", "L.json")
+    same = (same and o.returncode == n.returncode and no_clock(o.stdout) is not None
+            and no_clock(o.stdout) == no_clock(n.stdout))
+    a6 = acc(d6)
+    res["AC-FR-06"] = bool(same and a6.get("measured_closed") == []
+                           and len(a6.get("stale_reports") or []) == 1)
+
+# --- AC-FR-07: the seal, amended. HEAD one commit ahead of the snapshot by docs and the ledger
+# only is SEALED WITH A NOTE naming what moved (the self-applied repo's release commit); one
+# source file in that diff and it is a break again, naming the offending path. Exit codes 0/1.
+d7 = fixture()
+eng(d7, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+sh(d7, "git", "add", "-A")
+sh(d7, "git", "commit", "-m", "release: docs + ledger")
+rc_ok, s_ok = seal(d7)
+write(os.path.join(d7, "src", "main.py"), "x = 42\n")
+sh(d7, "git", "add", "-A")
+sh(d7, "git", "commit", "-m", "code after the snapshot")
+rc_bad, s_bad = seal(d7)
+txt = eng(d7, "check-terminado", "--ledger", "L.json").stdout or ""
+res["AC-FR-07"] = bool(rc_ok == 0 and s_ok.get("ok") is True and not s_ok.get("reasons")
+                       and "non-source files only" in (s_ok.get("note") or "")
+                       and "L.json" in s_ok["note"]
+                       and rc_bad == 1 and s_bad.get("ok") is False
+                       and s_bad.get("note") is None
+                       and any(r.startswith("stale seal: source changed since")
+                               and r.endswith("src/main.py")
+                               for r in (s_bad.get("reasons") or []))
+                       and "UNSEALED" in txt)
+
+# --- AC-FR-08: the baseline cannot LAUNDER ITSELF. `snapshot` records the tree as it is, so on a
+# repo whose code moved and whose tests were never re-run it honestly writes freshness: stale --
+# and a read-time rule that then trusted THAT record as its anchor would answer its own question
+# ("the report hashes to what I ingested, and nothing changed since MY commit", both true by
+# construction) and turn an UNMEASURED verdict into a GREEN. The snapshot record and the read-time
+# derivation must agree: stale stays stale, on both surfaces.
+d8 = fixture()
+write(os.path.join(d8, "src", "main.py"), "x = 99\n")
+sh(d8, "git", "add", "-A")
+sh(d8, "git", "commit", "-m", "code moved, suite NOT re-run")
+redate_source(d8)
+eng(d8, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+snap8 = (json.load(io.open(os.path.join(d8, "L.json"), encoding="utf-8"))
+         ["repos"]["app"]["snapshots"][-1])
+mc, stale = closed(d8)
+res["AC-FR-08"] = bool(snap8["tests"]["freshness"]["status"] == "stale"
+                       and [r["fresh_by"] for r in snap8["tests"]["reports"]] == ["stale"]
+                       and mc == [] and stale == 1)
+
+# --- AC-FR-09: the RITUAL, end to end, which is the case ADR-039 exists for. Commit the code (X),
+# run the suite, `snapshot` at X, then commit the ledger AND the JUnit it names (X+1) -- so the
+# report is necessarily inside the X..X+1 diff. Clone that at X+1 (which re-dates every file, the
+# operation that started all this) and the board must read the truth: fresh by content, sealed,
+# with a note naming the ledger and the report as the non-source files that moved.
+d9 = fixture(with_report=False)
+write(os.path.join(d9, "reports", "junit.xml"), JUNIT)
+eng(d9, "init", "--config", "c.json", "--out", "L.json")
+eng(d9, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+sh(d9, "git", "add", "-A")
+sh(d9, "git", "commit", "-m", "release: ledger + evidence")
+c9 = tempfile.mkdtemp(prefix="uscha-fr-clone-")
+TMPS.append(c9)
+c9 = os.path.join(c9, "clone")
+sh(d9, "git", "-c", "core.autocrlf=false", "clone", "-q", d9, c9)
+redate_source(c9)
+mc9, stale9 = closed(c9)
+rc9, s9 = seal(c9)
+note9 = s9.get("note") or ""
+res["AC-FR-09"] = bool(mc9 == ["AC-1"] and stale9 == 0
+                       and rc9 == 0 and s9.get("ok") is True and not s9.get("reasons")
+                       and "non-source files only" in note9
+                       and "L.json" in note9 and "reports/junit.xml" in note9)
+
+# --- AC-FR-10: the BUILD and HARNESS files are source-relevant too, for rule (b) and for the seal
+# alike. A commit that rewrites the suite runner or the build file changes what a green report
+# MEANS, and a seal that waved it through would be tolerating the one edit a green board cannot
+# survive. Measured on an extension (.sh) and on a basename (pom.xml).
+for _tag, _rel, _body in (("sh", "run-tests.sh", "#!/bin/sh\npytest -q\n"),
+                          ("pom", "pom.xml",
+                           "<project><artifactId>a</artifactId></project>\n")):
+    dh = fixture()
+    write(os.path.join(dh, _rel), _body)
+    sh(dh, "git", "add", "-A")
+    sh(dh, "git", "commit", "-m", "harness " + _tag)
+    redate_source(dh)
+    mch, staleh = closed(dh)
+    rch, sh_seal = seal(dh)
+    okh = bool(mch == [] and staleh == 1 and rch == 1 and sh_seal.get("ok") is False
+               and any(r.startswith("stale seal: source changed since") and r.endswith(_rel)
+                       for r in (sh_seal.get("reasons") or [])))
+    res["AC-FR-10"] = bool(res.get("AC-FR-10", True) and okh)
+
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+sp = os.path.join(side, ".fr-cases.json")
+try:
+    prev = json.loads(io.open(sp, encoding="utf-8").read())
+except (OSError, ValueError):
+    prev = {}
+prev.update(res)
+io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+bad = [k for k, v in res.items() if v is False]
+skip = [k for k, v in res.items() if v is None]
+tail = " (%d unmeasured: %s)" % (len(skip), ",".join(sorted(skip))) if skip else ""
+for _t in TMPS:
+    shutil.rmtree(_t, ignore_errors=True)     # every fixture this block made, gone with it
+print(("OK %d cases" % len(res)) + tail if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T147" in
+  OK*) PASS=$((PASS+1)); echo "  ok   freshness by content + commit, tolerant seal (AC-FR-01..10): $T147";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T147";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -11413,6 +11728,26 @@ for _n in range(1, 12):
         results.append((_ctid, "sealed-terminado", None))
     else:
         results.append((_ctid, "sealed-terminado", "T146 case failed or missing"))
+
+# Freshness by content and commit (ADR-039): measured by T147, same sidecar contract. AC-FR-06
+# (rule (a) pinned byte-identical against the 1.92.0 engine) reports None without git or the
+# tagged copy -> emitted as skipped = UNMEASURED, never a silent pass.
+def _fr_cases():
+    p = os.path.join(kit, "reports", "junit", ".fr-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_frc = _fr_cases()
+for _n in range(1, 11):
+    _frid = "AC-FR-%02d" % _n
+    if _frc is None or _frc.get(_frid) is None:
+        results.append((_frid, "freshness-content", SKIP))
+    elif _frc.get(_frid) is True:
+        results.append((_frid, "freshness-content", None))
+    else:
+        results.append((_frid, "freshness-content", "T147 case failed or missing"))
 
 # Family-prefixed criteria (ADR-036): measured by T140, same sidecar contract. AC-FA-03 (the
 # bare form pinned byte-identical against the previous engine) reports None without git or the

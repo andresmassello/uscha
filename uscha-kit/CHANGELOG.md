@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.93.0** — [evidence freshness by content and commit, not the clock alone; the seal tolerates non-source commits (ADR-039) (2026-08-19)](CHANGELOG-1.93.0.md)
 - **1.92.0** — [TERMINADO is sealed to the exact code state: evidence content-hashed at ingest, DONE is not DONE while the seal is broken (INV-T1, ADR-038) (2026-08-19)](CHANGELOG-1.92.0.md)
 - **1.91.0** — [`uscha top` phase 2: `d` shows the drift the ledger measured, `o` reruns what the human supplied (ADR-037) (2026-08-18)](CHANGELOG-1.91.0.md)
 - **1.90.0** — [measured debt paid: the round trip reads behaviour (0.062 → 0.828), coverage 85.9% said honestly, three deferred issues closed (2026-08-18)](CHANGELOG-1.90.0.md)

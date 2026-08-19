@@ -642,7 +642,7 @@ _SRC_EXT = {
     ".java", ".kt", ".kts", ".scala", ".groovy", ".py", ".js", ".jsx",
     ".ts", ".tsx", ".mjs", ".cjs", ".go", ".rs", ".cs", ".vb", ".fs",
     ".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".swift", ".m", ".mm",
-    ".rb", ".php", ".dart", ".gradle",
+    ".rb", ".php", ".dart", ".gradle", ".hh", ".hxx",
 }
 _SRC_SKIP_DIRS = SKIP_DIRS | {"reports", "Pods", ".vs"}
 
@@ -701,7 +701,125 @@ def _source_newest_mtime(repo_path):
     return newest["mtime_ns"] / 1_000_000_000 if newest else 0.0
 
 
-def _test_evidence_provenance(repo_path, repo_type):
+# kit 1.93.0 (ADR-039): the clock is not the only honest freshness rule. A fresh clone, a
+# `git worktree add`, a merge or a CI checkout re-date every source file without changing a
+# byte of source, and rule (a) then throws away evidence that IS current -- the day INV-T1
+# shipped, the release machine read 0/195 for exactly that reason. Rule (b) asks the question
+# a timestamp cannot: has any SOURCE file changed since the commit the last snapshot was
+# measured at, and is the report still the exact file that was ingested? Either rule
+# suffices; both are measured. No git, no recorded commit, no recorded hash -> (a) alone,
+# byte-identical to 1.92.0.
+def _git_path_list(text):
+    """Paths from `git diff --name-only`: C-quotes stripped, forward slashes. An escape
+    inside a quoted path is left as-is -- that can only fail to MATCH, which withholds
+    freshness rather than granting it (the safe direction, same posture as `_porcelain_paths`)."""
+    out = []
+    for line in (text or "").splitlines():
+        p = line.strip()
+        if len(p) >= 2 and p[0] == '"' and p[-1] == '"':
+            p = p[1:-1]
+        if p:
+            out.append(p.replace("\\", "/"))
+    return out
+
+
+# What rule (b) and the seal treat as "a change that invalidates a test run", BEYOND the source
+# code itself: the build and harness files that decide WHAT the suite runs and HOW. A commit that
+# rewrites `smoke-engine.sh`, a `pom.xml` or a CI workflow changes the meaning of a green report
+# just as surely as editing the code under test, and a seal that tolerated it would be tolerating
+# the one edit a green board cannot survive. Deliberately NOT here, and named in ADR-039 and
+# SPEC 4: `.md`, `.json`, `.xml`, `.txt` -- docs, changelogs, the ledger and the JUnit reports
+# themselves are non-source BY CONSTRUCTION, which is the whole point of the tolerant seal.
+# (`package.json` and `pyproject.toml` are the named exceptions: they carry the test command.)
+_HARNESS_EXT = {".sh", ".bash", ".ps1", ".yml", ".yaml", ".toml", ".sql", ".tf",
+                ".gradle", ".cmake"}
+_HARNESS_NAMES = {"makefile", "pom.xml", "build.gradle", "package.json",
+                  "pyproject.toml", "setup.py", "cargo.toml", "go.mod"}
+
+
+def _src_relevant(paths, repo_type=None):
+    """Only the paths that can invalidate a test run: the engine's own source-extension set --
+    a true SUPERSET of what rule (a) looked at, because provenance narrows the clock rule to
+    `SOURCE_EXT[repo_type]` and that set is unioned in here rather than assumed to be inside
+    `_SRC_EXT` (`.hh`/`.hxx` were in one and not the other until 1.93.0) -- plus the build and
+    harness files above. The same generated/build/report/vendor trees `_newest_source` prunes
+    are pruned here. ONE definition for rule (b) and for the seal (ADR-039): widening it widens
+    both at once, never one."""
+    allowed = _SRC_EXT | SOURCE_EXT.get(repo_type or "", set()) | _HARNESS_EXT
+    out = []
+    for path in paths:
+        parts = path.split("/")
+        if any(d in _SRC_SKIP_DIRS or d.startswith("cmake-build-") for d in parts[:-1]):
+            continue
+        name = parts[-1].lower()
+        if os.path.splitext(name)[1] in allowed or name in _HARNESS_NAMES:
+            out.append(path)
+    return out
+
+
+def _content_state(repo_path, repo_type, last_snapshot):
+    """What rule (b) needs, measured ONCE per repo instead of once per report: the commit the
+    last snapshot was taken at (`origin.commit`, ADR-007), the sha256 that snapshot recorded
+    per report path (ADR-038), and every source-relevant path that changed between that commit
+    and the tree on disk -- the committed diff AND the working tree, because a source edit that
+    is not committed yet is exactly as invalidating as one that is.
+
+    `None` whenever the question cannot be answered: no snapshot, no recorded commit, no
+    recorded hash (a pre-1.92.0 ledger), no git. Absence leaves rule (a) alone; it never
+    grants freshness."""
+    snap = last_snapshot if isinstance(last_snapshot, dict) else {}
+    commit = (snap.get("origin") or {}).get("commit")
+    if not commit:
+        return None
+    # THE BASELINE MUST NOT LAUNDER ITSELF (fixed before 1.93.0 shipped, found in blind review).
+    # `snapshot` records the tree AS IT IS: taken on a repo whose code moved and whose tests were
+    # never re-run, it faithfully writes `freshness: stale` -- and then, at read time, that same
+    # record would say "the report hashes to what I ingested, and nothing changed since MY commit"
+    # (its commit is HEAD, its hash was taken over that very file) and turn its own UNMEASURED
+    # verdict into a GREEN. A snapshot can only anchor evidence it judged CURRENT: a stale
+    # verdict, or a report the record itself marked stale, is no anchor at all.
+    if ((snap.get("tests") or {}).get("freshness") or {}).get("status") == "stale":
+        return None
+    hashes = {r["path"]: r["sha256"]
+              for r in ((snap.get("tests") or {}).get("reports") or [])
+              if isinstance(r, dict) and r.get("path") and r.get("sha256")
+              and r.get("fresh_by") != "stale"}
+    if not hashes:
+        return None
+    diff = _seal_git(repo_path, "-c", "core.quotepath=false", "diff", "--name-only",
+                     commit, "HEAD", "--", ".")
+    st = _seal_git(repo_path, "-c", "core.quotepath=false", "status", "--porcelain",
+                   "-uall", "--", ".")
+    if diff is None or st is None:
+        return None
+    changed = _src_relevant(_git_path_list(diff.stdout) + _porcelain_paths(st.stdout),
+                            repo_type)
+    return {"commit": commit, "hashes": hashes, "src_changed": sorted(set(changed))}
+
+
+def _report_fresh(repo_path, report_path, clock_fresh, content_state):
+    """'clock' | 'content' | None (stale) for ONE report -- the single derivation both the
+    snapshot record (`_test_evidence_provenance`) and the tag ingest (`_ac_tags`) read, so the
+    two surfaces cannot disagree about which report is current.
+
+    The CLOCK verdict is supplied by the caller on purpose: the two callers have always applied
+    it with different tolerances, and both stay byte-identical to 1.92.0 rather than being
+    quietly unified here."""
+    if clock_fresh:
+        return "clock"
+    if not content_state or content_state["src_changed"]:
+        return None
+    # the SAME relpath form the snapshot recorded the report under. No realpath on either
+    # side: both come from the same `repo_path` string, so the 8.3 mismatch of 2026-08-02
+    # cannot arise here, while normalizing one side would stop matching the recorded key.
+    rel = os.path.relpath(report_path, repo_path).replace("\\", "/")
+    recorded = content_state["hashes"].get(rel)
+    if not recorded or _sha256_file(report_path) != recorded:
+        return None
+    return "content"
+
+
+def _test_evidence_provenance(repo_path, repo_type, last_snapshot=None):
     """Explain which JUnit reports back a snapshot and whether they are newer
     than relevant source/test files. No discoverable source is explicitly
     uncorrelated-but-usable to preserve synthetic/report-only workflows.
@@ -745,15 +863,29 @@ def _test_evidence_provenance(repo_path, repo_type):
             "tolerance_ns": _JUNIT_FRESHNESS_TOLERANCE_NS,
         }
 
-    stale_reports = [
-        report for report in reports
-        if newest["mtime_ns"] > report["mtime_ns"] + _JUNIT_FRESHNESS_TOLERANCE_NS
-    ]
+    # ADR-039: the clock verdict first (unchanged, tolerance included), then rule (b) for the
+    # reports the clock rejects. `fresh_by` says WHICH rule answered for each report, so a
+    # board that reads fresh can always be asked why.
+    content_state = _content_state(repo_path, repo_type, last_snapshot)
+    stale_reports = []
+    for report in reports:
+        clock_fresh = (newest["mtime_ns"]
+                       <= report["mtime_ns"] + _JUNIT_FRESHNESS_TOLERANCE_NS)
+        how = _report_fresh(repo_path, os.path.join(repo_path, report["path"]),
+                            clock_fresh, content_state)
+        report["fresh_by"] = how or "stale"
+        if how is None:
+            stale_reports.append(report)
+    by_content = [r["path"] for r in reports if r["fresh_by"] == "content"]
     if stale_reports:
         paths = ", ".join(report["path"] for report in stale_reports)
         reason = (f"source/test {newest['path']} is newer than JUnit report(s) "
                   f"{paths}")
         status = "stale"
+    elif by_content:
+        reason = ("content unchanged since %s: %s"
+                  % (content_state["commit"][:8], ", ".join(by_content)))
+        status = "fresh"
     else:
         reason = "selected JUnit report(s) are current relative to source/test files"
         status = "fresh"
@@ -804,7 +936,7 @@ def _ac_tag_ids(name):
     return ids
 
 
-def _ac_tags(repo_path, repo_type):
+def _ac_tags(repo_path, repo_type, last_snapshot=None):
     """Tags AC-n leidos de los NOMBRES de testcase en los reportes JUnit que el
     engine ya ingiere. Devuelve (tags, stale) donde tags = {'AC-n': {'green': x,
     'red': y}} (o 'AC-FAM-n' para la forma con familia, ADR-036 / kit 1.87.0)
@@ -822,14 +954,21 @@ def _ac_tags(repo_path, repo_type):
     tags = {}
     stale = []
     newest_src = _source_newest_mtime(repo_path)
+    # ADR-039 (kit 1.93.0): rule (b) applies HERE too, not only in the snapshot record. A
+    # report the clock rejects but whose content is unchanged since the snapshot commit is
+    # FRESH, and discarding it here while calling it fresh there would be two derivations of
+    # one fact, free to disagree -- the 1.48.1 mirador sin.
+    content_state = _content_state(repo_path, repo_type, last_snapshot)
     for f in _junit_files_for(repo_path, repo_type):
+        clock_fresh = True
         if newest_src > 0.0:
             try:
-                if os.path.getmtime(f) < newest_src:
-                    stale.append(f)
-                    continue
+                clock_fresh = os.path.getmtime(f) >= newest_src
             except OSError:
                 pass
+        if _report_fresh(repo_path, f, clock_fresh, content_state) is None:
+            stale.append(f)
+            continue
         try:
             root = _parse_xml(f).getroot()
         except (ET.ParseError, OSError):
@@ -873,7 +1012,11 @@ def _sum_ac_tags(ledger):
     ac_tags = {}
     stale_reports = []
     for rcfg in (ledger.get("config") or {}).get("repos", []):
-        rtags, rstale = _ac_tags(rcfg.get("path", "."), rcfg.get("type", "maven"))
+        # the LAST snapshot of this repo is what rule (b) compares against (ADR-039): the
+        # commit the evidence was measured at and the hash each report carried at ingest.
+        snaps = ((ledger.get("repos") or {}).get(rcfg.get("name")) or {}).get("snapshots") or []
+        rtags, rstale = _ac_tags(rcfg.get("path", "."), rcfg.get("type", "maven"),
+                                 snaps[-1] if snaps else None)
         for cid, v in rtags.items():
             d = ac_tags.setdefault(cid, {"green": 0, "red": 0, "cases": []})
             d["green"] += v["green"]
@@ -944,7 +1087,7 @@ def junit_test_count(repo_path, extra_files=None):
             "passed": executed - failures - errors, "report_found": bool(files)}
 
 
-def test_count(repo_path, repo_type):
+def test_count(repo_path, repo_type, last_snapshot=None):
     if repo_type == "ant":
         result = ant_test_count(repo_path)
     elif repo_type == "maven":
@@ -963,7 +1106,7 @@ def test_count(repo_path, repo_type):
         result = junit_test_count(repo_path)
     else:
         result = flutter_test_count(repo_path)
-    reports, freshness = _test_evidence_provenance(repo_path, repo_type)
+    reports, freshness = _test_evidence_provenance(repo_path, repo_type, last_snapshot)
     result["reports"] = reports
     result["freshness"] = freshness
     return result
@@ -1989,10 +2132,14 @@ def _snapshot(ledger, name):
     cfg = _repo_cfg(ledger, name) if name != "integration" else {"path": ".", "type": "maven"}
     path = cfg["path"]
     rtype = cfg["type"]
+    # the PREVIOUS snapshot, read before this one is appended: rule (b) asks whether the
+    # reports are still the files THAT run ingested, at a commit with no source change since
+    # (ADR-039). Comparing a snapshot against itself would be circular.
+    prev = (node.get("snapshots") or [])[-1:] or [None]
     snap = {
         "at": _now(),
         "coverage": coverage(path, rtype),
-        "tests": test_count(path, rtype),
+        "tests": test_count(path, rtype, prev[0]),
         "loc": count_loc(path, rtype),
         "origin": _evidence_origin(path),
     }
@@ -8710,7 +8857,12 @@ def _sealed_state(ledger, ledger_path):
          monorepo sibling's edit is not this repo's dirt -- ignoring the ledger itself and
          the report files the last snapshot names (those two are the seal's own footprint,
          exactly as the reference `sh` package exempts `EVIDENCIA.md` and the logs it hashes);
-      2. is `HEAD` the commit that snapshot was taken at (`origin.commit`, ADR-007);
+      2. has the CODE moved since the commit that snapshot was taken at (`origin.commit`,
+         ADR-007)? Amended in 1.93.0 (ADR-039): HEAD may differ from that commit by files
+         outside `_SRC_EXT` and outside the named report set -- docs, changelogs, the ledger
+         that carries this very snapshot -- and the seal then holds and carries a `note`
+         naming what moved (capped at five paths). A source-relevant difference is still a
+         break, named by its first path;
       3. does every report the snapshot names still exist and still hash to what was
          recorded at ingest (`sha256`, added in 1.92.0).
 
@@ -8725,13 +8877,14 @@ def _sealed_state(ledger, ledger_path):
     "checked at" would be a second wall clock inside a payload whose only other one is
     `generated_at` -- and two consecutive `top --json` runs must differ in nothing else
     (AC-T-24 measures exactly that, and caught this before it shipped)."""
-    out = {"ok": None, "reasons": [], "commit": None, "repo": None}
+    out = {"ok": None, "reasons": [], "commit": None, "repo": None, "note": None}
     repos = (ledger.get("config", {}) or {}).get("repos") or []
     if not repos:
         out["reasons"].append("no repo configured — seal UNMEASURED")
         return out
     name = repos[0].get("name")
     path = repos[0].get("path", ".")
+    rtype = repos[0].get("type")
     out["repo"] = _top_clean(name) if name else None
 
     top = _seal_git(path, "rev-parse", "--show-toplevel")
@@ -8767,13 +8920,6 @@ def _sealed_state(ledger, ledger_path):
     snap = snaps[-1]
 
     failures, unmeasured = [], []
-    snap_commit = (snap.get("origin") or {}).get("commit")
-    if not snap_commit:
-        unmeasured.append("snapshot recorded no commit — seal UNMEASURED")
-    elif snap_commit != head_sha:
-        failures.append("stale seal: snapshot at %s, HEAD is %s"
-                        % (snap_commit[:8], head_sha[:8]))
-
     reports = [r for r in ((snap.get("tests") or {}).get("reports") or [])
                if isinstance(r, dict) and r.get("path")]
     exempt = set()
@@ -8781,6 +8927,48 @@ def _sealed_state(ledger, ledger_path):
         rel = _seal_rel(work_tree, candidate)
         if rel:
             exempt.add(rel)
+
+    snap_commit = (snap.get("origin") or {}).get("commit")
+    if not snap_commit:
+        unmeasured.append("snapshot recorded no commit — seal UNMEASURED")
+    elif snap_commit != head_sha:
+        # AMENDED in 1.93.0 (ADR-039): `HEAD == commit` was too strict in the one repo that
+        # applies the method to itself -- the ledger lives INSIDE the commit that carries it,
+        # so the release commit is always one ahead of the snapshot it publishes and the board
+        # read `stale seal` forever on the machine that released. What the seal actually
+        # promises is that the CODE has not moved, so a HEAD that differs only by files outside
+        # `_SRC_EXT` and outside the named report set (docs, changelogs, the ledger itself) is
+        # sealed WITH A NOTE that says exactly what moved. Anything source-relevant is still a
+        # break, and it names the first offending path instead of two opaque hashes.
+        diff = _seal_git(path, "-c", "core.quotepath=false", "diff", "--name-only",
+                         snap_commit, head_sha, "--", ".")
+        if diff is None:
+            # the commit is unreachable (shallow clone, rewritten history): we cannot SEE what
+            # changed, so the strict verdict stands. Fail-closed, as before.
+            failures.append("stale seal: snapshot at %s, HEAD is %s"
+                            % (snap_commit[:8], head_sha[:8]))
+        else:
+            moved = sorted(set(_git_path_list(diff.stdout)))
+            # the REPORTS are deliberately NOT re-added here (blind review, before 1.93.0
+            # shipped). The release ritual is: commit the code, run the suite, `snapshot` at that
+            # commit, then commit the ledger AND the JUnit it names -- so the report is always in
+            # the X..X+1 diff and a seal that counted it could never close on the machine that
+            # released. Nothing is given away: the hash check below proves the file on disk is
+            # byte-for-byte the one that was ingested, which is a stronger statement than "this
+            # path did not appear in a diff".
+            relevant = sorted(set(_src_relevant(moved, rtype)))
+            if relevant:
+                failures.append("stale seal: source changed since snapshot %s: %s"
+                                % (snap_commit[:8], relevant[0]))
+            elif moved:
+                shown = ", ".join(moved[:5])
+                if len(moved) > 5:
+                    shown += " (+%d)" % (len(moved) - 5)
+                out["note"] = ("HEAD %s differs from snapshot %s by non-source files only: %s"
+                               % (head_sha[:8], snap_commit[:8], shown))
+            else:
+                out["note"] = ("HEAD %s differs from snapshot %s: no file changed in the "
+                               "repo subtree" % (head_sha[:8], snap_commit[:8]))
     # `core.quotepath=false`: without it git C-quotes any non-ASCII path, so a report named
     # `junit-acción.xml` would appear in the reason as `junit-acciÃ³n.xml` -- a reason
     # nobody can act on, and an exemption that cannot match. Set on the command, never in the
@@ -8838,6 +9026,8 @@ def cmd_check_terminado(args):
         where = " at %s" % sealed["commit"][:8] if sealed.get("commit") else ""
         print("[qa_ledger] check-terminado: %s%s (repo %s)"
               % (verdict, where, sealed.get("repo") or "?"))
+        if sealed.get("note"):
+            print("  - %s" % sealed["note"])
         for reason in sealed.get("reasons") or []:
             print("  - %s" % reason)
         if ok is not True:
