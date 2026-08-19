@@ -1,0 +1,264 @@
+{
+  "schema": "uscha-top/v0.1",
+  "project": "backend-api",
+  "spec_pin": {
+    "sha": "a41f9c2",
+    "clean_room_verified": false
+  },
+  "step": 147,
+  "generated_at": "2026-08-17T12:00:00+00:00",
+  "obligations": [
+    {
+      "id": "AC-1",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-2",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 2,
+      "cases_total": 2,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-3",
+      "kind": "AC",
+      "state": "MEASURED_FAIL",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 2,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-4",
+      "kind": "AC",
+      "state": "UNMEASURED",
+      "gate": "junit",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-5",
+      "kind": "AC",
+      "state": "QUARANTINE",
+      "gate": "curation",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": "OBS-2b837dfd92ec",
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-6",
+      "kind": "AC",
+      "state": "QUARANTINE",
+      "gate": "curation",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": "OBS-21653f98dedb",
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-7",
+      "kind": "AC",
+      "state": "UNMEASURED",
+      "gate": "junit",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-8",
+      "kind": "AC",
+      "state": "UNMEASURED",
+      "gate": "junit",
+      "cases_pass": 0,
+      "cases_total": 0,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    }
+  ],
+  "observations": [
+    {
+      "id": "OBS-2b837dfd92ec",
+      "ac": "AC-5",
+      "repo": "backend-api",
+      "title": "AC-05 the settlement window rolls to the next business day",
+      "candidate": [
+        "type: behavior · site: svc/settle.py",
+        "claim: AC-05 the settlement window rolls to the next business day"
+      ],
+      "evidence": [
+        "svc/settle.py",
+        "evidence_class: static · tool: fixture"
+      ],
+      "age_hours": null
+    },
+    {
+      "id": "OBS-21653f98dedb",
+      "ac": "AC-6",
+      "repo": "backend-api",
+      "title": "AC-06 a refund never exceeds the captured amount",
+      "candidate": [
+        "type: invariant · site: svc/refund.py",
+        "claim: AC-06 a refund never exceeds the captured amount"
+      ],
+      "evidence": [
+        "svc/refund.py",
+        "evidence_class: static · tool: fixture"
+      ],
+      "age_hours": null
+    },
+    {
+      "id": "OBS-2a9f0dc835ee",
+      "ac": null,
+      "repo": "backend-api",
+      "title": "the retry budget is exhausted silently after three attempts",
+      "candidate": [
+        "type: contract · site: svc/retry.py",
+        "claim: the retry budget is exhausted silently after three attempts"
+      ],
+      "evidence": [
+        "svc/retry.py",
+        "evidence_class: static · tool: fixture"
+      ],
+      "age_hours": null
+    }
+  ],
+  "events_tail": [
+    {
+      "ts": "11:30:00",
+      "level": "human",
+      "text": "escalation backend-api · spec doubt raised mid-loop; human gate open"
+    },
+    {
+      "ts": "11:25:00",
+      "level": "fail",
+      "text": "static-gate backend-api/gate:sast · 2 gated finding(s)"
+    },
+    {
+      "ts": "11:20:00",
+      "level": "pass",
+      "text": "qa-step backend-api/improve · 0 reported, 0 fixed"
+    },
+    {
+      "ts": "11:05:00",
+      "level": "unmeasured",
+      "text": "gate-not-run backend-api/gate:license · not run — nobody measured it"
+    },
+    {
+      "ts": "10:40:00",
+      "level": "info",
+      "text": "qa-step backend-api/judgment-day · 3 reported, 1 fixed"
+    },
+    {
+      "ts": "10:00:00",
+      "level": "pass",
+      "text": "qa-step backend-api/code-review · 4 reported, 4 fixed"
+    },
+    {
+      "ts": "09:59:00",
+      "level": "info",
+      "text": "snapshot backend-api · phase pre"
+    }
+  ],
+  "counts": {
+    "measured_pass": 2,
+    "measured_fail": 1,
+    "quarantine": 2,
+    "unmeasured": 3,
+    "traced": 0,
+    "tagged": 0,
+    "total": 8
+  },
+  "terminado": {
+    "done": 2,
+    "total": 8,
+    "pct": 25,
+    "unmeasured": 3
+  },
+  "debtors": {
+    "machine": 1,
+    "you": 2,
+    "untagged": 3
+  },
+  "honesty": {
+    "measured": 3,
+    "total": 8,
+    "pct": 38
+  },
+  "eta_min": null,
+  "medians": {
+    "verdict_min": null,
+    "loop_min": 40
+  },
+  "checks": null,
+  "drift_pct": null,
+  "burnup": {
+    "kind": "score",
+    "weeks": [
+      44,
+      51,
+      55
+    ]
+  },
+  "repos": [
+    {
+      "name": "backend-api",
+      "path": "repo"
+    }
+  ],
+  "spec_diff": {
+    "measured_at": "2026-08-18T12:00:00+00:00",
+    "repo": "backend-api",
+    "max_lag_days": 30,
+    "docs_total": 4,
+    "stale": [
+      {
+        "doc": "SPEC.md",
+        "lag_days": 74.0,
+        "code_ref": "src/app.py",
+        "newer_files_total": 3,
+        "spec_committed_at": "2026-01-05T10:00:00Z",
+        "newest_governed_at": "2026-03-20T10:00:00Z"
+      },
+      {
+        "doc": "docs/adr/ADR-001-money-rounding.md",
+        "lag_days": 47.0,
+        "code_ref": "src/money.py",
+        "newer_files_total": 2,
+        "spec_committed_at": "2026-02-01T10:00:00Z",
+        "newest_governed_at": "2026-03-20T10:00:00Z"
+      }
+    ],
+    "advisory": true,
+    "source": "spec-drift"
+  }
+}

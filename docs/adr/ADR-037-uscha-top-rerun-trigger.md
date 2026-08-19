@@ -6,7 +6,7 @@ governs:
 ---
 # ADR-037: `o` rerun in `uscha top` — the TUI may TRIGGER the engine with a command the human supplied at launch; it never decides what to run and never writes the ledger itself (proposal for phase 2, M4)
 
-## Status: Proposed — option B chosen by the maintainer (2026-08-18); becomes Accepted when phase 2 ships it
+## Status: Accepted (phase 2 shipped in 1.91.0; option B chosen by the maintainer 2026-08-18)
 
 ## Context
 `uscha top` v0.1 (ADR-031..034, shipped 1.86.0–1.89.0) reads everything and writes exactly one
@@ -61,14 +61,48 @@ Under-claim: B does not run tests in a clean room; it runs them in the working t
 the human would from their shell — the clean-room gate stays `cleanroom --run`, unchanged. The
 board's evidence-origin line already says `measured dirty` when that is the case (ADR-007).
 
-## What would be measured (draft criteria, `AC-T-25..29`, phase 2)
-- `o` without `--rerun-cmd` writes nothing and says why; `o` under `--state` refuses.
-- with `--rerun-cmd`, one keypress → one command run (argv shape asserted at a mockable
-  boundary) → one `snapshot --repo` (engine write, byte-identical to a manual call) → reload.
-- verdict keys are locked while a rerun is in flight; a held `o` yields one run.
-- after a green rerun of a fixture whose tests were red, `terminado.done` increases and the
-  feed shows the snapshot event — the only path that moves DONE.
-- AST guard: exactly one call site per engine subcommand, none inside a loop.
+## What shipped (1.91.0) — two decisions the draft left open
+
+- **The snapshot runs whether or not the command exited 0.** A red suite is evidence; refusing
+  to ingest it would leave the board showing the previous, greener measurement — narrated green
+  beside measured facts, the exact inversion this kit exists to remove. What a non-zero exit
+  changes is the status line, which names it (`rerun exit 7 (red) · ingested: …`), and nothing
+  else. A failing *ingest* is a different statement and gets its own line
+  (`snapshot FAILED (…) — nothing was ingested`).
+- **Which repo.** The **first configured repo**, exactly as `spec_pin` already picks the sha it
+  labels the board with (ADR-032). The choice is the engine's: `top --json` now emits
+  `repos[]` in configuration order and the TUI takes its head — a TUI that scanned the ledger
+  for a repo would be deriving. Every line that depends on the choice names the repo it picked
+  (`running in backend-api (first configured repo)`), so a multi-repo project cannot read the
+  status as "all of them". Under-claim: `o` reruns and ingests **one** repo per keypress.
+- A third refusal joined the two the draft named: a ledger with **no configured repo** (no cwd
+  to run in, no repo to ingest for) is refused by name, like the other two, spawning nothing.
+
+## What is measured (`AC-T-25..29`, T145, promoted into `ACCEPTANCE.md`)
+- **AC-T-25** — `o` is inert without `--rerun-cmd`, refuses under `--state`, and refuses with no
+  configured repo: each says why, spawns nothing, and leaves the ledger byte-identical.
+- **AC-T-26** — with the flag: one keypress → one command in the first configured repo's
+  directory (as a shell string, `shell=True`) → one `snapshot --ledger … --repo …` → one
+  re-read, in that order, both boundaries asserted by argv; a held `o` yields one run; a red
+  run is still ingested and a failed ingest says so.
+- **AC-T-27** — verdict keys record nothing while a rerun is in flight and `o` cannot stack on
+  itself, while navigation and the exits keep working. Measured purely (a caller-supplied
+  boolean), because the phase-2 rerun is synchronous: while the suite runs no key is read at
+  all, and what is typed meanwhile the drain throws away.
+- **AC-T-28** — the loop closes on measured evidence: with the fixture's red case replaced by a
+  green report, the real `_snapshot_call` leaves a ledger record equal member for member to a
+  manual `qa_ledger.py snapshot` call's (minus the two wall clocks), the feed's newest event is
+  that snapshot, and `terminado.done` is up by one. **Stated narrowly:** the AC recount reads
+  the ingested *report* (`_ac_tags` reads the file), so the number moves as soon as the report
+  does — what the snapshot adds, and what the TUI could not fabricate, is the recorded
+  measurement and the event that names it.
+- **AC-T-29** — AST guard: exactly one call site each for `_curate_call`, `_snapshot_call` and
+  `_rerun_call`, none under a `for`/`while`; plus the `d` pane byte-identical against its two
+  golden frames with zero escapes on the plain path, and the empty case rendering "no
+  spec-drift run recorded" rather than a clean board.
+
+*Mutation-checked: a doubled rerun call, a skipped snapshot, a verdict allowed during a rerun,
+a stale `[d]/[o] phase 2` hint and a tampered golden each turn a criterion red.*
 
 ## Consequences / Risks
 + The complete loop lives in one screen; every write stays the engine's and human-attributed.
@@ -78,5 +112,7 @@ board's evidence-origin line already says `measured dirty` when that is the case
   the human already extends to their own shell; documented, not mitigated further.
 
 ## What this ADR does NOT decide
-`d` (spec↔code diff, read-only, ADR-032's contract) and spec-lens (a separate surface) — they are
-phase-2 siblings, not this decision.
+spec-lens (a separate surface) — a phase-2 sibling, not this decision. `d` (spec↔code diff,
+read-only) shipped in the same release under ADR-032's contract, widened there with the nullable
+`spec_diff` block: it is a projection of the advisory record `spec-drift` already writes, it runs
+nothing, and with no recorded run it says so instead of showing a clean board.

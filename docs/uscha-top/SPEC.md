@@ -27,7 +27,11 @@ conflict is named. The definitive AC ids are assigned here, not by the handoff.
 - **In v0.1 (M1-M3):** the read-only board (header + obligations table + state colors), the git
   `HEAD` spec-pin proxy, the live feed with `mtime` polling, and VERDICTS mode (the only write, via
   `curate`). Pure `render()`, golden-frame oracle, Windows first-class VT path, `--once` no-TTY mode.
-- **Not in v0.1 (phase 2, M4):** `d` spec↔code diff, `o` oracle rerun, the spec-lens editor. Every
+- **Phase 2 (M4, shipped 1.91.0 — ADR-037):** `d` spec↔code diff (read-only, over the ledger's own
+  advisory `spec-drift` record) and `o` rerun (the human's command, then the engine's `snapshot`).
+  Still out: the spec-lens editor.
+- **Not in v0.1 (deferred to phase 2, M4 — see the line above for what of it shipped):** `d`
+  spec↔code diff, `o` oracle rerun, the spec-lens editor. Every
   deferred `—` field (ETA, ages, obligation-count burn-up, drift, TRACED/TAGGED rungs, designed
   spec-pin) is enumerated in ADR-035 and rendered honestly as `—`/gray until wired.
 
@@ -39,8 +43,8 @@ conflict is named. The definitive AC ids are assigned here, not by the handoff.
 - Header: `DONE x/N (p%)` + debtor decomposition + honesty coverage + spec-pin + step.
 - Obligations table, columns: `ID · GATE · STATE · CASES · AGE · ACTION`.
 - Bottom pane: the ledger feed (last ≤N events, colored by level).
-- Keys: `[v]` verdicts · `[d]` spec↔code diff *(phase 2, stub)* · `[o]` rerun oracle *(phase 2,
-  stub)* · `[j/k` or `↑/↓]` move · `[q]` quit.
+- Keys: `[v]` verdicts · `[d]` spec↔code diff · `[o]` rerun · `[j/k` or `↑/↓]` move · `[r]` reload ·
+  `[q]` quit. *(`d` and `o` shipped in 1.91.0 — the hint line no longer marks them as future.)*
 
 ### VERDICTS (`v`)
 - List of uncurated OBS (affected AC, and the age the engine cannot supply — so it is not shown)
@@ -49,6 +53,26 @@ conflict is named. The definitive AC ids are assigned here, not by the handoff.
   `[t]`/`[Esc]` back · `[q]` quit.
 - Each verdict shells out to `curate` once (ADR-033) and advances to the next uncurated OBS; empty
   queue returns to BOARD.
+
+### DIFF (`d`) — *shipped 1.91.0, read-only*
+- One header line: `spec ↔ code drift · advisory · N of M doc(s) stale (lag > D d) · measured <at>`,
+  or the honest `no spec-drift run recorded — run qa_ledger.py spec-drift --repo <r>` when the
+  ledger carries no run. The count sits before the timestamp because this is the line the
+  80-column floor cuts.
+- A table, worst lag first: `DOC · LAG/d · A NEWER GOVERNED FILE (1 of N)`.
+- Keys: `[t]`/`[Esc]`/`[d]` back · `[r]` reload · `[q]` quit. **No cursor in v1** — the pane names
+  what does not fit (`— N more stale doc(s) do not fit at this size`) instead of scrolling, and no
+  key in this mode writes anything.
+- It reads `spec_diff` (ADR-032, amended) and **never runs `spec-drift`**: that command walks git
+  and records its own verdicts; `d` is a projection of the last real run, with that run's timestamp
+  on screen so an old measurement cannot pass for a fresh one.
+
+### `o` — rerun *(shipped 1.91.0, ADR-037 option B)*
+- Inert without `--rerun-cmd`, and it says so. With it: the human's shell string runs in the first
+  configured repo's directory (named on screen), synchronously, verdict keys locked; then the
+  engine's own `snapshot --repo <r>` ingests — **on a red run too** — and the board re-reads.
+- Refused under `--state` (a frozen snapshot is not a live ledger) and with no configured repo.
+  Same drain + 250 ms cooldown as a verdict: one keypress, one run.
 
 All labels are English (repo convention since 1.55.0).
 
@@ -116,7 +140,9 @@ renders them, it does not recompute them (single derivation, ADR-032).
   byte-equal fixture (AC-T-17). **Shipped 1.89.0**, measured by T141 plus two VERDICTS golden
   frames; the queue's order is the one §7/AC-T-13 records, not the age-descending one drafted in
   §2 (there is no age to sort by — ADR-032 amended for M3).
-- **M4 — phase 2 (not now).** `d` diff, `o` rerun, spec-lens over the same contract.
+- **M4 — phase 2.** `d` diff and `o` rerun **shipped 1.91.0** (ADR-037; contract widened with
+  `spec_diff` + `repos`, ADR-032 amended). **Gate:** AC-T-25..29, measured by T145 plus two DIFF
+  golden frames. The spec-lens editor is still future and still consumes the same contract.
 
 Each milestone closes with a full turn of the method (spec pinned → compile → oracle → curation).
 
@@ -129,8 +155,13 @@ Each milestone closes with a full turn of the method (spec pinned → compile �
 - Modifying the existing HTML `mirador`.
 - Any auto-promotion of observations (would violate INV-CURATION-01).
 - **Auto-rerun after a verdict** (a fix leaves the obligation in its measured state — ADR-033).
-- **The spec-lens editor** (phase 2; it consumes the same `top --json` contract — nothing in v0.1
-  may block it).
+  Still out in phase 2: `o` is a keypress a human makes, with a command that human supplied at
+  launch; nothing reruns by itself and nothing is guessed from config (ADR-008/037).
+- **A clean-room rerun.** `o` runs in the working tree, exactly as the human would from their
+  shell; the clean-room gate stays `cleanroom --run`, unchanged (ADR-037).
+- **An asynchronous rerun.** Phase 2 blocks the board while the command runs, by design.
+- **The spec-lens editor** (still phase-2 future; it consumes the same `top --json` contract —
+  nothing shipped may block it).
 
 ---
 

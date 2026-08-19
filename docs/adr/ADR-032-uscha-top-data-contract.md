@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-032: The engine computes the whole projection — one read-only subcommand `top --json` emits every state, cardinality, median and feed line already derived, and a field with no honest source is `null`, never invented
 
-## Status: Accepted (M1 shipped in 1.86.0; feed derivation amended and shipped in 1.88.0 for M2; `observations[]` amended and shipped in 1.89.0 for M3; nullable fields per ADR-035; curated 2026-08-17)
+## Status: Accepted (M1 shipped in 1.86.0; feed derivation amended and shipped in 1.88.0 for M2; `observations[]` amended and shipped in 1.89.0 for M3; `spec_diff` + `repos` amended and shipped in 1.91.0 for phase 2 / ADR-037; nullable fields per ADR-035; curated 2026-08-17)
 
 ## Context
 Decision #1 of this work: the engine computes everything and the TUI only renders
@@ -79,9 +79,44 @@ writes, never runs tests, never calls a model. Shape:
 
   "checks":   { "pass": 418, "fail": 4, "total": 422 },
   "drift_pct": null,
-  "burnup":   { "kind": "score", "weeks": [61, 61, 64, 66, 66, 70] }
+  "burnup":   { "kind": "score", "weeks": [61, 61, 64, 66, 66, 70] },
+
+  "repos": [ { "name": "backend-api", "path": "services/api" } ],
+  "spec_diff": {
+    "measured_at": "2026-08-18T12:00:00+00:00",
+    "repo": "backend-api",
+    "max_lag_days": 30,
+    "docs_total": 4,
+    "stale": [
+      { "doc": "SPEC.md", "lag_days": 74, "code_ref": "src/app.py", "newer_files_total": 3,
+        "spec_committed_at": "2026-01-05T10:00:00Z", "newest_governed_at": "2026-03-20T10:00:00Z" }
+    ],
+    "advisory": true,
+    "source": "spec-drift"
+  }
 }
 ```
+
+**`repos` and `spec_diff`** *(amended 1.91.0, phase 2 — ADR-037).* Both are reads of what the
+ledger already holds; `top` still runs nothing.
+
+- **`repos[]`** — the configured repos, name and **configured** path, in configuration order.
+  It exists because phase 2 gave the TUI two questions it must not answer for itself: which
+  repo `o` runs in and ingests for (the head of this list, the same repo `spec_pin` labels the
+  board with) and which repo `d` names when it tells the reader how to produce a missing
+  spec-drift run. The path is the one in the config — relative to the ledger, never resolved to
+  an absolute machine path here, because a frozen state carrying one is a golden frame nobody
+  else can render.
+- **`spec_diff`** — `null` when no `spec-drift` run is recorded, and that null is the point: the
+  pane then says *no run recorded* rather than showing a clean board, because "nobody measured"
+  and "nothing is stale" are different statements (INV-TOP-05). When a run exists, this
+  projects `ledger["spec_drift"]` (ADR-005) and **only its `SPEC_STALE` rows** — CLEAN, UNMAPPED,
+  UNTRACKED and NO-CODE are the four ways a doc is not drifting, with `docs_total` keeping the
+  denominator visible. `advisory` is always `true`: ADR-005 drift never gates, here or anywhere.
+  `code_ref` is **one** of the governed files that outran the doc — the record stores a capped,
+  alphabetically sorted list and no per-file dates, so it is "a newer file", never "the newest
+  one", and `newer_files_total` carries the real cardinality. `drift_pct` stays `null`: an
+  aggregate percentage is still a new metric definition nobody has agreed (ADR-035/3).
 
 **Percentages under-claim on rounding.** `terminado.pct` and `honesty.pct` come from one engine
 helper and are capped at **99** whenever the numerator is below the denominator — 999 of 1000 rounds
@@ -104,6 +139,8 @@ and derivations live in exactly one place.
 | `medians.loop_min` | integer or `null` | Honestly computable from `ledger["repos"][r]["iterations"][*].at` (median gap between consecutive iterations); `null` if fewer than two iterations. (A/`medians.loop_min`) |
 | `checks` | `{pass,fail,total}` or `null` | Mapped from the LATEST snapshot's `tests` block per repo (`pass = passed`, `fail = failures+errors`, `total = executed`), summed across repos. `null` — not a zeroed object — when no repo carries an ingested report: "0 of 0 tests ran" and "nobody measured" are different statements, and only one of them is true. Never conflated with `cases_pass/cases_total`, which is the AC-tagged subset. (A/`checks`) |
 | `drift_pct` | `null` | `spec_drift` stores per-file verdicts, not an aggregate. A percentage would be a *new metric definition*, deferred to ADR-035. (A/`drift_pct`, E.7) |
+| `spec_diff` | the block above or `null` *(added 1.91.0)* | Projects `ledger["spec_drift"]`, the advisory latest-state record ADR-005's command leaves behind. No recorded run → `null` → the pane says so. Nothing is re-measured here: `top` never walks git. |
+| `repos` | `[{name, path}]` (possibly empty) *(added 1.91.0)* | The configured repos in configuration order, so the TUI picks neither the rerun target nor the repo it names. Empty list when the ledger configures none — `o` then refuses by name. |
 | `burnup` | `{kind:"score", weeks:[…]}` | Only the **score** series is real (`readiness_history`, L8238). Obligation-count burn-up needs new persistence (ADR-035); v0.1 ships the score burn-up and labels `kind` so the TUI never implies it is a count of closed obligations. (A/`burnup_weeks`, E.6) |
 
 **Per-obligation state ladder — what each state requires as evidence (v0.1):**

@@ -8567,6 +8567,78 @@ def _top_events(ledger, limit=TOP_EVENTS_TAIL):
     return events[:max(0, int(limit))]
 
 
+def _top_repos(ledger):
+    """The configured repos, name and configured path, in configuration order (phase 2).
+
+    Two things the TUI must not decide for itself now have a source: WHICH repo a rerun runs
+    in and ingests for (ADR-037 picks the first configured one, exactly as `_top_spec_pin`
+    picks the sha it labels), and WHICH repo the `d` pane names when it tells the reader how
+    to produce the spec-drift run that is missing. `path` is the path as CONFIGURED --
+    relative to the ledger, never resolved here: an absolute machine path in the contract is
+    a frozen state nobody else can render (the golden frames are files in a repo)."""
+    out = []
+    for r in ((ledger.get("config", {}) or {}).get("repos") or []):
+        if isinstance(r, dict) and r.get("name"):
+            out.append({"name": _top_clean(r["name"]), "path": _top_clean(r.get("path", "."))})
+    return out
+
+
+def _top_spec_diff(ledger):
+    """The advisory spec↔code drift the ledger ALREADY carries, projected for `d` (ADR-037).
+
+    It measures NOTHING: `spec-drift` (ADR-005) is the only command that walks git for this,
+    and `top` is read-only by contract (ADR-032) -- so this reads `ledger["spec_drift"]`, the
+    latest-state record that command leaves behind, and nothing else. **No recorded run ->
+    `null`**, which the TUI renders as "no spec-drift run recorded", never as "no drift":
+    "nobody measured" and "nothing is stale" are different statements and only one of them is
+    ever free (INV-TOP-05).
+
+    Only `SPEC_STALE` rows travel: CLEAN/UNMAPPED/UNTRACKED/NO-CODE are the four ways a doc
+    is NOT drifting, and `docs_total` keeps the denominator visible beside the count so the
+    pane can say `3 of 21`. `code_ref` is ONE of the governed files that outran the doc --
+    the record stores a capped, alphabetically sorted list and no per-file dates, so it is
+    "a newer file", never "the newest one" (under-claim; `newer_files_total` carries the
+    real cardinality)."""
+    rec = ledger.get("spec_drift")
+    if not isinstance(rec, dict):
+        return None
+    results = rec.get("results")
+    results = results if isinstance(results, list) else []
+    docs = [r for r in results if isinstance(r, dict)]
+    stale = []
+    for r in docs:
+        if r.get("verdict") != "SPEC_STALE":
+            continue
+        # `newer_files` is a LIST in the record `spec-drift` writes, but the ledger is JSON on
+        # disk: a hand edit can leave a string there, and a string is iterable -- the old
+        # comprehension would have walked its characters and named `"n"` as the governed file
+        # that outran the doc. A non-list is no evidence, so it yields no code_ref and 0.
+        nf = r.get("newer_files")
+        newer = [f for f in nf if isinstance(f, str)] if isinstance(nf, list) else []
+        lag = r.get("lag_days_actual")
+        total = r.get("newer_files_total")
+        stale.append({
+            "doc": _top_clean(r.get("file") or "?"),
+            "lag_days": lag if isinstance(lag, (int, float)) else None,
+            "code_ref": _top_clean(newer[0]) if newer else None,
+            "newer_files_total": total if isinstance(total, int) else len(newer),
+            "spec_committed_at": (_top_clean(r["spec_committed_at"])
+                                  if r.get("spec_committed_at") else None),
+            "newest_governed_at": (_top_clean(r["newest_governed_at"])
+                                   if r.get("newest_governed_at") else None)})
+    # worst lag first, the doc name as the tie-break: deterministic given the record, which
+    # is what lets a golden frame be the oracle for this pane too (ADR-034).
+    stale.sort(key=lambda s: (-(s["lag_days"] or 0), s["doc"]))
+    lag_days = rec.get("max_lag_days")
+    return {"measured_at": _top_clean(rec["at"]) if rec.get("at") else None,
+            "repo": _top_clean(rec["repo"]) if rec.get("repo") else None,
+            "max_lag_days": lag_days if isinstance(lag_days, int) else None,
+            "docs_total": len(docs),
+            "stale": stale,
+            "advisory": True,               # ADR-005: this never gates, here or anywhere
+            "source": "spec-drift"}
+
+
 def cmd_top(args):
     """`uscha top` — the WHOLE projection of the ledger as one read-only JSON (ADR-032).
 
@@ -8699,6 +8771,11 @@ def cmd_top(args):
         "medians": {"verdict_min": None, "loop_min": _top_loop_median_min(ledger)},
         "checks": _top_checks(ledger),
         "drift_pct": None,                # spec_drift is per-file; an aggregate is ADR-035/3
+        # phase 2 (ADR-037): the repos in configuration order -- the source for the ONE repo
+        # `o` reruns in and `d` names -- and the advisory drift ALREADY recorded by
+        # `spec-drift`. Both are reads of what the ledger holds; `top` still runs nothing.
+        "repos": _top_repos(ledger),
+        "spec_diff": _top_spec_diff(ledger),
         # the ONLY real series is the readiness SCORE history; an obligation-count burn-up
         # needs new persistence (ADR-035/2), so `kind` is emitted for the TUI to label it a
         # score trend and never as a count of closed obligations.

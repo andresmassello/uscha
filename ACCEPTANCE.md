@@ -574,7 +574,8 @@ the engine's own `curate`). Criteria authored in `docs/uscha-top/SPEC.md` s7 and
 measured by T137 (engine `top --json` contract, including the derived feed and the verdict queue),
 T138 (pure `render`, twelve golden frames, the poll primitive) and T141 (the write path, on temp
 copies of the quarantine fixture) through the acceptance sidecar. Every v0.1 id is now measured; the
-phase-2 keys (`d` diff, `o` rerun) are out of scope and carry no criterion here. They close by the
+phase-2 keys (`d` diff, `o` rerun) shipped in 1.91.0 and carry their own criteria in the section
+below (AC-T-25..29, ADR-037), not here. They close by the
 suite, like every other family prefix — and since
 1.87.0 (ADR-036) the engine also READS those family ids, so the green ones enter the measured
 pipeline instead of counting as untagged (the gap ADR-035 item 6 recorded is closed).
@@ -603,6 +604,21 @@ pipeline instead of counting as untagged (the gap ADR-035 item 6 recorded is clo
 - [x] AC-T-22 - Windows legacy conhost: VT via `SetConsoleMode` (ctypes); on failure degrade to the plain frame.
 - [x] AC-T-23 - honesty negative case: 23/24 PASS + 1 UNMEASURED renders 96% with the suffix, never 100%.
 - [x] AC-T-24 - single derivation: a frame rendered from a frozen `top --json` fixture traces every number to a JSON field.
+
+## uscha top phase 2 (ADR-037) - closes on green `AC-T-nn` smoke assertions
+
+Shipped in 1.91.0: `d` (spec<->code drift, read-only) and `o` (rerun). Criteria drafted in ADR-037
+before the code and measured by T145 through the same acceptance sidecar, plus two DIFF golden
+frames over `state/state-drift.json` - a frozen state whose drift block comes from a REAL
+`qa_ledger.py spec-drift` run on a temp git repo, not from a hand edit. The contract grew two
+members for this (`spec_diff`, nullable, and `repos`); ADR-032 is amended for both. What did NOT
+change: the TUI still writes nothing itself, and DONE still moves only on ingested evidence.
+
+- [x] AC-T-25 - `o` is inert without `--rerun-cmd` and says why; it refuses under `--state` (a frozen snapshot is not a live ledger) and with no configured repo. Each refusal spawns nothing - not the command, not the ingest - and leaves the ledger byte-identical. `o` answers on the BOARD only.
+- [x] AC-T-26 - with `--rerun-cmd`, one keypress runs the human's shell string ONCE in the first configured repo's directory (`shell=True`, ADR-008 style: the string is the human's, never guessed) and then the engine's `snapshot --ledger ... --repo ...` ONCE, in that order, followed by a re-read. Both boundaries are replaced and their argv asserted, so nothing runs. A held `o` (a repeat inside the 250 ms cooldown) yields one run; a red run is ingested anyway and the status line names the exit code; a failing ingest says `snapshot FAILED ... nothing was ingested` instead of implying the board moved.
+- [x] AC-T-27 - verdict keys record nothing while a rerun is in flight and `o` cannot stack on itself, while `j`/`t`/`q` keep working; the banner names the lock and the repo it picked. Measured PURELY (the flag is a caller-supplied boolean): the phase-2 rerun is synchronous, so while the command runs no key is read at all and what is typed meanwhile the drain throws away.
+- [x] AC-T-28 - the loop closes on measured evidence: with the fixture's red case replaced by a green report, the REAL `_snapshot_call` leaves a ledger record equal member for member to a manual `qa_ledger.py snapshot` call's (the record's `at` and the report mtime - two wall clocks read inside a subprocess - compared for shape, not value), the feed's newest event is that snapshot, and `terminado.done` is up by one while `debtors.machine` is down by one. Stated narrowly: the AC recount reads the ingested REPORT, so the number moves as soon as the report does - what the snapshot adds, and what the TUI could not fabricate, is the recorded measurement and the event that names it. A verdict moves neither (AC-T-16).
+- [x] AC-T-29 - structural, plus the read-only pane. Exactly one call site each for `_curate_call`, `_snapshot_call` and `_rerun_call`, none under a `for`/`while`, and exactly one place builds a snapshot call: three engine spawns exist in `uscha_top.py` BEYOND THE READ BOUNDARY and no more (ADR-033 as restated by ADR-037). The boundary is counted too rather than hand-waved: the module's spawn call sites (`subprocess.run`/`Popen`/`call`) total exactly FOUR - the three above plus the single read-only `top --json` read in `load_state` - so a fifth inlined spawn goes red whichever side of the boundary it lands on. The `d` pane renders byte-identical against its two golden frames at 100x32 and 80x24 with zero escapes on the plain path, shows only the SPEC_STALE docs worst-lag-first with the cardinality beside the one file it names, and - the case that matters most - a state with no `spec_drift` record renders "no spec-drift run recorded" plus the command that would produce one, never a clean board (INV-TOP-05). The engine half is asserted beside it on BOTH cases: no record -> `spec_diff: null`, and a hostile record spliced into a copied ledger (mixed verdicts, tied and missing lags, a junk non-dict row, a `newer_files` that is a string) comes back through the real `top --json` as SPEC_STALE rows only, worst-lag-first with the doc name as tie-break, `advisory: true`, `docs_total` over the dict rows only, and no code_ref invented out of a string's characters. The board's key hint no longer labels either key as `phase 2`.
 
 ## Family-prefixed criteria (ADR-036) - closes on green `AC-FA-nn` smoke assertions
 
@@ -643,6 +659,7 @@ form is claimed. Measured by T140 through the acceptance sidecar.
 - ADR-033 — The verdict is the only thing `uscha top` writes, and it writes it through the existing `curate`.
 - ADR-034 — `render(state, size)` is pure; golden frames are its oracle, with a negative-honesty fixture.
 - ADR-036 — The instrument reads family-prefixed criteria (`AC-<FAMILY>-<n>`); the bare form is unchanged.
+- ADR-037 — `o` triggers the command the HUMAN supplied at launch, then the engine's own `snapshot` ingests; the TUI never decides what to run and never writes.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

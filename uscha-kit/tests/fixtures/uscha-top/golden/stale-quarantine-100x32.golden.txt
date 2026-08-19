@@ -29,4 +29,4 @@ feed · 7/7 · newest first · P/F/H/U/I = pass/fail/human/unmeasured/info
   10:00:00  P  qa-step backend-api/code-review · 4 reported, 4 fixed
   09:59:00  I  snapshot backend-api · phase pre
 
-[j/k] move · [r] reload · [q] quit · [v] verdicts · [d]/[o] phase 2
+[j/k] move · [r] reload · [q] quit · [v] verdicts · [d]iff · [o] rerun

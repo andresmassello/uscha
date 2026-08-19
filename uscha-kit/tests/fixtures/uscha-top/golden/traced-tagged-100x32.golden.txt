@@ -29,4 +29,4 @@ feed · no ledger step recorded yet (nothing to show)
 
 
 
-[j/k] move · [r] reload · [q] quit · [v] verdicts · [d]/[o] phase 2
+[j/k] move · [r] reload · [q] quit · [v] verdicts · [d]iff · [o] rerun

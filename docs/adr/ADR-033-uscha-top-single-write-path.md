@@ -5,7 +5,21 @@ governs:
 ---
 # ADR-033: The verdict is the only thing `uscha top` writes, and it writes it by shelling out to the existing `curate` — one keypress, one `curate` call, no batch, no auto-promotion, no auto-rerun
 
-## Status: Accepted (M3 shipped in 1.89.0; curated 2026-08-17)
+## Status: Accepted (M3 shipped in 1.89.0; curated 2026-08-17; title sentence restated for phase 2 in 1.91.0 per ADR-037)
+
+> **Restated 1.91.0 (ADR-037).** The title above is the M3 statement and stays true of the
+> verdict. The general rule the feature now follows is one sentence wider: **the TUI itself
+> never writes; it invokes engine subcommands, one per keypress, never in a loop** — `curate`
+> for a verdict (this ADR) and `snapshot` for the ingest after a rerun (ADR-037), plus the
+> human's own command, which is not an engine subcommand at all and writes only whatever the
+> human's shell writes. Three spawns exist in `uscha_top.py` BEYOND THE READ BOUNDARY and no
+> more; each has exactly one call site with no `for`/`while` above it, and the suite parses the
+> module to prove it (AC-T-15, AC-T-29). The boundary itself — the single read-only `top --json`
+> call in `load_state` (ADR-032/034) — is a fourth spawn in the file and always was; the earlier
+> wording said "three spawns exist in `uscha_top.py`" full stop, which anyone grepping the module
+> could falsify in one command (1.91.0 blind review). The suite now counts spawn call sites and
+> pins the total at **four**, so a fifth inlined one goes red whichever side it lands on. Decision #4 below — **no auto-rerun** — is unchanged: nothing reruns by
+> itself, and `o` is a keypress a human makes with a command that human supplied.
 
 ## Context
 Decision #2: the verdict write goes through the **existing** `curate` subcommand, never a

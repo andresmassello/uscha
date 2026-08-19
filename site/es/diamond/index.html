@@ -51,10 +51,6 @@
   }
   .chip.real{color:#16110f; background:var(--pass)}
   .chip.vision{color:#dbe8e6; background:#2a4341; border:1px solid var(--line)}
-  .chip.split{padding:0; overflow:hidden; display:inline-flex; border:1px solid var(--line)}
-  .chip.split span{padding:2px 8px}
-  .chip.split .r{color:#16110f; background:var(--pass)}
-  .chip.split .v{color:#dbe8e6; background:#2a4341}
   .article table td:first-child{min-width:200px}
 </style>
 </head>
@@ -272,10 +268,10 @@
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED queda literal donde no hay veredicto</td></tr>
         <tr><td>La autoría controlada (EARS+STE) reduce la varianza entre compiladores</td>
             <td><span class="chip real">REAL</span> (medido, comportamiento-primero: los arquetipos densos ayudaron, los simples dieron nulo/daño; la varianza estructural sola ya no sostiene una afirmación — ADR-027)</td><td>deconfundido en 5 arquetipos: REDUCED en 1 (guard −61%, NOISY 0.642), IMPROVED en 1 (scheduler, +1 verde de oráculo), dos nulos, uno WORSE · 1.76–1.84 · ADR-019/021/024/025/026/027</td></tr>
-        <tr><td>«El código es regenerable desde las specs» — sistemas <em>acotados</em> (REAL) vs. sistemas <em>arbitrarios</em> (VISIÓN)</td>
-            <td><span class="chip split"><span class="r">REAL · acotado</span><span class="v">VISIÓN · arbitrario</span></span></td><td>la mitad acotada es REAL (fila de arriba): el bench corrió sobre 12 arquetipos, 9 regeneran al mismo sistema bajo un oráculo oculto, 3 PARTIAL. Lo que sigue siendo VISIÓN es la palabra <em>totalmente</em> y las palabras <em>sistemas arbitrarios</em> — generalizar más allá de arquetipos acotados es la frontera abierta que M5 existe para contestar, y ninguna corrida la contestó todavía (ADR-018)</td></tr>
+        <tr><td>«El código es <em>totalmente</em> regenerable desde las specs» (sistemas arbitrarios)</td>
+            <td><span class="chip vision">VISIÓN</span></td><td>la mitad acotada es REAL (fila de arriba): el bench corrió sobre 12 arquetipos, 9 regeneran al mismo sistema bajo un oráculo oculto, 3 PARTIAL. Lo que sigue siendo VISIÓN es la palabra <em>totalmente</em> y las palabras <em>sistemas arbitrarios</em> — generalizar más allá de arquetipos acotados es la frontera abierta que M5 existe para contestar, y ninguna corrida la contestó todavía (ADR-018)</td></tr>
         <tr><td>«Drift = reverse discovery incremental, mismo motor»</td>
-            <td><span class="chip vision">VISIÓN</span></td><td>VISIÓN por decisión, no por deuda: ADR-011 rechazó el motor compartido a propósito — spec-drift compara fechas de commit de git (~150 líneas, determinista, cero LLM, advisory); reverse discovery lee código y propone (juicio de LLM). No comparten nada; unificarlos convertiría un instrumento barato e imposible de alucinar en cliente de un LLM. La misma idea en dos escalas, dos instrumentos. Se reabre solo si el round trip alguna vez desarrolla matching semántico medido — con su propio ADR.</td></tr>
+            <td><span class="chip vision">VISIÓN</span></td><td>idea válida, arquitectura rechazada · ADR-011</td></tr>
       </tbody>
     </table>
     <p>Y nótese lo elegante: la parte del diamante que <strong>ya es real</strong> — la capa
@@ -291,13 +287,13 @@
     registradas — son lo único que vale la pena migrar.</p>
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
-      Estado verificado contra kit 1.90.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-030,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.90.0 · los
+      Estado verificado contra kit 1.91.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-030,
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.91.0 · los
       estados REAL/VISIÓN siguen la regla
       INV-TRUTH-01 del repo.
     </p>
 
-    <h2>07 · El programa, medido — T0 → 1.90.0</h2>
+    <h2>07 · El programa, medido — T0 → 1.91.0</h2>
     <p>El programa Diamond corrió como ocho releases del kit midiéndose a sí mismo. Cada
     número de abajo sale de un reporte commiteado y regenerable en el repo — ninguno es
     narrado:</p>
@@ -354,7 +350,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../../diamond/index.html">English version</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.90.0</p>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.91.0</p>
   </div>
 </footer>
 

@@ -8710,8 +8710,13 @@ if len(calls_to(tree, "apply_verdict")) != 1:
 for nd in ast.walk(tree):
     if isinstance(nd, (ast.For, ast.While, ast.AsyncFor)) and calls_to(nd, "apply_verdict"):
         ok = False
-if len(calls_to(tree, "drain_keys")) != 1:
-    ok = False                     # the buffer is drained on every verdict path, once
+if len(calls_to(tree, "drain_keys")) != 2:
+    ok = False                     # once per write path: the verdict's, and (1.91.0) the rerun's
+for _drainer in ("_apply_and_advance", "_rerun_and_reload"):
+    _fn = [n for n in ast.walk(tree)
+           if isinstance(n, ast.FunctionDef) and n.name == _drainer]
+    if len(_fn) != 1 or len(calls_to(_fn[0], "drain_keys")) != 1:
+        ok = False                 # and each of the two drains exactly once
 res["AC-T-15"] = bool(ok)
 
 # --- AC-T-16 (INV-TOP-03): a verdict is a judgement, not a measurement. DONE does not move;
@@ -9142,6 +9147,552 @@ PY
 case "$T144" in
   OK*) PASS=$((PASS+1)); echo "  ok   uscha top read boundary + refusals: $T144";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T144";;
+esac
+
+echo "== T145 (uscha top M4): the drift pane reads, and 'o' triggers what the human supplied (ADR-037) =="
+# Phase 2. Two keys, opposite natures: 'd' is a projection of a record the ledger already
+# holds (it runs nothing and can therefore lie only by omission -- which is why the empty case
+# is measured), and 'o' is the one key that can move DONE, by running the HUMAN's command and
+# letting the engine's own snapshot ingest whatever it produced. What is asserted here is that
+# the TUI adds nothing to either: no derivation on the read side, no write of its own on the
+# rerun side, one spawn per boundary per keypress, none inside a loop.
+T145=$("$PY" - "$KIT" <<'PY'
+import ast, io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
+ENG = os.path.join(SKILL, "qa_ledger.py")
+TUI = os.path.join(SKILL, "uscha_top.py")
+FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
+GOLD = os.path.join(FIX, "golden")
+HOME = os.getcwd()
+res = {}
+
+sys.path.insert(0, SKILL)
+import uscha_top
+
+
+def fixture_copy(tag):
+    """A WRITABLE copy: everything in this block that can write, writes here."""
+    d = os.path.join(tempfile.mkdtemp(prefix="uscha-top-m4-" + tag + "-"), "f")
+    shutil.copytree(os.path.join(FIX, "fixture-stale-quarantine"), d)
+    return d
+
+
+def top(d):
+    r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
+                       cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                       text=True, encoding="utf-8", errors="replace")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+
+def ledger_bytes(d):
+    return io.open(os.path.join(d, "QA-LEDGER.json"), "rb").read()
+
+
+class Args(object):
+    """The launcher's namespace, as uscha_top.main builds it."""
+
+    def __init__(self, cmd=None, state=None):
+        self.ledger = "QA-LEDGER.json"
+        self.human = "operator"
+        self.rerun_cmd = cmd
+        self.state = state
+
+
+spawns = []
+
+
+def fake_rerun(cmd, cwd):
+    spawns.append(("rerun", cmd, cwd))
+    return 0
+
+
+def fake_snapshot(engine, ledger, repo):
+    spawns.append(("snapshot", engine, ledger, repo))
+    return 0, "[qa_ledger] snapshot backend-api (post): tests=5 (found=True)"
+
+
+def fake_reload(state, args):
+    spawns.append(("reload",))
+    return {"reloaded": True}
+
+
+real_rerun, real_snapshot, real_reload = (uscha_top._rerun_call, uscha_top._snapshot_call,
+                                          uscha_top._reload)
+
+# --- AC-T-25: without the flag the key is INERT, and it stays inert for the two other
+# reasons a rerun cannot honestly happen: a frozen --state snapshot (the ledger on disk is not
+# the one on screen) and a ledger with no configured repo (no cwd to run in, no repo to ingest
+# for). Each says why, spawns nothing, and leaves the ledger byte-identical.
+d25 = fixture_copy("inert")
+s25 = top(d25)
+before25 = ledger_bytes(d25)
+spawns[:] = []
+uscha_top._rerun_call, uscha_top._snapshot_call = fake_rerun, fake_snapshot
+os.chdir(d25)
+try:
+    ok = True
+    ran, msg = uscha_top.run_rerun(s25, Args())
+    if ran or msg != uscha_top.RERUN_MISSING_MSG:
+        ok = False
+    ran, msg = uscha_top.run_rerun(s25, Args("pytest -q", state="state-frozen.json"))
+    if ran or "frozen snapshot" not in msg:
+        ok = False
+    no_repo = json.loads(json.dumps(s25))
+    no_repo["repos"] = []
+    ran, msg = uscha_top.run_rerun(no_repo, Args("pytest -q"))
+    if ran or "no repo configured" not in msg:
+        ok = False
+finally:
+    os.chdir(HOME)
+    uscha_top._rerun_call, uscha_top._snapshot_call = real_rerun, real_snapshot
+if spawns:
+    ok = False                     # a refusal spawns NOTHING -- not the command, not the ingest
+if ledger_bytes(d25) != before25:
+    ok = False                     # and writes nothing either
+# the contract the refusals read from: the engine names the repos, the TUI only takes the head
+if [r.get("name") for r in (s25.get("repos") or [])] != ["backend-api"]:
+    ok = False
+if uscha_top.first_repo(s25) != ("backend-api", "repo"):
+    ok = False
+# the KEY itself answers on the board only, and on the board it changes nothing by itself
+if not uscha_top.is_rerun_key("o", "board"):
+    ok = False
+if uscha_top.is_rerun_key("o", "verdicts") or uscha_top.is_rerun_key("o", "diff"):
+    ok = False
+if uscha_top.dispatch_mode("o", "board", 2, 8) != ("board", 2, False, False, None):
+    ok = False
+res["AC-T-25"] = bool(ok)
+
+# --- AC-T-26: one keypress -> ONE command in the first configured repo's directory -> ONE
+# engine snapshot -> a re-read, in that order. Both boundaries are replaced, so what is
+# measured is the calls the dispatch makes and not the processes behind them (that is
+# AC-T-28). A HELD key yields one run, the same guard a held verdict key gets.
+d26 = fixture_copy("rerun")
+s26 = top(d26)
+spawns[:] = []
+uscha_top._rerun_call, uscha_top._snapshot_call = fake_rerun, fake_snapshot
+uscha_top._reload = fake_reload
+os.chdir(d26)
+try:
+    ok = bool(uscha_top.is_rerun_key("o", "board"))
+    a26 = Args("pytest -q")
+    st26, status26 = uscha_top._rerun_and_reload(s26, a26)
+    if [s[0] for s in spawns] != ["rerun", "snapshot", "reload"]:
+        # run, ingest, re-read -- in that order and once each. Checked FIRST and the detail
+        # checks skipped when it does not hold: a missing or doubled spawn must report a red
+        # criterion, not an IndexError the reader has to decode.
+        ok = False
+    else:
+        if spawns[0][1] != "pytest -q":
+            ok = False             # the human's string, unmodified
+        if os.path.realpath(spawns[0][2]) != os.path.realpath(os.path.join(d26, "repo")):
+            ok = False             # in the tracked repo's directory (realpath BOTH sides)
+        if spawns[1][2:] != ("QA-LEDGER.json", "backend-api"):
+            ok = False
+        if os.path.realpath(spawns[1][1]) != os.path.realpath(ENG):
+            ok = False
+    if st26 != {"reloaded": True} or "exit 0" not in status26:
+        ok = False
+    # a HELD key: the loop arms the same 250 ms cooldown a verdict arms, so repeats 2 and 3
+    # are refused before any boundary is reached -- one press, one run.
+    spawns[:] = []
+    cooling = False
+    for _key in ("o", "o", "o"):
+        if uscha_top.is_rerun_key(_key, "board", cooling=cooling):
+            uscha_top._rerun_and_reload(s26, a26)
+            cooling = True
+    if len([s for s in spawns if s[0] == "rerun"]) != 1:
+        ok = False
+    # a RED run is ingested too: the report is what it is, and refusing to ingest it would
+    # leave the board showing the previous, greener measurement.
+    spawns[:] = []
+
+    def red_rerun(cmd, cwd):
+        spawns.append(("rerun", cmd, cwd))
+        return 7
+
+    uscha_top._rerun_call = red_rerun
+    _st, status_red = uscha_top._rerun_and_reload(s26, a26)
+    if [s[0] for s in spawns] != ["rerun", "snapshot", "reload"]:
+        ok = False
+    if "exit 7" not in status_red or "ingested" not in status_red:
+        ok = False
+    # a FAILING ingest says so instead of implying the board moved
+    spawns[:] = []
+
+    def bad_snapshot(engine, ledger, repo):
+        spawns.append(("snapshot", engine, ledger, repo))
+        return 2, "[qa_ledger] snapshot: unknown repo"
+
+    uscha_top._snapshot_call = bad_snapshot
+    _st, status_bad = uscha_top._rerun_and_reload(s26, a26)
+    if "snapshot FAILED" not in status_bad or "nothing was ingested" not in status_bad:
+        ok = False
+finally:
+    os.chdir(HOME)
+    uscha_top._rerun_call, uscha_top._snapshot_call = real_rerun, real_snapshot
+    uscha_top._reload = real_reload
+
+# the two argv shapes themselves, with the subprocess boundary replaced so nothing runs
+seen = []
+
+
+class FakeProc(object):
+    returncode = 0
+    stdout = b"[qa_ledger] snapshot backend-api (post)\n"
+    stderr = b""
+
+
+class FakeSub(object):
+    PIPE = subprocess.PIPE
+
+    @staticmethod
+    def run(argv, **kw):
+        seen.append((argv, kw))
+        return FakeProc()
+
+
+real_sub = uscha_top.subprocess
+uscha_top.subprocess = FakeSub
+try:
+    code = uscha_top._rerun_call("pytest -q", os.path.join(d26, "repo"))
+    rc, said = uscha_top._snapshot_call(ENG, "QA-LEDGER.json", "backend-api")
+finally:
+    uscha_top.subprocess = real_sub
+if len(seen) != 2 or code != 0 or (rc, said) != (0, "[qa_ledger] snapshot backend-api (post)"):
+    ok = False
+if seen[0][0] != "pytest -q" or seen[0][1].get("shell") is not True:
+    ok = False                     # the human passed a SHELL string; it is run as one (ADR-008)
+if os.path.realpath(seen[0][1].get("cwd") or ".") != os.path.realpath(
+        os.path.join(d26, "repo")):
+    ok = False
+if seen[1][0] != [sys.executable, ENG, "snapshot", "--ledger", "QA-LEDGER.json",
+                  "--repo", "backend-api"]:
+    ok = False
+res["AC-T-26"] = bool(ok)
+
+# --- AC-T-27: while a rerun is in flight the queue on screen was read BEFORE the ingest, so a
+# verdict aimed at it is aimed at the wrong observation. p/f/u produce nothing; navigation and
+# the exits keep working; and 'o' itself is refused, so a second rerun cannot stack on the
+# first. Measured PURELY -- the flag is a caller-supplied boolean, so no clock and no process
+# enters the dispatch.
+spawns[:] = []
+ok = True
+for _key in ("p", "f", "u"):
+    if uscha_top.dispatch_mode(_key, "verdicts", 0, 3, rerunning=True)[4] is not None:
+        ok = False
+    if uscha_top.dispatch_mode(_key, "verdicts", 0, 3, rerunning=True)[1] != 0:
+        ok = False                 # and the cursor does not move either
+if uscha_top.dispatch_mode("p", "verdicts", 0, 3)[4] != "preserve":
+    ok = False                     # the control: with no rerun in flight the key still writes
+if uscha_top.dispatch_mode("j", "verdicts", 0, 3, rerunning=True)[1] != 1:
+    ok = False
+if uscha_top.dispatch_mode("t", "verdicts", 1, 3, rerunning=True)[0] != "board":
+    ok = False
+if uscha_top.dispatch_mode("q", "verdicts", 1, 3, rerunning=True)[2] is not True:
+    ok = False
+if uscha_top.is_rerun_key("o", "board", rerunning=True):
+    ok = False
+if spawns:
+    ok = False
+# the human is TOLD why the key did nothing -- a keypress that vanishes reads as a dropped
+# input, and the next reflex is to press it again.
+banner = uscha_top.rerun_banner("pytest -q", "backend-api")
+if "verdict keys locked" not in banner or "pytest -q" not in banner:
+    ok = False
+if "backend-api" not in banner or "first configured repo" not in banner:
+    ok = False
+res["AC-T-27"] = bool(ok)
+
+# --- AC-T-28 (INV-TOP-03, the other half): a verdict never moves DONE (AC-T-16) and this is
+# the path that does. The fixture's red case is replaced by a green report and the REAL
+# _snapshot_call runs. Stated precisely, because the honest claim is narrower than the
+# obvious one: the AC recount reads the ingested REPORT (_ac_tags reads the file), so DONE
+# moves as soon as the report does -- what the snapshot adds, and what the TUI could not
+# fabricate, is the LEDGER RECORD of that measurement plus the feed event that names it. That
+# record is asserted equal to a manual qa_ledger.py snapshot call's, member for member.
+d_tui, d_man = fixture_copy("ingest-tui"), fixture_copy("ingest-man")
+before28 = top(d_tui)
+green = io.open(os.path.join(d_tui, "repo", "reports", "junit.xml"),
+                encoding="utf-8").read().replace("<failure message=\x22red\x22/>", "")
+for _d in (d_tui, d_man):
+    io.open(os.path.join(_d, "repo", "reports", "junit.xml"), "w",
+            encoding="utf-8").write(green)
+mid28 = top(d_tui)
+os.chdir(d_tui)
+try:
+    rc28, said28 = uscha_top._snapshot_call(ENG, "QA-LEDGER.json", "backend-api")
+finally:
+    os.chdir(HOME)
+after28 = top(d_tui)
+man = subprocess.run([sys.executable, ENG, "snapshot", "--ledger", "QA-LEDGER.json",
+                      "--repo", "backend-api"], cwd=d_man, stdout=subprocess.PIPE,
+                     stderr=subprocess.PIPE)
+ok = rc28 == 0 and man.returncode == 0
+if mid28.get("terminado", {}).get("done") != before28.get("terminado", {}).get("done") + 1:
+    ok = False                     # the report moved the recount -- named, not implied
+if after28.get("terminado", {}).get("done") != mid28.get("terminado", {}).get("done"):
+    ok = False                     # and the ingest did not move it a second time
+if after28.get("debtors", {}).get("machine") != before28.get("debtors", {}).get("machine") - 1:
+    ok = False
+feed28 = after28.get("events_tail") or []
+if not feed28 or not (feed28[0].get("text") or "").startswith("snapshot backend-api"):
+    ok = False                     # the newest event is the ingest that just happened
+led_a = json.loads(io.open(os.path.join(d_tui, "QA-LEDGER.json"), encoding="utf-8").read())
+led_b = json.loads(io.open(os.path.join(d_man, "QA-LEDGER.json"), encoding="utf-8").read())
+snap_a = led_a["repos"]["backend-api"]["snapshots"][-1]
+snap_b = led_b["repos"]["backend-api"]["snapshots"][-1]
+
+
+def strip_clocks(rec):
+    """The wall clocks a subprocess reads for itself: the record's own `at` and the mtime of
+    the report file, which is the moment the copy was made. Everything else -- the test
+    counts, the coverage block, the LOC block, the freshness verdict, the origin -- must be
+    equal, and IS what makes the two calls the same call."""
+    out = json.loads(json.dumps(rec))
+    out.pop("at", None)
+    for rep in ((out.get("tests") or {}).get("reports") or []):
+        rep.pop("mtime_ns", None)
+        rep.pop("mtime", None)
+    return out
+
+
+if json.dumps(strip_clocks(snap_a), sort_keys=True) != \
+        json.dumps(strip_clocks(snap_b), sort_keys=True):
+    ok = False
+for _snap in (snap_a, snap_b):
+    if not isinstance(_snap.get("at"), str):
+        ok = False
+    if not (_snap.get("tests") or {}).get("reports"):
+        ok = False                 # the stripped members were really there
+step_a, step_b = dict(led_a["steps"][-1]), dict(led_b["steps"][-1])
+step_a.pop("at", None)
+step_b.pop("at", None)
+if step_a != step_b or step_a.get("kind") != "snapshot":
+    ok = False
+res["AC-T-28"] = bool(ok)
+
+# --- AC-T-29: the structural half plus the read-only pane. Three engine spawns exist in this
+# module and no more, each reached from exactly ONE call site with no loop above it -- the
+# same proof AC-T-15 makes for the verdict, extended to the two ADR-037 boundaries. And the
+# 'd' pane is pinned by golden frames, including the case that matters most: no recorded run
+# renders as "no run recorded", never as a clean board.
+src = io.open(TUI, encoding="utf-8").read()
+tree = ast.parse(src)
+
+
+def calls_to(node, name):
+    return [c for c in ast.walk(node)
+            if isinstance(c, ast.Call)
+            and (getattr(c.func, "attr", None) or getattr(c.func, "id", None)) == name]
+
+
+ok = True
+for _name in ("_curate_call", "_snapshot_call", "_rerun_call", "run_rerun"):
+    if len(calls_to(tree, _name)) != 1:
+        ok = False                 # one call site each: curate, snapshot, the human's command
+for nd in ast.walk(tree):
+    if isinstance(nd, (ast.For, ast.While, ast.AsyncFor)):
+        for _name in ("_curate_call", "_snapshot_call", "_rerun_call", "run_rerun"):
+            if calls_to(nd, _name):
+                ok = False         # and none of them under a loop
+if src.count(chr(34) + "snapshot" + chr(34)) != 1:
+    ok = False                     # exactly ONE place builds a snapshot call
+# ...and the claim itself is counted, not just its three named halves. The module spawns FOUR
+# times: the three ADR-037/033 boundaries above plus the ONE read-only top --json read in
+# load_state (ADR-032). The docs used to say "three spawns exist in uscha_top.py" full stop,
+# which anyone grepping the module could falsify in one command (1.91.0 blind review) -- so the
+# sentence now counts from the read boundary and the suite pins the total. A FIFTH inlined
+# spawn goes red here whichever side of the boundary it lands on.
+_spawn_sites = [c for c in ast.walk(tree)
+                if isinstance(c, ast.Call)
+                and getattr(c.func, "attr", None) in ("run", "Popen", "call")
+                and getattr(getattr(c.func, "value", None), "id", None) == "subprocess"]
+if len(_spawn_sites) != 4:
+    ok = False                     # three beyond the read boundary, plus the boundary itself
+# the pane: byte-identical against its golden frames, and no escape on the plain path
+st_drift = json.load(io.open(os.path.join(FIX, "state", "state-drift.json"),
+                             encoding="utf-8"))
+for c, r_ in ((100, 32), (80, 24)):
+    p = os.path.join(GOLD, "drift-%dx%d.golden.txt" % (c, r_))
+    g = io.open(p, encoding="utf-8").read().split("\n")[:-1]
+    frame = uscha_top.render(st_drift, (c, r_), sel=0, plain=True, mode="diff")
+    if frame != g or len(frame) != r_ or max(len(ln) for ln in frame) > c:
+        ok = False
+    if [ln for ln in frame if chr(27) in ln or chr(0) in ln]:
+        ok = False
+# what the pane says it measured is what the engine recorded, and only the stale docs travel
+sd = st_drift.get("spec_diff") or {}
+if sd.get("source") != "spec-drift" or sd.get("advisory") is not True:
+    ok = False
+if len(sd.get("stale") or []) != 2 or sd.get("docs_total") != 4:
+    ok = False
+if [s.get("doc") for s in sd["stale"]] != ["SPEC.md", "docs/adr/ADR-001-money-rounding.md"]:
+    ok = False                     # worst lag first
+wide = uscha_top.render(st_drift, (100, 32), sel=0, plain=True, mode="diff")
+if not any("2 of 4 doc(s) stale" in ln for ln in wide):
+    ok = False
+if not any("SPEC.md" in ln and "src/app.py" in ln and "1 of 3" in ln for ln in wide):
+    ok = False                     # one newer file shown, with the cardinality beside it
+# the DIFF pane measures itself in COLUMNS, not codepoints (1.91.0 blind review): _fit_tail used
+# len() and slicing, and the rows were padded with str.ljust, so a CJK path drew two columns per
+# codepoint and walked the LAG column off its position. The committed drift fixture is ASCII (its
+# goldens are unmoved by the fix), so the wide case is spliced onto a COPY here.
+_cjk = chr(0x6587) + chr(0x66F8) + chr(0x5316)          # three East Asian Wide characters
+st_cjk = json.loads(json.dumps(st_drift))
+st_cjk["spec_diff"]["stale"].append(
+    {"doc": "docs/" + _cjk * 12 + "/SPEC-" + _cjk * 8 + ".md",
+     "lag_days": 7.5,
+     "code_ref": "src/" + _cjk * 20 + "/" + _cjk * 10 + ".py",
+     "newer_files_total": 1})   # 1, so no "(1 of N)" suffix re-fits the ref from the LEFT
+for _c, _r in ((100, 32), (80, 24), (61, 20)):
+    _frame = uscha_top.render(st_cjk, (_c, _r), sel=0, plain=True, mode="diff")
+    if len(_frame) != _r:
+        ok = False
+    if max(uscha_top._dw(ln) for ln in _frame) > _c:
+        ok = False                 # DISPLAY width, the whole point -- len() passes here anyway
+    _dw_, _lw_, _cw_ = uscha_top._diff_widths(_c)
+    _k = 2 + _dw_ + 2 + _lw_       # gutter + DOC + separator + LAG, in columns
+    _rows = [ln for ln in _frame if ln.startswith("  ") and ln.strip()
+             and uscha_top._dw(ln) > _k + 2]
+    for _ln in _rows:
+        _head = uscha_top._cut(_ln, _k)
+        if uscha_top._dw(_head) != _k or not _ln[len(_head):].startswith("  "):
+            ok = False             # the LAG column lands on the same cell in every row
+        if _head != _head.rstrip():
+            ok = False             # ...and the lag ENDS on it: a doc field padded by
+            # codepoints puts its own spare spaces where the number belongs, so the whole
+            # row after it walks. Trailing blanks in the head is exactly that walk.
+    if len(_rows) < 4:
+        ok = False                 # header + three stale rows: a check that measured nothing
+    # the CJK row is the last one, and its code_ref is the one _fit_tail governs: the promise
+    # is that the END of the path survives (cut at the front shows the file that moved; cut at
+    # the back shows a directory). Measured in codepoints the tail overflows, the frame-wide
+    # _fit then chops it from the RIGHT, and the file name is what is lost.
+    if not _rows[-1].rstrip().endswith(".py"):
+        ok = False
+
+# the empty case: no record -> it SAYS there is no record and names the command that makes one
+s_null = json.loads(json.dumps(st_drift))
+s_null.pop("spec_diff", None)
+null_frame = uscha_top.render(s_null, (100, 32), sel=0, plain=True, mode="diff")
+if not any("no spec-drift run recorded" in ln for ln in null_frame):
+    ok = False
+if not any("spec-drift --repo backend-api" in ln for ln in null_frame):
+    ok = False
+if any("stale" in ln and "doc(s)" in ln for ln in null_frame):
+    ok = False                     # never a clean board where nobody measured (INV-TOP-05)
+if len(null_frame) != 32:
+    ok = False
+# and the engine emits that null itself: a ledger with no spec-drift record carries no block
+if top(d25).get("spec_diff") is not None:
+    ok = False
+res["AC-T-29"] = bool(ok)
+
+# --- the ENGINE half of _top_spec_diff, on a record that is NOT the null case. Until now only
+# "no record -> null" was measured, so three mutations lived: dropping the SPEC_STALE filter,
+# dropping the worst-lag-first sort, and flipping advisory. A hostile record is spliced into a
+# copied ledger and read back through the real top --json -- the engine, not the renderer.
+okE = True
+d29 = fixture_copy("specdiff")
+_lp = os.path.join(d29, "QA-LEDGER.json")
+_led = json.load(io.open(_lp, encoding="utf-8"))
+_led.pop("integrity", None)        # a deliberate external edit; the engine refuses a stale sum
+_led["spec_drift"] = {
+    "at": "2026-08-18T09:00:00Z", "repo": "backend-api", "max_lag_days": 30,
+    "results": [
+        # a stale doc whose newer_files keeps RECORD order: code_ref is "a newer file", never
+        # the newest one, so the engine must not sort or pick inside the list
+        {"file": "docs/adr/ADR-002.md", "verdict": "SPEC_STALE", "lag_days_actual": 12.5,
+         "newer_files": ["src/b.py", "src/a.py"], "newer_files_total": 2,
+         "spec_committed_at": "2026-01-01T00:00:00Z",
+         "newest_governed_at": "2026-01-13T12:00:00Z"},
+        # same lag as the row above: the DOC NAME is the tie-break, which is what makes the
+        # order deterministic enough for a golden frame to be an oracle
+        {"file": "docs/adr/ADR-001.md", "verdict": "SPEC_STALE", "lag_days_actual": 12.5,
+         "newer_files": ["src/z.py"], "newer_files_total": 1},
+        # the worst lag, LAST in the record: it must come out first
+        {"file": "SPEC.md", "verdict": "SPEC_STALE", "lag_days_actual": 40,
+         "newer_files": "nope", "newer_files_total": "lots"},
+        # SPEC_STALE with no lag recorded: sorts as 0, never raises
+        {"file": "docs/adr/ADR-003.md", "verdict": "SPEC_STALE", "lag_days_actual": None,
+         "newer_files": ["src/c.py"], "newer_files_total": 1},
+        # NOT stale, and carrying the biggest lag in the record on purpose: if the verdict
+        # filter is dropped this row is what lands at the top of the pane
+        {"file": "README.md", "verdict": "CLEAN", "lag_days_actual": 99,
+         "newer_files": ["src/x.py"], "newer_files_total": 1},
+        {"file": "docs/GOVERNANCE.md", "verdict": "UNMAPPED"},
+        "a hand edit left a string in results",      # junk: counted by nobody, crashes nothing
+    ]}
+io.open(_lp, "w", encoding="utf-8").write(json.dumps(_led))
+sdE = top(d29).get("spec_diff") or {}
+if sdE.get("advisory") is not True or sdE.get("source") != "spec-drift":
+    okE = False                    # ADR-005: this record never gates, and it says where it came
+if sdE.get("measured_at") != "2026-08-18T09:00:00Z" or sdE.get("repo") != "backend-api":
+    okE = False
+if sdE.get("max_lag_days") != 30:
+    okE = False
+if sdE.get("docs_total") != 6:
+    okE = False                    # the six DICT rows; the junk string is not a document
+_stale = sdE.get("stale") or []
+if [x.get("doc") for x in _stale] != ["SPEC.md", "docs/adr/ADR-001.md",
+                                      "docs/adr/ADR-002.md", "docs/adr/ADR-003.md"]:
+    okE = False                    # only SPEC_STALE, worst lag first, doc name as tie-break
+_by = dict((x.get("doc"), x) for x in _stale)
+if _by.get("SPEC.md", {}).get("code_ref") is not None:
+    okE = False                    # newer_files was a STRING: a string is iterable, and the
+if _by.get("SPEC.md", {}).get("newer_files_total") != 0:
+    okE = False                    # old code walked its characters and named n as the file
+if _by.get("docs/adr/ADR-002.md", {}).get("code_ref") != "src/b.py":
+    okE = False                    # record order kept, not re-sorted
+if _by.get("docs/adr/ADR-002.md", {}).get("newer_files_total") != 2:
+    okE = False
+if _by.get("docs/adr/ADR-002.md", {}).get("spec_committed_at") != "2026-01-01T00:00:00Z":
+    okE = False
+if _by.get("docs/adr/ADR-003.md", {}).get("lag_days") is not None:
+    okE = False
+res["reg-top-spec-diff-filters-sorts-and-guards"] = bool(okE)
+ok = True
+# the keymap: 'd' enters and leaves, and the pane writes nothing from any key
+if uscha_top.dispatch_mode("d", "board", 3, 8) != ("diff", 0, False, False, None):
+    ok = False
+for _key in ("t", chr(27), "d"):
+    if uscha_top.dispatch_mode(_key, "diff", 0, 0) != ("board", 0, False, False, None):
+        ok = False
+if uscha_top.dispatch_mode("r", "diff", 0, 0)[3] is not True:
+    ok = False
+if uscha_top.dispatch_mode("q", "diff", 0, 0)[2] is not True:
+    ok = False
+for _key in ("p", "f", "u", "v", "o"):
+    if uscha_top.dispatch_mode(_key, "diff", 0, 3)[4] is not None:
+        ok = False
+# the board's hint no longer labels either key as future -- a hint that calls a live key
+# "phase 2" is the same stale claim the frames exist to catch
+board = uscha_top.render(st_drift, (100, 32), sel=0, plain=True)
+if "[d]iff" not in board[-1] or "[o] rerun" not in board[-1] or "phase 2" in board[-1]:
+    ok = False
+res["AC-T-29"] = bool(res.get("AC-T-29", True) and ok)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+sp = os.path.join(side, ".top-cases.json")
+try:
+    prev = json.loads(io.open(sp, encoding="utf-8").read())
+except (OSError, ValueError):
+    prev = {}
+prev.update(res)
+io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T145" in
+  OK*) PASS=$((PASS+1)); echo "  ok   uscha-top phase 2, diff + rerun (AC-T-25,26,27,28,29): $T145";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T145";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -10500,9 +11051,10 @@ for _rtid in ("AC-RT-01", "AC-RT-02", "AC-RT-03", "AC-RT-04"):
     else:
         results.append((_rtid, "round-trip", "T136 case failed or missing"))
 
-# uscha top criteria (ADR-031..034): M1+M2 ids measured by T137/T138 and the M3 ids (13..17)
-# by T141, all through the same sidecar contract. A missing sidecar key is still SKIP =
-# UNMEASURED, never a silent pass -- that is what the whole family is worth.
+# uscha top criteria (ADR-031..034/037): M1+M2 ids measured by T137/T138, the M3 ids (13..17)
+# by T141 and the phase-2 ids (25..29) by T145, all through the same sidecar contract. A
+# missing sidecar key is still SKIP = UNMEASURED, never a silent pass -- that is what the
+# whole family is worth.
 def _top_cases():
     p = os.path.join(kit, "reports", "junit", ".top-cases.json")
     try:
@@ -10511,14 +11063,14 @@ def _top_cases():
     except (OSError, ValueError):
         return None
 _tpc = _top_cases()
-for _n in range(1, 25):
+for _n in range(1, 30):
     _tid = "AC-T-%02d" % _n
     if _tpc is None or _tpc.get(_tid) is None:
         results.append((_tid, "uscha-top", SKIP))
     elif _tpc.get(_tid) is True:
         results.append((_tid, "uscha-top", None))
     else:
-        results.append((_tid, "uscha-top", "T137/T138/T141 case failed or missing"))
+        results.append((_tid, "uscha-top", "T137/T138/T141/T145 case failed or missing"))
 
 # Family-prefixed criteria (ADR-036): measured by T140, same sidecar contract. AC-FA-03 (the
 # bare form pinned byte-identical against the previous engine) reports None without git or the
