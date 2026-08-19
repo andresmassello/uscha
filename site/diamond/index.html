@@ -51,6 +51,10 @@
   }
   .chip.real{color:#16110f; background:var(--pass)}
   .chip.vision{color:#dbe8e6; background:#2a4341; border:1px solid var(--line)}
+  .chip.split{padding:0; overflow:hidden; display:inline-flex; border:1px solid var(--line)}
+  .chip.split span{padding:2px 8px}
+  .chip.split .r{color:#16110f; background:var(--pass)}
+  .chip.split .v{color:#dbe8e6; background:#2a4341}
   .article table td:first-child{min-width:200px}
 </style>
 </head>
@@ -268,10 +272,10 @@
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED stays literal where no verdict exists</td></tr>
         <tr><td>Controlled authoring (EARS+STE) reduces inter-compiler variance</td>
             <td><span class="chip real">REAL</span> (measured, behaviour-first: dense archetypes helped, simple ones null/harm; structural variance alone no longer carries a claim — ADR-027)</td><td>deconfounded across 5 archetypes: REDUCED in 1 (guard −61%, NOISY 0.642), IMPROVED in 1 (scheduler, +1 oracle-green), two nulls, one WORSE · 1.76–1.84 · ADR-019/021/024/025/026/027</td></tr>
-        <tr><td>"The code is <em>fully</em> regenerable from the specs" (arbitrary systems)</td>
-            <td><span class="chip vision">VISION</span></td><td>the bounded half is REAL (row above): the bench ran on 12 archetypes, 9 regenerate to the same system under a withheld oracle, 3 PARTIAL. What stays VISION is the word <em>totally</em> and the words <em>arbitrary systems</em> — generalization past bounded archetypes is the open frontier M5 exists to answer, and no run has answered it yet (ADR-018)</td></tr>
+        <tr><td>"The code is regenerable from the specs" — <em>bounded</em> systems (REAL) vs. <em>arbitrary</em> systems (VISION)</td>
+            <td><span class="chip split"><span class="r">REAL · bounded</span><span class="v">VISION · arbitrary</span></span></td><td>the bounded half is REAL (row above): the bench ran on 12 archetypes, 9 regenerate to the same system under a withheld oracle, 3 PARTIAL. What stays VISION is the word <em>totally</em> and the words <em>arbitrary systems</em> — generalization past bounded archetypes is the open frontier M5 exists to answer, and no run has answered it yet (ADR-018)</td></tr>
         <tr><td>"Drift = incremental reverse discovery, same engine"</td>
-            <td><span class="chip vision">VISION</span></td><td>valid idea, rejected as architecture · ADR-011</td></tr>
+            <td><span class="chip vision">VISION</span></td><td>VISION by decision, not by debt: ADR-011 rejected the shared engine on purpose — spec-drift compares git commit dates (~150 lines, deterministic, zero LLM, advisory); reverse discovery reads code and proposes (LLM judgment). They share nothing; unifying them would make a cheap, un-hallucinatable instrument a client of an LLM. Same idea at two scales, two instruments. Reopens only if the round trip ever grows measured semantic matching — with its own ADR.</td></tr>
       </tbody>
     </table>
     <p>And note the elegant part: the piece of the diamond that <strong>is already real</strong>
