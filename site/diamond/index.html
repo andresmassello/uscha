@@ -78,7 +78,7 @@
     <div class="equation">
       the <b>specs</b> are <span class="a">the source code</span><br>
       the <b>LLM</b> is <span class="a">the compiler</span><br>
-      <b>reverse discovery</b> is <span class="a">the decompiler</span> — one that recovers <b>intent</b>, not just structure
+      <b>reverse discovery</b> is <span class="a">the decompiler</span> — an ordinary decompiler recovers only structure; this one also recovers <b>intent</b>, the <em>why</em>
     </div>
 
     <h2>01 · Before — the code is the truth</h2>
@@ -235,7 +235,7 @@
         <text class="lbl-b" x="576" y="61" text-anchor="middle" style="font-size:20px">&#8776;</text>
         <rect class="box-gem" x="606" y="30" width="94" height="50" rx="6"/>
         <text class="lbl-acc" x="653" y="61" text-anchor="middle">specs?</text>
-        <text class="lbl-s" x="362" y="112" text-anchor="middle">measurable today by ID coverage (uscha-spec) · the semantic version is still vision</text>
+        <text class="lbl-s" x="362" y="112" text-anchor="middle">measured by ID coverage (uscha-spec) and, since 1.90, by static + behaviour recoverability (0.828, bounded) — see the truth-pass table</text>
       </svg>
       <figcaption><b>The methodology's self-test:</b> <code>discovery(forward(specs)) &#8776; specs</code>.
       Nobody in the spec-driven space measures the fidelity of their own methodology; this
@@ -262,7 +262,7 @@
             <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
         <tr><td>Semantic round-trip (does the code <em>say the same thing</em> as the spec?)</td>
             <td><span class="chip real">REAL</span> (measured, bounded)</td><td>recoverability 0.828 measured, behaviour measured in 12/12 — anchors names and behaviour · 1.90 · ADR-030 (amended)</td></tr>
-        <tr><td>Implementation replaceability, demonstrated on bounded systems — independent models regenerate the same system from the canonical package, a withheld oracle certifies it</td>
+        <tr><td>Implementation replaceability, demonstrated on bounded systems — independent compilations regenerate the same system from the canonical package, a withheld oracle certifies it — three Claude-family models (Haiku · Sonnet · Opus), one vendor; cross-vendor is not yet measured</td>
             <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 archetypes (11 Python + 1 JavaScript, one multi-unit): 9 PASS, 3 PARTIAL · 1.74–1.85 · ADR-017/018/020/025/028/029</td></tr>
         <tr><td>Per-compiler fidelity (reverse discovery over each compiled artifact) + human curation of machine-generated code, one verdict per observation</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED stays literal where no verdict exists</td></tr>
@@ -298,7 +298,7 @@
     <table>
       <thead><tr><th>Instrument</th><th>Measured result</th><th>Releases</th></tr></thead>
       <tbody>
-        <tr><td>Diamond Bench — 12 bounded archetypes × 3 blind compilers, each judged by a withheld oracle</td>
+        <tr><td>Diamond Bench — 12 bounded archetypes × 3 blind compilers (Haiku · Sonnet · Opus — one vendor), each judged by a withheld oracle</td>
             <td>9 PASS · 3 PARTIAL. The oracle also caught a convergent aliasing bug two independent compilers shared — a defect no code review of either would have flagged as suspicious.</td>
             <td>1.74–1.83</td></tr>
         <tr><td>Controlled language, deconfounded — free prose vs EARS+STE, same generation, shared oracle, 5 archetypes</td>
@@ -322,8 +322,8 @@
         <tr><td>Curation of machine-generated code — one human verdict per observation, append-only, fail-closed store</td>
             <td>Closure is measured where a human judged and stays the literal UNMEASURED where none did — absence named, never faked.</td>
             <td>1.80</td></tr>
-        <tr><td>The method on itself — every milestone shipped through an independent blind review before release</td>
-            <td>The reviews caught real defects in eight releases of the program (each recorded in that release's changelog); the ninth review came back clean.</td>
+        <tr><td>The method on itself — releases shipped through a blind review before release (independent in most; two, 1.74.0 and 1.75.0, were inline self-reviews and say so in their changelogs)</td>
+            <td>The reviews caught real defects in most releases — each catch is recorded in that release's changelog. An earlier per-release tally published here had no ledger behind the exact count and was withdrawn by the 1.85.0 review; this is what the repo can actually show.</td>
             <td>1.73–1.81</td></tr>
       </tbody>
     </table>

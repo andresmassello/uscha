@@ -554,9 +554,7 @@ converting the principle from slogan to enforced property.
 
 \textbf{Doctrine cross-examination.} The methodology was systematically read
 against classical software-engineering doctrine~\cite{thomas2019pragmatic},
-producing 8 validations, 12 tensions with recorded resolutions, and 10
-actionable improvements --- all ten implemented, each as a separate release
-with its own regression checks. The validations were often word-for-word:
+producing a set of validations, tensions with recorded resolutions, and ten actionable improvements that shipped as separate releases with their own regression checks (the per-item tally lives in the release changelogs rather than in a single committed artifact, and is stated here at that level of evidence). The validations were often word-for-word:
 ``don't assume it --- prove it'' is the ledger's two-tier contract; shared
 mutable resources including \emph{files} motivated the ledger's integrity
 checksum; and the doctrine's warning against trusting enforcement to good
@@ -575,7 +573,7 @@ by the suite. These reviews repeatedly caught real defects prior to
 merge --- the changelogs record the resulting hardening across the series ---
 including: test-file
 classifier gaps that made a documented guarantee an overclaim; a blank-line
-loophole in regression-capture evidence (any non-blank test line counts as
+loophole in regression-check evidence (any non-blank test line counts as
 evidence --- a tripwire, not a judge --- but a blank line must not); a
 review-suite check that passed for the wrong reason (its precondition never
 held, so the assertion was vacuous); silent last-wins semantics on
@@ -657,7 +655,7 @@ frameworks surveyed in~\cite{demacedo2026prompt} along their six taxonomy
 dimensions (with particular attention to the validation and portability axes).
 The missing pieces are operators other than the author and a controlled task
 set; the process instrumentation is already in place. Supporting steps:
-read-only dry runs of all nine stack adapters against real repositories; a
+read-only dry runs of all eleven stack adapters against real repositories; a
 multi-project dogfooding phase; and an evaluation of the rubric layer's
 inter-run variance under anchored versus unanchored criteria, connecting to the
 validation self-awareness agenda of~\cite{ma2026building}. A further direction extends the Lean lens beyond the

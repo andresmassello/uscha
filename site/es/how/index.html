@@ -178,6 +178,7 @@
         <span><i class="lg-human"></i>decisión humana</span>
         <span><i style="border-color:#22403f"></i>paso de skill</span>
       </div>
+      <p class="cap" style="margin-top:12px;font-size:12.5px;color:var(--mute)">INV-GOLDEN-01 se aplica mecánicamente en Claude Code (un hook PreToolUse bloqueante); en los demás targets el kit lo reporta como <em>advisory</em> — el control medido en todos lados es <code>golden-diff</code>, que compara bytes.</p>
     </section>
 
     <!-- ============ DIAGRAMA 3 — CURACIÓN / ORÁCULO ============ -->
@@ -288,7 +289,7 @@
         <g><rect x="150" y="100" width="320" height="60" rx="10" fill="#14282b" stroke="#22403f"/>
           <text x="310" y="120" text-anchor="middle" class="svg-tag" fill="#9db3b0">CUALQUIER MODELO · el LLM compila</text>
           <text x="310" y="140" text-anchor="middle" class="svg-t" font-size="13">compilación ciega → código</text>
-          <text x="310" y="154" text-anchor="middle" class="svg-s" font-size="10">tres modelos, mismo paquete, sin oráculo a la vista</text></g>
+          <text x="310" y="154" text-anchor="middle" class="svg-s" font-size="10">tres modelos de la familia Claude (un solo vendor), mismo paquete, sin oráculo a la vista</text></g>
         <g><rect x="150" y="188" width="320" height="68" rx="10" fill="#14282b" stroke="#4fd6c9" stroke-width="2"/>
           <text x="310" y="208" text-anchor="middle" class="svg-tag" fill="#4fd6c9">MEDIDO · compile-validate</text>
           <text x="310" y="229" text-anchor="middle" class="svg-t" font-size="13">contrato de salida — solo mecánico</text>
@@ -304,7 +305,7 @@
         <g><rect x="150" y="480" width="320" height="62" rx="10" fill="#14282b" stroke="#f5b13d" stroke-dasharray="5 4"/>
           <text x="310" y="500" text-anchor="middle" class="svg-tag" fill="#f5b13d">ADVISORY · bench-roundtrip · bench-r2</text>
           <text x="310" y="520" text-anchor="middle" class="svg-t" font-size="12.5">cuánto del activo se re-ancla desde el código</text>
-          <text x="310" y="536" text-anchor="middle" class="svg-s" font-size="10">recuperabilidad 0.828 (nombres + comportamiento) · piso de ruido NOISY, publicado</text></g>
+          <text x="310" y="536" text-anchor="middle" class="svg-s" font-size="10">0.828 = cuánto del spec se re-ancla desde el código · NOISY = cuánto discrepan reejecuciones del mismo modelo</text></g>
       </svg>
 
       <div class="legend">
@@ -324,6 +325,7 @@
 
     <div class="backlinks">
       <a href="../diamond/index.html">La tesis detrás: el diamante →</a>
+      <a href="../why/index.html">Por qué existe: loop abierto vs. grafo medido →</a>
       <a href="../../docs/uscha-dev-course.html">Hacer el curso →</a>
       <a href="../../docs/paper/uscha-paper.html">Leer el paper (inglés) →</a>
       <a href="../index.html">← Volver al inicio</a>

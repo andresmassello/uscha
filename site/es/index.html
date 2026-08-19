@@ -6,9 +6,9 @@
 <title>uscha — las specs son el código fuente</title>
 <meta name="description" content="Uscha: las specs son el código fuente, el LLM es el compilador, reverse discovery es el decompilador — y el código es un artefacto de build regenerable. Una metodología spec-driven y tool-agnóstica para agentes de código LLM, medida bajo sus propios instrumentos. El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.">
 <link rel="canonical" href="https://uscha.dev/es">
-<link rel="alternate" hreflang="en" href="https://uscha.dev/">
+<link rel="alternate" hreflang="en" href="https://uscha.dev">
 <link rel="alternate" hreflang="es" href="https://uscha.dev/es">
-<link rel="alternate" hreflang="x-default" href="https://uscha.dev/">
+<link rel="alternate" hreflang="x-default" href="https://uscha.dev">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -38,20 +38,19 @@
       <div class="kicker">los specs compilan · el código se regenera · un humano cura</div>
       <h1>Las specs son el código fuente.<br>El código es un <em>artefacto de build</em>.</h1>
       <p class="sub">
-        Uscha trata el paquete de specs como el fuente y al <b>LLM como el compilador</b>;
-        <b>reverse discovery es el decompilador</b> — recupera intención, no solo estructura, y ninguna
-        candidata se promueve sin un veredicto humano. El código pasa a ser regenerable; el paquete de
-        specs, su behavior ledger y su IR son el activo que le sobrevive. Y la tesis está bajo sus
-        propios instrumentos: sistemas acotados se regeneran al mismo comportamiento bajo un oráculo
-        que los compiladores nunca vieron, y cuánta intención sobrevive el round trip es un
-        <b>número medido</b> — publicado con su techo, no una promesa.
+        El paquete de specs es el fuente; <b>el LLM es el compilador</b> — convierte el spec en
+        código, y el código pasa a ser un artefacto de build regenerable. <b>Reverse discovery corre
+        al revés</b>: del código existente de vuelta a specs, con un humano juzgando cada afirmación
+        antes de que cuente. La tesis está medida, no prometida: sistemas acotados se regeneran al
+        mismo comportamiento bajo una prueba que los compiladores nunca vieron, y el número se publica
+        con su techo. El mecanismo completo, con los términos definidos, está un click más abajo.
       </p>
       <p class="motto"><b>El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</b></p>
 
       <div class="install">
         <code><span class="dim">$</span> npx --yes @andresmassello/uscha@latest install --target claude</code>
       </div>
-      <p class="install-targets">Targets: <b>claude · codex · cursor · copilot · gemini · cline · pi</b> — o <b>--target all</b></p>
+      <p class="install-targets">Targets: <b>claude · codex · cursor · copilot · gemini · cline · pi</b> — o <b>--target all</b>. Alcance honesto: Claude Code y Codex están ejercitados contra un agente real; los otros cinco se verifican solo por ubicación + relectura.</p>
 
       <div class="hero-cta">
         <a class="btn primary" href="diamond/index.html">La tesis: el diamante →</a>
@@ -65,7 +64,7 @@
         <span class="badge">Windows · macOS · Linux</span>
         <span class="badge">Python 3.8+ · <b>cero deps</b></span>
         <span class="badge"><b>9</b> skills</span>
-        <span class="badge"><b>7</b> agentes</span>
+        <span class="badge"><b>7</b> agentes · 2 ejercitados, 5 verificados por ubicación</span>
       </div>
     </div>
 
@@ -85,7 +84,8 @@
         Hay dos formas de poner un agente a trabajar sobre código. En el <b>loop abierto</b>, el agente
         decide el recorrido y se pregunta a sí mismo si terminó — nadie afuera lo contradice.
         En el <b>grafo medido</b>, el humano define los caminos posibles y cada compuerta la contesta
-        <b>evidencia medida</b>, no el agente.
+        <b>evidencia medida</b>, no el agente. Es la misma disciplina que, un nivel arriba, deja que el
+        código mismo se vuelva descartable — <a href="diamond/index.html">el diamante</a>.
       </p>
 
       <div class="duel">
@@ -97,7 +97,7 @@
             <li>modifica código</li>
             <li>ejecuta tests</li>
             <li>revisa el resultado</li>
-            <li class="self" data-tag="SE PREGUNTA A SÍ MISMO">¿resolvió?</li>
+            <li class="self" data-tag="SE PREGUNTA A SÍ MISMO">¿resuelto?</li>
             <li>termina — o vuelve a intentar</li>
           </ul>
         </div>
@@ -288,8 +288,8 @@
           <h3>El paper</h3>
           <p>El tratamiento formal: una metodología fact-gated y tool-agnóstica para desarrollo spec-driven con agentes de código LLM.</p>
         </a>
-        <a class="lib-card" href="../docs/field-notes/FIELD-NOTE-001-treasury-migration-ES.md">
-          <span class="lk">field note <span class="fmt">md · EN/ES</span></span>
+        <a class="lib-card" href="field-notes/001-treasury-migration/index.html">
+          <span class="lk">nota de campo <span class="fmt">proyecto real</span></span>
           <h3>Field note 001 — migración de tesorería</h3>
           <p>Un proyecto real, anonimizado: 19 checkboxes declarados, 16 aceptados por el motor — y las cinco veces que el grafo medido contradijo un "terminado" aparente.</p>
         </a>
@@ -305,6 +305,7 @@
         <div class="stat"><div class="v">9</div><div class="k">skills en el kit</div></div>
         <div class="stat"><div class="v">0</div><div class="k">dependencias runtime</div></div>
         <div class="stat"><div class="v">100<small>%</small></div><div class="k">stdlib de Python</div></div>
+        <div class="stat"><div class="v">9<small>/12</small></div><div class="k">arquetipos se regeneran — <a href="diamond/index.html">el bench</a></div></div>
       </div>
       <p class="ev-note">
         El motor es <code>qa_ledger.py</code>: Python puro, sin pip installs. Ingesta evidencia de

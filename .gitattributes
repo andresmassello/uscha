@@ -24,3 +24,7 @@
 *.pdf  binary
 *.jpg  binary
 *.webp binary
+# site pages: LF only (D-6, judges panel 2026-08-19)
+site/**/*.html text eol=lf
+site/*.txt text eol=lf
+site/*.sh text eol=lf

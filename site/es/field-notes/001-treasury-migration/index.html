@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIELD NOTE 001 — Migración de tesorería legacy: lo que atrapó el ledger — uscha</title>
+<meta name="description" content="Estado: proyecto real, anonimizado. Los números son exactos y salen del QA-LEDGER.json, ACCEPTANCE.md e historial git del proyecto. Las atribuciones causales inferidas (no registradas) están marcadas ">
+<link rel="canonical" href="https://uscha.dev/es/field-notes/001-treasury-migration">
+<link rel="alternate" hreflang="en" href="https://uscha.dev/field-notes/001-treasury-migration">
+<link rel="alternate" hreflang="es" href="https://uscha.dev/es/field-notes/001-treasury-migration">
+<link rel="alternate" hreflang="x-default" href="https://uscha.dev/field-notes/001-treasury-migration">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../assets/uscha.css">
+<style>.article ul{margin-top:14px;padding-left:22px;color:var(--fg-soft)} .article li{margin:6px 0} .article h2{margin-top:44px}</style>
+</head>
+<body>
+<header class="bar">
+  <div class="bar-in">
+    <a class="wordmark" href="../../index.html">uscha<b>.</b>dev</a>
+    <nav>
+      <a href="../../index.html#biblioteca">biblioteca</a>
+      <a href="../../how/index.html">cómo funciona</a>
+      <a href="https://github.com/andresmassello/uscha">github</a>
+      <a class="lang" href="../../../field-notes/001-treasury-migration/index.html">EN</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <article class="article">
+    <div class="kicker">nota de campo · proyecto real, anonimizado</div>
+    <h1>FIELD NOTE 001 — Migración de tesorería legacy: lo que atrapó el ledger</h1>
+<p><strong>Estado:</strong> proyecto real, anonimizado. Los números son exactos y salen del <code>QA-LEDGER.json</code>, <code>ACCEPTANCE.md</code> e historial git del proyecto. Las atribuciones causales inferidas (no registradas) están marcadas como tales — ver Limitaciones. <strong>Forma del proyecto:</strong> migración de un sistema de tesorería legacy en PHP (codebase legacy fuertemente customizado) a Java/Spring Boot + SQL Server + React. Perfil de riesgo E (migración). 6 módulos de tesorería, 12 ADRs, 12 invariantes de constitución, 21 criterios de aceptación, 48 fixtures golden capturados del sistema legacy, 44 tests backend al cierre, ~2 días de actividad de ledger en 5 PRs squash-merged. <strong>Honestidad primero:</strong> el sistema <strong>no está en producción</strong>. Readiness final 79.4 (IN PROGRESS); los dos criterios abiertos (AC-13, AC-14) son los gates humanos de cutover, por diseño. Esta nota no es "hicimos un sistema de tesorería en dos días" — es el registro de cada vez que el grafo medido contradijo un "terminado" declarado o aparente.</p>
+<p>---</p>
+<h2>El número de cabecera</h2>
+<p>El agente marcó <strong>19 de 21</strong> checkboxes de aceptación. El motor aceptó <strong>16</strong>.</p>
+<p>Los otros 3 estaban marcados pero sin test verde que los nombre — el ledger los clasifica <em>narrated-only</em> y se niega a contarlos ("measured beats narrated: NO cierra"). Un checkbox es un claim. Evidencia es una corrida de tests que el motor ingirió. La brecha entre 19 y 16 es la tesis completa de la herramienta en una línea.</p>
+<h2>Cinco capturas, desde el ledger</h2>
+<p><strong>A — Readiness clavado en 49/NOT-READY durante 10 snapshots verdes consecutivos.</strong> Los tests crecieron 15 → 40 (todos en verde), cobertura ~80%, durante casi 8 horas — y el score no se movió de 49 en 10 registros consecutivos. Saltó a 82.6 solo inmediatamente después de registrarse el gate golden-diff (48/48 CLEAN). <em>Atribución inferida, números exactos:</em> la config tenía <code>golden_required=true</code> bajo perfil E; la razón del cap no se persiste por entrada (ver Limitaciones y el follow-up de engine). Los tests verdes no pudieron sustituir la única evidencia que el perfil de riesgo exigía.</p>
+<p><strong>B — BLOCKER de constitución: endpoints de plata sin auth.</strong> Los módulos de dinero (ledger, facturas, cuentas) estaban construidos y en verde cuando el gate de constitución registró 1 BLOCKER: INV-12, "no auth/authz on any endpoint yet". Readiness capada. Cerrado cinco iteraciones después con evidencia: <code>@PreAuthorize</code> por grupo en cada controller más un <code>AuthzContractTest</code> probando allow/deny/admin-bypass. Los tests decían listo; un invariante inviolable dijo no.</p>
+<p><strong>C — Review adversarial sobre código verde, ronda 1:</strong> con <code>tests_passed=true</code>, una pasada de code-review reportó 18 hallazgos, <strong>7 en o sobre el severity gate</strong> (BLOCKER/CRITICAL/HIGH) en los paths de plata. 5 arreglados, 8 diferidos con rationale en <code>ISSUES-DEFERRED.md</code>.</p>
+<p><strong>D — Review adversarial sobre código verde, ronda 2:</strong> de nuevo con tests verdes: 6 hallazgos, 2 gated — <strong>#1 BLOCKER: ETL no atómico por fila</strong> (una fila mala abortaba toda la migración) y <strong>#2 HIGH: session fixation (CWE-384)</strong>. Ambos arreglados; 3 MEDIUM diferidos con rationale.</p>
+<p><strong>E — Evidencia stale descartada; el score se desplomó dos veces.</strong> Al re-registrar readiness, el motor rechazó reportes JUnit más viejos que el código: el score cayó de la zona de 82.6 a <strong>53.5</strong>, y recuperó 82.6 solo tras re-correr la suite sobre evidencia fresca; el patrón se repitió al día siguiente (<strong>54.0</strong> → 79.4). Dos snapshots quedaron en el ledger marcados <code>freshness=stale</code>. <em>Atribución inferida del patrón caída-y-recuperación; scores exactos.</em> El verde de ayer no es el verde de hoy.</p>
+<h2>Lo que "tests en verde" solo hubiera shippeado</h2>
+<p>Leyendo B, C y D juntos: un sistema de tesorería con <strong>endpoints de plata sin autenticación, un ETL de migración no atómico y una vulnerabilidad de session fixation — todo con la suite completa en verde.</strong> Nada de eso lo atrapó la suite: lo atraparon el gate de constitución y las pasadas de review adversarial cuyos hallazgos entran al mismo ledger que todo lo demás. Esa es la diferencia práctica entre "el agente corrió tests" y "el grafo está medido".</p>
+<h2>Limitaciones (leer antes de citar)</h2>
+<p>1. <strong>Las causas no se persisten por entrada.</strong> El ledger registra scores e iteraciones, no eventos estructurados de "cap aplicado" / "N reportes stale descartados". Los casos A y E llevan números exactos con causas inferidas, y así están marcados. 2. <strong>Los false dones están subcontados.</strong> Solo se cuentan los rechazos que dejaron evento en el ledger. Las auto-correcciones del agente antes de registrar estado no dejan rastro; el número real de "done" prematuros es probablemente mayor. 3. <strong>Los conteos de review son auto-reportados</strong> por la pasada de review al ledger; no fueron re-verificados independientemente para esta nota. 4. <strong>La cobertura sobreestima la confianza justo donde más importa:</strong> 73.75% es line coverage JaCoCo sobre tests unitarios contra H2, no SQL Server. La fidelidad decimal/dialecto de los módulos de dinero sobre el motor real está explícitamente diferida (Testcontainers MSSQL en <code>ISSUES-DEFERRED.md</code>). 5. <strong>Los golden congelan el comportamiento del sistema legacy</strong> (captura byte-determinística, 46/47 idénticos en dos corridas, 1 scrub declarado). La fidelidad del sistema nuevo se prueba por tests AC-tagged, no por byte-diff — "regresiones atrapadas por el golden sobre el sistema nuevo" no es un claim que este proyecto pueda hacer en términos de bytes. 6. <strong>Los squash-merges colapsaron el historial:</strong> 6 commits en main subrepresentan las iteraciones reales; los loops por feature no se registraron.</p>
+<h2>Follow-up de engine que este proyecto generó</h2>
+<p>La limitación 1 es un hallazgo de producto, no solo un caveat: el motor debería persistir eventos estructurados de <strong>caps de readiness (con razón)</strong> y <strong>descartes de evidencia stale (con conteo)</strong> para que los casos A y E de la próxima field note estén registrados, no inferidos. Cargado como mejora contra el kit.</p>
+<p>---</p>
+<p><em>Método: <a href="https://uscha.dev">Uscha</a> — desarrollo spec-driven con un QA ledger determinístico donde los hechos bloquean y la narración aconseja. Esta nota se extrajo solo-lectura de los artefactos del proyecto; el pedido de extracción y sus reglas se publican junto al kit.</em></p>
+    <p style="margin-top:32px;color:var(--mute);font-size:13px">Fuente canónica, en el repo: <a href="https://github.com/andresmassello/uscha/blob/main/docs/field-notes/FIELD-NOTE-001-treasury-migration-ES.md">docs/field-notes/FIELD-NOTE-001-treasury-migration-ES.md</a>.</p>
+    <div class="backlinks">
+      <a href="../../diamond/index.html">La tesis: el diamante →</a>
+      <a href="../../index.html">← Volver al inicio</a>
+    </div>
+  </article>
+</main>
+<footer>
+  <div class="wrap">
+    <p class="foot-motto">El agente ejecuta · el método gobierna · la evidencia decide · el humano aprueba.</p>
+    <div class="foot-links">
+      <a href="https://github.com/andresmassello/uscha">github.com/andresmassello/uscha</a>
+      <a href="https://www.npmjs.com/package/@andresmassello/uscha">npm · @andresmassello/uscha</a>
+      <a href="mailto:info@uscha.dev">info@uscha.dev</a>
+    </div>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.90.0</p>
+  </div>
+</footer>
+</body>
+</html>

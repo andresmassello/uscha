@@ -91,7 +91,7 @@ automatic tool can perform: a human verdict.
 |---|---|---|
 | Asset → typed graph | `ir-extract`, `ir-render` | the whole package becomes one canonical IR (M2, ADR-015) — deterministic, `UNTYPED` is a measurement not an error |
 | Forward, the compiler | `compile-validate`, `compile-ingest` | any model produces code; the engine validates the output contract and never compiles (M3, ADR-016) |
-| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 9 PASS · 3 PARTIAL**, three models, JS included (M4/M5, ADR-017/018/028/029) |
+| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 9 PASS · 3 PARTIAL**, three Claude-family models (Haiku · Sonnet · Opus — one vendor; cross-vendor not yet measured), JS included (M4/M5, ADR-017/018/028/029) |
 | Reverse, facts | `discover`, `golden-diff` (+ the `/uscha-characterize` skill) | system map + mechanically captured golden; typed candidate observations with evidence class (M1, ADR-013) |
 | Reverse, the human gate | `curate`, `promote`, `curation-check`, `bench-curate` | one verdict per candidate, append-only ledger verified against git; unjudged → `pr-ready` blocked naming it (ADR-009/010, INV-CURATION-01) |
 | Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.828**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |

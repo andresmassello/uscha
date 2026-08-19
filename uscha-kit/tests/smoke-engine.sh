@@ -8042,6 +8042,7 @@ chk "site+README+manifests+docs claims match SYSTEM-FACTS" 0 \
     "$ROOT/.claude-plugin/marketplace.json" "$ROOT/uscha-kit/.claude-plugin/plugin.json" \
     "$ROOT/docs/uscha-claude-code-doc.html" "$ROOT/docs/uscha-claude-code-doc-EN.html" \
     "$ROOT/site/docs/uscha-claude-code-doc.html" "$ROOT/site/docs/uscha-claude-code-doc-EN.html" \
+    "$ROOT/docs/paper/uscha-paper.html" "$ROOT/docs/uscha-dev-course.html" "$ROOT/docs/uscha-dev-course-EN.html" \
     --out "$ROOT/SYSTEM-FACTS.json"
 
 echo "== T139 (facts table drift): a doc's parser-surface table missing a subcommand row fails facts --check by name =="

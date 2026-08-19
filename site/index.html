@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>uscha — the specs are the source code</title>
 <meta name="description" content="Uscha: the specs are the source code, the LLM is the compiler, reverse discovery is the decompiler — and code is a regenerable build artifact. A spec-driven, tool-agnostic methodology for LLM coding agents, measured under its own instruments. The agent executes · the method governs · evidence decides · the human approves.">
-<link rel="canonical" href="https://uscha.dev/">
-<link rel="alternate" hreflang="en" href="https://uscha.dev/">
+<link rel="canonical" href="https://uscha.dev">
+<link rel="alternate" hreflang="en" href="https://uscha.dev">
 <link rel="alternate" hreflang="es" href="https://uscha.dev/es">
-<link rel="alternate" hreflang="x-default" href="https://uscha.dev/">
+<link rel="alternate" hreflang="x-default" href="https://uscha.dev">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -38,20 +38,19 @@
       <div class="kicker">specs compile · code regenerates · a human curates</div>
       <h1>The specs are the source code.<br>The code is a <em>build artifact</em>.</h1>
       <p class="sub">
-        Uscha treats the spec package as the source and the <b>LLM as the compiler</b>;
-        <b>reverse discovery is the decompiler</b> — it recovers intent, not just structure, and no
-        candidate is promoted without a human verdict. Code becomes regenerable; the spec package,
-        its behavior ledger and its IR are the asset that survives it. And the thesis is under its
-        own instruments: bounded systems regenerate to the same behavior under an oracle the
-        compilers never saw, and how much intent survives the round trip is a <b>measured
-        number</b> — published with its ceiling, not a promise.
+        The spec package is the source; <b>the LLM is the compiler</b> — it turns the spec into
+        code, and the code becomes a regenerable build artifact. <b>Reverse discovery runs the other
+        way</b>: from existing code back to specs, with a human judging every claim before it counts.
+        The thesis is measured, not promised: bounded systems regenerate to the same behavior under a
+        test the compilers never saw, and the number is published with its ceiling. The full
+        mechanism, terms defined, is one click below.
       </p>
       <p class="motto"><b>The agent executes · the method governs · evidence decides · the human approves.</b></p>
 
       <div class="install">
         <code><span class="dim">$</span> npx --yes @andresmassello/uscha@latest install --target claude</code>
       </div>
-      <p class="install-targets">Targets: <b>claude · codex · cursor · copilot · gemini · cline · pi</b> — or <b>--target all</b></p>
+      <p class="install-targets">Targets: <b>claude · codex · cursor · copilot · gemini · cline · pi</b> — or <b>--target all</b>. Honest scope: Claude Code and Codex are exercised against a real agent; the other five are verified by placement + read-back only.</p>
 
       <div class="hero-cta">
         <a class="btn primary" href="diamond/index.html">The thesis: the diamond →</a>
@@ -65,7 +64,7 @@
         <span class="badge">Windows · macOS · Linux</span>
         <span class="badge">Python 3.8+ · <b>zero deps</b></span>
         <span class="badge"><b>9</b> skills</span>
-        <span class="badge"><b>7</b> agents</span>
+        <span class="badge"><b>7</b> agents · 2 exercised, 5 placement-verified</span>
       </div>
     </div>
 
@@ -85,7 +84,8 @@
         There are two ways to put an agent to work on code. In the <b>open loop</b>, the agent
         decides the path and asks itself whether it is done — nothing outside it can contradict it.
         In the <b>measured graph</b>, the human defines the possible paths and every gate is
-        answered by <b>measured evidence</b>, not the agent.
+        answered by <b>measured evidence</b>, not the agent. This is the same discipline that, one
+        level up, lets the code itself become disposable — <a href="diamond/index.html">the diamond</a>.
       </p>
 
       <div class="duel">
@@ -97,7 +97,7 @@
             <li>modify code</li>
             <li>run tests</li>
             <li>review the result</li>
-            <li class="self" data-tag="ASKS ITSELF">solved?</li>
+            <li class="self" data-tag="ASKS ITSELF">resolved?</li>
             <li>done — or try again</li>
           </ul>
         </div>
@@ -288,8 +288,8 @@
           <h3>The paper</h3>
           <p>The formal treatment: a fact-gated, tool-agnostic methodology for specification-driven development with LLM coding agents.</p>
         </a>
-        <a class="lib-card" href="docs/field-notes/FIELD-NOTE-001-treasury-migration.md">
-          <span class="lk">field note <span class="fmt">md · EN/ES</span></span>
+        <a class="lib-card" href="field-notes/001-treasury-migration/index.html">
+          <span class="lk">field note <span class="fmt">real project</span></span>
           <h3>Field note 001 — treasury migration</h3>
           <p>A real, anonymized project: 19 checkboxes claimed, 16 accepted by the engine — and the five times the measured graph contradicted an apparent "done".</p>
         </a>
@@ -305,6 +305,7 @@
         <div class="stat"><div class="v">9</div><div class="k">skills in the kit</div></div>
         <div class="stat"><div class="v">0</div><div class="k">runtime dependencies</div></div>
         <div class="stat"><div class="v">100<small>%</small></div><div class="k">Python stdlib</div></div>
+        <div class="stat"><div class="v">9<small>/12</small></div><div class="k">archetypes regenerate — <a href="diamond/index.html">the bench</a></div></div>
       </div>
       <p class="ev-note">
         The engine is <code>qa_ledger.py</code>: pure Python, no pip installs. It ingests evidence from
