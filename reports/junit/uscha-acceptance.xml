@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="184" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="195" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -353,6 +353,28 @@
   <testcase classname="uscha.acceptance" name="AC-T-28_uscha-top">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-T-29_uscha-top">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-01_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-02_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-03_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-04_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-05_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-06_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-07_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-08_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-09_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-10_sealed-terminado">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CT-11_sealed-terminado">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-01_family-ids">
   </testcase>

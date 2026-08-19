@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-032: The engine computes the whole projection — one read-only subcommand `top --json` emits every state, cardinality, median and feed line already derived, and a field with no honest source is `null`, never invented
 
-## Status: Accepted (M1 shipped in 1.86.0; feed derivation amended and shipped in 1.88.0 for M2; `observations[]` amended and shipped in 1.89.0 for M3; `spec_diff` + `repos` amended and shipped in 1.91.0 for phase 2 / ADR-037; nullable fields per ADR-035; curated 2026-08-17)
+## Status: Accepted (M1 shipped in 1.86.0; feed derivation amended and shipped in 1.88.0 for M2; `observations[]` amended and shipped in 1.89.0 for M3; `spec_diff` + `repos` amended and shipped in 1.91.0 for phase 2 / ADR-037; `terminado.sealed` amended and shipped in 1.92.0 / ADR-038; nullable fields per ADR-035; curated 2026-08-17)
 
 ## Context
 Decision #1 of this work: the engine computes everything and the TUI only renders
@@ -71,7 +71,10 @@ writes, never runs tests, never calls a model. Shape:
   ],
 
   "counts":   { "measured_pass": 14, "measured_fail": 2, "quarantine": 4, "unmeasured": 4, "traced": 0, "tagged": 0, "total": 24 },
-  "terminado":{ "done": 14, "total": 24, "pct": 58, "unmeasured": 4 },
+  "terminado":{ "done": 14, "total": 24, "pct": 58, "unmeasured": 4,
+                "sealed": { "ok": false,
+                            "reasons": ["stale seal: snapshot at 1a2b3c4d, HEAD is 9f8e7d6c"],
+                            "commit": "9f8e7d6c...", "repo": "backend-api" } },
   "debtors":  { "machine": 2, "you": 4, "untagged": 4 },
   "honesty":  { "measured": 16, "total": 24, "pct": 67 },
   "eta_min":  null,
@@ -117,6 +120,30 @@ ledger already holds; `top` still runs nothing.
   alphabetically sorted list and no per-file dates, so it is "a newer file", never "the newest
   one", and `newer_files_total` carries the real cardinality. `drift_pct` stays `null`: an
   aggregate percentage is still a new metric definition nobody has agreed (ADR-035/3).
+
+**`terminado.sealed`** *(amended 1.92.0 — ADR-038, INV-T1).* Derived at read time from the
+ledger plus the tree, **never stored**: a recorded verdict is a claim about a tree that has moved
+on since, which is the failure mode the field exists to catch. It answers one question — is the
+recorded evidence still bound to the code on disk right now — from three checks over what the
+ledger already carries: the working tree is clean (`git status --porcelain -uall`, ignoring the
+ledger file itself and the report files the last snapshot names), `HEAD` equals that snapshot's
+`origin.commit` (ADR-007), and every report it names still exists and still hashes to the
+`sha256` recorded at ingest (new in 1.92.0, beside the path and mtime already recorded).
+
+- **Three verdicts, never two.** `true` sealed · `false` a MEASURED break, with `reasons[]`
+  naming which · `null` UNMEASURED — no git work tree, no configured repo, no snapshot recorded
+  yet, or a snapshot old enough to carry no hash. A measured break outranks an unmeasured check
+  (fail-closed); an unmeasured check never reads as a pass (INV-TOP-05).
+- **`repo`** names the repo every reason is read against: the FIRST configured one, the same
+  choice `spec_pin` and `repos[]` make. `commit` is the tree's `HEAD` at check time, `null`
+  without git. The block carries **no timestamp of its own**: it is recomputed on every read, so a
+  "checked at" would be a second wall clock beside `generated_at` and two consecutive `top --json`
+  runs would differ in it — which AC-T-24 measures, and which is how the field was caught before
+  it shipped. Everything in the block is deterministic given the ledger and the tree.
+- **What it costs to read.** The hash is taken over the report set the LAST snapshot names — a
+  handful of files the engine already opens — so `top --json` stays a read of bounded size.
+- The same derivation backs the `check-terminado` subcommand (exit 0/1/2). One derivation, two
+  surfaces: a second place that decides TERMINADO is a second place that can disagree.
 
 **Percentages under-claim on rounding.** `terminado.pct` and `honesty.pct` come from one engine
 helper and are capped at **99** whenever the numerator is below the denominator — 999 of 1000 rounds

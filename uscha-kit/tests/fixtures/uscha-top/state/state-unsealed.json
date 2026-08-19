@@ -1,0 +1,153 @@
+{
+  "schema": "uscha-top/v0.1",
+  "project": "backend-api",
+  "spec_pin": {
+    "sha": "7f6ceef",
+    "clean_room_verified": false
+  },
+  "step": 43,
+  "generated_at": "2026-08-19T12:00:00+00:00",
+  "obligations": [
+    {
+      "id": "AC-1",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-2",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-3",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-4",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-5",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    },
+    {
+      "id": "AC-6",
+      "kind": "AC",
+      "state": "MEASURED_PASS",
+      "gate": "junit",
+      "cases_pass": 1,
+      "cases_total": 1,
+      "trace": [],
+      "quarantine_obs": null,
+      "ac": null,
+      "age_hours": null
+    }
+  ],
+  "observations": [],
+  "events_tail": [
+    {
+      "ts": "12:00:00",
+      "level": "info",
+      "text": "snapshot backend-api · phase post"
+    }
+  ],
+  "counts": {
+    "measured_pass": 6,
+    "measured_fail": 0,
+    "quarantine": 0,
+    "unmeasured": 0,
+    "traced": 0,
+    "tagged": 0,
+    "total": 6
+  },
+  "terminado": {
+    "done": 6,
+    "total": 6,
+    "pct": 99,
+    "unmeasured": 0,
+    "sealed": {
+      "ok": false,
+      "reasons": [
+        "evidence altered after ingest: reports/junit.xml"
+      ],
+      "commit": "7f6ceefec84635e6ddc94350e94b18de090ab3fb",
+      "repo": "backend-api"
+    }
+  },
+  "debtors": {
+    "machine": 0,
+    "you": 0,
+    "untagged": 0
+  },
+  "honesty": {
+    "measured": 6,
+    "total": 6,
+    "pct": 100
+  },
+  "eta_min": null,
+  "medians": {
+    "verdict_min": null,
+    "loop_min": null
+  },
+  "checks": {
+    "pass": 6,
+    "fail": 0,
+    "total": 6
+  },
+  "drift_pct": null,
+  "repos": [
+    {
+      "name": "backend-api",
+      "path": "repo"
+    }
+  ],
+  "spec_diff": null,
+  "burnup": {
+    "kind": "score",
+    "weeks": [
+      61,
+      64,
+      70,
+      78,
+      88
+    ]
+  }
+}

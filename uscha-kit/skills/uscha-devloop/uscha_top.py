@@ -131,6 +131,17 @@ ACTIONS = {
     "TAGGED": "machine: run the case",
 }
 
+# INV-TOP-06 (ADR-038): what a row that is green ON PAPER is actually waiting on when the
+# seal is broken. Presentation, like ACTIONS above: the engine says WHAT broke (the reason),
+# this says what the reader does about it, and the mapping is by reason prefix so a new
+# reason class degrades to the generic line instead of to silence.
+SEAL_ACTIONS = (
+    ("stale seal", "seal: snapshot at HEAD"),
+    ("repo subtree dirty", "seal: commit or discard, then snapshot"),
+    ("evidence altered", "seal: re-run the suite, then snapshot"),
+    ("evidence missing", "seal: re-run the suite, then snapshot"),
+)
+
 
 # --------------------------------------------------------------------------- #
 # pure rendering                                                              #
@@ -216,7 +227,15 @@ def _pct_line(terminado):
     """INV-TOP-01: the DONE bar carries an explicit `N unmeasured` suffix whenever anything
     is unmeasured, and the engine has already capped the percentage below 100 while any
     obligation sits outside MEASURED_PASS -- the renderer republishes that fact, it never
-    recomputes it (AC-T-01, AC-T-04, AC-T-23)."""
+    recomputes it (AC-T-01, AC-T-04, AC-T-23).
+
+    INV-TOP-06 (ADR-038) rides on the same line: when the engine's seal is MEASURED broken
+    (`terminado.sealed.ok is False`) the bar says so and names the first reason -- and the
+    percentage beside it is already capped below 100, in the engine, for the same reason the
+    unmeasured cap is (single derivation, AC-T-24). An UNMEASURED seal (`ok is null`: no git
+    work tree, the state of every frozen fixture) adds NOTHING here: the seal is shown only
+    when it is measured, and decorating a header with the absence of a measurement would
+    turn INV-TOP-05's `—` into noise on every board."""
     done = terminado.get("done")
     total = terminado.get("total")
     pct = terminado.get("pct")
@@ -224,7 +243,35 @@ def _pct_line(terminado):
     line = "DONE %s/%s (%s%%)" % (_num(done), _num(total), _num(pct))
     if unm:
         line += " %s %d unmeasured" % (MID, unm)
+    # the state is a FILE a human can hand us (`--state`), so `sealed` is guarded by TYPE and
+    # not merely by truthiness: a string there would answer `.get` with an AttributeError, and a
+    # `reasons` that is a string is iterable -- the frame would name its first CHARACTER as the
+    # reason. Same guards `_top_spec_diff` applies on the engine side, for the same reason.
+    seal = terminado.get("sealed")
+    seal = seal if isinstance(seal, dict) else {}
+    if seal.get("ok") is False:
+        raw = seal.get("reasons")
+        reasons = [r for r in raw if isinstance(r, str) and r] if isinstance(raw, list) else []
+        line += " %s unsealed (%s)" % (MID, _safe(reasons[0]) if reasons
+                                       else "no reason recorded")
     return line
+
+
+def _seal_action(sealed):
+    """The ACTION cell of a row that is green on paper while the seal is broken. Empty
+    whenever the seal is not MEASURED broken -- an unmeasured seal changes no row, and a
+    `sealed` of the wrong TYPE reads as no seal at all rather than raising mid-frame."""
+    seal = sealed if isinstance(sealed, dict) else {}
+    if seal.get("ok") is not False:
+        return ""
+    raw = seal.get("reasons")
+    for reason in (raw if isinstance(raw, list) else []):
+        if not isinstance(reason, str):
+            continue
+        for prefix, action in SEAL_ACTIONS:
+            if reason.startswith(prefix):
+                return action
+    return "seal: re-snapshot the current state"
 
 
 def _burnup_line(burnup, cols):
@@ -264,15 +311,21 @@ def _cases_text(ob):
     return "%s/%s" % (_num(ob.get("cases_pass")), total)
 
 
-def _row(ob, selected):
+def _row(ob, selected, seal_action=""):
     # the three left columns are cut and padded in COLUMNS: an id or state carrying wide
     # characters used to eat its neighbour's field and walk every column after it.
     gutter = "> " if selected else "  "
+    action = ACTIONS.get(ob.get("state"), DASH)
+    # INV-TOP-06: only the rows that CLAIM to be done change, and only while the seal is
+    # measured broken. A failing or unmeasured row already names its own debtor; telling it
+    # about the seal too would bury the thing it is actually waiting for.
+    if seal_action and ob.get("state") == "MEASURED_PASS":
+        action = seal_action
     return "%s%s%s%s%7s%5s  %s" % (
         gutter, _pad(_cut(_safe(ob.get("id") or "?"), 8), 8),
         _pad(_cut(_safe(ob.get("gate") or DASH), 8), 9),
         _pad(_cut(_safe(ob.get("state") or "?"), 14), 15), _cases_text(ob),
-        _num(ob.get("age_hours")), ACTIONS.get(ob.get("state"), DASH))
+        _num(ob.get("age_hours")), action)
 
 
 def _safe(text):
@@ -382,8 +435,9 @@ def _render_board(state, size, sel, plain, status=""):
     top = max(0, top)
 
     table = []
+    seal_action = _seal_action(terminado.get("sealed"))
     for i, ob in enumerate(obligations[top:top + body], start=top):
-        line = _fit(_row(ob, i == sel), cols)
+        line = _fit(_row(ob, i == sel, seal_action), cols)
         table.append(line if plain else _colorize(line, ob.get("state")))
     hidden = len(obligations) - len(table)
     if hidden > 0:

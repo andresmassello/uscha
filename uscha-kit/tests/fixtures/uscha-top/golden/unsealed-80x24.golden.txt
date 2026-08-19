@@ -1,0 +1,24 @@
+uscha top · backend-api                                                 step #43
+────────────────────────────────────────────────────────────────────────────────
+DONE 6/6 (99%) · unsealed (evidence altered after ingest: reports/junit.xml)
+machine owes 0 · you owe 0 · untagged 0 · ETA —
+honesty 6/6 (100%) measured · spec_pin 7f6ceef (not clean-room verified)
+score trend  ▅▆▆▇▇  (readiness score, not closed obligations)
+────────────────────────────────────────────────────────────────────────────────
+  ID      GATE     STATE            CASES  AGE  ACTION
+> AC-1    junit    MEASURED_PASS      1/1    —  seal: re-run the suite, then sn…
+  AC-2    junit    MEASURED_PASS      1/1    —  seal: re-run the suite, then sn…
+  AC-3    junit    MEASURED_PASS      1/1    —  seal: re-run the suite, then sn…
+  AC-4    junit    MEASURED_PASS      1/1    —  seal: re-run the suite, then sn…
+  AC-5    junit    MEASURED_PASS      1/1    —  seal: re-run the suite, then sn…
+  AC-6    junit    MEASURED_PASS      1/1    —  seal: re-run the suite, then sn…
+────────────────────────────────────────────────────────────────────────────────
+feed · 1/1 · newest first · P/F/H/U/I = pass/fail/human/unmeasured/info
+  12:00:00  I  snapshot backend-api · phase post
+
+
+
+
+
+
+[j/k] move · [r] reload · [q] quit · [v] verdicts · [d]iff · [o] rerun

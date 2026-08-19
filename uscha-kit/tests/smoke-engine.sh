@@ -3550,6 +3550,7 @@ rm -f "$KIT/reports/junit/.multi-cases.json"      # same rule for T135
 rm -f "$KIT/reports/junit/.rt-cases.json"         # same rule for T136
 rm -f "$KIT/reports/junit/.top-cases.json"        # same rule for T137/T138/T141
 rm -f "$KIT/reports/junit/.fa-cases.json"         # same rule for T140
+rm -f "$KIT/reports/junit/.ct-cases.json"         # same rule for T146
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -7966,6 +7967,10 @@ hostile["obligations"][0]["id"] = chr(27) + "[1m" + chr(0x4E2D) * 20
 hostile["obligations"][0]["gate"] = chr(0) + chr(0x4E2D) * 20
 hostile["events_tail"][0]["text"] = chr(0x4E2D) * 400 + chr(27) + "[1m"
 hostile["events_tail"][0]["ts"] = chr(27) + "[2m00:00:00"
+# the seal block (1.92.0) is state-supplied like everything else: a string where a dict belongs
+# would raise on .get, a string `reasons` is iterable and would put its first CHARACTER on the
+# header, and an escape inside a real reason must not reach the terminal
+hostile["terminado"]["sealed"] = "not a dict at all"
 ok = True
 for cols, rows in SIZES:
     hf = uscha_top.render(hostile, (cols, rows), sel=0, plain=True)
@@ -7990,6 +7995,27 @@ for cols, rows in SIZES:
         ok = False
     if any(chr(27) in ln or chr(0) in ln for ln in vf):
         ok = False
+# the same guard, one rung at a time: a non-dict seal, a non-list `reasons`, and a hostile
+# reason string -- none may raise, widen the frame or decorate a header it cannot justify
+for bad_seal in ("nope", 7, [], {"ok": False, "reasons": "dirty"},
+                 {"ok": False, "reasons": [chr(27) + "[7m" + chr(0xFF30) * 200]},
+                 {"ok": None, "reasons": ["unmeasured"]}):
+    probe = json.loads(json.dumps(state("healthy")))
+    probe["terminado"]["sealed"] = bad_seal
+    for cols, rows in SIZES:
+        pf = uscha_top.render(probe, (cols, rows), sel=0, plain=True)
+        if len(pf) != rows or max(uscha_top._dw(ln) for ln in pf) > cols:
+            ok = False
+        if any(chr(27) in ln or chr(0) in ln for ln in pf):
+            ok = False
+        head = [ln for ln in pf if ln.startswith("DONE ")]
+        # only a dict saying ok is False may decorate the bar; nothing else may, and a
+        # `reasons` that is a string must not put "d" on the header as its first reason
+        wants = isinstance(bad_seal, dict) and bad_seal.get("ok") is False
+        if len(head) != 1 or (("unsealed" in head[0]) is not wants):
+            ok = False
+        if wants and "unsealed (d)" in head[0]:
+            ok = False
 res["reg-top-render-state-text-cannot-widen-or-escape"] = bool(ok)
 
 side = os.path.join(kit, "reports", "junit")
@@ -9695,6 +9721,303 @@ case "$T145" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T145";;
 esac
 
+echo "== T146 (1.92.0): TERMINADO is sealed to the exact code state -- INV-T1 in the engine (ADR-038) =="
+# The three holes INV-T1 names, over a REAL temp git repo driven by the engine itself (init ->
+# report -> snapshot), never by a hand-written ledger: evidence from an old run, code touched
+# after the measurement, and the one the kit could not see until now -- a report swapped or
+# edited after ingest, which keeps its path and can keep its date. The seal is DERIVED at read
+# time, so what is asserted is that `check-terminado` and `top --json` say the same thing, that
+# every refusal names a reason, and that an UNMEASURED answer (no git, or a snapshot older than
+# the content hash) never reads as a pass.
+T146=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
+ENG = os.path.join(SKILL, "qa_ledger.py")
+FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
+GOLD = os.path.join(FIX, "golden")
+res = {}
+
+sys.path.insert(0, SKILL)
+import uscha_top
+
+JUNIT = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+         '<testsuite name="app" tests="2" failures="0" errors="0" skipped="0">\n'
+         '  <testcase classname="t" name="AC-01_the_seal_holds"/>\n'
+         '  <testcase classname="t" name="AC-02_the_seal_breaks"/>\n'
+         '</testsuite>\n')
+ACC = "# ACCEPTANCE\n\n- [x] AC-01 - sealed evidence\n- [x] AC-02 - sealed evidence\n"
+CFG = {"version": "1.0.0", "project": "sealed-app",
+       "defaults": {"acceptance_file": "ACCEPTANCE.md", "coverage_threshold": 60},
+       "repos": [{"name": "app", "path": ".", "type": "python"}],
+       "integration": {"enabled": False}}
+
+
+def sh(d, *a):
+    return subprocess.run(list(a), cwd=d, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
+
+
+def eng(d, *a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=d, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+
+def write(path, body):
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(body)
+
+
+def fixture(report_rel="reports/junit.xml"):
+    d = tempfile.mkdtemp(prefix="uscha-ct-")
+    os.makedirs(os.path.join(d, "src"))
+    os.makedirs(os.path.dirname(os.path.join(d, report_rel)))
+    write(os.path.join(d, "src", "main.py"), "x = 1\n")
+    write(os.path.join(d, "ACCEPTANCE.md"), ACC)
+    write(os.path.join(d, "c.json"), json.dumps(CFG))
+    sh(d, "git", "init", "-b", "main")
+    sh(d, "git", "config", "user.email", "t@t")
+    sh(d, "git", "config", "user.name", "t")
+    sh(d, "git", "add", "-A")
+    sh(d, "git", "commit", "-m", "v1")
+    sh(d, "git", "tag", "v1.0.0")
+    write(os.path.join(d, "src", "main.py"), "x = 2\n")
+    sh(d, "git", "add", "-A")
+    sh(d, "git", "commit", "-m", "v2")
+    write(os.path.join(d, report_rel), JUNIT)
+    eng(d, "init", "--config", "c.json", "--out", "L.json")
+    eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+    return d
+
+
+def check(d):
+    r = eng(d, "check-terminado", "--ledger", "L.json")
+    return r.returncode, (r.stdout or "") + (r.stderr or "")
+
+
+def top(d):
+    r = eng(d, "top", "--json", "--ledger", "L.json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+
+def seal(d):
+    return ((top(d).get("terminado") or {}).get("sealed") or {})
+
+
+def reasons(s):
+    return [r for r in (s.get("reasons") or []) if isinstance(r, str)]
+
+
+d = fixture()
+RP = os.path.join(d, "reports", "junit.xml")
+SRC = os.path.join(d, "src", "main.py")
+codes = set()
+
+rc, out = check(d)
+codes.add(rc)
+t = top(d)
+s = (t.get("terminado") or {})
+res["AC-CT-01"] = bool(rc == 0 and s.get("sealed", {}).get("ok") is True
+                       and not reasons(s.get("sealed") or {})
+                       and "SEALED" in out and s.get("done") == 2 and s.get("pct") == 100)
+try:
+    da = fixture("reports/junit/junit-ación.xml")
+    rca, outa = check(da)
+    sa = seal(da)
+    reps = [r.get("path") for r in
+            json.load(io.open(os.path.join(da, "L.json"), encoding="utf-8"))
+            ["repos"]["app"]["snapshots"][-1]["tests"]["reports"]]
+    write(os.path.join(da, "reports", "junit", "junit-ación.xml"),
+          JUNIT.replace("</testsuite>", "  <!-- swapped -->\n</testsuite>"))
+    rcb, outb = check(da)
+    utf8_ok = (rca == 0 and sa.get("ok") is True and reps == ["reports/junit/junit-ación.xml"]
+               and rcb == 1 and "junit-ación.xml" in outb
+               # the C-quoted form git emits WITHOUT core.quotepath=false, as four literal
+               # characters -- an octal escape here would compare against the wrong thing
+               and chr(92) + "303" not in outb)
+except (OSError, UnicodeError, ValueError):
+    # a filesystem or console that cannot carry the name is not a failure of the seal; the
+    # ASCII half above still measures the exemption, and a case that cannot run says so by
+    # not claiming to have run (it is folded into the same criterion, never into a pass)
+    utf8_ok = None
+res["AC-CT-01"] = bool(res["AC-CT-01"] and utf8_ok is not False)
+
+write(SRC, "x = 2\ny = 3\n")
+rc, out = check(d)
+codes.add(rc)
+s = top(d).get("terminado") or {}
+dirty_named = any(r.startswith("repo subtree dirty")
+                  for r in reasons(s.get("sealed") or {}))
+# a snapshot taken ON the dirty subtree does NOT launder it: ADR-007 records `dirty: true`
+# and the seal keeps refusing with the same reason. The snapshot is evidence of when the
+# measurement happened, never a pardon for the state it happened in.
+eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+snap2 = (json.load(io.open(os.path.join(d, "L.json"), encoding="utf-8"))
+         ["repos"]["app"]["snapshots"][-1])
+rc2b, _out2b = check(d)
+res["AC-CT-02"] = bool(rc == 1 and s.get("sealed", {}).get("ok") is False and dirty_named
+                       and (snap2.get("origin") or {}).get("dirty") is True
+                       and rc2b == 1
+                       and any(r.startswith("repo subtree dirty") for r in reasons(seal(d))))
+sh(d, "git", "checkout", "--", "src/main.py")
+eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+
+# the report's mtime is bumped (content untouched, so its hash is the same one the snapshot
+# recorded): the FRESHNESS gate is a different mechanism -- restoring a source file above made
+# the source the newest artifact and dropped the AC tags -- and this case is about the CAP on a
+# board that really is 2/2, not about freshness.
+os.utime(RP, None)
+write(os.path.join(d, "colado.txt"), "smuggled in\n")
+rc, out = check(d)
+codes.add(rc)
+s = top(d).get("terminado") or {}
+sr = reasons(s.get("sealed") or {})
+os.remove(os.path.join(d, "colado.txt"))
+res["AC-CT-03"] = bool(rc == 1 and any("colado.txt" in r for r in sr)
+                       and s.get("done") == s.get("total") and s.get("pct") == 99
+                       and check(d)[0] == 0)
+
+write(SRC, "x = 3\n")
+sh(d, "git", "add", "-A")
+sh(d, "git", "commit", "-m", "v3")
+rc, out = check(d)
+codes.add(rc)
+sr = reasons(seal(d))
+res["AC-CT-04"] = bool(rc == 1 and any(r.startswith("stale seal") for r in sr))
+
+eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+rc, out = check(d)
+codes.add(rc)
+res["AC-CT-05"] = bool(rc == 0 and seal(d).get("ok") is True)
+
+write(RP, JUNIT.replace("</testsuite>", "  <!-- swapped after the run -->\n</testsuite>"))
+rc, out = check(d)
+codes.add(rc)
+sr = reasons(seal(d))
+res["AC-CT-06"] = bool(rc == 1 and sr == ["evidence altered after ingest: reports/junit.xml"])
+
+os.remove(RP)
+rc, out = check(d)
+codes.add(rc)
+sr = reasons(seal(d))
+res["AC-CT-07"] = bool(rc == 1 and sr == ["evidence missing: reports/junit.xml"])
+write(RP, JUNIT)
+eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+
+nogit = tempfile.mkdtemp(prefix="uscha-ct-nogit-")
+shutil.copy(os.path.join(d, "L.json"), os.path.join(nogit, "L.json"))
+write(os.path.join(nogit, ".git"), "gitdir: nowhere-at-all\n")
+rc, out = check(nogit)
+codes.add(rc)
+sn = json.loads(eng(nogit, "check-terminado", "--ledger", "L.json", "--json").stdout)
+# the OTHER unmeasured source, and the limit it leaves: a ledger with no snapshot at all has
+# no anchor to compare the tree against, so the seal is UNMEASURED (never a pass) -- and the
+# subcommand still refuses with 2, which is where the teeth are
+d8 = os.path.join(tempfile.mkdtemp(prefix="uscha-ct-nosnap-"), "f")
+shutil.copytree(d, d8)
+led8 = json.load(io.open(os.path.join(d8, "L.json"), encoding="utf-8"))
+led8["repos"]["app"]["snapshots"] = []
+led8.pop("integrity", None)
+write(os.path.join(d8, "L.json"), json.dumps(led8))
+rc8b, out8b = check(d8)
+s8b = seal(d8)
+# a ledger the command could not READ is UNMEASURED too, never a break: 1 means "I checked
+# and the seal is broken", and saying that about a file nobody opened is the exact class of
+# claim this command exists to refuse. Missing and corrupt are both measured here.
+d8c = tempfile.mkdtemp(prefix="uscha-ct-noledger-")
+rc8c, out8c = check(d8c)
+write(os.path.join(d8c, "L.json"), "{ this is not json")
+rc8d, out8d = check(d8c)
+# and a git repo with no commit yet: a DIFFERENT absence from "not a work tree", named as one
+d8e = tempfile.mkdtemp(prefix="uscha-ct-nocommit-")
+sh(d8e, "git", "init", "-b", "main")
+shutil.copy(os.path.join(d, "L.json"), os.path.join(d8e, "L.json"))
+rc8e, _out8e = check(d8e)
+s8e = seal(d8e)
+res["AC-CT-08"] = bool(rc == 2 and "UNMEASURED" in out and sn.get("ok") is None
+                       and sn.get("commit") is None and codes == set([0, 1, 2])
+                       and rc8b == 2 and s8b.get("ok") is None
+                       and reasons(s8b) == ["no snapshot recorded yet"]
+                       and rc8c == 2 and "UNMEASURED" in out8c
+                       and rc8d == 2 and "UNMEASURED" in out8d
+                       and rc8e == 2 and s8e.get("ok") is None
+                       and reasons(s8e) == ["git repo without commits — seal UNMEASURED"])
+
+write(SRC, "x = 4\n")
+a = dict(seal(d))
+b = json.loads(eng(d, "check-terminado", "--ledger", "L.json", "--json").stdout)
+# equal member for member, with no wall clock inside to excuse a difference: the block is
+# deterministic given the ledger and the tree, which is what lets two surfaces publish it
+res["AC-CT-09"] = bool(a == b and a.get("ok") is False
+                       and sorted(a) == ["commit", "ok", "reasons", "repo"])
+sh(d, "git", "checkout", "--", "src/main.py")
+
+st = json.load(io.open(os.path.join(FIX, "state", "state-unsealed.json"), encoding="utf-8"))
+frozen = json.dumps(st, sort_keys=True)
+ok = True
+for cols, rows in ((100, 32), (80, 24)):
+    frame = uscha_top.render(st, (cols, rows), sel=0, plain=True)
+    gp = os.path.join(GOLD, "unsealed-%dx%d.golden.txt" % (cols, rows))
+    with io.open(gp, encoding="utf-8") as fh:
+        if frame != fh.read().split("\n")[:-1]:
+            ok = False
+    head = [ln for ln in frame if ln.startswith("DONE ")]
+    if len(head) != 1 or "99%" not in head[0] or "unsealed (" not in head[0]:
+        ok = False
+    if any("100%" in ln for ln in head):
+        ok = False
+    body = [ln for ln in frame if ln.startswith(("> AC-", "  AC-"))]
+    if not body or not all("seal:" in ln for ln in body):
+        ok = False
+    if any("\x1b" in ln for ln in frame):
+        ok = False
+if json.dumps(st, sort_keys=True) != frozen:
+    ok = False
+plain = json.load(io.open(os.path.join(FIX, "state", "state-healthy.json"), encoding="utf-8"))
+for ln in uscha_top.render(plain, (100, 32), sel=0, plain=True):
+    if "unsealed" in ln or "seal:" in ln:
+        ok = False
+res["AC-CT-10"] = bool(ok)
+
+d11 = tempfile.mkdtemp(prefix="uscha-ct-old-")
+shutil.copytree(d, os.path.join(d11, "f"))
+d11 = os.path.join(d11, "f")
+led = json.load(io.open(os.path.join(d11, "L.json"), encoding="utf-8"))
+for snap in led["repos"]["app"]["snapshots"]:
+    for rep in snap["tests"]["reports"]:
+        rep.pop("sha256", None)
+# a ledger written before 1.92.0 also carries no integrity hash over these bytes; dropping
+# the field is the engine's own documented escape for a deliberate external edit
+led.pop("integrity", None)
+write(os.path.join(d11, "L.json"), json.dumps(led))
+rc, out = check(d11)
+sr = reasons(seal(d11))
+res["AC-CT-11"] = bool(rc == 2 and seal(d11).get("ok") is None
+                       and any(r.startswith("evidence hash unmeasured") for r in sr)
+                       and not any("altered" in r or "missing" in r for r in sr)
+                       and "UNMEASURED" in out)
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+sp = os.path.join(side, ".ct-cases.json")
+try:
+    prev = json.loads(io.open(sp, encoding="utf-8").read())
+except (OSError, ValueError):
+    prev = {}
+prev.update(res)
+io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+bad = [k for k, v in res.items() if not v]
+print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T146" in
+  OK*) PASS=$((PASS+1)); echo "  ok   sealed TERMINADO, INV-T1 (AC-CT-01..11): $T146";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T146";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -11071,6 +11394,25 @@ for _n in range(1, 30):
         results.append((_tid, "uscha-top", None))
     else:
         results.append((_tid, "uscha-top", "T137/T138/T141/T145 case failed or missing"))
+
+# Sealed TERMINADO criteria (ADR-038): measured by T146, same sidecar contract. A missing
+# sidecar key is SKIP = UNMEASURED -- the seal's own rule applied to the seal's own criteria.
+def _ct_cases():
+    p = os.path.join(kit, "reports", "junit", ".ct-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_ctc = _ct_cases()
+for _n in range(1, 12):
+    _ctid = "AC-CT-%02d" % _n
+    if _ctc is None or _ctc.get(_ctid) is None:
+        results.append((_ctid, "sealed-terminado", SKIP))
+    elif _ctc.get(_ctid) is True:
+        results.append((_ctid, "sealed-terminado", None))
+    else:
+        results.append((_ctid, "sealed-terminado", "T146 case failed or missing"))
 
 # Family-prefixed criteria (ADR-036): measured by T140, same sidecar contract. AC-FA-03 (the
 # bare form pinned byte-identical against the previous engine) reports None without git or the

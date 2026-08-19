@@ -459,6 +459,18 @@ BLOCKER/CRITICAL + no open escalation), never self-declared — if it exits 1, t
 output lists exactly which facts are missing; do NOT open the PR, close the gap.
 A `spike/*` branch NEVER passes this gate (kit 1.19.0): spike code is disposable
 by contract — its only legitimate output is an ADR with lessons, never a merge.
+- **Before declaring TERMINADO, run the seal (kit 1.92.0, INV-T1 / ADR-038):**
+
+```bash
+python3 $QL check-terminado          # 0 = sealed · 1 = broken · 2 = UNMEASURED
+```
+
+  It recomputes, from the ledger and the tree, whether the recorded evidence still belongs to
+  the code on disk: the repo subtree clean, `HEAD` equal to the last snapshot's commit, every
+  ingested report still hashing to what was recorded. **Exit 1** — do not declare TERMINADO:
+  re-snapshot on the CURRENT state (`snapshot --repo <REPO> --phase post`) and record why the
+  seal broke. **Exit 2** — the seal is UNMEASURED (no git, or no snapshot recorded): say so
+  plainly; an answer nobody could measure is not a TERMINADO either.
 - Ensure conventional-commit history is clean.
 - Open the PR(s). Confirm CI is green.
 - **STOP.** Present the PR link(s) and wait for the human to merge.

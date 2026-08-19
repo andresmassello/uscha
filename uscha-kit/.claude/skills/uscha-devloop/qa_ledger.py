@@ -704,7 +704,14 @@ def _source_newest_mtime(repo_path):
 def _test_evidence_provenance(repo_path, repo_type):
     """Explain which JUnit reports back a snapshot and whether they are newer
     than relevant source/test files. No discoverable source is explicitly
-    uncorrelated-but-usable to preserve synthetic/report-only workflows."""
+    uncorrelated-but-usable to preserve synthetic/report-only workflows.
+
+    Since 1.92.0 (ADR-038) each report also carries its CONTENT hash. Path and mtime
+    answer "which file, and was it written after the source"; they cannot answer "is
+    this still the file that was ingested" -- a log swapped or edited after the run
+    keeps its name and can keep its date. The hash is taken over the same files this
+    function already selects and the parser already reads: no new file is opened, and
+    `None` (unreadable) is recorded as absence, never as a match."""
     files = _junit_files_for(repo_path, repo_type)
     reports = []
     for path in files:
@@ -717,6 +724,7 @@ def _test_evidence_provenance(repo_path, repo_type):
             "mtime_ns": mtime_ns,
             "mtime": datetime.fromtimestamp(
                 mtime_ns / 1_000_000_000, timezone.utc).isoformat(),
+            "sha256": _sha256_file(path),
         })
     if not reports:
         status = "not-applicable" if repo_type == "flutter" else "missing"
@@ -8639,6 +8647,205 @@ def _top_spec_diff(ledger):
             "source": "spec-drift"}
 
 
+SEAL_NO_GIT = "no git work tree — seal UNMEASURED"
+SEAL_NO_COMMIT = "git repo without commits — seal UNMEASURED"
+
+
+def _seal_git(repo_path, *argv):
+    """One git read for the seal, or None. Same OSError posture as `_evidence_origin`:
+    git absent, or a repo path that does not exist, is an ordinary state of the world and
+    must degrade to UNMEASURED, never take down the command it only annotates."""
+    try:
+        r = subprocess.run(["git"] + list(argv), cwd=repo_path, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return r if r.returncode == 0 else None
+
+
+def _seal_rel(work_tree, path):
+    """`path` as git names it: relative to the work tree root, forward slashes, or None
+    when it falls outside the tree.
+
+    BOTH sides go through `realpath` first. On Windows one API answers with an 8.3 short
+    name (`RUNNER~1`) and another with the long one, and `relpath` between the two yields
+    `..\\..` for a file plainly inside the tree — the CI-only failure paid for on
+    2026-08-02. A None here can only WITHHOLD an exemption, so the seal fails closed."""
+    try:
+        rel = os.path.relpath(os.path.realpath(path), os.path.realpath(work_tree))
+    except (OSError, ValueError):
+        return None
+    rel = rel.replace("\\", "/")
+    return None if rel == ".." or rel.startswith("../") else rel
+
+
+def _porcelain_paths(text):
+    """Every path named by `git status --porcelain -uall`, rename destinations included.
+
+    A path with special characters comes back C-quoted; the quotes are stripped and any
+    escape inside is left as-is. That can only fail to MATCH an exemption, which leaves the
+    seal broken — the safe direction: an unrecognized change is dirt, never a pass."""
+    out = []
+    for line in (text or "").splitlines():
+        if len(line) < 4:
+            continue
+        for part in line[3:].split(" -> "):
+            part = part.strip()
+            if len(part) >= 2 and part[0] == '"' and part[-1] == '"':
+                part = part[1:-1]
+            if part:
+                out.append(part.replace("\\", "/"))
+    return out
+
+
+def _sealed_state(ledger, ledger_path):
+    """INV-T1 (ADR-038): is the recorded evidence bound to the code state on disk RIGHT NOW?
+
+    Derived at read time, never written: nothing here creates a file, and re-deriving it is
+    the only way it can be trusted — a stored verdict is a claim about a tree that has moved
+    on since. Three questions, all answerable from what the ledger already carries:
+
+      1. is the TRACKED REPO'S SUBTREE clean -- `git status ... -- .` inside the configured
+         repo path, the same per-path scoping `_evidence_origin` uses (ADR-007), so a
+         monorepo sibling's edit is not this repo's dirt -- ignoring the ledger itself and
+         the report files the last snapshot names (those two are the seal's own footprint,
+         exactly as the reference `sh` package exempts `EVIDENCIA.md` and the logs it hashes);
+      2. is `HEAD` the commit that snapshot was taken at (`origin.commit`, ADR-007);
+      3. does every report the snapshot names still exist and still hash to what was
+         recorded at ingest (`sha256`, added in 1.92.0).
+
+    Three verdicts, never two: `True` sealed, `False` a MEASURED break (the reasons say
+    which), `None` UNMEASURED — no git work tree, or a snapshot old enough to predate the
+    content hash. A measured break outranks an unmeasured check (fail-closed); an unmeasured
+    check never reads as a pass (INV-TOP-05). The repo is the FIRST configured one, the same
+    choice `_top_spec_pin` and `_top_repos` make, and it is named in the `repo` member so
+    every reason below is read against it.
+
+    The block carries NO timestamp of its own. It is recomputed on every read, so a
+    "checked at" would be a second wall clock inside a payload whose only other one is
+    `generated_at` -- and two consecutive `top --json` runs must differ in nothing else
+    (AC-T-24 measures exactly that, and caught this before it shipped)."""
+    out = {"ok": None, "reasons": [], "commit": None, "repo": None}
+    repos = (ledger.get("config", {}) or {}).get("repos") or []
+    if not repos:
+        out["reasons"].append("no repo configured — seal UNMEASURED")
+        return out
+    name = repos[0].get("name")
+    path = repos[0].get("path", ".")
+    out["repo"] = _top_clean(name) if name else None
+
+    top = _seal_git(path, "rev-parse", "--show-toplevel")
+    if top is None or not top.stdout.strip():
+        out["reasons"].append(SEAL_NO_GIT)
+        return out
+    head = _seal_git(path, "rev-parse", "HEAD")
+    if head is None or not head.stdout.strip():
+        # a git tree with no commit yet: `rev-parse HEAD` fails on an unborn branch. It is a
+        # DIFFERENT absence from "not a work tree" and the reason says so -- the verdict is
+        # the same UNMEASURED, but a reason that misnames the cause sends the reader to the
+        # wrong fix.
+        out["reasons"].append(SEAL_NO_COMMIT)
+        return out
+    head_sha = head.stdout.strip()
+    work_tree = top.stdout.strip()
+    out["commit"] = head_sha
+
+    snaps = ((ledger.get("repos") or {}).get(name) or {}).get("snapshots") or []
+    if not snaps:
+        # UNMEASURED, not broken. The reference `sh` package calls a missing EVIDENCIA.md a
+        # rejection, and that is right for a file whose only job is to be the seal -- but a
+        # snapshot is the INGEST record, and with none recorded there is nothing to compare
+        # the tree against: not "the evidence is stale", not "the evidence was altered",
+        # simply no anchor. Calling that a break would also make the seal non-deterministic
+        # for a board whose evidence is read live from reports (the `top` fixtures are
+        # exactly that), and INV-TOP-05 already fixes the posture: absence renders as
+        # absence. The teeth stay where they bite -- `check-terminado` exits 2, so a hook or
+        # a human gating on exit 0 still refuses. The LIMIT this leaves is stated out loud in
+        # SPEC §4: a board at 100% with no snapshot at all carries no seal marker.
+        out["reasons"].append("no snapshot recorded yet")
+        return out
+    snap = snaps[-1]
+
+    failures, unmeasured = [], []
+    snap_commit = (snap.get("origin") or {}).get("commit")
+    if not snap_commit:
+        unmeasured.append("snapshot recorded no commit — seal UNMEASURED")
+    elif snap_commit != head_sha:
+        failures.append("stale seal: snapshot at %s, HEAD is %s"
+                        % (snap_commit[:8], head_sha[:8]))
+
+    reports = [r for r in ((snap.get("tests") or {}).get("reports") or [])
+               if isinstance(r, dict) and r.get("path")]
+    exempt = set()
+    for candidate in [ledger_path] + [os.path.join(path, r["path"]) for r in reports]:
+        rel = _seal_rel(work_tree, candidate)
+        if rel:
+            exempt.add(rel)
+    # `core.quotepath=false`: without it git C-quotes any non-ASCII path, so a report named
+    # `junit-acción.xml` would appear in the reason as `junit-acciÃ³n.xml` -- a reason
+    # nobody can act on, and an exemption that cannot match. Set on the command, never in the
+    # user's config: the engine reads git, it does not configure it.
+    st = _seal_git(path, "-c", "core.quotepath=false",
+                   "status", "--porcelain", "-uall", "--", ".")
+    if st is None:
+        unmeasured.append("repo subtree state unreadable — seal UNMEASURED")
+    else:
+        dirty = sorted(set(_porcelain_paths(st.stdout)) - exempt)
+        if dirty:
+            failures.append("repo subtree dirty: changes no snapshot covers (%s)" % dirty[0])
+
+    for r in reports:
+        rel, full = r["path"], os.path.join(path, r["path"])
+        if not os.path.isfile(full):
+            failures.append("evidence missing: %s" % rel)
+        elif not r.get("sha256"):
+            unmeasured.append("evidence hash unmeasured: %s — no hash recorded at ingest "
+                              "(older snapshot, or the file was unreadable)" % rel)
+        elif _sha256_file(full) != r["sha256"]:
+            failures.append("evidence altered after ingest: %s" % rel)
+
+    out["reasons"] = failures + unmeasured
+    out["ok"] = False if failures else (None if unmeasured else True)
+    return out
+
+
+def cmd_check_terminado(args):
+    """The enforcement side of INV-T1: the SAME `_sealed_state` derivation `top --json`
+    publishes, with an exit code a hook or a human can act on. It measures the tree and
+    prints; it writes nothing and it decides nothing else.
+
+    0 = sealed · 1 = a measured break · 2 = UNMEASURED (no git work tree, no configured
+    repo, a snapshot with no recorded hash -- or no readable ledger at all). 2 is the
+    reference script's error class: "I could not answer" is not "yes".
+
+    A missing or corrupt ledger is UNMEASURED, not a break: `_load` exits 1 by design, and 1
+    here means "I checked and the seal is broken". Reporting "not sealed" for a file the
+    command never managed to read would be a verdict on evidence nobody looked at -- the
+    exact failure this command exists to catch."""
+    try:
+        ledger = _load(args.ledger)
+    except SystemExit as exc:
+        message = exc.code if isinstance(exc.code, str) else None
+        print(message or "[qa_ledger] check-terminado: ledger '%s' unreadable" % args.ledger)
+        print("[qa_ledger] check-terminado: UNMEASURED — no readable ledger, no seal.")
+        sys.exit(2)
+    sealed = _sealed_state(ledger, args.ledger)
+    ok = sealed.get("ok")
+    if getattr(args, "json", False):
+        print(json.dumps(sealed, indent=2, ensure_ascii=False))
+    else:
+        verdict = "SEALED" if ok is True else ("UNSEALED" if ok is False else "UNMEASURED")
+        where = " at %s" % sealed["commit"][:8] if sealed.get("commit") else ""
+        print("[qa_ledger] check-terminado: %s%s (repo %s)"
+              % (verdict, where, sealed.get("repo") or "?"))
+        for reason in sealed.get("reasons") or []:
+            print("  - %s" % reason)
+        if ok is not True:
+            print("  TERMINADO is not enabled: re-run the evidence and `snapshot` "
+                  "on the current state.")
+    sys.exit(0 if ok is True else (1 if ok is False else 2))
+
+
 def cmd_top(args):
     """`uscha top` — the WHOLE projection of the ledger as one read-only JSON (ADR-032).
 
@@ -8744,6 +8951,15 @@ def cmd_top(args):
     done, fail, quar = _n("MEASURED_PASS"), _n("MEASURED_FAIL"), _n("QUARANTINE")
     unmeasured = _n("UNMEASURED") + _n("TRACED")
     pct = _top_pct(done, total)
+    # INV-TOP-06 (ADR-038): DONE never publishes 100% while the seal is MEASURED broken --
+    # every criterion green against evidence that no longer belongs to this code state is
+    # the same lie INV-TOP-01 forbids one row earlier. The cap lives HERE, beside the
+    # rounding cap, so no renderer is the place it happens. An UNMEASURED seal (`ok is
+    # None` -- no git) does NOT cap: absence of measurement is not evidence of a break, and
+    # capping on it would put an unearned 99 on every non-git tree.
+    sealed = _sealed_state(ledger, args.ledger)
+    if sealed.get("ok") is False and pct >= 100:
+        pct = 99
     measured = done + fail
     out = {
         "schema": TOP_SCHEMA,
@@ -8760,7 +8976,10 @@ def cmd_top(args):
         "events_tail": _top_events(ledger),
         "counts": {"measured_pass": done, "measured_fail": fail, "quarantine": quar,
                    "unmeasured": _n("UNMEASURED"), "traced": 0, "tagged": 0, "total": total},
-        "terminado": {"done": done, "total": total, "pct": pct, "unmeasured": unmeasured},
+        # `sealed` is DERIVED at read time from the ledger plus the tree (ADR-038); it is
+        # never stored, so it cannot go stale the way the claim it guards can.
+        "terminado": {"done": done, "total": total, "pct": pct, "unmeasured": unmeasured,
+                      "sealed": sealed},
         "debtors": {"machine": fail, "you": quar, "untagged": unmeasured},
         "honesty": {"measured": measured, "total": total,
                     "pct": _top_pct(measured, total)},
@@ -11951,6 +12170,14 @@ def build_parser():
     ptop.add_argument("--section", default=None)
     ptop.add_argument("--json", action="store_true")
     ptop.set_defaults(func=cmd_top)
+
+    pct = sub.add_parser("check-terminado",
+                         help="INV-T1 (ADR-038): is TERMINADO sealed to the code state on "
+                              "disk? Same derivation `top --json` publishes. Exit 0 sealed, "
+                              "1 broken, 2 UNMEASURED")
+    add_ledger(pct)
+    pct.add_argument("--json", action="store_true")
+    pct.set_defaults(func=cmd_check_terminado)
 
     pb = sub.add_parser("rebuild",
                         help="rebuild test: is the SPEC complete enough to "

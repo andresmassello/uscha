@@ -145,6 +145,7 @@ M1; VERDICTS frames arrive with VERDICTS mode (M3).
 | empty project (0 obligations) | ✓ shipped | ✓ shipped | — | — | — |
 | wide (CJK / full-width text) | ✓ shipped (1.90.0) | ✓ shipped (1.90.0) | — | — | — |
 | **drift (F2 + a real `spec-drift` run)** | — | — | — | — | ✓ shipped (1.91.0) |
+| **unsealed (F1 + a real broken seal)** | ✓ shipped (1.92.0) | ✓ shipped (1.92.0) | — | — | — |
 | F3 re-pinned scope | planned | planned | — | — | — |
 | F4 demo module | not needed | not needed | not needed | not needed | — |
 
@@ -152,9 +153,23 @@ Ten frames ship in M1 (eight from the original four states, two from `state-empt
 more in 1.90.0 (`wide-100x32` / `-80x24`, the display-width fixture — the row above went
 undocumented when it shipped and is recorded here now), two more in M3
 (`stale-quarantine-verdicts-100x32` / `-80x24`) and two in phase 2
-(`drift-100x32` / `-80x24`) — **sixteen** in total: twelve BOARD, two VERDICTS, two DIFF. The
-fourteen BOARD/VERDICTS frames are asserted byte-identical by T138 (board) and T141 (verdicts),
-the two DIFF frames by T145.
+(`drift-100x32` / `-80x24`) and two in 1.92.0 (`unsealed-100x32` / `-80x24`) — **eighteen** in
+total: fourteen BOARD, two VERDICTS, two DIFF. Sixteen of them are asserted byte-identical by
+T138 (twelve board) and T141 (two verdicts), the two DIFF frames by T145 and the two unsealed
+frames by T146.
+
+**The unsealed state (1.92.0, ADR-038) is engine-derived, like the drift one.** `fixture-healthy`
+was copied to a temp directory, turned into a git repo and committed; the engine's own
+`snapshot --repo backend-api` ingested the fixture's JUnit report; then the report was EDITED in
+place — the hole INV-T1 names, since the path and the date survive it — and that run's real
+`top --json` was frozen as `state/state-unsealed.json`. Only the wall clocks are normalized
+(`generated_at` and the feed's `ts` — the seal block carries no clock), exactly as the other states
+already normalize theirs; `terminado.sealed.commit` and `spec_pin.sha` are the temp repo's real
+shas, which is why they are not reproducible byte-for-byte — the SHAPE is what that run produced.
+The frame is the discriminator for INV-TOP-06: `DONE 6/6 (99%) · unsealed (evidence altered after
+ingest: reports/junit.xml)` and every `MEASURED_PASS` row's ACTION reading `seal: …`. The twelve
+older BOARD frames did **not** move: their frozen states carry no `sealed` member at all, which is
+the `null` case the header is required to leave undecorated (SPEC §4, INV-TOP-06).
 Only the drift state has a DIFF frame, and that is the whole population that can have one: the
 other frozen states carry no `spec_drift` record, and their pane is the *empty* case — pinned by
 assertion in T145 rather than by a seventeenth and eighteenth file that would differ from the drift
@@ -178,6 +193,13 @@ These exist to fail a cheating implementation, not to describe the happy path.
 - **N1 — 23/24 + 1 UNMEASURED** (`fixture-honesty-negative/`): 23 `MEASURED_PASS`, 1 `UNMEASURED`.
   Golden frame MUST render `96%` with the `· 1 unmeasured` suffix and MUST NOT render `100%`
   (AC-T-23, INV-TOP-01/02). A renderer that rounds or drops the unmeasured obligation fails here.
+- **N2 — 6/6 but unsealed** (`state/state-unsealed.json`, both sizes; shipped 1.92.0, measured in
+  T146): every obligation is `MEASURED_PASS` and the frame still MUST render `99%` with
+  `· unsealed (evidence altered after ingest: reports/junit.xml)`, never `100%`, with every green
+  row's ACTION reading `seal: …` (INV-TOP-06, AC-CT-10). This is the frame that fails an
+  implementation which publishes a board's own arithmetic without asking whether the evidence
+  behind it still belongs to this code. Its twin assertion is that a state with **no** `sealed`
+  member — every older frozen state — renders exactly as it did before: no suffix, no `seal:` cell.
 - **Verdict does not move DONE** *(shipped M3, measured in T141 over a TEMP COPY of F2)*: a real
   verdict is recorded through the TUI's write path and `top --json` is re-read; `terminado.done` and
   `terminado.pct` are unchanged and only the debtor cardinalities move — `you` down by one, the four

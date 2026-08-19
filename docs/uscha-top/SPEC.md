@@ -126,6 +126,31 @@ renders them, it does not recompute them (single derivation, ADR-032).
 - **INV-TOP-05** — any field with no honest source renders `—` (or its state's gray), never a
   fabricated value. Truth-pass, the mirador precedent; this is what makes every `—` in §3 honest
   rather than a missing feature. (ADR-032)
+- **INV-TOP-06** — the DONE bar never shows 100% while the seal is **measured broken**
+  (`terminado.sealed.ok is false`): the header carries `· unsealed (<first reason>)` and the
+  ACTION column of every `MEASURED_PASS` row says what that row is waiting on (`seal: …`).
+  Green criteria measured against evidence that no longer belongs to this code state are the
+  same lie INV-TOP-01 forbids one line earlier. (INV-T1, ADR-038)
+  - **The cap is the engine's**, beside INV-TOP-01's: `cmd_top` lowers `terminado.pct` to 99
+    when the seal is broken, so the TUI still computes no KPI of its own (AC-T-24).
+  - **The seal is shown only when it is MEASURED.** `sealed.ok is null` — no git work tree, or
+    a snapshot old enough to carry no `sha256` — adds no suffix, changes no row and caps
+    nothing: absence of a measurement is not evidence of a break (INV-TOP-05), and every
+    frozen fixture in `docs/uscha-top/FIXTURES.md` is in exactly that state.
+  - **The scope is the tracked repo's subtree**, not the whole work tree: the clean check is
+    `git status --porcelain -uall -- .` inside the configured repo path, the same per-path
+    scoping `evidence_origin` uses (ADR-007), so a monorepo sibling's edit is not this repo's
+    dirt — and the reason says `repo subtree dirty`, never `working tree dirty`.
+  - **The live board can hold a stale seal.** The seal is recomputed on reload (`r`), on a
+    ledger change the poll sees, and after `o`. A source edit or a new commit ALONE does not
+    trigger a redraw, so a board that was sealed can keep saying so until the next refresh.
+    Under-claimed on purpose (widening the poll to the subtree is future work); the surface
+    that recomputes on every call is `check-terminado`, which is what a hook gates on.
+  - **The limit, stated out loud**: a board with **no snapshot recorded at all** has no anchor
+    to compare the tree against, so its seal is UNMEASURED and the header says nothing. A
+    project can therefore read 100% with nothing binding that evidence to a commit. What does
+    not soften is the gate: `qa_ledger.py check-terminado` exits **2** there (0 sealed, 1
+    measured break, 2 UNMEASURED), so a hook or a human gating on exit 0 still refuses.
 
 ---
 
@@ -250,3 +275,10 @@ Each milestone closes with a full turn of the method (spec pinned → compile �
 - [x] AC-T-24 — single derivation: rendered from a frozen `top --json` fixture with no engine call,
   every number in the frame traces to a JSON field; the TUI computes no KPI itself.
 ```
+
+> **Amended 1.92.0 (ADR-038).** The contract grew `terminado.sealed`
+> (`{ok, reasons[], commit, repo}`, derived at read time, never stored, no clock of its own) and the
+> board grew INV-TOP-06 above. The criteria for it are their own family, `AC-CT-01..11` in
+> `ACCEPTANCE.md`, measured by smoke T146 over a real temp git repo plus two golden frames
+> over `state/state-unsealed.json` — the same mechanism, a separate family, because they are
+> about the seal and not about the view.
