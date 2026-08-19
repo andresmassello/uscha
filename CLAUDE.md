@@ -43,7 +43,8 @@ itself.
    -> ledger committed in its OWN commit right after the code commit (since 1.93.0 / ADR-039: the
    snapshot's commit must exist and the difference must be non-source only; order = code commit X ->
    `readiness --record` (dates the ledger after X, so AC-DF-01 is green while the suite runs) -> suite ->
-   `snapshot` + `readiness --record` -> ledger + JUnit committed as X+1) -- and the smoke suite checks that
+   `snapshot` + `readiness --record` -> ledger + JUnit + the CHANGELOG's suite counts committed as X+1;
+   NEVER amend X after the record: an amend re-dates X and orphans the snapshot's commit) -- and the smoke suite checks that
    `readiness_history[-1].at` is not older than the last commit that touched the engine (a stale
    ledger is a FAIL, not a note). At session start the `uscha-status` skill is shown first, from the
    ledger. The honest gap that made measured acceptance read 6/172 in 1.86.0 was the INSTRUMENT, not

@@ -87,6 +87,11 @@ reads `stale seal` forever on the machine that released, although no source chan
   hash and does not start now), while the seal reads `evidence altered after ingest` and refuses.
   Acceptance measures whether the tests were re-run after the code; the seal is what gates
   TERMINADO, and that is the surface where the swapped log is caught.
+- **Amended in 1.93.1: evidence hashes are EOL-normalized** (`_sha256_evidence`). A text report
+  ingested with CRLF and checked out as LF is the SAME evidence; before this, rule (b) went inert
+  and the seal read `evidence altered` on the kit's own release the day 1.93.0 shipped. Any byte
+  change other than line endings is still altered. New records carry `sha256_eol: "lf"`; older
+  ones are compared against all three renderings of their text, and manifest hashes are untouched.
 
 ## What this ADR does NOT decide
 Semantic freshness (which tests a source change invalidates) — out of scope; the spec-drift

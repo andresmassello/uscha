@@ -154,13 +154,19 @@ renders them, it does not recompute them (single derivation, ADR-032).
     ledger and the reports it names are non-source by construction. The LIMIT is the set itself —
     a project whose source or fixtures live in an extension it does not list gets a seal that
     tolerates changes to them.
-  - **The hash is over BYTES, so line-ending translation is a false alarm** — fail-closed, but an
-    alarm. A consumer repo that lets git rewrite CRLF on checkout (`core.autocrlf=true`, the
-    Windows default, with no `.gitattributes`) will hash a cloned report differently from the one
-    that was ingested and read `evidence altered after ingest` on a file nobody touched. The fix
-    is one line in `.gitattributes` — `* text=auto eol=lf` — and the kit states it rather than
-    silently normalizing, because a seal that normalized what it hashes would be hashing an
-    interpretation of the evidence instead of the evidence.
+  - **Evidence hashes are EOL-NORMALIZED** (`_sha256_evidence`, 1.93.1): CRLF becomes LF before
+    hashing, so a report ingested on a Windows runner and checked out as LF is the same evidence.
+    1.93.0 shipped with this merely named as a limit and the kit's own release board hit it the
+    same day — `evidence altered after ingest` about a file nobody had touched, and a board at
+    0/205. Line endings are the one difference a version control system is allowed to introduce;
+    every OTHER changed byte still reads as altered, which is the guarantee the hash exists for.
+    Records carry `sha256_eol: "lf"` to say how they were taken; a record from before the marker
+    is compared against all three renderings of the same text (normalized, exact, CRLF) so an old
+    ledger neither breaks nor gains a pass it did not have. `* text=auto eol=lf` in
+    `.gitattributes` stays good hygiene — it keeps the working copy and the committed form equal
+    — it is simply no longer what stands between a green suite and a false `altered`. Not covered,
+    on purpose: `compile-validate`'s manifest hashes (`_sha256_file`), where the exact bytes ARE
+    the claim.
   - **The scope is the tracked repo's subtree**, not the whole work tree: the clean check is
     `git status --porcelain -uall -- .` inside the configured repo path, the same per-path
     scoping `evidence_origin` uses (ADR-007), so a monorepo sibling's edit is not this repo's

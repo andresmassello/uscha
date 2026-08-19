@@ -10311,6 +10311,47 @@ for _tag, _rel, _body in (("sh", "run-tests.sh", "#!/bin/sh\npytest -q\n"),
     res["AC-FR-10"] = bool(res.get("AC-FR-10", True) and okh)
 
 
+# --- AC-FR-11: line endings are not content. A version control system is ALLOWED to rewrite them
+# (`* text=auto eol=lf`), so a report ingested with CRLF and checked out as LF -- or the mirror --
+# is the same evidence and must read fresh and sealed; the 1.93.0 release board said `evidence
+# altered after ingest` about exactly that and read 0/205. What must NOT survive the rewrite is a
+# real content change: one different byte, with the line endings untouched, is still altered.
+def _eol_case(recorded_crlf):
+    """snapshot with the report in one line-ending form, then rewrite it in the other"""
+    d = fixture(with_report=False)
+    body = JUNIT.replace(chr(10), chr(13) + chr(10)) if recorded_crlf else JUNIT
+    with io.open(os.path.join(d, "reports", "junit.xml"), "wb") as fh:
+        fh.write(body.encode("utf-8"))
+    eng(d, "init", "--config", "c.json", "--out", "L.json")
+    eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+    sh(d, "git", "add", "-A")
+    sh(d, "git", "commit", "-m", "release: ledger + evidence")
+    other = JUNIT if recorded_crlf else JUNIT.replace(chr(10), chr(13) + chr(10))
+    with io.open(os.path.join(d, "reports", "junit.xml"), "wb") as fh:
+        fh.write(other.encode("utf-8"))
+    redate_source(d)
+    return d
+
+
+ok11 = True
+for _recorded_crlf in (True, False):
+    d11 = _eol_case(_recorded_crlf)
+    mc11, stale11 = closed(d11)
+    rc11, s11 = seal(d11)
+    ok11 = ok11 and mc11 == ["AC-1"] and stale11 == 0 and rc11 == 0 and s11.get("ok") is True
+    # and the guarantee that must NOT be given away: one changed byte, same line endings
+    write(os.path.join(d11, "reports", "junit.xml"),
+          JUNIT.replace("tests=" + chr(34) + "1" + chr(34), "tests=" + chr(34) + "2" + chr(34)))
+    rc11b, s11b = seal(d11)
+    ok11 = ok11 and rc11b == 1 and any(r.startswith("evidence altered after ingest")
+                                       for r in (s11b.get("reasons") or []))
+# the marker travels with the record, so a reader never has to guess how the hash was taken
+snap11 = (json.load(io.open(os.path.join(d11, "L.json"), encoding="utf-8"))
+          ["repos"]["app"]["snapshots"][-1])
+res["AC-FR-11"] = bool(ok11 and all(r.get("sha256_eol") == "lf"
+                                    for r in snap11["tests"]["reports"]))
+
+
 side = os.path.join(kit, "reports", "junit")
 os.makedirs(side, exist_ok=True)
 sp = os.path.join(side, ".fr-cases.json")
@@ -10329,7 +10370,7 @@ print(("OK %d cases" % len(res)) + tail if not bad else "BAD " + ",".join(sorted
 PY
 )
 case "$T147" in
-  OK*) PASS=$((PASS+1)); echo "  ok   freshness by content + commit, tolerant seal (AC-FR-01..10): $T147";;
+  OK*) PASS=$((PASS+1)); echo "  ok   freshness by content + commit, tolerant seal (AC-FR-01..11): $T147";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T147";;
 esac
 
@@ -11740,7 +11781,7 @@ def _fr_cases():
     except (OSError, ValueError):
         return None
 _frc = _fr_cases()
-for _n in range(1, 11):
+for _n in range(1, 12):
     _frid = "AC-FR-%02d" % _n
     if _frc is None or _frc.get(_frid) is None:
         results.append((_frid, "freshness-content", SKIP))
@@ -11831,7 +11872,12 @@ for ac, name, msg in results:
         lines.append(f'    <failure message="{esc(msg)}"/>')
     lines.append("  </testcase>")
 lines.append("</testsuite>")
-with open(os.path.join(out, "uscha-acceptance.xml"), "w", encoding="utf-8") as fh:
+# newline="" + explicit LF: on Windows the default translation writes CRLF, so the report on
+# disk differed from the LF form git stores and the evidence hash was taken over bytes no
+# checkout would ever reproduce (1.93.0's release, fixed in the engine by normalizing the hash --
+# this is the belt to that braces: the working copy now equals the committed form byte for byte).
+with open(os.path.join(out, "uscha-acceptance.xml"), "w", encoding="utf-8",
+          newline="\n") as fh:
     fh.write("\n".join(lines) + "\n")
 print(f"ACCEPTANCE: {len(results) - failed - skipped}/{len(results)} criterios medidos en verde"
       + ("" if not skipped else " · SIN MEDIR: "

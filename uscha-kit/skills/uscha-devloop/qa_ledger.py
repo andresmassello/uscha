@@ -780,7 +780,9 @@ def _content_state(repo_path, repo_type, last_snapshot):
     # verdict, or a report the record itself marked stale, is no anchor at all.
     if ((snap.get("tests") or {}).get("freshness") or {}).get("status") == "stale":
         return None
-    hashes = {r["path"]: r["sha256"]
+    # the RECORD, not just the hash string: `_evidence_hash_matches` needs the `sha256_eol`
+    # marker beside it to know whether the compatibility comparison is still on offer
+    hashes = {r["path"]: r
               for r in ((snap.get("tests") or {}).get("reports") or [])
               if isinstance(r, dict) and r.get("path") and r.get("sha256")
               and r.get("fresh_by") != "stale"}
@@ -814,7 +816,7 @@ def _report_fresh(repo_path, report_path, clock_fresh, content_state):
     # cannot arise here, while normalizing one side would stop matching the recorded key.
     rel = os.path.relpath(report_path, repo_path).replace("\\", "/")
     recorded = content_state["hashes"].get(rel)
-    if not recorded or _sha256_file(report_path) != recorded:
+    if _evidence_hash_matches(report_path, recorded) is not True:
         return None
     return "content"
 
@@ -842,7 +844,10 @@ def _test_evidence_provenance(repo_path, repo_type, last_snapshot=None):
             "mtime_ns": mtime_ns,
             "mtime": datetime.fromtimestamp(
                 mtime_ns / 1_000_000_000, timezone.utc).isoformat(),
-            "sha256": _sha256_file(path),
+            "sha256": _sha256_evidence(path),
+            # the marker says HOW the hash above was taken, so a reader never has to guess
+            # (and 1.93.0-and-older records, which have no marker, keep their compatibility)
+            "sha256_eol": "lf",
         })
     if not reports:
         status = "not-applicable" if repo_type == "flutter" else "missing"
@@ -5304,6 +5309,59 @@ def _sha256_file(path):
         return None
 
 
+# kit 1.93.1: the hash of a TEXT evidence file, EOL-NORMALIZED (CRLF -> LF before hashing).
+#
+# A JUnit report is text, and a version control system is allowed to rewrite its line endings
+# on checkout -- `* text=auto eol=lf` is the recommended `.gitattributes` and the kit's own.
+# The suite that produced the report on Windows wrote CRLF, the repository stores LF, and a
+# clean checkout therefore yields a file that is byte-different and semantically identical.
+# The exact-byte hash read that as `evidence altered after ingest`: 1.93.0 shipped with the
+# limit merely NAMED in SPEC 4, and the release machine's own board hit it the same day.
+# Normalizing the ONE difference git is allowed to introduce keeps the guarantee that matters
+# -- any other changed byte (a swapped log, an edited count, a different run) still fails.
+#
+# `_sha256_file` is deliberately left alone: compile-validate hashes MANIFEST UNITS, where the
+# exact bytes ARE the claim, and a manifest that tolerated a rewrite would be tolerating the
+# thing it exists to detect.
+def _sha256_evidence(path):
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError:
+        return None
+    return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
+
+
+def _evidence_hash_matches(path, record):
+    """Does the file on disk still hash to what the RECORD carries? True / False, or None when
+    the record carries no hash at all (the caller decides: UNMEASURED, never a pass).
+
+    Records written by 1.93.1 and later carry `sha256_eol: "lf"` and are compared NORMALIZED,
+    full stop. A record written BEFORE that marker hashed the file's exact bytes, whatever
+    line endings the machine that ran the suite happened to write -- and 1.93.0's own release
+    record is the proof: the suite wrote CRLF on Windows, git stored LF, and the LF checkout
+    matched neither the recorded hash nor its normalized form, because the recording was of the
+    CRLF RENDERING of the same text. So a pre-marker record is compared against all three
+    renderings of the bytes on disk: normalized, exact, and CRLF. The door is narrow on purpose
+    -- it opens only for records that predate the marker, and it admits only the line-ending
+    renderings of THIS file's text: a report whose content really changed matches none of them."""
+    want = record.get("sha256") if isinstance(record, dict) else None
+    if not want:
+        return None
+    if _sha256_evidence(path) == want:
+        return True
+    if record.get("sha256_eol") == "lf":
+        return False
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError:
+        return False
+    lf = data.replace(b"\r\n", b"\n")
+    return want in (hashlib.sha256(data).hexdigest(),
+                    hashlib.sha256(lf.replace(b"\n", b"\r\n")).hexdigest())
+
+
 def _contained_unit(base, unit):
     """A compilation's units must be RELATIVE paths CONTAINED within the compilation
     directory: the manifest references what was compiled, and what was compiled lives with
@@ -8989,7 +9047,7 @@ def _sealed_state(ledger, ledger_path):
         elif not r.get("sha256"):
             unmeasured.append("evidence hash unmeasured: %s — no hash recorded at ingest "
                               "(older snapshot, or the file was unreadable)" % rel)
-        elif _sha256_file(full) != r["sha256"]:
+        elif _evidence_hash_matches(full, r) is not True:
             failures.append("evidence altered after ingest: %s" % rel)
 
     out["reasons"] = failures + unmeasured
