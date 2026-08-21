@@ -98,6 +98,17 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
 - [ ] `golden-diff` clean (byte for byte) = hard closing condition of the touched module
 - [ ] Corpus documented; a module with insufficient corpus = PARTIAL, never COVERS
 
+## Stack lifecycle — the stack expires (non-negotiable)
+
+> A major version is a family; support is granted to a MINOR line, for a window, by an upstream
+> nobody here controls. A stack ADR that fixes a version without its end-of-support date has not
+> decided anything — it has deferred the decision to the week before go-live (ADR-040).
+> Measured — ADVISORY, never a gate — by `qa_ledger.py spec-check`'s lifecycle dimension.
+
+- [ ] No stack ADR without a cited end-of-support date for every component it fixes <!-- ADR-040 -->
+- [ ] The date comes from the OFFICIAL source, fetched when asked, with the URL and the day checked recorded — never from memory
+- [ ] No component whose support ends before the declared `go_live` enters the build; the upgrade happens BEFORE, not days after
+
 ## Anti-ceremony — Lean over the method itself (meta-invariant)
 
 > The risk is not a bad gate: it is the **sum** of good gates turning `/uscha-devloop` into an
@@ -139,6 +150,12 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
 - The **Golden (INV-GOLDEN-01)** invariant is measured by `qa_ledger.py golden-diff`: any `.received`
   that does not match its `.approved` (or is unapproved) = **DIVERGE**, cutting the chain before judgment-day.
   The agent does not touch `.approved` (ideally a `PreToolUse` hook makes it impossible).
+- The **Stack lifecycle** invariant is measured by `qa_ledger.py spec-check`: each `lifecycle:`
+  entry in `docs/adr/*.md` is compared against the SPEC's `go_live` and reads `ok` / `expires
+  before go-live` / `no EOL cited` / `no source cited`, with the whole dimension UNMEASURED (and
+  the reason named) when nothing declares it. **Advisory** — it never gates and never caps
+  readiness: the engine can see that a date was CITED, never that the citation is true. Verifying
+  the source is the human's job; the record makes the omission visible.
 - The **Anti-ceremony** meta-invariant is not measured by any subcommand: it is the admission filter
   for new gates (does it autorun? does it stay quiet except when it matters? does it collapse into `readiness`? does a
   trivial change skip it?). Its only mechanized leg today is the single verdict of `readiness` (kit

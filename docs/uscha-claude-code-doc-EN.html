@@ -626,7 +626,7 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
       <tr><td class="t">simplicity-check</td><td>Scores diff minimality.</td></tr>
       <tr><td class="t">pit-check</td><td>Scores test effectiveness.</td></tr>
       <tr><td class="t">gate-check</td><td>Detects weakened gates or secrets.</td></tr>
-      <tr><td class="t">spec-check</td><td>Validates SPEC/ACCEPTANCE.</td></tr>
+      <tr><td class="t">spec-check</td><td>Validates SPEC/ACCEPTANCE; <em>lifecycle</em> dimension (ADR-040): compares the end-of-support dates cited in the ADRs' <code class="in">lifecycle:</code> blocks against the SPEC's <code class="in">go_live</code>. Advisory: never gates.</td></tr>
       <tr><td class="t">golden-diff</td><td>Byte-compares received/approved.</td></tr>    </tbody>
   </table>
   <pre><span class="c"># a typical pass of the loop</span>

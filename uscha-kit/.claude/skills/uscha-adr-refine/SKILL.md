@@ -112,21 +112,45 @@ it's already fully answered. Keep a running list of OPEN GAPS and resolved decis
 2. **Implicit decisions.** Surface the choices the request assumed: sync vs async,
    storage, protocol, idempotency, transactional boundaries, who owns state. For each,
    force an explicit decision and at least one considered alternative.
-3. **Behavior.** Happy path first, then the DIRTY cases: provider/timeout failures,
+3. **Stack and lifecycle (MANDATORY — before any stack/architecture decision is
+   recorded).** The stack is not a given ("we use X"): it is a decision with an EXPIRY
+   DATE. A major version is a family; support is granted to a MINOR line, for a window,
+   by an upstream nobody in the room controls. Ask these one at a time, each with your
+   recommended answer, and **FETCH the dates from the official source AS YOU ASK — never
+   answer from memory**; record the URL and the day you checked:
+   (a) the EXACT version of every runtime/framework/store (JDK, web framework, ORM, DB,
+   Node, bundler, broker, cache) and its OSS/LTS end-of-support date, cited;
+   (b) support window vs the declared go-live AND the expected operating life — does the
+   line stay patched for the whole operation? If not, move it up BEFORE building: a major
+   upgrade days before the milestone is the most expensive one there is;
+   (c) major dependencies and the upgrade policy — who approves one, and when it is
+   scheduled (aligned with the dev-loop's "zero new dependencies without approval");
+   (d) development and observability tools the operator wants from day one (consoles, APM,
+   admin UIs) — they CONSTRAIN versions, so ask early or they force the upgrade;
+   (e) compatibility with reused legacy modules — the minimum version they support.
+   The answers distil into the stack ADR with the dates INSIDE it, as the machine-readable
+   `lifecycle:` frontmatter block (`component` / `version` / `eol` / `source` / `checked`,
+   ISO dates; `eol: unknown` is allowed and reads as a NAMED absence, never a pass) — see
+   `templates/docs/adr/ADR-stack-template.md`. The SPEC declares the milestone it is
+   compared against: frontmatter `go_live: YYYY-MM-DD` or a `**Go-live:** YYYY-MM-DD` line.
+   `qa_ledger.py spec-check` then reports, per component, `ok` / `expires before go-live` /
+   `no EOL cited` / `no source cited` — ADVISORY, it never gates. It can see that a date
+   was CITED; it cannot see whether the citation is TRUE. That part is yours.
+4. **Behavior.** Happy path first, then the DIRTY cases: provider/timeout failures,
    retries and backoff, 4xx vs 5xx, concurrency, partial/terminal states, what must NOT
    happen. A feature without its failure behavior is half-specified.
-4. **Inviolable constraints (→ `CONSTITUTION.md`).** Domain + security + operation
+5. **Inviolable constraints (→ `CONSTITUTION.md`).** Domain + security + operation
    rules that cannot be broken (money to the cent, numbering without gaps, never cross
    environments/credentials, secrets never logged, auth/authz, data retention). Write/extend
    `CONSTITUTION.md` (one invariant per line, CWE ref where it maps); these feed the
    dev-loop severity gate and a breach is a BLOCKER. **An ADR may never contradict the
    CONSTITUTION** — if a decision would, it's escalated, not recorded.
-5. **Out of scope.** Explicit boundaries, with forward references ("X goes to a later
+6. **Out of scope.** Explicit boundaries, with forward references ("X goes to a later
    spec"). What you exclude is as important as what you include.
-6. **Definition of Done + how we measure success.** Concrete, checkable acceptance criteria
+7. **Definition of Done + how we measure success.** Concrete, checkable acceptance criteria
    (tests green, documented, metrics published, runbook) AND success metrics (p95,
    cost ceiling, zero orphaned records). Each item must be verifiable, not a feeling.
-7. **Dependencies.** Which other specs/systems/credentials this needs to exist first.
+8. **Dependencies.** Which other specs/systems/credentials this needs to exist first.
 
 After each batch, reflect: "Decided: … / Still open: …". Move on only when the
 current topic is closed.
@@ -146,7 +170,7 @@ have behavior, the scope has a boundary and the DoD is verifiable.") before Phas
 ## Phase B — Distill the artifacts
 
 Only after convergence. Produce (and, if any new project-wide invariant surfaced in
-step 4, append it to **`CONSTITUTION.md`** — never let an inviolable rule slip into an
+step 5, append it to **`CONSTITUTION.md`** — never let an inviolable rule slip into an
 ADR where it could later be "traded away"):
 
 1. **One ADR per decision worth recording** at `docs/adr/ADR-NNN-<slug>.md`, format:

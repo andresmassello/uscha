@@ -676,6 +676,27 @@ committed report is re-run after the snapshot it is compared against.
 - [x] AC-FR-10 - BUILD and HARNESS files are source-relevant for rule (b) AND for the seal: a commit that adds `run-tests.sh` (by extension) or `pom.xml` (by basename) after the snapshot makes the evidence stale and breaks the seal with the offending path named. A commit that rewrites what the suite runs changes what a green report means; `.md`/`.json`/`.xml`/`.txt` stay non-source, which is what keeps the ledger and the reports themselves tolerable.
 - [x] AC-FR-11 - line endings are not content (1.93.1): a report ingested with CRLF and checked out as LF - and the mirror case - reads FRESH by content and SEALED, because the evidence hash is taken EOL-normalized (`_sha256_evidence`); the record carries `sha256_eol: "lf"` so a reader never guesses how it was taken, and a record from before the marker is compared against all three renderings of its text so an old ledger neither breaks nor gains a pass. What is NOT given away: one changed byte with the line endings untouched still reads `evidence altered after ingest`. 1.93.0 shipped with this named as a limit in SPEC 4 and the kit's own release board hit it the same day - `altered` about a file nobody had touched, and a board at 0/205.
 
+## Stack and lifecycle (ADR-040) - closes on green `AC-LC-nn` smoke assertions
+
+Shipped in 1.94.0. A field run closed sixteen ADRs with rigor and still fixed the stack as a MAJOR
+line, as if a family were a decision; ten days before a declared go-live the test phase surfaced
+that the chosen MINOR line had left OSS support months earlier and that a tool the operator wanted
+from day one required the next major - a major upgrade at the most expensive possible moment, which
+three questions in discovery would have avoided. So the front-half skills gain a MANDATORY "Stack
+and lifecycle" round before the stack ADR (one question per turn, dates FETCHED from the official
+source as they are asked, never from memory), the stack ADR gains a machine-readable `lifecycle:`
+frontmatter block and the SPEC declares `go_live:`, and `spec-check` gains a lifecycle dimension
+that compares the two. ADVISORY by construction, the spec-drift contract (ADR-005): it never gates,
+never caps readiness and never changes an exit code. The limit is stated rather than papered over:
+the engine measures that a date and a source were CITED and compares two dates - it cannot verify
+that the cited source tells the truth. Measured by T148 through the `.lc-cases.json` sidecar.
+
+- [x] AC-LC-01 - a stack ADR whose component's `eol` falls before the SPEC's `go_live` reads `expires before go-live (<eol> < <go_live>)` in `spec-check` text AND in `--json` (key `lifecycle`), and the same fact reaches the `readiness` advisory line - one derivation (`_lifecycle_report`) behind both surfaces, so they cannot disagree.
+- [x] AC-LC-02 - `eol` at or after the go-live WITH a source cited reads `ok`, and nothing is flagged: the dimension speaks only when it matters.
+- [x] AC-LC-03 - a missing/`unknown`/unparseable `eol` reads `no EOL cited` and a missing `source` reads `no source cited`. A named absence, never a silent pass; and a date that already expires keeps the sharper label even when its source is missing.
+- [x] AC-LC-04 - the whole dimension is UNMEASURED, with the reason spelled out, when the SPEC declares no go-live and when no ADR carries a `lifecycle:` block at all - and the SAME fixture WITH a go-live reads `measured`, so the parse is proved to be doing work rather than failing quietly.
+- [x] AC-LC-05 - advisory only: the `readiness` score is BYTE-IDENTICAL with and without an expiring component, and `dashboard --json` carries the `lifecycle` block. The key is CONDITIONAL, the `fast_path`/`spec_drift` rule: a project that declares nothing keeps the exact prior payload and the exact prior readiness text.
+
 ## Family-prefixed criteria (ADR-036) - closes on green `AC-FA-nn` smoke assertions
 
 Shipped in 1.87.0. The instrument now reads `AC-<FAMILY>-<n>` beside the bare `AC-<n>`, so the 166

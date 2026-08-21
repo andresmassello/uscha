@@ -137,25 +137,49 @@ answer.
    I deduce these core entities: … do they work for you, or is one missing?")
 3. **Operation / API surface.** Propose the endpoints/operations and their
    contracts (idempotency, status codes).
-4. **Big decisions (→ ADR).** Propose 2–3 architecture options with trade-offs and
+4. **Stack and lifecycle (MANDATORY — before any stack/architecture decision is
+   recorded).** The stack is not a given ("we use X"): it is a decision with an EXPIRY
+   DATE. A major version is a family; support is granted to a MINOR line, for a window,
+   by an upstream nobody in the room controls. Ask these one at a time, each with your
+   recommended answer, and **FETCH the dates from the official source AS YOU ASK — never
+   answer from memory**; record the URL and the day you checked:
+   (a) the EXACT version of every runtime/framework/store (JDK, web framework, ORM, DB,
+   Node, bundler, broker, cache) and its OSS/LTS end-of-support date, cited;
+   (b) support window vs the declared go-live AND the expected operating life — does the
+   line stay patched for the whole operation? If not, move it up BEFORE building: a major
+   upgrade days before the milestone is the most expensive one there is;
+   (c) major dependencies and the upgrade policy — who approves one, and when it is
+   scheduled (aligned with the dev-loop's "zero new dependencies without approval");
+   (d) development and observability tools the operator wants from day one (consoles, APM,
+   admin UIs) — they CONSTRAIN versions, so ask early or they force the upgrade;
+   (e) compatibility with reused legacy modules — the minimum version they support.
+   The answers distil into the stack ADR with the dates INSIDE it, as the machine-readable
+   `lifecycle:` frontmatter block (`component` / `version` / `eol` / `source` / `checked`,
+   ISO dates; `eol: unknown` is allowed and reads as a NAMED absence, never a pass) — see
+   `templates/docs/adr/ADR-stack-template.md`. The SPEC declares the milestone it is
+   compared against: frontmatter `go_live: YYYY-MM-DD` or a `**Go-live:** YYYY-MM-DD` line.
+   `qa_ledger.py spec-check` then reports, per component, `ok` / `expires before go-live` /
+   `no EOL cited` / `no source cited` — ADVISORY, it never gates. It can see that a date
+   was CITED; it cannot see whether the citation is TRUE. That part is yours.
+5. **Big decisions (→ ADR).** Propose 2–3 architecture options with trade-offs and
    a recommended default: persistence, protocol, idempotency, sync/async, multi-tenancy.
-5. **Behavior and dirty cases.** Happy path, then failures, retries, partial states,
+6. **Behavior and dirty cases.** Happy path, then failures, retries, partial states,
    concurrency, what must NOT happen.
-6. **Inviolable constraints (→ `CONSTITUTION.md`).** Domain + security + operation
+7. **Inviolable constraints (→ `CONSTITUTION.md`).** Domain + security + operation
    rules that can't be broken (money to the cent, no numbering gaps, never cross
    environments, secrets never logged, auth). Write/extend `CONSTITUTION.md` with these —
    one invariant per line, with a CWE reference where it maps. They feed the severity gate
    downstream, and a breach is a BLOCKER, never a trade-off.
-7. **Out of scope.** Explicit boundaries with forward references.
-8. **Acceptance / Definition of Done.** Concrete, checkable criteria + success metrics.
-9. **Quality bar (→ config, kit 1.17.0).** "What level of quality is ENOUGH here, and which
+8. **Out of scope.** Explicit boundaries with forward references.
+9. **Acceptance / Definition of Done.** Concrete, checkable criteria + success metrics.
+10. **Quality bar (→ config, kit 1.17.0).** "What level of quality is ENOUGH here, and which
    dimensions are negotiable (coverage, perf, security)?" Propose thresholds fit for
    the risk profile (a payments core is not an internal dashboard). What the human
    declares goes into `uscha.config.json` (`defaults.coverage_threshold`,
    `defaults.readiness_caps`, `defaults.simplicity`) — a declared threshold reads as
    **requerimiento (config)** in the engine's output; an undeclared one stays a kit
    default (opinion) and is labeled as such. Declaring is committing the config.
-10. **Residual risks and dependencies.** What's uncertain, what must exist first.
+11. **Residual risks and dependencies.** What's uncertain, what must exist first.
     For each HIGH-uncertainty risk, ask (kit 1.19.0, Tip 21 'Prototype to Learn'):
     "Does it warrant a time-boxed spike before freezing the SPEC?" A spike runs on a
     `spike/*` branch and its ONLY legitimate output is an **ADR with lessons**

@@ -40,7 +40,7 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.93.1** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v1.94.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -85,7 +85,7 @@ automatic tool can perform: a human verdict.
    from the compiled code: 0.828 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (kit 1.93.1, 53 subcommands, all measured):**
+**What each arrow is, in the engine (kit 1.94.0, 53 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|

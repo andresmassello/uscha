@@ -8406,6 +8406,10 @@ def cmd_dashboard(args):
                             for r in {e.get("repo") for e in ledger["fast_path"]}}
     if ledger.get("spec_drift"):
         out["spec_drift"] = ledger["spec_drift"]
+    # lifecycle (ADR-040): reused VERBATIM from the readiness payload above (one read, no
+    # drift possible between the two surfaces), conditional for the same reason spec_drift is.
+    if rd.get("lifecycle"):
+        out["lifecycle"] = rd["lifecycle"]
     # evidence_origin: the latest snapshot's origin per repo, and ONLY when one exists --
     # a ledger predating ADR-007 keeps the exact prior schema (same conditional-key rule
     # fast_path and spec_drift already follow).
@@ -9554,6 +9558,12 @@ def cmd_readiness(args):
         "gates": _gate_rollup(ledger),
         "by_repo": repos,
     }
+    # lifecycle (ADR-040): advisory, and CONDITIONAL like fast_path/spec_drift -- a project
+    # that declares no lifecycle: block keeps the exact prior payload and the exact prior
+    # text. Speaking only when it matters is the anti-ceremony rule applied to itself.
+    _lc = _lifecycle_for(os.path.dirname(os.path.abspath(args.ledger)) or os.getcwd())
+    if _lc["declared"]:
+        out["lifecycle"] = _lc
     if args.json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
@@ -9634,6 +9644,8 @@ def cmd_readiness(args):
               f"rising for {STALL_WINDOW} cycles: iterating more is not getting "
               f"closer. Likely a design/SPEC problem — go back to the ADR / "
               f"re-plan with the human (advisory)")
+    if _lc["declared"]:
+        print("  · " + _lifecycle_summary(_lc))
     # rubrica (1.23.0): el ultimo grade por repo, siempre visible — guess
     # estructurado que aconseja; si esta gateado ya bloqueo por el ledger
     for rname, rnode in ledger["repos"].items():
@@ -10986,6 +10998,225 @@ _SC_SETEXT = re.compile(r"^(=+|-{2,})\s*$")
 _SC_CHECKBOX = re.compile(r"^\[[ xX]\]\s*")
 
 
+# --------------------------------------------------------------------------- #
+# lifecycle  (ADR-040: stack end-of-support vs go-live -- advisory, NEVER gates)
+# --------------------------------------------------------------------------- #
+# The method interrogates WHAT and WHY and has always treated the stack as a given
+# ("we use X"). A major line is not a decision: a minor line has an END-OF-SUPPORT
+# DATE, and a date that falls before the declared go-live is a forced upgrade nobody
+# planned. This dimension reads what the ADR CITES and compares it against the SPEC's
+# declared go-live. It cannot verify that the cited source tells the truth -- only that
+# a date and a source were cited at all. Advisory by construction, like spec-drift
+# (ADR-005): it never gates, never caps readiness, and never changes an exit code.
+_LC_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _lc_valid_date(s):
+    """A cited date is real only if it is BOTH shaped YYYY-MM-DD and a calendar date:
+    the format regex alone accepts 2025-13-40 (1.94.0 review), which then string-compares
+    as if it were a real EOL. fromisoformat rejects the impossible month/day."""
+    if not s or not _LC_DATE.match(s):
+        return False
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+_LC_KEY = re.compile(r"^lifecycle\s*:\s*(.*)$")
+_LC_GOLIVE_FM = re.compile(r"^go[-_ ]?live\s*:\s*(.+?)\s*$", re.I)
+_LC_GOLIVE_LINE = re.compile(r"^\s*\*\*\s*go[-_ ]?live\s*:?\s*\*\*\s*:?\s*"
+                             r"(\d{4}-\d{2}-\d{2})\b", re.I)
+_LC_FIELDS = ("component", "version", "eol", "source", "checked")
+
+
+def _lc_frontmatter(lines):
+    """The lines INSIDE a leading `---` frontmatter block, or None when there is none.
+    An unterminated fence is not data: a half-written block reads as absent."""
+    if not lines or lines[0].strip() != "---":
+        return None
+    body = []
+    for ln in lines[1:]:
+        if ln.strip() == "---":
+            return body
+        body.append(ln)
+    return None
+
+
+def _lc_parse(lines):
+    """The `lifecycle:` list-of-dicts of a markdown file, parsed as a YAML SUBSET --
+    stdlib only, the kit ships no PyYAML. Returns None when the key is absent (nothing to
+    measure) and [] when the key is there but nothing under it parses (a NAMED absence:
+    the caller reports UNMEASURED with a reason, never a silent pass)."""
+    fm = _lc_frontmatter(lines)
+    if fm is None:
+        return None
+    entries, in_lc, cur = None, False, None
+    for ln in fm:
+        s = ln.strip()
+        if not in_lc:
+            m = _LC_KEY.match(ln)
+            if m:
+                entries = []
+                # only the block form is supported; an inline `lifecycle: [...]` parses to
+                # nothing and reads as unparseable, never as "this ADR fixes no component"
+                in_lc = not m.group(1).strip()
+            continue
+        if not s or s.startswith("#"):
+            continue
+        if not ln[:1].isspace():          # back to column 0 -> the key ended
+            in_lc = False
+            continue
+        if s.startswith("- "):
+            cur = {}
+            entries.append(cur)
+            s = s[2:].strip()
+            if not s:
+                continue
+        if cur is None:
+            continue
+        k, sep, v = s.partition(":")
+        if not sep:
+            continue
+        k = k.strip().lower()
+        if k in _LC_FIELDS:
+            cur[k] = v.strip().strip("\x27\x22")
+    if entries is not None:
+        entries = [e for e in entries if e]
+    return entries
+
+
+def _lc_go_live(text):
+    """The declared go-live of a SPEC: frontmatter `go_live: YYYY-MM-DD`, or a
+    `**Go-live:** YYYY-MM-DD` line anywhere in the body. None = not declared."""
+    lines = [ln.rstrip("\r") for ln in (text or "").split("\n")]
+    fm = _lc_frontmatter(lines)
+    if fm:
+        for ln in fm:
+            if ln[:1].isspace():
+                continue
+            m = _LC_GOLIVE_FM.match(ln.strip())
+            if m:
+                v = m.group(1).strip().strip("\x27\x22")
+                if _lc_valid_date(v):
+                    return v
+    for ln in lines:
+        m = _LC_GOLIVE_LINE.match(ln)
+        if m and _lc_valid_date(m.group(1)):
+            return m.group(1)
+    return None
+
+
+def _lc_short(path):
+    """The ADR dir as the reader would type it: relative to the cwd when that is shorter,
+    absolute otherwise (a different drive on Windows has no relative form)."""
+    if not path:
+        return "docs/adr"
+    try:
+        rel = os.path.relpath(path)
+    except ValueError:
+        return path
+    return rel if len(rel) < len(path) else path
+
+
+def _lifecycle_report(adr_dir, spec_text):
+    """Per-component verdicts for every `lifecycle:` entry under `adr_dir`, compared
+    against the go-live declared in `spec_text`. Whole-dimension UNMEASURED -- with the
+    reason spelled out, never silence -- when no ADR carries the block, when the block is
+    unparseable, or when no go-live is declared."""
+    go_live = _lc_go_live(spec_text)
+    comps, unparsed, names = [], [], []
+    if adr_dir and os.path.isdir(adr_dir):
+        names = sorted(f for f in os.listdir(adr_dir) if f.lower().endswith(".md"))
+    for fn in names:
+        try:
+            with open(os.path.join(adr_dir, fn), "r", encoding="utf-8",
+                      errors="replace") as fh:
+                lines = [ln.rstrip("\r") for ln in fh.read().split("\n")]
+        except OSError:
+            continue
+        ent = _lc_parse(lines)
+        if ent is None:
+            continue
+        if not ent:
+            unparsed.append(fn)
+            continue
+        for e in ent:
+            comps.append({"adr": fn, "component": e.get("component") or "(unnamed)",
+                          "version": e.get("version"), "eol": e.get("eol"),
+                          "source": e.get("source"), "checked": e.get("checked")})
+    out = {"status": "UNMEASURED", "reason": None, "go_live": go_live,
+           "adr_dir": adr_dir, "declared": bool(comps or unparsed),
+           "components": comps, "n_components": len(comps), "n_expiring": 0,
+           "unparsed_adrs": unparsed}
+    if not comps:
+        out["reason"] = ("lifecycle: block declared but unparseable in: "
+                         + ", ".join(unparsed) if unparsed else
+                         "no ADR under %s carries a lifecycle: block"
+                         % _lc_short(adr_dir))
+        return out
+    if not go_live:
+        for c in comps:
+            c["status"], c["detail"] = "unmeasured", "no go-live declared"
+        out["reason"] = ("no go-live declared in the SPEC (frontmatter 'go_live: "
+                         "YYYY-MM-DD' or a '**Go-live:** YYYY-MM-DD' line)")
+        return out
+    for c in comps:
+        eol = (c.get("eol") or "").strip()
+        cited = (c.get("source") or "").strip()
+        if not eol or eol.lower() == "unknown" or not _lc_valid_date(eol):
+            c["status"] = "no EOL cited"
+            c["detail"] = ("declared unknown" if eol.lower() == "unknown"
+                           else ("not a YYYY-MM-DD date: %s" % eol if eol else "absent"))
+        elif eol < go_live:
+            # the sharper fact wins the label: a date that already expires is reported as
+            # expiring even when uncited, and the missing source stays visible in the record
+            c["status"] = "expires before go-live"
+            c["detail"] = "%s < %s" % (eol, go_live)
+            out["n_expiring"] += 1
+        elif not cited:
+            c["status"] = "no source cited"
+            c["detail"] = "eol %s is asserted, not cited" % eol
+        else:
+            c["status"] = "ok"
+            c["detail"] = "eol %s >= go-live %s" % (eol, go_live)
+    out["status"] = "measured"
+    return out
+
+
+def _lifecycle_summary(lc):
+    """The one advisory line, shared by spec-check and readiness so the two surfaces
+    cannot drift apart."""
+    if lc["status"] != "measured":
+        return "lifecycle: UNMEASURED - %s" % lc["reason"]
+    return ("lifecycle: %d component(s), %d expire before go-live %s (advisory)"
+            % (lc["n_components"], lc["n_expiring"], lc["go_live"]))
+
+
+def _lifecycle_root(*paths):
+    """The project root a lifecycle read hangs off: the directory of the first path
+    given, else the cwd."""
+    for p in paths:
+        if p:
+            return os.path.dirname(os.path.abspath(p)) or os.getcwd()
+    return os.getcwd()
+
+
+def _lifecycle_for(root, adr_dir=None, spec_text=None, fallback=True):
+    """Read the dimension for a project root: `docs/adr` unless overridden, and the
+    go-live from the text already in hand. `fallback` reads `<root>/SPEC.md` when no
+    text was supplied -- it is OFF when the caller named the spec files itself, so an
+    explicit `--spec` is never silently topped up from a file nobody asked for."""
+    if fallback and not _lc_go_live(spec_text):
+        sp = os.path.join(root, "SPEC.md")
+        if os.path.isfile(sp):
+            try:
+                with open(sp, "r", encoding="utf-8", errors="replace") as fh:
+                    spec_text = (spec_text or "") + "\n" + fh.read()
+            except OSError:
+                pass
+    return _lifecycle_report(adr_dir or os.path.join(root, "docs", "adr"), spec_text)
+
+
 def _spec_check_text(text):
     lines = text.split("\n")
     n = len(lines)
@@ -11280,6 +11511,11 @@ def cmd_spec_check(args):
     m = (_spec_check_text(text) if text.strip()
          else {"blockers": [], "untestable": [], "stack_hits": [],
                "non_ears": 0, "n_criteria": 0})
+    # lifecycle (ADR-040): read-only and advisory -- it never touches `fail` below.
+    lc = _lifecycle_for(_lifecycle_root(args.spec[0] if args.spec else None,
+                                        args.acceptance),
+                        getattr(args, "adr_dir", None), text,
+                        fallback=not args.spec)
     structural = len(m["blockers"]) + len(acc_block)  # estructura = FACT -> bloquea
     soft_find = len(m["untestable"]) + len(m["stack_hits"]) + len(acc_adv)
     fail = structural > 0 or (args.strict and soft_find > 0)
@@ -11288,7 +11524,7 @@ def cmd_spec_check(args):
     if args.json:
         print(json.dumps({"verdict": verdict, "advisory": structural == 0,
                           "acceptance_blockers": acc_block,
-                          "acceptance_advisory": acc_adv, **m},
+                          "acceptance_advisory": acc_adv, "lifecycle": lc, **m},
                          indent=2, ensure_ascii=False))
         sys.exit(1 if fail else 0)
 
@@ -11309,6 +11545,11 @@ def cmd_spec_check(args):
         print(f"  ~ stack named in criteria ({len(m['stack_hits'])}): {', '.join(terms[:6])} — the 'how' belongs in the ADR, not the SPEC")
     if m["non_ears"] and m["n_criteria"]:
         print(f"  · advisory: {m['non_ears']}/{m['n_criteria']} criteria do not follow the EARS pattern (When/If/While … shall)")
+    print("  · " + _lifecycle_summary(lc))
+    for c in [x for x in lc["components"] if x.get("status") not in ("ok", None)][:5]:
+        print("      %s %s %s - %s (%s)"
+              % ("!" if c["status"] == "expires before go-live" else "~",
+                 c["component"], c.get("version") or "?", c["status"], c["detail"]))
     print("  i consistency: INFERENTIAL (an uncorrelated checker), not this lint · "
           "structure = FACT (blocks) · prose = advisory (--strict to gate)")
     if verdict == "OK":
@@ -12529,6 +12770,9 @@ def build_parser():
                      help="validate ACCEPTANCE traceability (AC-n IDs): missing "
                           "file / zero criteria / zero traceable / duplicate "
                           "IDs block as structural FACTS")
+    psc.add_argument("--adr-dir", default=None,
+                     help="ADRs whose lifecycle: blocks are read (ADR-040); default "
+                          "docs/adr beside the SPEC")
     psc.add_argument("--strict", action="store_true",
                      help="also fail (exit 1) on soft findings: untestable criteria / stack named")
     psc.add_argument("--json", action="store_true")

@@ -629,7 +629,7 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">simplicity-check</td><td>Eval?a minimalidad del diff.</td></tr>
       <tr><td class="t">pit-check</td><td>Eval?a efectividad de tests.</td></tr>
       <tr><td class="t">gate-check</td><td>Detecta debilitamiento de gates o secretos.</td></tr>
-      <tr><td class="t">spec-check</td><td>Valida SPEC/ACCEPTANCE.</td></tr>
+      <tr><td class="t">spec-check</td><td>Valida SPEC/ACCEPTANCE; dimension <em>lifecycle</em> (ADR-040): compara el fin de soporte citado en los bloques <code class="in">lifecycle:</code> de los ADR contra el <code class="in">go_live</code> del SPEC. Advisory: nunca gatea.</td></tr>
       <tr><td class="t">golden-diff</td><td>Compara bytes received/approved.</td></tr>    </tbody>
   </table>
   <pre><span class="c"># un pase típico del loop</span>

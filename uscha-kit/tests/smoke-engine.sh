@@ -3552,6 +3552,7 @@ rm -f "$KIT/reports/junit/.top-cases.json"        # same rule for T137/T138/T141
 rm -f "$KIT/reports/junit/.fa-cases.json"         # same rule for T140
 rm -f "$KIT/reports/junit/.ct-cases.json"         # same rule for T146
 rm -f "$KIT/reports/junit/.fr-cases.json"         # same rule for T147
+rm -f "$KIT/reports/junit/.lc-cases.json"         # same rule for T148
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -10374,6 +10375,186 @@ case "$T147" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T147";;
 esac
 
+echo "== T148 (1.94.0): the stack has an EXPIRY DATE -- the lifecycle dimension of spec-check (ADR-040) =="
+# A field run fixed the stack as a MAJOR line and found out ten days before go-live that the MINOR
+# line it chose had left OSS support months earlier. The ADR now carries a machine-readable
+# lifecycle: block and the SPEC a go_live:, and the engine compares the two dates. ADVISORY by
+# construction (the spec-drift contract, ADR-005): what it must NEVER do is move a score or an exit
+# code, so LC-05 byte-compares the readiness line with and without an expiring component.
+T148=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+res = {}
+TMPS = []
+CFG = {"version": "1.0.0", "project": "lc-app",
+       "defaults": {"acceptance_file": "ACCEPTANCE.md", "coverage_threshold": 60},
+       "repos": [{"name": "app", "path": ".", "type": "python"}],
+       "integration": {"enabled": False}}
+SPEC_BODY = ("## Out of scope\n- nothing here\n\n## Acceptance\n"
+             "- [ ] AC-01 - When a request arrives the system shall answer in less than 200 ms\n")
+
+
+def write(p, body):
+    with io.open(p, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(body)
+
+
+def eng(d, *a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=d, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+
+def adr_block(comps):
+    out = ["---", "lifecycle:"]
+    for c in comps:
+        out.append("  - component: " + c[0])
+        out.append("    version: " + chr(34) + c[1] + chr(34))
+        if c[2] is not None:
+            out.append("    eol: " + c[2])
+        if c[3] is not None:
+            out.append("    source: " + c[3])
+        out.append("    checked: 2026-08-21")
+    out += ["---", "# ADR-007: the stack this project fixes", ""]
+    return "\n".join(out)
+
+
+def fixture(comps, go_live="2026-12-01", adr=True):
+    d = tempfile.mkdtemp(prefix="uscha-lc-")
+    TMPS.append(d)
+    os.makedirs(os.path.join(d, "docs", "adr"))
+    head = "# SPEC\n\n"
+    if go_live:
+        head += "**Go-live:** " + go_live + "\n\n"
+    write(os.path.join(d, "SPEC.md"), head + SPEC_BODY)
+    write(os.path.join(d, "ACCEPTANCE.md"), "# ACCEPTANCE\n\n- [x] AC-01 - lifecycle\n")
+    write(os.path.join(d, "c.json"), json.dumps(CFG))
+    if adr:
+        write(os.path.join(d, "docs", "adr", "ADR-007-stack.md"), adr_block(comps))
+    eng(d, "init", "--config", "c.json", "--out", "L.json")
+    return d
+
+
+def sc(d):
+    r = eng(d, "spec-check", "--spec", "SPEC.md")
+    return r.returncode, r.stdout
+
+
+def scj(d):
+    return json.loads(eng(d, "spec-check", "--spec", "SPEC.md", "--json").stdout)["lifecycle"]
+
+
+def ready(d):
+    return eng(d, "readiness", "--ledger", "L.json").stdout
+
+
+def dash(d):
+    return json.loads(eng(d, "dashboard", "--ledger", "L.json", "--json").stdout)
+
+
+def by_name(lc):
+    return dict((c["component"], c["status"]) for c in lc["components"])
+
+
+OK_C = ("JDK", "21.0.3", "2029-09-30", "https://example.org/jdk")
+EXPIRED = ("WebFw", "3.2.5", "2026-06-30", "https://example.org/wf")
+NO_EOL = ("Store", "16.3", None, "https://example.org/store")
+UNKNOWN = ("Broker", "3.7", "unknown", "https://example.org/broker")
+NO_SRC = ("Bundler", "5.9", "2027-01-31", None)
+EXP_NO_SRC = ("Cache", "7.2", "2026-01-01", None)
+BAD_DATE = ("Runtime", "1.0", "2025-13-40", "https://example.org/rt")  # calendar-invalid (1.94.0 review)
+
+# --- AC-LC-01: a component that expires before the declared go-live is named on every surface,
+# and the command still exits 0 -- an advisory that changes an exit code is a gate in disguise.
+d1 = fixture([OK_C, EXPIRED])
+rc1, t1 = sc(d1)
+j1 = scj(d1)
+r1 = ready(d1)
+res["AC-LC-01"] = bool(rc1 == 0
+                       and "expires before go-live" in t1
+                       and j1["status"] == "measured" and j1["n_expiring"] == 1
+                       and j1["go_live"] == "2026-12-01"
+                       and by_name(j1)["WebFw"] == "expires before go-live"
+                       and any(c["detail"] == "2026-06-30 < 2026-12-01"
+                               for c in j1["components"])
+                       and ("lifecycle: 2 component(s), 1 expire before go-live "
+                            "2026-12-01 (advisory)") in r1)
+
+# --- AC-LC-02: eol at or after go-live WITH a source cited reads ok, and nothing is flagged.
+d2 = fixture([OK_C])
+rc2, t2 = sc(d2)
+j2 = scj(d2)
+res["AC-LC-02"] = bool(rc2 == 0 and j2["status"] == "measured" and j2["n_expiring"] == 0
+                       and [c["status"] for c in j2["components"]] == ["ok"]
+                       and "expires before go-live" not in t2)
+
+# --- AC-LC-03: the two named absences. A missing or `unknown` or unparseable eol is `no EOL
+# cited`; an eol nobody sourced is `no source cited`. And the sharper fact keeps the label: a date
+# that ALREADY expires is reported as expiring even when its source is missing too.
+d3 = fixture([NO_EOL, UNKNOWN, NO_SRC, EXP_NO_SRC])
+_rc3, t3 = sc(d3)
+j3 = scj(d3)
+st3 = by_name(j3)
+d3b = fixture([BAD_DATE])
+_rc3b, _t3b = sc(d3b)
+st3b = by_name(scj(d3b))
+res["AC-LC-03"] = bool(st3["Store"] == "no EOL cited" and st3["Broker"] == "no EOL cited"
+                       and st3["Bundler"] == "no source cited"
+                       and st3["Cache"] == "expires before go-live"
+                       and j3["n_expiring"] == 1
+                       and "no EOL cited" in t3 and "no source cited" in t3
+                       and st3b["Runtime"] == "no EOL cited")   # 2025-13-40 is NOT a date
+
+# --- AC-LC-04: silence is never a pass. No go-live declared and no lifecycle: block anywhere both
+# read UNMEASURED with the reason named -- and the SAME fixture WITH a go-live reads measured, so
+# the go-live parse is proved to be doing work rather than failing quietly.
+d4 = fixture([OK_C, EXPIRED], go_live=None)
+_rc4, t4 = sc(d4)
+j4 = scj(d4)
+j4b = scj(fixture([OK_C, EXPIRED]))
+d4c = fixture([], adr=False)
+j4c = scj(d4c)
+res["AC-LC-04"] = bool(j4["status"] == "UNMEASURED" and "go-live" in (j4["reason"] or "")
+                       and "UNMEASURED" in t4
+                       and j4b["status"] == "measured"
+                       and j4c["status"] == "UNMEASURED" and j4c["declared"] is False
+                       and "lifecycle: block" in (j4c["reason"] or ""))
+
+# --- AC-LC-05: advisory means the number does not move. Two fixtures identical but for one eol
+# date; the READINESS line is byte-compared. And the payload key is CONDITIONAL (the fast_path /
+# spec_drift rule): a project that declares nothing keeps the exact prior text and payload.
+d5a = fixture([OK_C, EXPIRED])
+d5b = fixture([OK_C, ("WebFw", "3.2.5", "2029-06-30", "https://example.org/wf")])
+sa = [ln for ln in ready(d5a).split("\n") if ln.startswith("READINESS:")]
+sb = [ln for ln in ready(d5b).split("\n") if ln.startswith("READINESS:")]
+d5c = fixture([], adr=False)
+res["AC-LC-05"] = bool(sa and sa == sb
+                       and dash(d5a).get("lifecycle", {}).get("n_expiring") == 1
+                       and "lifecycle" not in ready(d5c)
+                       and "lifecycle" not in dash(d5c))
+
+side = os.path.join(kit, "reports", "junit")
+os.makedirs(side, exist_ok=True)
+sp = os.path.join(side, ".lc-cases.json")
+try:
+    prev = json.loads(io.open(sp, encoding="utf-8").read())
+except (OSError, ValueError):
+    prev = {}
+prev.update(res)
+io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+bad = [k for k, v in res.items() if v is False]
+skip = [k for k, v in res.items() if v is None]
+tail = " (%d unmeasured: %s)" % (len(skip), ",".join(sorted(skip))) if skip else ""
+for _t in TMPS:
+    shutil.rmtree(_t, ignore_errors=True)
+print(("OK %d cases" % len(res)) + tail if not bad else "BAD " + ",".join(sorted(bad)))
+PY
+)
+case "$T148" in
+  OK*) PASS=$((PASS+1)); echo "  ok   stack lifecycle vs go-live (AC-LC-01..05): $T148";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T148";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -11789,6 +11970,26 @@ for _n in range(1, 12):
         results.append((_frid, "freshness-content", None))
     else:
         results.append((_frid, "freshness-content", "T147 case failed or missing"))
+
+# Stack lifecycle criteria (ADR-040): measured by T148, same sidecar contract. A missing sidecar
+# key is SKIP = UNMEASURED -- the dimension's own rule ("silence is never a pass") applied to the
+# criteria that measure it.
+def _lc_cases():
+    p = os.path.join(kit, "reports", "junit", ".lc-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_lcc = _lc_cases()
+for _n in range(1, 6):
+    _lcid = "AC-LC-%02d" % _n
+    if _lcc is None or _lcc.get(_lcid) is None:
+        results.append((_lcid, "stack-lifecycle", SKIP))
+    elif _lcc.get(_lcid) is True:
+        results.append((_lcid, "stack-lifecycle", None))
+    else:
+        results.append((_lcid, "stack-lifecycle", "T148 case failed or missing"))
 
 # Family-prefixed criteria (ADR-036): measured by T140, same sidecar contract. AC-FA-03 (the
 # bare form pinned byte-identical against the previous engine) reports None without git or the
