@@ -42,4 +42,4 @@ and the readiness advisory; a supported one reads `ok`; a missing date `no EOL c
 source `no source cited`; no go-live → UNMEASURED; and the readiness score is byte-identical with or
 without an expiring component (advisory, never a gate).
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 436 checks · 0 fail; acceptance 211/211.
