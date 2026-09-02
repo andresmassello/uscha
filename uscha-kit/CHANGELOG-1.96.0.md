@@ -145,4 +145,4 @@ project but this one. For maintainers of this repo the ritual changes: leave the
 uncommitted, write the changelog with the placeholder, update the published claims, and run
 `python tools/release.py X.Y.Z --message-file <msg> --tag`.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 440 checks · 0 fail; acceptance 227/227.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="217" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="227" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -419,6 +419,26 @@
   <testcase classname="uscha.acceptance" name="AC-AU-05_audit-fixes">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-AU-06_audit-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DF-02_dogfood-ancestry">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DF-03_dogfood-ancestry">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DF-04_dogfood-ancestry">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DF-05_dogfood-ancestry">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RL-01_release-ritual">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RL-02_release-ritual">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RL-03_release-ritual">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RL-04_release-ritual">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RL-05_release-ritual">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RL-06_release-ritual">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-01_family-ids">
   </testcase>
