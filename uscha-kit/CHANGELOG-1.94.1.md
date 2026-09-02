@@ -96,4 +96,4 @@ of raising, a mistyped `--ruff` that exits 2 naming the path while a real report
 `fastpath-eval`/`cleanroom` on the `integration` scope no longer naming a config entry that never
 existed. Acceptance goes 211 → 217 criteria; nothing was dropped.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 439 checks · 0 fail; acceptance 217/217.
