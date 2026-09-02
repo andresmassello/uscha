@@ -7053,11 +7053,10 @@ def _struct_distance(a, b):
 
 
 def _oracle_hash(arm_dir):
-    try:
-        with open(os.path.join(arm_dir, "oracle", "ORACLE.json"), "rb") as fh:
-            return hashlib.sha256(fh.read()).hexdigest()
-    except OSError:
-        return None
+    # the arm's withheld oracle, hashed by exact bytes -- an arm whose oracle differs by one
+    # byte is a different experiment (cmd_lang_compare refuses the pair). Same rule, and now the
+    # same code, as a manifest unit: `_sha256_file`.
+    return _sha256_file(os.path.join(arm_dir, "oracle", "ORACLE.json"))
 
 
 def cmd_lang_compare(args):
@@ -7548,11 +7547,18 @@ DEFAULT_STATIC_ZERO_AT = 10  # gated-open count at which the static dimension hi
 BANDS = [(95, "READY"), (80, "RELEASE CANDIDATE"), (50, "IN PROGRESS"), (0, "NOT READY")]
 
 
-def _band(score):
-    for floor, label in BANDS:
+def _banded(score, bands):
+    """The label of the highest floor the score reaches. Every band table ends at floor 0, so
+    the last row IS the default -- named once here instead of being restated as a trailing
+    `return` in four callers, where it read as a fifth band nobody could reach (1.95.0)."""
+    for floor, label in bands:
         if score >= floor:
             return label
-    return "NOT READY"
+    return bands[-1][1]
+
+
+def _band(score):
+    return _banded(score, BANDS)
 
 
 _AC_ID = re.compile(r"(?i)^[*_`]*\s*AC[-_]?0*(\d+)\b[*_`]*[\s.:—–·-]*")
@@ -9216,7 +9222,9 @@ def cmd_top(args):
 
     total = len(obligations)
     done, fail, quar = _n("MEASURED_PASS"), _n("MEASURED_FAIL"), _n("QUARANTINE")
-    unmeasured = _n("UNMEASURED") + _n("TRACED")
+    # TRACED/TAGGED are declared in TOP_STATES for the renderer and NEVER assigned above
+    # (v0.1 has no source for either), so only UNMEASURED can carry a count here.
+    unmeasured = _n("UNMEASURED")
     pct = _top_pct(done, total)
     # INV-TOP-06 (ADR-038): DONE never publishes 100% while the seal is MEASURED broken --
     # every criterion green against evidence that no longer belongs to this code state is
@@ -9780,17 +9788,11 @@ _FUNC_RE = re.compile(
 
 
 def _simplicity_band(score):
-    for floor, label in SIMPLICITY_BANDS:
-        if score >= floor:
-            return label
-    return "OVERBUILT"
+    return _banded(score, SIMPLICITY_BANDS)
 
 
 def _rebuild_band(score):
-    for floor, label in REBUILD_BANDS:
-        if score >= floor:
-            return label
-    return "DIVERGE"
+    return _banded(score, REBUILD_BANDS)
 
 
 def _test_file_set(repo_path, repo_type):
@@ -10349,10 +10351,7 @@ _WASTE_COMMENT = ("//", "#", "*", "--", "/*", "*/", '"""', "'''", ";;", "<!--")
 
 
 def _waste_band(score):
-    for floor, label in WASTE_BANDS:
-        if score >= floor:
-            return label
-    return "WASTEFUL"
+    return _banded(score, WASTE_BANDS)
 
 
 def _path_allowed(rel, allow_paths):

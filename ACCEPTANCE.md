@@ -723,8 +723,7 @@ green, and every one of them was the same mistake in a different costume: absenc
 number, or a measurement discarded before anyone read it. Two live in the SUITE -- a `chk` whose
 `FAIL=$((FAIL+1))` incremented a copy inside a `( cd ... )` subshell, and a T-block that ran after
 `SMOKE_STATUS` was frozen and after `$FAIL` was handed to the acceptance emitter -- so neither can
-be caught by running the suite: they are pinned by a STATIC scan of the suite file, the way T106
-pins version literals. Three live in the ENGINE: a corrupt JaCoCo module report summed as `(0, 0)`
+be caught by running the suite: they are pinned by a STATIC scan of the suite file itself. Three live in the ENGINE: a corrupt JaCoCo module report summed as `(0, 0)`
 while `report_found` stayed true, an explicit `--<linter>` path that did not exist ingested as
 silence and exited 0, and the synthetic `integration` scope crashing `fastpath-eval` and
 `cleanroom` because they read `_repo_cfg` instead of `_scope_path`. Measured by T149 through the

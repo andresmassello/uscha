@@ -3531,37 +3531,16 @@ echo "== T113 (1.57.0): fastpath-eval -- measured ALLOW/DENY, escalation, fail-c
 # opaque aggregate. The golden (AC-FP-08) compares the CURRENT engine against the anchor
 # captured BEFORE this feature existed; without a human-approved anchor it reports null ->
 # emitted as skipped, never as a silent pass.
-rm -f "$KIT/reports/junit/.fastpath-cases.json"   # a stale green sidecar must never survive a crashed T113
-rm -f "$KIT/reports/junit/.specdrift-cases.json"  # same rule for T114
-rm -f "$KIT/reports/junit/.goldencov-cases.json"  # same rule for T117
-rm -f "$KIT/reports/junit/.origin-cases.json"     # same rule for T118
-rm -f "$KIT/reports/junit/.cleanroom-cases.json"  # same rule for T119
-rm -f "$KIT/reports/junit/.curation-cases.json"   # same rule for T120
-rm -f "$KIT/reports/junit/.oracle-cases.json"     # same rule for T121
-rm -f "$KIT/reports/junit/.facts-cases.json"      # same rule for T122
-rm -f "$KIT/reports/junit/.delta-cases.json"      # same rule for T123
-rm -f "$KIT/reports/junit/.fidelity-cases.json"   # same rule for T124
-rm -f "$KIT/reports/junit/.ir-cases.json"         # same rule for T125
-rm -f "$KIT/reports/junit/.compile-cases.json"    # same rule for T126
-rm -f "$KIT/reports/junit/.bootstrap-cases.json"  # same rule for T127
-rm -f "$KIT/reports/junit/.bench-cases.json"      # same rule for T128
-rm -f "$KIT/reports/junit/.lang-cases.json"       # same rule for T129
-rm -f "$KIT/reports/junit/.bench-curate-cases.json"  # same rule for T130
-rm -f "$KIT/reports/junit/.lang3-cases.json"      # same rule for T131
-rm -f "$KIT/reports/junit/.sched-cases.json"      # same rule for T132
-rm -f "$KIT/reports/junit/.r2-cases.json"         # same rule for T133
-rm -f "$KIT/reports/junit/.js-cases.json"         # same rule for T134
-rm -f "$KIT/reports/junit/.multi-cases.json"      # same rule for T135
-rm -f "$KIT/reports/junit/.rt-cases.json"         # same rule for T136
-rm -f "$KIT/reports/junit/.top-cases.json"        # same rule for T137/T138/T141
-rm -f "$KIT/reports/junit/.fa-cases.json"         # same rule for T140
-rm -f "$KIT/reports/junit/.ct-cases.json"         # same rule for T146
-rm -f "$KIT/reports/junit/.fr-cases.json"         # same rule for T147
-rm -f "$KIT/reports/junit/.lc-cases.json"         # same rule for T148
-rm -f "$KIT/reports/junit/.au-cases.json"         # same rule for T149
+# A stale green sidecar must never survive a crashed block: every one of them is removed
+# before the first measuring block runs. The glob replaces 28 hand-listed paths (1.95.0)
+# -- `$KIT/reports/` is build output, gitignored, and holds nothing but these sidecars, so
+# a family added tomorrow is covered without anyone remembering to add a line here.
+rm -f "$KIT/reports/junit/".*-cases.json
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(repo)
@@ -3638,9 +3617,7 @@ if os.path.isfile(approved) and os.path.isfile(harness):
 else:
     res["AC-FP-08"] = None   # UNMEASURED until a human approves the anchor
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".fastpath-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".fastpath-cases.json", res)
 bad = [k for k, v in res.items() if v is False]
 unm = [k for k, v in res.items() if v is None]
 print("OK %d cases%s" % (sum(1 for v in res.values() if v),
@@ -3659,6 +3636,8 @@ echo "== T114 (1.58.0): spec-drift -- advisory drift from commit dates, never a 
 T114=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -3729,9 +3708,7 @@ eng("init", "--config", "c.json", "--out", "L2.json")
 r = eng("dashboard", "--ledger", "L2.json", "--json"); virgin = "spec_drift" in json.loads(r.stdout)
 dash_ok = has and not virgin
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".specdrift-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".specdrift-cases.json", res)
 bad = [k for k, v in res.items() if not v] + ([] if dash_ok else ["dashboard-passthrough"])
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(bad))
 PY
@@ -3832,6 +3809,8 @@ echo "== T117 (1.60.0): golden-coverage -- measured mapping + the opt-in veto (A
 T117=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(repo)
@@ -4003,10 +3982,7 @@ if have_cov:
 else:
     res["AC-GM-08"] = None       # UNMEASURED without the capture-time dependency
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".goldencov-cases.json"), "w", encoding="utf-8").write(
-    json.dumps(res))
+sidecar(kit, ".goldencov-cases.json", res)
 bad = [k for k, v in res.items() if v is False]
 unm = [k for k, v in res.items() if v is None]
 print("OK %d cases%s" % (sum(1 for v in res.values() if v),
@@ -4026,6 +4002,8 @@ echo "== T118 (1.61.0): evidence origin -- the commit and tree state it was meas
 T118=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 
@@ -4135,9 +4113,7 @@ eng(w, "init", "--config", "c.json", "--out", "L2.json")
 d2 = json.loads(eng(w, "dashboard", "--ledger", "L2.json", "--json").stdout)
 dash_ok = ("evidence_origin" in d1) and ("evidence_origin" not in d2)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".origin-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".origin-cases.json", res)
 bad = [k for k, v in res.items() if not v] + ([] if dash_ok else ["dashboard-passthrough"])
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(bad))
 PY
@@ -4154,6 +4130,8 @@ echo "== T119 (1.63.0): cleanroom -- verify the COMMIT, not the tree (ADR-008) =
 T119=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(os.path.join(repo, "reports"))
@@ -4249,9 +4227,7 @@ res["AC-CR-08"] = (_ip.returncode == 1
                    and "no config entry" not in (_ip.stdout + _ip.stderr)
                    and "PHASE integration" in _ip.stdout)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".cleanroom-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".cleanroom-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -4268,6 +4244,8 @@ echo "== T120 (1.64.0): curation -- candidates in quarantine, verdicts in the le
 T120=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -4409,9 +4387,7 @@ for cmdname in ("spec-drift", "curation-check", "roundtrip"):
         ok13 = False
 res["AC-RD-13"] = ok13
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".curation-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".curation-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -4425,6 +4401,8 @@ echo "== T121 (1.65.0): oracle -- declared divergences + roundtrip by spec-id (s
 T121=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); os.makedirs(os.path.join(w, "golden"))
@@ -4515,9 +4493,7 @@ r = eng("dashboard", "--ledger", "Lv.json", "--json")
 virgin = "roundtrip" in json.loads(r.stdout)
 res["AC-RD-12"] = bool(persisted and has and not virgin)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".oracle-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".oracle-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -4531,6 +4507,8 @@ echo "== T122 (1.68.0): facts -- published claims become compiled artifacts (T0,
 T122=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp()
@@ -4580,9 +4558,7 @@ rt = subprocess.run([sys.executable, TWIN, "facts", "--out", "ftwin.json"],
 tb = io.open(os.path.join(w, "ftwin.json"), "rb").read() if rt.returncode == 0 else b""
 res["AC-SF-05"] = rt.returncode == 0 and tb == b1
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".facts-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".facts-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -4598,6 +4574,8 @@ echo "== T123 (1.69.0): CANDIDATE-DELTA -- typed observations, verdicts as ledge
 T123=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -4817,10 +4795,7 @@ res["review-h1"] = (rh.returncode == 2 and "shape invalid" in rh.stderr
                     and rph.returncode == 1 and "Traceback" not in rph.stderr
                     and "CANDIDATE-DELTA invalido" in rph.stdout + rph.stderr)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".delta-cases.json"), "w", encoding="utf-8").write(
-    json.dumps(res))
+sidecar(kit, ".delta-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -4834,6 +4809,8 @@ echo "== T124 (1.69.0): fidelity -- a vector of measured dimensions; advisory ca
 T124=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -4952,10 +4929,7 @@ rm = eng("fidelity", "--ledger", "L.json", "--repo", "r")
 res["review-m4"] = (rm.returncode == 2 and "malformed" in rm.stderr
                     and "no delta" not in rm.stdout)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".fidelity-cases.json"), "w", encoding="utf-8").write(
-    json.dumps(res))
+sidecar(kit, ".fidelity-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -4969,6 +4943,8 @@ echo "== T125 (1.72.0): IR -- the canonical package extracts into a typed graph 
 T125=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -5080,9 +5056,7 @@ vir = json.loads(eng("fidelity", "--ledger", "L.json", "--repo", "r", "--ir",
 res["AC-IR-06"] = (v0 == 1.0 and vir["value"] == v0
                    and "IR path query" in vir["provenance"])
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".ir-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".ir-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -5096,6 +5070,8 @@ echo "== T126 (1.73.0): compiler contract -- the LLM is a validated backend; onl
 T126=$("$PY" - "$KIT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 FIX = os.path.join(kit, "tests", "fixtures", "compile-ref")
 IR = os.path.join(FIX, "IR.json")
@@ -5246,9 +5222,7 @@ res["AC-CC-07"] = (rc_o == 0 and rep_o.get("valid") is True
                    and rep_o.get("advisory", {}).get("degenerate") is False
                    and rep_s.get("advisory", {}).get("degenerate") is False)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".compile-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".compile-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -5262,6 +5236,8 @@ echo "== T127 (1.74.0): bootstrap -- a bounded subsystem's identity is its canon
 T127=$("$PY" - "$KIT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BF = os.path.join(kit, "tests", "fixtures", "bootstrap-golden-hook")
 IR = os.path.join(BF, "IR.json")
@@ -5398,9 +5374,7 @@ res["reg-oracle-child-gets-no-coverage-hook"] = bool(
     and all(c.get("ok") for c in rep_env.get("results", []))
     and rep_env.get("total") == 1)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".bootstrap-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".bootstrap-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -5410,10 +5384,33 @@ case "$T127" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T127";;
 esac
 
+# ---------------------------------------------------------------------------- #
+# diamond-bench cache (1.95.0): three full-fixture passes, run ONCE.
+# ---------------------------------------------------------------------------- #
+# T128/T132/T133/T134/T135/T136 each used to launch their own full pass over the pristine
+# fixture -- seven plain, two --fidelity, three bench-r2 -- to assert against the SAME numbers.
+# Each pass is ~50-60 s and ~648 child processes here, and the fixture is READ-ONLY while the
+# engine is deterministic over it (ADR-027 pins the r2 classes, ADR-030 the round-trip). Twelve
+# runs of one measurement is not twelve measurements. They are produced here and read back by
+# `_harness.bench_cached`; the plain pass emits --out and --json together, so ONE run yields both
+# the JSON and DIAMOND-BENCH.md. A bench over a MUTATED or temporary copy of the fixture is a
+# different measurement and still runs in its own block; T128 keeps its scoped `guard`-only
+# --fidelity re-run as the determinism probe.
+BENCH_FIXTURE="$KIT/tests/fixtures/diamond-bench"
+BENCH_CACHE_DIR="$SB/bench-cache"
+mkdir -p "$BENCH_CACHE_DIR"
+export BENCH_CACHE_DIR
+run bench --dir "$BENCH_FIXTURE" --out "$BENCH_CACHE_DIR/DIAMOND-BENCH.md" --json \
+  > "$BENCH_CACHE_DIR/bench.json"
+run bench --dir "$BENCH_FIXTURE" --fidelity --json > "$BENCH_CACHE_DIR/bench-fid.json"
+run bench-r2 --dir "$BENCH_FIXTURE" --json > "$BENCH_CACHE_DIR/bench-r2.json"
+
 echo "== T128 (1.75.0): the Diamond Bench -- regeneration fidelity across archetypes; PASS/PARTIAL/FAIL/PENDING (M5, ADR-018) =="
 T128=$("$PY" - "$KIT" <<'PY'
 import hashlib, importlib.util, io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import bench_cache_path, bench_cached, sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
 res = {}
@@ -5430,17 +5427,15 @@ def bench(dirpath):
         return {}
 
 # AC-DB-01: bench over the committed dir emits a table; a PASS entry's numbers are a real run;
-# DIAMOND-BENCH.md is written
-d = bench(BENCH)
+# DIAMOND-BENCH.md is written. Both come from the ONE cached full pass (--out + --json).
+d = bench_cached("bench")
 byarch = {r["archetype"]: r for r in d.get("raw", [])}
 oracle = os.path.join(BENCH, "parser", "oracle", "ORACLE.json")
 impl = os.path.join(BENCH, "parser", "c-opus", "source", "impl.py")
 rr = subprocess.run([sys.executable, ENG, "bootstrap-oracle", "--impl", impl, "--oracle", oracle,
                      "--json"], capture_output=True, text=True, encoding="utf-8", errors="replace")
 direct = json.loads(rr.stdout)["passed"]
-outp = os.path.join(tempfile.mkdtemp(), "DIAMOND-BENCH.md")
-subprocess.run([sys.executable, ENG, "bench", "--dir", BENCH, "--out", outp],
-               capture_output=True, text=True, encoding="utf-8", errors="replace")
+outp = bench_cache_path("md")
 res["AC-DB-01"] = (d.get("entries") == 12 and byarch.get("parser", {}).get("verdict") == "PASS"
                    and byarch.get("crud-store", {}).get("verdict") == "PASS"
                    and all(r["verdict"] != "PENDING" for r in d.get("raw", []))
@@ -5607,14 +5602,7 @@ def wrongs_red(e):
 res["AC-BG-05"] = d.get("entries") == 12 and all(wrongs_red(e) for e in NEW5)
 
 # Fidelity-per-compiler criteria (ADR-022): advisory descriptor, opt-in, UNMEASURED named.
-def bench_fid():
-    r = subprocess.run([sys.executable, ENG, "bench", "--dir", BENCH, "--fidelity", "--json"],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace")
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {}
-df1 = bench_fid()
+df1 = bench_cached("fidelity")
 # determinism re-run over the guard entry ONLY (a full second 27-compilation bench pass is
 # minutes of subprocess launches on Windows; one entry proves determinism at 1/9 the cost)
 gdir = os.path.join(w, "fidsub")
@@ -5665,9 +5653,7 @@ def closure_ok(c):
             and cl == round(float(cu["judged"]) / max(cu.get("total", 1), 1), 3))
 res["AC-FC-03"] = (all(closure_ok(c) for c in allc1) and v_flag == v_none)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".bench-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".bench-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -5681,6 +5667,8 @@ echo "== T129 (1.76.0): the controlled-language arm -- free prose vs EARS+STE, s
 T129=$("$PY" - "$KIT" <<'PY'
 import hashlib, importlib.util, io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
 FREE = os.path.join(CL, "free")
@@ -5874,9 +5862,7 @@ res["AC-CL2-04"] = all(os.path.isfile(os.path.join(kit, "..", f)) for f in
                        ("CONTROLLED-LANGUAGE-REPORT.md", "CONTROLLED-LANGUAGE-CONTROL.md",
                         "CONTROLLED-LANGUAGE-DECONFOUNDED.md"))
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".lang-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".lang-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -5890,6 +5876,8 @@ echo "== T130 (1.80.0): bench-curate -- ONE human verdict per observation, measu
 T130=$("$PY" - "$KIT" <<'PY'
 import io, json, os, re, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
 res = {}
@@ -5979,10 +5967,7 @@ try:
                        and "STALE" in lst2.stdout)
 finally:
     shutil.rmtree(w, ignore_errors=True)
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".bench-curate-cases.json"), "w",
-        encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".bench-curate-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -5996,6 +5981,8 @@ echo "== T131 (1.81.0): controlled-language v0.3 -- replication across archetype
 T131=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
 res = {}
@@ -6075,10 +6062,7 @@ res["AC-CL3-03"] = ("5 deconfounded archetypes" in body
                     and "| parser |" in body and "| state-machine |" in body
                     and "| transformer |" in body and "**WORSE**" in body
                     and body.count("**NO EFFECT**") >= 2)
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".lang3-cases.json"), "w",
-        encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".lang3-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -6092,6 +6076,8 @@ echo "== T132 (1.83.0): the slack hypothesis, tested -- scheduler enters the ben
 T132=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import bench_cached, sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
 CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
@@ -6110,12 +6096,6 @@ def oracle(impl):
         return json.loads(r.stdout)
     except ValueError:
         return {}
-def bench(dirpath):
-    r = run("bench", "--dir", dirpath, "--json")
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {}
 
 # AC-SH-01: the scheduler oracle discriminates -- the degenerate stub is red, EVERY wrong/
 # implementation is red (each breaks exactly one rule), and the bench's own discrimination
@@ -6126,7 +6106,7 @@ wd = os.path.join(SCHED, "wrong")
 wrongs = sorted(f for f in os.listdir(wd) if f.endswith(".py"))
 wrong_ok = bool(wrongs) and all(oracle(os.path.join(wd, f)).get("oracle_green") is False
                                 for f in wrongs)
-d0 = bench(BENCH)
+d0 = bench_cached("bench")
 sched_raw = [r for r in d0.get("raw", []) if r["archetype"] == "scheduler"]
 disc_ok = (bool(sched_raw)
            and (sched_raw[0].get("discrimination") or {}).get("stub_green") is False)
@@ -6237,10 +6217,7 @@ res["AC-LI-03"] = ("## Verdict: IMPROVED" in fresh and "convergence on a shared 
                    and "## Verdict: IMPROVED" in committed_body
                    and "convergence on a shared reading" in committed_body)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".sched-cases.json"), "w",
-        encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".sched-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -6254,6 +6231,8 @@ echo "== T133 (1.84.0): the noise floor -- intra-model variance under the bench,
 T133=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import bench_cached, sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
 res = {}
@@ -6264,13 +6243,6 @@ spec.loader.exec_module(q)
 def run(*a):
     return subprocess.run([sys.executable, ENG] + list(a), capture_output=True,
                           text=True, encoding="utf-8", errors="replace")
-
-def bench_json(dirpath):
-    r = run("bench", "--dir", dirpath, "--json")
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {}
 
 def bench_r2_json(dirpath):
     r = run("bench-r2", "--dir", dirpath, "--json")
@@ -6291,7 +6263,7 @@ shutil.copytree(os.path.join(BENCH, "protocol-adapter"), os.path.join(tcopy, "pr
 with_r2 = run("bench", "--dir", tcopy, "--json")
 shutil.rmtree(os.path.join(tcopy, "protocol-adapter", "r2"))
 without_r2 = run("bench", "--dir", tcopy, "--json")
-d0 = bench_json(BENCH)
+d0 = bench_cached("bench")
 partial = sorted(r["archetype"] for r in d0.get("raw", []) if r["verdict"] == "PARTIAL")
 res["AC-R2-01"] = (with_r2.stdout == without_r2.stdout and with_r2.returncode == 0
                    and d0.get("entries") == 12
@@ -6302,7 +6274,7 @@ res["AC-R2-01"] = (with_r2.stdout == without_r2.stdout and with_r2.returncode ==
 # rate-limiter and ledger-lite carry no r2/ at all (ADR-028, ADR-029) -- their has_r2 False is
 # the legitimately-absent case, not a shape defect, so the loop skips them without failing
 # shape_ok; the absence contract itself is asserted below by absent_ok/gap_ok.
-r2d0 = bench_r2_json(BENCH)
+r2d0 = bench_cached("r2")
 raw = r2d0.get("raw", [])
 def expect_class(ratio):
     if ratio is None:
@@ -6413,9 +6385,7 @@ agg_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("
 res["AC-R2-03"] = res["AC-R2-03-compile"] and classes_ok and agg_ok
 del res["AC-R2-03-compile"]
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".r2-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".r2-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -6429,6 +6399,8 @@ echo "== T134 (1.85.0): the method leaves Python -- a JS archetype under the wit
 T134=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import bench_cached, sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
 CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
@@ -6449,20 +6421,13 @@ def bench_json(dirpath, fidelity=False):
     except ValueError:
         return {}
 
-def bench_r2_json(dirpath):
-    r = run("bench-r2", "--dir", dirpath, "--json")
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {}
-
 # AC-JS-01: Python untouched -- the bench now reports 12 entries (rate-limiter and ledger-lite
 # join the 10 original Python archetypes) but every Python verdict is pinned exactly as it was
 # before ADR-028/ADR-029; bench-r2's aggregate is unaffected (neither rate-limiter nor
 # ledger-lite has r2/, so neither ever enters "measured"); lang-compare over the scheduler pair
 # is byte-for-byte the same computation (the refactor routes JS and multi-unit entries through
 # new organs, it does not touch the Python single-unit metrics path at all).
-d0 = bench_json(BENCH)
+d0 = bench_cached("bench")
 WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "ledger-lite": "PASS",
                 "parser": "PASS", "protocol-adapter": "PASS", "rest-handler": "PARTIAL",
                 "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PASS",
@@ -6470,7 +6435,7 @@ WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "ledger-lite": "PASS",
 py_verdicts_ok = all(
     next((r for r in d0.get("raw", []) if r["archetype"] == a), {}).get("verdict") == v
     for a, v in WANT_VERDICT.items())
-r2d0 = bench_r2_json(BENCH)
+r2d0 = bench_cached("r2")
 agg = r2d0.get("aggregate", {})
 rl_r2 = next((r for r in r2d0.get("raw", []) if r["archetype"] == "rate-limiter"), {})
 ll_r2 = next((r for r in r2d0.get("raw", []) if r["archetype"] == "ledger-lite"), {})
@@ -6599,9 +6564,7 @@ else:
             fid_ok = False
     res["AC-JS-03"] = bool(metrics_ok and dist_ok and static_ok and fid_ok)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".js-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".js-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -6615,6 +6578,8 @@ echo "== T135 (1.85.0): the bench leaves the single file -- a multi-unit archety
 T135=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, subprocess, sys
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import bench_cached, sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
 CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
@@ -6628,22 +6593,7 @@ def run(*a):
     return subprocess.run([sys.executable, ENG] + list(a), capture_output=True,
                           text=True, encoding="utf-8", errors="replace")
 
-def bench_json(dirpath, fidelity=False):
-    args = ["bench", "--dir", dirpath, "--json"] + (["--fidelity"] if fidelity else [])
-    r = run(*args)
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {}
-
-def bench_r2_json(dirpath):
-    r = run("bench-r2", "--dir", dirpath, "--json")
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {}
-
-d0 = bench_json(BENCH)
+d0 = bench_cached("bench")
 byarch = {r["archetype"]: r for r in d0.get("raw", [])}
 
 # AC-MU-01: single-unit Python entries unchanged -- the same bench verdicts, the same scheduler
@@ -6666,7 +6616,7 @@ lang_ok = (rep_sh.get("verdict") == "IMPROVED"
           # the decimal -- the same lesson the r2 ratios taught
           and 0.015 <= (rep_sh.get("free", {}).get("variance_score") or 0) <= 0.03
           and 0.17 <= (rep_sh.get("controlled", {}).get("variance_score") or 0) <= 0.20)
-r2d0 = bench_r2_json(BENCH)
+r2d0 = bench_cached("r2")
 agg = r2d0.get("aggregate", {})
 r2_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 5
         and agg.get("noise") == 4 and agg.get("measured") == 10)
@@ -6703,7 +6653,7 @@ bench_ok = (ll_rec.get("verdict") == "PASS"
                    and c.get("entry_unit") == "source/cli.py"
                    and c.get("units") == 2
                    for c in ll_rec.get("compilations", [])))
-fid = bench_json(BENCH, fidelity=True)
+fid = bench_cached("fidelity")
 fid_by = {r["archetype"]: r for r in fid.get("raw", [])}
 ll_fid = fid_by.get("ledger-lite", {})
 fid_ok = bool(ll_fid.get("compilations")) and all(
@@ -6740,9 +6690,7 @@ named_ok = (wrong_verdicts.get("balance-in-cli") is False
 disc_ok = (ll_rec.get("discrimination") or {}).get("stub_green") is False
 res["AC-MU-03"] = bool(stub_ok and wrong_ok and named_ok and disc_ok)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".multi-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".multi-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -6756,6 +6704,8 @@ echo "== T136 (1.85.0): the round trip gets its honest number -- reverse organs 
 T136=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import glob, io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import bench_cached, sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
 CL = os.path.join(kit, "tests", "fixtures", "controlled-language")
@@ -6764,13 +6714,6 @@ res = {}
 def run(*a, py=sys.executable):
     return subprocess.run([py, ENG] + list(a), capture_output=True,
                           text=True, encoding="utf-8", errors="replace")
-
-def bench_json(dirpath):
-    r = run("bench", "--dir", dirpath, "--json")
-    try:
-        return json.loads(r.stdout)
-    except ValueError:
-        return {"_failed": {"rc": r.returncode, "err": (r.stderr or "")[-400:]}}
 
 def rt_json(dirpath, out=None, py=sys.executable):
     args = ["bench-roundtrip", "--dir", dirpath, "--json"]
@@ -6836,7 +6779,7 @@ WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "parser": "PASS",
                 "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PASS",
                 "ui-render": "PASS", "worker": "PASS", "rate-limiter": "PASS",
                 "ledger-lite": "PASS"}
-b0 = bench_json(BENCH)
+b0 = bench_cached("bench")
 byarch = {r["archetype"]: r for r in b0.get("raw", [])}
 bench_ok = (len(b0.get("raw", [])) == 12
            and all(byarch.get(a, {}).get("verdict") == v for a, v in WANT_VERDICT.items()))
@@ -6867,8 +6810,6 @@ if not bench_ok:
              if byarch.get(a, {}).get("verdict") != v]
     why["AC-RT-01"].append("verdicts moved: " + ("; ".join(moved) or "none, %d entries"
                                                  % len(b0.get("raw") or [])))
-    if b0.get("_failed"):
-        why["AC-RT-01"].append("bench --json failed: %s" % json.dumps(b0["_failed"]))
 if not no_new_ir:
     why["AC-RT-01"].append("files appeared: %s" % sorted(after - before)[:6])
 if d0.get("_failed"):
@@ -7082,9 +7023,7 @@ res["AC-RT-04"] = not rt4
 why["AC-RT-04"] = rt4
 shutil.rmtree(w4, ignore_errors=True)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".rt-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".rt-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(
     "%s(%s)" % (k, ",".join(why.get(k) or ["?"])) for k in sorted(bad)))
@@ -7102,6 +7041,8 @@ echo "== T137 (uscha top M1): the engine computes the WHOLE projection, and a fi
 T137=$(pyin "$KIT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
 NAMES = ("healthy", "stale-quarantine", "honesty-negative")
@@ -7543,9 +7484,7 @@ except ValueError:
     ok = False
 res["AC-T-11"] = bool(ok)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".top-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".top-cases.json", res)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -7562,6 +7501,8 @@ echo "== T138 (uscha top M1): render() is pure and its oracle is golden frames (
 T138=$(pyin "$KIT" <<'PY'
 import ast, io, json, os, subprocess, sys, tempfile, unicodedata
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 TUI = os.path.join(SKILL, "uscha_top.py")
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
@@ -8020,15 +7961,7 @@ for bad_seal in ("nope", 7, [], {"ok": False, "reasons": "dirty"},
             ok = False
 res["reg-top-render-state-text-cannot-widen-or-escape"] = bool(ok)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-sp = os.path.join(side, ".top-cases.json")
-try:
-    prev = json.loads(io.open(sp, encoding="utf-8").read())
-except (OSError, ValueError):
-    prev = {}
-prev.update(res)
-io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+sidecar(kit, ".top-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -8130,6 +8063,8 @@ echo "== T140 (ADR-036): family-prefixed AC ids enter the measured pipeline; the
 T140=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 _spec = importlib.util.spec_from_file_location("ql140", ENG)
 q = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(q)
@@ -8309,9 +8244,7 @@ if gok:
 else:
     res["AC-FA-06"] = None      # no usable git here -> UNMEASURED, never a silent pass
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-io.open(os.path.join(side, ".fa-cases.json"), "w", encoding="utf-8").write(json.dumps(res))
+sidecar(kit, ".fa-cases.json", res)
 shutil.rmtree(d, ignore_errors=True)
 bad = [k for k, v in res.items() if v is False]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
@@ -8331,6 +8264,8 @@ echo "== T141 (uscha top M3): VERDICTS mode -- the ONE write, made by the engine
 T141=$(pyin "$KIT" <<'PY'
 import ast, io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 ENG = os.path.join(SKILL, "qa_ledger.py")
 TUI = os.path.join(SKILL, "uscha_top.py")
@@ -8810,15 +8745,7 @@ if not (isinstance(at_a, str) and isinstance(at_b, str) and len(at_a) == len(at_
     ok = False
 res["AC-T-17"] = bool(ok)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-sp = os.path.join(side, ".top-cases.json")
-try:
-    prev = json.loads(io.open(sp, encoding="utf-8").read())
-except (OSError, ValueError):
-    prev = {}
-prev.update(res)
-io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+sidecar(kit, ".top-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -9189,6 +9116,8 @@ echo "== T145 (uscha top M4): the drift pane reads, and 'o' triggers what the hu
 T145=$("$PY" - "$KIT" <<'PY'
 import ast, io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 ENG = os.path.join(SKILL, "qa_ledger.py")
 TUI = os.path.join(SKILL, "uscha_top.py")
@@ -9707,15 +9636,7 @@ if "[d]iff" not in board[-1] or "[o] rerun" not in board[-1] or "phase 2" in boa
     ok = False
 res["AC-T-29"] = bool(res.get("AC-T-29", True) and ok)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-sp = os.path.join(side, ".top-cases.json")
-try:
-    prev = json.loads(io.open(sp, encoding="utf-8").read())
-except (OSError, ValueError):
-    prev = {}
-prev.update(res)
-io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+sidecar(kit, ".top-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -9736,6 +9657,8 @@ echo "== T146 (1.92.0): TERMINADO is sealed to the exact code state -- INV-T1 in
 T146=$(pyin "$KIT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 ENG = os.path.join(SKILL, "qa_ledger.py")
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
@@ -10007,15 +9930,7 @@ res["AC-CT-11"] = bool(rc == 2 and seal(d11).get("ok") is None
                        and not any("altered" in r or "missing" in r for r in sr)
                        and "UNMEASURED" in out)
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-sp = os.path.join(side, ".ct-cases.json")
-try:
-    prev = json.loads(io.open(sp, encoding="utf-8").read())
-except (OSError, ValueError):
-    prev = {}
-prev.update(res)
-io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+sidecar(kit, ".ct-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -10035,6 +9950,8 @@ echo "== T147 (1.93.0): freshness by CONTENT and COMMIT, and a seal that tolerat
 T147=$(pyin "$KIT" "$ROOT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 
@@ -10355,15 +10272,7 @@ res["AC-FR-11"] = bool(ok11 and all(r.get("sha256_eol") == "lf"
                                     for r in snap11["tests"]["reports"]))
 
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-sp = os.path.join(side, ".fr-cases.json")
-try:
-    prev = json.loads(io.open(sp, encoding="utf-8").read())
-except (OSError, ValueError):
-    prev = {}
-prev.update(res)
-io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+sidecar(kit, ".fr-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if v is False]
 skip = [k for k, v in res.items() if v is None]
 tail = " (%d unmeasured: %s)" % (len(skip), ",".join(sorted(skip))) if skip else ""
@@ -10386,6 +10295,8 @@ echo "== T148 (1.94.0): the stack has an EXPIRY DATE -- the lifecycle dimension 
 T148=$(pyin "$KIT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 TMPS = []
@@ -10535,15 +10446,7 @@ res["AC-LC-05"] = bool(sa and sa == sb
                        and "lifecycle" not in ready(d5c)
                        and "lifecycle" not in dash(d5c))
 
-side = os.path.join(kit, "reports", "junit")
-os.makedirs(side, exist_ok=True)
-sp = os.path.join(side, ".lc-cases.json")
-try:
-    prev = json.loads(io.open(sp, encoding="utf-8").read())
-except (OSError, ValueError):
-    prev = {}
-prev.update(res)
-io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+sidecar(kit, ".lc-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if v is False]
 skip = [k for k, v in res.items() if v is None]
 tail = " (%d unmeasured: %s)" % (len(skip), ",".join(sorted(skip))) if skip else ""
@@ -10560,13 +10463,15 @@ esac
 echo "== T149 (1.94.1): the audit fixes -- two false greens in the suite, three invented facts in the engine =="
 # An audit of the suite and the engine found five ways a red thing could read green. Two live in
 # the HARNESS (a chk whose counter died in a subshell; a T-block that ran after the exit status
-# was already frozen) and cannot be self-tested by running them -- they are pinned STATICALLY the
-# way T106 pins version literals. Three live in the ENGINE and are pinned by behaviour: a corrupt
+# was already frozen) and cannot be self-tested by running them -- they are pinned STATICALLY, by
+# scanning the suite's own source. Three live in the ENGINE and are pinned by behaviour: a corrupt
 # coverage report summed as zero, an explicit linter path nobody could find ingested as silence,
 # and the synthetic `integration` scope crashing two commands that never learned about _scope_path.
 T149=$(pyin "$KIT" <<'PY'
 import io, json, os, re, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 SUITE = os.path.join(kit, "tests", "smoke-engine.sh")
 res = {}
@@ -10732,16 +10637,7 @@ finally:
     for _t in TMPS:
         shutil.rmtree(_t, ignore_errors=True)
 
-side = os.path.join(kit, "reports", "junit")
-if not os.path.isdir(side):
-    os.makedirs(side)
-sp = os.path.join(side, ".au-cases.json")
-try:
-    prev = json.loads(io.open(sp, encoding="utf-8").read())
-except (OSError, ValueError):
-    prev = {}
-prev.update(res)
-io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+sidecar(kit, ".au-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if v is False]
 print(("OK %d cases" % len(res)) if not bad
       else "BAD " + ",".join(sorted(bad)) + " | "
@@ -11070,42 +10966,6 @@ rm -rf "$T107H"
 if [ "$T107" = "OK" ]; then
   PASS=$((PASS+1)); echo "  ok   5 targets Agent-Skills instalan en su root, doctor healthy, guard advisory, 'both' intacto"; \
 else FAIL=$((FAIL+1)); echo "  FAIL $T107"; fi
-
-echo "== T106 (1.52.1): the suite reads the version, it never pins it (no release toll) =="
-# Every release used to edit six version literals in THIS file. That was pure toll: it proved
-# nothing (install-uscha.py's source_version() reads the same VERSION file) and it broke the
-# suite on each bump until someone retyped them. The version now flows from $KIT_VERSION.
-# This check keeps a future edit from quietly pinning one again.
-T106=$("$PY" - "$KIT/tests/smoke-engine.sh" "$KIT" "$KIT_VERSION" <<'PY'
-import io, re, sys
-smoke, kit, kit_version = sys.argv[1], sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "")
-src = io.open(smoke, encoding="utf-8").read()
-version = io.open(kit + "/VERSION", encoding="utf-8").readline().split()[-1]
-bad = []
-# a version-shaped literal compared against a version / source_version key = a pin.
-# EITHER quote style: a re-pin written with double quotes used to slip through this check.
-# The quote chars are written as \x27 / \x22 ON PURPOSE: a LITERAL ' or " inside this
-# heredoc-in-$() makes bash 3.2 -- the one macOS still ships -- hunt for a matching quote
-# to the end of the file and die with "unexpected EOF". Linux/git-bash (4/5) parse it fine,
-# which is exactly why only the macOS cell caught it.
-Q = "[\x27\x22]"
-for m in re.finditer(r"\[" + Q + r"(?:source_)?version" + Q + r"\]\s*==\s*" + Q + r"(\d+\.\d+\.\d+)" + Q, src):
-    bad.append("version fijada en linea %d: %s" % (src[:m.start()].count("\n") + 1, m.group(1)))
-# the changelog filename must be derived too
-if re.search(r"CHANGELOG-\d+\.\d+\.\d+\.md", src):
-    bad.append("nombre de CHANGELOG fijado (debe derivarse de VERSION)")
-# the derivation must exist AND have produced the right value: kit_version is the REAL
-# runtime value the shell computed, not a re-derivation of it (that would be circular).
-if not re.search(r"^KIT_VERSION=", src, flags=re.M):
-    bad.append("falta KIT_VERSION derivado de VERSION")
-elif kit_version != version:
-    bad.append("KIT_VERSION=%r no coincide con VERSION=%r" % (kit_version, version))
-print("OK" if not bad else "BAD " + " | ".join(bad[:4]))
-PY
-)
-if [ "$T106" = "OK" ]; then
-  PASS=$((PASS+1)); echo "  ok   cero versiones fijadas: la suite las lee de VERSION ($KIT_VERSION)"; \
-else FAIL=$((FAIL+1)); echo "  FAIL $T106"; fi
 
 echo "== T105 (1.52.0): every skill declares the orientation markers (breadcrumb + close block) =="
 # Field feedback: the operator got lost -- no in-flow signal of WHERE they were, and a phase
@@ -11589,7 +11449,11 @@ if [ "${USCHA_P0_C_SKIP:-0}" != "1" ]; then
   if [ "${P0_C_STATUS:-1}" -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
 fi
 if [ "${USCHA_P0_A_SKIP:-0}" != "1" ]; then
-  if [ "${P0_A_STATUS:-1}" -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+  # the P0-A block above runs under `set -eu`: a failed assertion kills the suite there and
+  # this line is never reached, so P0_A_STATUS is 0 whenever it IS read. The `else FAIL=...`
+  # arm that used to sit here could not fire (1.95.0) -- unlike P0-B/P0-C, whose blocks record
+  # a status and keep going.
+  PASS=$((PASS+1))
 fi
 
 # ---------------------------------------------------------------------------- #
@@ -11755,510 +11619,102 @@ check("AC-04", "engine_model_agnostic", model_agnostic)
 check("AC-05", "doc_es_en_twins", doc_twins)
 check("AC-06", "smoke_suite_green", smoke_green)
 
-# Fast-path feature criteria (ADR-003): measured by T113 against real git fixtures; the
-# sidecar carries one verdict per criterion so each closes on its OWN testcase. Absent
-# sidecar or a null case (the golden not yet human-approved) -> skipped, never green.
-def _fastpath_cases():
-    p = os.path.join(kit, "reports", "junit", ".fastpath-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_fpc = _fastpath_cases()
-for _fid in ("AC-FP-01", "AC-FP-02", "AC-FP-03", "AC-FP-05", "AC-FP-06",
-             "AC-FP-07", "AC-FP-08", "AC-FP-09", "AC-FP-10", "AC-FP-11"):
-    if _fpc is None or _fpc.get(_fid) is None:
-        results.append((_fid, "fastpath", SKIP))
-    elif _fpc.get(_fid) is True:
-        results.append((_fid, "fastpath", None))
-    else:
-        results.append((_fid, "fastpath", "T113 case failed or missing"))
+# Per-family acceptance criteria. Every block that measures ACCEPTANCE ids drops a sidecar
+# under reports/junit/ (one boolean per id) and each id closes here on its OWN named testcase,
+# never on one opaque aggregate. The contract has always been the same four things -- which
+# sidecar, what to label the testcase, which block measures it, which ids it owns -- and the
+# same three-way classification: an ABSENT sidecar or a null case is SKIP = UNMEASURED (the
+# golden is not human-approved, the tool is not installed, the block crashed), True is green,
+# anything else is red and names the block that measured it.
+#
+# Until 1.95.0 that classification was retyped once per family: 28 near-identical reader
+# functions and 28 near-identical loops, ~390 lines in which a family that had quietly drifted
+# from the idiom -- a green-by-absence, a missing None guard -- would have been invisible in the
+# noise. It is written ONCE now, and the table below is the only thing a new family adds.
+# The ORDER of this table is the order of the emitted testcases: keep it stable.
+def _seq(prefix, lo, hi):
+    return tuple("%s-%02d" % (prefix, k) for k in range(lo, hi + 1))
 
-# Spec-drift criteria (ADR-005): measured by T114, same sidecar contract as T113.
-def _specdrift_cases():
-    p = os.path.join(kit, "reports", "junit", ".specdrift-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_sdc = _specdrift_cases()
-for _sid in ("AC-SD-01", "AC-SD-02", "AC-SD-03", "AC-SD-04", "AC-SD-05"):
-    if _sdc is None or _sdc.get(_sid) is None:
-        results.append((_sid, "specdrift", SKIP))
-    elif _sdc.get(_sid) is True:
-        results.append((_sid, "specdrift", None))
-    else:
-        results.append((_sid, "specdrift", "T114 case failed or missing"))
 
-# Golden-coverage criteria (ADR-006): measured by T117, same sidecar contract.
-def _goldencov_cases():
-    p = os.path.join(kit, "reports", "junit", ".goldencov-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_gcc = _goldencov_cases()
-for _gid in ("AC-GM-01", "AC-GM-02", "AC-GM-03", "AC-GM-04",
-             "AC-GM-05", "AC-GM-06", "AC-GM-07", "AC-GM-08"):
-    if _gcc is None or _gcc.get(_gid) is None:
-        results.append((_gid, "goldencov", SKIP))
-    elif _gcc.get(_gid) is True:
-        results.append((_gid, "goldencov", None))
-    else:
-        results.append((_gid, "goldencov", "T117 case failed or missing"))
+FAMILIES = (
+    # sidecar file                    testcase label            measured by   criteria
+    (".fastpath-cases.json", "fastpath", "T113",                    # ADR-003
+     ("AC-FP-01", "AC-FP-02", "AC-FP-03", "AC-FP-05", "AC-FP-06",
+      "AC-FP-07", "AC-FP-08", "AC-FP-09", "AC-FP-10", "AC-FP-11")),
+    (".specdrift-cases.json", "specdrift", "T114",                  # ADR-005
+     _seq("AC-SD", 1, 5)),
+    (".goldencov-cases.json", "goldencov", "T117",                  # ADR-006
+     _seq("AC-GM", 1, 8)),
+    (".origin-cases.json", "evidence-origin", "T118",               # ADR-007
+     _seq("AC-EP", 1, 5)),
+    (".cleanroom-cases.json", "cleanroom", "T119",                  # ADR-008
+     _seq("AC-CR", 1, 8)),
+    (".curation-cases.json", "curation", "T120",                    # ADR-009/010
+     _seq("AC-RD", 1, 7) + ("AC-RD-13",)),
+    (".oracle-cases.json", "oracle", "T121",                        # oracle slice 2
+     _seq("AC-RD", 8, 12)),
+    (".facts-cases.json", "system-facts", "T122",                   # T0, ADR-012
+     _seq("AC-SF", 1, 5)),
+    (".delta-cases.json", "candidate-delta", "T123",                # Diamond M1, ADR-013
+     _seq("AC-DD", 1, 7) + _seq("AC-CU", 1, 6)),
+    (".fidelity-cases.json", "fidelity", "T124",                    # Diamond M1, ADR-014
+     _seq("AC-FV", 1, 6)),
+    (".ir-cases.json", "ir", "T125",                                # Diamond M2, ADR-015
+     _seq("AC-IR", 1, 6)),
+    (".compile-cases.json", "compile", "T126",                      # Diamond M3, ADR-016
+     _seq("AC-CC", 1, 7)),
+    (".bootstrap-cases.json", "bootstrap", "T127",                  # Diamond M4, ADR-017
+     _seq("AC-BS", 1, 6)),
+    (".bench-cases.json", "bench", "T128",                          # Diamond M5, ADR-018/020/022
+     _seq("AC-DB", 1, 6) + _seq("AC-BG", 1, 5) + _seq("AC-FC", 1, 3)),
+    (".bench-curate-cases.json", "bench-curation", "T130",          # ADR-023
+     _seq("AC-BC", 1, 4)),
+    (".lang-cases.json", "controlled-language", "T129",             # ADR-019
+     _seq("AC-CL", 1, 6) + _seq("AC-CL2", 1, 4)),
+    (".lang3-cases.json", "controlled-language-v03", "T131",        # ADR-024
+     _seq("AC-CL3", 1, 3)),
+    (".sched-cases.json", "slack-hypothesis", "T132",               # ADR-025, ADR-026
+     _seq("AC-SH", 1, 3) + _seq("AC-LI", 1, 3)),
+    (".r2-cases.json", "intra-model-variance", "T133",              # ADR-027
+     _seq("AC-R2", 1, 3)),
+    (".js-cases.json", "non-python-archetype", "T134",              # ADR-028
+     _seq("AC-JS", 1, 3)),
+    (".multi-cases.json", "multi-unit-archetype", "T135",           # ADR-029
+     _seq("AC-MU", 1, 3)),
+    (".rt-cases.json", "round-trip", "T136",                        # ADR-030
+     _seq("AC-RT", 1, 4)),
+    # uscha top: M1+M2 by T137/T138, the M3 ids (13..17) by T141, phase 2 (25..29) by T145.
+    (".top-cases.json", "uscha-top", "T137/T138/T141/T145",         # ADR-031..034/037
+     _seq("AC-T", 1, 29)),
+    (".ct-cases.json", "sealed-terminado", "T146",                  # ADR-038
+     _seq("AC-CT", 1, 11)),
+    # AC-FR-06 (rule (a) pinned byte-identical against the 1.92.0 engine) reports None without
+    # git or the tagged copy -> skipped = UNMEASURED, never a silent pass.
+    (".fr-cases.json", "freshness-content", "T147",                 # ADR-039
+     _seq("AC-FR", 1, 11)),
+    (".lc-cases.json", "stack-lifecycle", "T148",                   # ADR-040
+     _seq("AC-LC", 1, 5)),
+    (".au-cases.json", "audit-fixes", "T149",                       # 1.94.1
+     _seq("AC-AU", 1, 6)),
+    # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
+    # without git or the tagged copy -> skipped, never a silent pass.
+    (".fa-cases.json", "family-ids", "T140",                        # ADR-036
+     _seq("AC-FA", 1, 6)),
+)
 
-# Evidence-origin criteria (ADR-007): measured by T118, same sidecar contract.
-def _origin_cases():
-    p = os.path.join(kit, "reports", "junit", ".origin-cases.json")
+for _sidecar, _label, _tref, _ids in FAMILIES:
     try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
+        with open(os.path.join(kit, "reports", "junit", _sidecar), encoding="utf-8") as _fh:
+            _cases = json.load(_fh)
     except (OSError, ValueError):
-        return None
-_oc = _origin_cases()
-for _oid in ("AC-EP-01", "AC-EP-02", "AC-EP-03", "AC-EP-04", "AC-EP-05"):
-    if _oc is None or _oc.get(_oid) is None:
-        results.append((_oid, "evidence-origin", SKIP))
-    elif _oc.get(_oid) is True:
-        results.append((_oid, "evidence-origin", None))
-    else:
-        results.append((_oid, "evidence-origin", "T118 case failed or missing"))
-
-# Clean-room criteria (ADR-008): measured by T119, same sidecar contract.
-def _cleanroom_cases():
-    p = os.path.join(kit, "reports", "junit", ".cleanroom-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_crc = _cleanroom_cases()
-for _cid in ("AC-CR-01", "AC-CR-02", "AC-CR-03", "AC-CR-04",
-             "AC-CR-05", "AC-CR-06", "AC-CR-07", "AC-CR-08"):
-    if _crc is None or _crc.get(_cid) is None:
-        results.append((_cid, "cleanroom", SKIP))
-    elif _crc.get(_cid) is True:
-        results.append((_cid, "cleanroom", None))
-    else:
-        results.append((_cid, "cleanroom", "T119 case failed or missing"))
-
-# Curation criteria (ADR-009/010): measured by T120, same sidecar contract.
-def _curation_cases():
-    p = os.path.join(kit, "reports", "junit", ".curation-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_cuc = _curation_cases()
-for _uid in ("AC-RD-01", "AC-RD-02", "AC-RD-03", "AC-RD-04",
-             "AC-RD-05", "AC-RD-06", "AC-RD-07", "AC-RD-13"):
-    if _cuc is None or _cuc.get(_uid) is None:
-        results.append((_uid, "curation", SKIP))
-    elif _cuc.get(_uid) is True:
-        results.append((_uid, "curation", None))
-    else:
-        results.append((_uid, "curation", "T120 case failed or missing"))
-
-# Oracle criteria (slice 2): measured by T121, same sidecar contract.
-def _oracle_cases():
-    p = os.path.join(kit, "reports", "junit", ".oracle-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_orc = _oracle_cases()
-for _oid in ("AC-RD-08", "AC-RD-09", "AC-RD-10", "AC-RD-11", "AC-RD-12"):
-    if _orc is None or _orc.get(_oid) is None:
-        results.append((_oid, "oracle", SKIP))
-    elif _orc.get(_oid) is True:
-        results.append((_oid, "oracle", None))
-    else:
-        results.append((_oid, "oracle", "T121 case failed or missing"))
-
-# SYSTEM-FACTS criteria (T0, ADR-012): measured by T122, same sidecar contract.
-def _facts_cases():
-    p = os.path.join(kit, "reports", "junit", ".facts-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_sfc = _facts_cases()
-for _sfid in ("AC-SF-01", "AC-SF-02", "AC-SF-03", "AC-SF-04", "AC-SF-05"):
-    if _sfc is None or _sfc.get(_sfid) is None:
-        results.append((_sfid, "system-facts", SKIP))
-    elif _sfc.get(_sfid) is True:
-        results.append((_sfid, "system-facts", None))
-    else:
-        results.append((_sfid, "system-facts", "T122 case failed or missing"))
-
-# CANDIDATE-DELTA criteria (Diamond M1, ADR-013): measured by T123, same sidecar contract.
-def _delta_cases():
-    p = os.path.join(kit, "reports", "junit", ".delta-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_dlc = _delta_cases()
-for _did in ("AC-DD-01", "AC-DD-02", "AC-DD-03", "AC-DD-04", "AC-DD-05", "AC-DD-06",
-             "AC-DD-07",
-             "AC-CU-01", "AC-CU-02", "AC-CU-03", "AC-CU-04", "AC-CU-05", "AC-CU-06"):
-    if _dlc is None or _dlc.get(_did) is None:
-        results.append((_did, "candidate-delta", SKIP))
-    elif _dlc.get(_did) is True:
-        results.append((_did, "candidate-delta", None))
-    else:
-        results.append((_did, "candidate-delta", "T123 case failed or missing"))
-
-# Fidelity criteria (Diamond M1, ADR-014): measured by T124, same sidecar contract.
-def _fidelity_cases():
-    p = os.path.join(kit, "reports", "junit", ".fidelity-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_fvc = _fidelity_cases()
-for _fid in ("AC-FV-01", "AC-FV-02", "AC-FV-03", "AC-FV-04", "AC-FV-05", "AC-FV-06"):
-    if _fvc is None or _fvc.get(_fid) is None:
-        results.append((_fid, "fidelity", SKIP))
-    elif _fvc.get(_fid) is True:
-        results.append((_fid, "fidelity", None))
-    else:
-        results.append((_fid, "fidelity", "T124 case failed or missing"))
-
-# IR criteria (Diamond M2, ADR-015): measured by T125, same sidecar contract.
-def _ir_cases():
-    p = os.path.join(kit, "reports", "junit", ".ir-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_irc = _ir_cases()
-for _iid in ("AC-IR-01", "AC-IR-02", "AC-IR-03", "AC-IR-04", "AC-IR-05", "AC-IR-06"):
-    if _irc is None or _irc.get(_iid) is None:
-        results.append((_iid, "ir", SKIP))
-    elif _irc.get(_iid) is True:
-        results.append((_iid, "ir", None))
-    else:
-        results.append((_iid, "ir", "T125 case failed or missing"))
-
-# Compiler-contract criteria (Diamond M3, ADR-016): measured by T126, same sidecar contract.
-def _compile_cases():
-    p = os.path.join(kit, "reports", "junit", ".compile-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_ccc = _compile_cases()
-for _cid in ("AC-CC-01", "AC-CC-02", "AC-CC-03", "AC-CC-04", "AC-CC-05", "AC-CC-06",
-             "AC-CC-07"):
-    if _ccc is None or _ccc.get(_cid) is None:
-        results.append((_cid, "compile", SKIP))
-    elif _ccc.get(_cid) is True:
-        results.append((_cid, "compile", None))
-    else:
-        results.append((_cid, "compile", "T126 case failed or missing"))
-
-# Bootstrap criteria (Diamond M4, ADR-017): measured by T127, same sidecar contract.
-def _bootstrap_cases():
-    p = os.path.join(kit, "reports", "junit", ".bootstrap-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_bsc = _bootstrap_cases()
-for _bid in ("AC-BS-01", "AC-BS-02", "AC-BS-03", "AC-BS-04", "AC-BS-05", "AC-BS-06"):
-    if _bsc is None or _bsc.get(_bid) is None:
-        results.append((_bid, "bootstrap", SKIP))
-    elif _bsc.get(_bid) is True:
-        results.append((_bid, "bootstrap", None))
-    else:
-        results.append((_bid, "bootstrap", "T127 case failed or missing"))
-
-# Diamond Bench criteria (Diamond M5, ADR-018): measured by T128, same sidecar contract.
-def _bench_cases():
-    p = os.path.join(kit, "reports", "junit", ".bench-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_dbc = _bench_cases()
-for _dbid in ("AC-DB-01", "AC-DB-02", "AC-DB-03", "AC-DB-04", "AC-DB-05", "AC-DB-06",
-              "AC-BG-01", "AC-BG-02", "AC-BG-03", "AC-BG-04", "AC-BG-05",
-              "AC-FC-01", "AC-FC-02", "AC-FC-03"):
-    if _dbc is None or _dbc.get(_dbid) is None:
-        results.append((_dbid, "bench", SKIP))
-    elif _dbc.get(_dbid) is True:
-        results.append((_dbid, "bench", None))
-    else:
-        results.append((_dbid, "bench", "T128 case failed or missing"))
-
-# Bench-curation criteria (ADR-023): measured by T130, same sidecar contract.
-def _bench_curate_cases():
-    p = os.path.join(kit, "reports", "junit", ".bench-curate-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_bcc = _bench_curate_cases()
-for _bcid in ("AC-BC-01", "AC-BC-02", "AC-BC-03", "AC-BC-04"):
-    if _bcc is None or _bcc.get(_bcid) is None:
-        results.append((_bcid, "bench-curation", SKIP))
-    elif _bcc.get(_bcid) is True:
-        results.append((_bcid, "bench-curation", None))
-    else:
-        results.append((_bcid, "bench-curation", "T130 case failed or missing"))
-
-# Controlled-language criteria (Diamond, ADR-019): measured by T129, same sidecar contract.
-def _lang_cases():
-    p = os.path.join(kit, "reports", "junit", ".lang-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_lcc = _lang_cases()
-for _lid in ("AC-CL-01", "AC-CL-02", "AC-CL-03", "AC-CL-04", "AC-CL-05", "AC-CL-06",
-             "AC-CL2-01", "AC-CL2-02", "AC-CL2-03", "AC-CL2-04"):
-    if _lcc is None or _lcc.get(_lid) is None:
-        results.append((_lid, "controlled-language", SKIP))
-    elif _lcc.get(_lid) is True:
-        results.append((_lid, "controlled-language", None))
-    else:
-        results.append((_lid, "controlled-language", "T129 case failed or missing"))
-
-# Controlled-language v0.3 criteria (ADR-024): measured by T131, same sidecar contract.
-def _lang3_cases():
-    p = os.path.join(kit, "reports", "junit", ".lang3-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_l3c = _lang3_cases()
-for _l3id in ("AC-CL3-01", "AC-CL3-02", "AC-CL3-03"):
-    if _l3c is None or _l3c.get(_l3id) is None:
-        results.append((_l3id, "controlled-language-v03", SKIP))
-    elif _l3c.get(_l3id) is True:
-        results.append((_l3id, "controlled-language-v03", None))
-    else:
-        results.append((_l3id, "controlled-language-v03", "T131 case failed or missing"))
-
-# Slack hypothesis criteria (ADR-025, ADR-026): measured by T132, same sidecar contract.
-def _sched_cases():
-    p = os.path.join(kit, "reports", "junit", ".sched-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_shc = _sched_cases()
-for _shid in ("AC-SH-01", "AC-SH-02", "AC-SH-03", "AC-LI-01", "AC-LI-02", "AC-LI-03"):
-    if _shc is None or _shc.get(_shid) is None:
-        results.append((_shid, "slack-hypothesis", SKIP))
-    elif _shc.get(_shid) is True:
-        results.append((_shid, "slack-hypothesis", None))
-    else:
-        results.append((_shid, "slack-hypothesis", "T132 case failed or missing"))
-
-# Intra-model variance criteria (ADR-027): measured by T133, same sidecar contract.
-def _r2_cases():
-    p = os.path.join(kit, "reports", "junit", ".r2-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_r2c = _r2_cases()
-for _r2id in ("AC-R2-01", "AC-R2-02", "AC-R2-03"):
-    if _r2c is None or _r2c.get(_r2id) is None:
-        results.append((_r2id, "intra-model-variance", SKIP))
-    elif _r2c.get(_r2id) is True:
-        results.append((_r2id, "intra-model-variance", None))
-    else:
-        results.append((_r2id, "intra-model-variance", "T133 case failed or missing"))
-
-# Non-Python archetype criteria (ADR-028): measured by T134, same sidecar contract.
-def _js_cases():
-    p = os.path.join(kit, "reports", "junit", ".js-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_jsc = _js_cases()
-for _jsid in ("AC-JS-01", "AC-JS-02", "AC-JS-03"):
-    if _jsc is None or _jsc.get(_jsid) is None:
-        results.append((_jsid, "non-python-archetype", SKIP))
-    elif _jsc.get(_jsid) is True:
-        results.append((_jsid, "non-python-archetype", None))
-    else:
-        results.append((_jsid, "non-python-archetype", "T134 case failed or missing"))
-
-# Multi-unit archetype criteria (ADR-029): measured by T135, same sidecar contract.
-def _multi_cases():
-    p = os.path.join(kit, "reports", "junit", ".multi-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_muc = _multi_cases()
-for _muid in ("AC-MU-01", "AC-MU-02", "AC-MU-03"):
-    if _muc is None or _muc.get(_muid) is None:
-        results.append((_muid, "multi-unit-archetype", SKIP))
-    elif _muc.get(_muid) is True:
-        results.append((_muid, "multi-unit-archetype", None))
-    else:
-        results.append((_muid, "multi-unit-archetype", "T135 case failed or missing"))
-
-# Round-trip recoverability criteria (ADR-030): measured by T136, same sidecar contract.
-def _rt_cases():
-    p = os.path.join(kit, "reports", "junit", ".rt-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_rtc = _rt_cases()
-for _rtid in ("AC-RT-01", "AC-RT-02", "AC-RT-03", "AC-RT-04"):
-    if _rtc is None or _rtc.get(_rtid) is None:
-        results.append((_rtid, "round-trip", SKIP))
-    elif _rtc.get(_rtid) is True:
-        results.append((_rtid, "round-trip", None))
-    else:
-        results.append((_rtid, "round-trip", "T136 case failed or missing"))
-
-# uscha top criteria (ADR-031..034/037): M1+M2 ids measured by T137/T138, the M3 ids (13..17)
-# by T141 and the phase-2 ids (25..29) by T145, all through the same sidecar contract. A
-# missing sidecar key is still SKIP = UNMEASURED, never a silent pass -- that is what the
-# whole family is worth.
-def _top_cases():
-    p = os.path.join(kit, "reports", "junit", ".top-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_tpc = _top_cases()
-for _n in range(1, 30):
-    _tid = "AC-T-%02d" % _n
-    if _tpc is None or _tpc.get(_tid) is None:
-        results.append((_tid, "uscha-top", SKIP))
-    elif _tpc.get(_tid) is True:
-        results.append((_tid, "uscha-top", None))
-    else:
-        results.append((_tid, "uscha-top", "T137/T138/T141/T145 case failed or missing"))
-
-# Sealed TERMINADO criteria (ADR-038): measured by T146, same sidecar contract. A missing
-# sidecar key is SKIP = UNMEASURED -- the seal's own rule applied to the seal's own criteria.
-def _ct_cases():
-    p = os.path.join(kit, "reports", "junit", ".ct-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_ctc = _ct_cases()
-for _n in range(1, 12):
-    _ctid = "AC-CT-%02d" % _n
-    if _ctc is None or _ctc.get(_ctid) is None:
-        results.append((_ctid, "sealed-terminado", SKIP))
-    elif _ctc.get(_ctid) is True:
-        results.append((_ctid, "sealed-terminado", None))
-    else:
-        results.append((_ctid, "sealed-terminado", "T146 case failed or missing"))
-
-# Freshness by content and commit (ADR-039): measured by T147, same sidecar contract. AC-FR-06
-# (rule (a) pinned byte-identical against the 1.92.0 engine) reports None without git or the
-# tagged copy -> emitted as skipped = UNMEASURED, never a silent pass.
-def _fr_cases():
-    p = os.path.join(kit, "reports", "junit", ".fr-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_frc = _fr_cases()
-for _n in range(1, 12):
-    _frid = "AC-FR-%02d" % _n
-    if _frc is None or _frc.get(_frid) is None:
-        results.append((_frid, "freshness-content", SKIP))
-    elif _frc.get(_frid) is True:
-        results.append((_frid, "freshness-content", None))
-    else:
-        results.append((_frid, "freshness-content", "T147 case failed or missing"))
-
-# Stack lifecycle criteria (ADR-040): measured by T148, same sidecar contract. A missing sidecar
-# key is SKIP = UNMEASURED -- the dimension's own rule ("silence is never a pass") applied to the
-# criteria that measure it.
-def _lc_cases():
-    p = os.path.join(kit, "reports", "junit", ".lc-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_lcc = _lc_cases()
-for _n in range(1, 6):
-    _lcid = "AC-LC-%02d" % _n
-    if _lcc is None or _lcc.get(_lcid) is None:
-        results.append((_lcid, "stack-lifecycle", SKIP))
-    elif _lcc.get(_lcid) is True:
-        results.append((_lcid, "stack-lifecycle", None))
-    else:
-        results.append((_lcid, "stack-lifecycle", "T148 case failed or missing"))
-
-# Audit fixes (1.94.1): measured by T149, same sidecar contract. A missing sidecar key is SKIP =
-# UNMEASURED -- these criteria exist because things read green without being measured, so they
-# are the last place a silent absence may pass for a pass.
-def _au_cases():
-    p = os.path.join(kit, "reports", "junit", ".au-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_auc = _au_cases()
-for _n in range(1, 7):
-    _auid = "AC-AU-%02d" % _n
-    if _auc is None or _auc.get(_auid) is None:
-        results.append((_auid, "audit-fixes", SKIP))
-    elif _auc.get(_auid) is True:
-        results.append((_auid, "audit-fixes", None))
-    else:
-        results.append((_auid, "audit-fixes", "T149 case failed or missing"))
-
-# Family-prefixed criteria (ADR-036): measured by T140, same sidecar contract. AC-FA-03 (the
-# bare form pinned byte-identical against the previous engine) reports None without git or the
-# HEAD copy -> emitted as skipped = UNMEASURED, never a silent pass.
-def _fa_cases():
-    p = os.path.join(kit, "reports", "junit", ".fa-cases.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
-_fac = _fa_cases()
-for _faid in ("AC-FA-01", "AC-FA-02", "AC-FA-03", "AC-FA-04", "AC-FA-05", "AC-FA-06"):
-    if _fac is None or _fac.get(_faid) is None:
-        results.append((_faid, "family-ids", SKIP))
-    elif _fac.get(_faid) is True:
-        results.append((_faid, "family-ids", None))
-    else:
-        results.append((_faid, "family-ids", "T140 case failed or missing"))
+        _cases = None
+    for _cid in _ids:
+        if _cases is None or _cases.get(_cid) is None:
+            results.append((_cid, _label, SKIP))
+        elif _cases.get(_cid) is True:
+            results.append((_cid, _label, None))
+        else:
+            results.append((_cid, _label, "%s case failed or missing" % _tref))
 
 # Dogfooding (repo rule 9): the root ledger is re-recorded in or after the last engine change.
 # Same-commit release ritual: the commit that last touched the engine must also carry the ledger,
