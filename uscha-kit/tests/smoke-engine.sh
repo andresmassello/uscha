@@ -10649,6 +10649,406 @@ case "$T149" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T149";;
 esac
 
+echo "== T150 (ADR-041): the dogfooding criterion is decided by git ancestry, not by a clock =="
+# AC-DF-01 asks whether the ledger was recorded AFTER the engine changed. Until 1.96.0 it asked a
+# WALL CLOCK, and the price of the unit mismatch was a throwaway `readiness --record` before every
+# suite run -- a record on a tree whose tests had not been re-run, whose only job was to be newer
+# than a commit. The question is about ORDER; git records order. This block drives the four
+# outcomes over REAL temp git repos through the SAME `dogfood_verdict` the acceptance emitter
+# calls -- a criterion whose test re-implements the criterion tests nothing.
+T150=$(pyin "$KIT" <<'PY'
+import io, os, pathlib, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar, dogfood_verdict
+res, why, TMPS = {}, {}, []
+ENG, LED = "eng/qa_ledger.py", "QA-LEDGER.json"
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix=prefix)
+    TMPS.append(d)
+    return d
+
+
+def sh(d, *a):
+    return subprocess.run(list(a), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          text=True)
+
+
+def write(d, rel, body):
+    p = os.path.join(d, rel.replace("/", os.sep))
+    dd = os.path.dirname(p)
+    if dd and not os.path.isdir(dd):
+        os.makedirs(dd)
+    with io.open(p, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(body)
+
+
+def repo(prefix):
+    d = tmp(prefix)
+    for a in (["git", "init", "-q", "-b", "main"], ["git", "config", "user.email", "t@t"],
+              ["git", "config", "user.name", "t"]):
+        sh(d, *a)
+    return d
+
+
+def commit(d, msg):
+    sh(d, "git", "add", "-A")
+    sh(d, "git", "commit", "-qm", msg)
+
+
+def measure():
+    # --- AC-DF-02: the two shapes that are GREEN. One commit carrying engine and ledger
+    # together, and the X -> X+1 ritual where the engine commit is an ancestor of the ledger
+    # commit. Neither consults a timestamp.
+    d1 = repo("uscha-df-same-")
+    write(d1, ENG, "v1" + chr(10)); write(d1, LED, "{}" + chr(10)); commit(d1, "both")
+    d2 = repo("uscha-df-ritual-")
+    write(d2, ENG, "v1" + chr(10)); write(d2, LED, "{}" + chr(10)); commit(d2, "base")
+    write(d2, ENG, "v2" + chr(10)); commit(d2, "X: engine")
+    write(d2, LED, chr(123) + '"n":1' + chr(125) + chr(10)); commit(d2, "X+1: ledger")
+    v1, v2 = dogfood_verdict(d1, ENG, LED), dogfood_verdict(d2, ENG, LED)
+    res["AC-DF-02"] = bool(v1 == "pass" and v2 == "pass")
+    why["AC-DF-02"] = "same-commit=%r ritual=%r" % (v1, v2)
+
+    # --- AC-DF-03: HEAD is the code commit X -- the ledger commit is an ANCESTOR of the engine
+    # commit, so the evidence has not been recorded yet. That is UNMEASURED, not green and not
+    # red: the honest report of a measurement that has not happened. The old rule manufactured a
+    # green here with a pre-suite record.
+    d3 = repo("uscha-df-headisx-")
+    write(d3, ENG, "v1" + chr(10)); write(d3, LED, "{}" + chr(10)); commit(d3, "base")
+    write(d3, LED, chr(123) + '"n":1' + chr(125) + chr(10)); commit(d3, "ledger")
+    write(d3, ENG, "v2" + chr(10)); commit(d3, "X: engine, now HEAD")
+    v3 = dogfood_verdict(d3, ENG, LED)
+    res["AC-DF-03"] = bool(v3 == "skip")
+    why["AC-DF-03"] = "head-is-X=%r" % (v3,)
+
+    # --- AC-DF-04: the two absences of a good answer. Diverged history (the engine changed on
+    # one branch, the ledger was recorded on another, both merged) is a measured FAIL -- the
+    # ledger does not contain the engine change, which is exactly what the criterion exists to
+    # catch and what a clock could not see. A tree with no git at all is None: UNMEASURED, never
+    # a silent pass.
+    d4 = repo("uscha-df-diverged-")
+    write(d4, ENG, "v1" + chr(10)); write(d4, LED, "{}" + chr(10)); commit(d4, "base")
+    sh(d4, "git", "checkout", "-q", "-b", "a")
+    write(d4, ENG, "v2" + chr(10)); commit(d4, "engine on a")
+    sh(d4, "git", "checkout", "-q", "main")
+    sh(d4, "git", "checkout", "-q", "-b", "b")
+    write(d4, LED, chr(123) + '"n":1' + chr(125) + chr(10)); commit(d4, "ledger on b")
+    sh(d4, "git", "checkout", "-q", "a")
+    sh(d4, "git", "merge", "-q", "--no-edit", "b")
+    d5 = tmp("uscha-df-nogit-")
+    write(d5, ENG, "v1" + chr(10)); write(d5, LED, "{}" + chr(10))
+    v4, v5 = dogfood_verdict(d4, ENG, LED), dogfood_verdict(d5, ENG, LED)
+    res["AC-DF-04"] = bool(v4 == "fail" and v5 is None)
+    why["AC-DF-04"] = "diverged=%r no-git=%r" % (v4, v5)
+
+    # --- AC-DF-05: the shallow guard, MEASURED. At depth 1 `git log -1 -- <path>` returns HEAD
+    # for every path that exists, so engine and ledger always look like the same commit and the
+    # criterion would read "pass" without measuring anything. The pair is what makes this sharp:
+    # the SAME history read in full says "pass" by ancestry, and read at depth 1 must say "skip"
+    # -- delete the guard and the shallow clone silently joins the greens.
+    d6 = repo("uscha-df-deep-")
+    write(d6, ENG, "v1" + chr(10)); write(d6, LED, "{}" + chr(10)); commit(d6, "base")
+    write(d6, ENG, "v2" + chr(10)); commit(d6, "X: engine")
+    write(d6, LED, chr(123) + '"n":1' + chr(125) + chr(10)); commit(d6, "X+1: ledger")
+    d7 = tmp("uscha-df-shallow-")
+    shutil.rmtree(d7)
+    sh(os.path.dirname(d7), "git", "clone", "-q", "--depth", "1",
+       pathlib.Path(d6).as_uri(), d7)
+    deep, shallow = dogfood_verdict(d6, ENG, LED), dogfood_verdict(d7, ENG, LED)
+    res["AC-DF-05"] = bool(deep == "pass" and shallow == "skip")
+    why["AC-DF-05"] = "same history: full=%r depth-1=%r" % (deep, shallow)
+
+
+try:
+    measure()
+finally:
+    # the five uscha-df-* temp trees go even if a case raised
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".df-cases.json", res, merge=True)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T150" in
+  OK*) PASS=$((PASS+1)); echo "  ok   dogfood ancestry (AC-DF-02..04): $T150";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T150";;
+esac
+
+echo "== T151 (ADR-041): the release ritual is a script that refuses, not prose a human re-reads =="
+# Repo rule 9 was ~20 manual steps and eight ordering invariants written as prose, the most
+# dangerous of them (never amend X after the record) in capitals because it had been hit.
+# tools/release.py performs the six steps and REFUSES, naming the invariant. This block drives it
+# over a temp fixture repo -- a real git tree with a bare origin, the six version surfaces, a copy
+# of the engine and a fake suite command -- and asserts the five refusals and the two commit
+# shapes. It never touches THIS repo.
+T151=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+res, why, TMPS = {}, {}, []
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+REL = os.path.join(root, "tools", "release.py")
+DOT, BS, NL = chr(183), chr(92), chr(10)
+PLACEHOLDER = "Suite: __SUITE__ checks " + DOT + " 0 fail; acceptance __ACC__."
+FILLED = "Suite: 7 checks " + DOT + " 0 fail; acceptance 5/5."
+SURFACES = ("uscha-kit/VERSION", "uscha-kit/uscha.config.json",
+            "uscha-kit/.claude-plugin/plugin.json", "uscha-kit/.codex-plugin/plugin.json",
+            ".claude-plugin/marketplace.json", "package.json")
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix=prefix)
+    TMPS.append(d)
+    return d
+
+
+def sh(d, *a):
+    return subprocess.run(list(a), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, encoding="utf-8", errors="replace")
+
+
+def write(d, rel, body):
+    p = os.path.join(d, rel.replace("/", os.sep))
+    dd = os.path.dirname(p)
+    if dd and not os.path.isdir(dd):
+        os.makedirs(dd)
+    with io.open(p, "w", encoding="utf-8", newline=NL) as fh:
+        fh.write(body)
+
+
+def read(d, rel):
+    with io.open(os.path.join(d, rel.replace("/", os.sep)), encoding="utf-8") as fh:
+        return fh.read()
+
+
+def rel_run(d, *a):
+    return subprocess.run([sys.executable, os.path.join(d, "tools", "release.py")] + list(a),
+                          cwd=d, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace",
+                          env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+
+
+def touched(d, rev):
+    return sorted(p for p in sh(d, "git", "show", "--name-only", "--format=", rev)
+                  .stdout.split() if p)
+
+
+def fixture():
+    d = tmp("uscha-rl-")
+    write(d, ".gitignore", ".uscha-release-state.json" + NL + "__pycache__/" + NL)
+    write(d, "uscha-kit/VERSION", "uscha-kit 1.0.0" + NL)
+    for rel, obj in (("uscha-kit/uscha.config.json", {"version": "1.0.0"}),
+                     ("uscha-kit/.claude-plugin/plugin.json", {"version": "1.0.0"}),
+                     ("uscha-kit/.codex-plugin/plugin.json", {"version": "1.0.0"}),
+                     ("package.json", {"version": "1.0.0", "files": ["uscha-kit/"]}),
+                     (".claude-plugin/marketplace.json",
+                      {"plugins": [{"name": "u", "version": "1.0.0"}]})):
+        write(d, rel, json.dumps(obj, indent=2) + NL)
+    os.makedirs(os.path.join(d, "uscha-kit", ".claude", "skills", "uscha-devloop"))
+    os.makedirs(os.path.join(d, "tools"))
+    shutil.copyfile(ENG, os.path.join(d, "uscha-kit", ".claude", "skills", "uscha-devloop",
+                                      "qa_ledger.py"))
+    shutil.copyfile(REL, os.path.join(d, "tools", "release.py"))
+    write(d, "uscha-kit/CHANGELOG-1.0.1.md",
+          "# uscha-kit 1.0.1" + NL * 2 + "prose." + NL * 2 + PLACEHOLDER + NL)
+    write(d, "uscha.config.json", json.dumps({
+        "project": "rl", "defaults": {"acceptance_file": "ACCEPTANCE.md"},
+        "repos": [{"name": "uscha", "path": ".", "type": "python"}],
+        "integration": {"enabled": False}}, indent=2) + NL)
+    write(d, "ACCEPTANCE.md", "# A" + NL * 2 + "- [x] AC-01 - a" + NL + "- [ ] AC-02 - b" + NL)
+    write(d, "README.md", "A repo." + NL)
+    write(d, "src/app.py", "x = 1" + NL)
+    write(d, "msg.txt", "feat: 1.0.1" + NL)
+    write(d, "site/sync-docs.sh",
+          chr(34) + "$PY" + chr(34) + " " + chr(34) + "$QL" + chr(34)
+          + " facts --check " + BS + NL + "  README.md" + NL)
+    write(d, "fake-suite.py",
+          "print('RESULTADO: 7 ok " + DOT + " 0 fail')" + NL
+          + "print('ACCEPTANCE: 5/5 criterios medidos en verde')" + NL)
+    sh(d, sys.executable, os.path.join(d, "uscha-kit", ".claude", "skills", "uscha-devloop",
+                                       "qa_ledger.py"),
+       "init", "--config", "uscha.config.json", "--out", "QA-LEDGER.json")
+    for a in (["git", "init", "-q", "-b", "main"], ["git", "config", "user.email", "t@t"],
+              ["git", "config", "user.name", "t"], ["git", "add", "-A"],
+              ["git", "commit", "-qm", "base"]):
+        sh(d, *a)
+    bare = tmp("uscha-rl-origin-")
+    sh(bare, "git", "init", "-q", "--bare", "-b", "main")
+    sh(d, "git", "remote", "add", "origin", bare)
+    sh(d, "git", "push", "-q", "-u", "origin", "main")
+    sh(d, "git", "checkout", "-q", "-b", "wip/1.0.1")
+    return d
+
+
+def fork(prefix, src):
+    """A throwaway copy of a fixture repo. A case that leaves git mid-operation must not be able
+    to contaminate the cases that come after it."""
+    d = tmp(prefix)
+    shutil.rmtree(d)
+    shutil.copytree(src, d)
+    return d
+
+
+def preflight(d, version):
+    return rel_run(d, version, "--dry-run", "--to-step", "1").stdout
+
+
+def committed_check(d, version, mutate):
+    mutate()
+    sh(d, "git", "add", "-A")
+    sh(d, "git", "commit", "-qm", "mut")
+    out = preflight(d, version)
+    sh(d, "git", "reset", "-q", "--hard", "HEAD~1")
+    return out
+
+
+
+
+def measure():
+    SUITE = chr(34) + sys.executable + chr(34) + " fake-suite.py"
+    base = fixture()
+    CL_BODY = read(base, "uscha-kit/CHANGELOG-1.0.1.md")
+
+    # I1 is NOT about a dirty tree -- a dirty tree is the normal state, it is what X commits.
+    # I1 says X can be a fast-forward and git is not mid-operation. Both arms, plus the negative:
+    # the same branch, ahead of origin/main only, must pass preflight and NAME nothing.
+    main_sha = sh(base, "git", "rev-parse", "main").stdout.strip()
+    sh(base, "git", "checkout", "-q", "-b", "sibling", "main")
+    write(base, "elsewhere.txt", "other work" + NL)
+    sh(base, "git", "add", "-A")
+    sh(base, "git", "commit", "-qm", "a commit only origin has")
+    sib = sh(base, "git", "rev-parse", "HEAD").stdout.strip()
+    sh(base, "git", "checkout", "-q", "wip/1.0.1")
+    sh(base, "git", "update-ref", "refs/remotes/origin/main", sib)
+    diverged = preflight(base, "1.0.1")
+    sh(base, "git", "update-ref", "refs/remotes/origin/main", main_sha)
+    sh(base, "git", "branch", "-qD", "sibling")
+
+    # a merge left half-done: MERGE_HEAD present and an unmerged path. On its OWN fork -- a
+    # case that leaves git mid-operation must not decide what the later cases measure.
+    mg = fork("uscha-rl-merge-", base)
+    sh(mg, "git", "checkout", "-q", "-b", "c1", "main")
+    write(mg, "conflict.txt", "a" + NL)
+    sh(mg, "git", "add", "-A"); sh(mg, "git", "commit", "-qm", "c1")
+    sh(mg, "git", "checkout", "-q", "-b", "c2", "main")
+    write(mg, "conflict.txt", "b" + NL)
+    sh(mg, "git", "add", "-A"); sh(mg, "git", "commit", "-qm", "c2")
+    sh(mg, "git", "merge", "c1")
+    mid_merge = preflight(mg, "1.0.1")
+
+    # the NEGATIVE, and it must hold with the tree DIRTY -- that is the whole point of the
+    # redesign: the working tree is X's payload, not a reason to refuse. It also pins that git's
+    # advice on stderr ("LF will be replaced by CRLF...") is not parsed as a path.
+    write(base, "src/app.py", "x = 1" + NL + "# a feature, uncommitted" + NL)
+    ahead = preflight(base, "1.0.1")
+    sh(base, "git", "checkout", "--", "src/app.py")
+    res["AC-RL-01"] = bool("WOULD REFUSE -- I1" in diverged
+                           and "WOULD REFUSE -- I1" in mid_merge
+                           and "WOULD REFUSE" not in ahead)
+    why["AC-RL-01"] = "diverged=%r mid-merge=%r ahead-and-dirty=%r" % (
+        diverged[-110:], mid_merge[-110:], ahead[-110:])
+
+    no_place = committed_check(
+        base, "1.0.1",
+        lambda: write(base, "uscha-kit/CHANGELOG-1.0.1.md", CL_BODY.replace(PLACEHOLDER, "none")))
+    no_cl = committed_check(
+        base, "1.0.1",
+        lambda: os.remove(os.path.join(base, "uscha-kit", "CHANGELOG-1.0.1.md")))
+    sh(base, "git", "tag", "v1.0.2")
+    tagged = preflight(base, "1.0.2")
+    sh(base, "git", "tag", "-d", "v1.0.2")
+    res["AC-RL-02"] = bool("WOULD REFUSE -- I2" in no_place and "WOULD REFUSE -- I2" in no_cl
+                           and "WOULD REFUSE -- I2" in tagged)
+    why["AC-RL-02"] = "no-placeholder=%r no-changelog=%r tagged=%r" % (
+        no_place[-80:], no_cl[-80:], tagged[-80:])
+
+    # the uncommitted "feature" X must carry alongside the bump
+    write(base, "src/app.py", "x = 1" + NL + "# the feature this release ships" + NL)
+    pristine = fork("uscha-rl-wt-", base)   # AC-RL-06 needs a repo no release has run on yet
+    r14 = rel_run(base, "1.0.1", "--message-file", "msg.txt", "--suite-cmd", SUITE, "--to-step", "4")
+
+
+    ok = fork("uscha-rl-ok-", base)
+    r5 = rel_run(ok, "1.0.1", "--suite-cmd", SUITE, "--from-step", "5", "--to-step", "5")
+    x_paths, x1_paths = touched(ok, "HEAD~1"), touched(ok, "HEAD")
+    cl_after = read(ok, "uscha-kit/CHANGELOG-1.0.1.md")
+    # X = the six surfaces + the regenerated facts + WHATEVER WAS DIRTY (here src/app.py, the
+    # "feature" AC-RL-01 left uncommitted). A bump-only X would fail this: the point of the
+    # redesign is that the code commit carries the code.
+    res["AC-RL-03"] = bool(
+        r14.returncode == 0 and r5.returncode == 0
+        and x_paths == sorted(list(SURFACES) + ["SYSTEM-FACTS.json", "src/app.py"])
+        and x1_paths == ["QA-LEDGER.json", "uscha-kit/CHANGELOG-1.0.1.md"]
+        and PLACEHOLDER not in cl_after and FILLED in cl_after)
+    why["AC-RL-03"] = "rc=(%s,%s) X=%s X+1=%s" % (r14.returncode, r5.returncode, x_paths, x1_paths)
+
+    am = fork("uscha-rl-amend-", base)
+    sh(am, "git", "commit", "--amend", "--no-edit", "-q")
+    r_am = rel_run(am, "1.0.1", "--suite-cmd", SUITE, "--from-step", "5", "--to-step", "5")
+    res["AC-RL-04"] = bool(r_am.returncode == 2 and "REFUSED -- I5" in r_am.stdout)
+    why["AC-RL-04"] = "rc=%s out=%r" % (r_am.returncode, r_am.stdout[-90:])
+
+    sc = fork("uscha-rl-src-", base)
+    write(sc, "src/app.py", "x = 2" + NL)
+    r_sc = rel_run(sc, "1.0.1", "--suite-cmd", SUITE, "--from-step", "5", "--to-step", "5")
+    res["AC-RL-05"] = bool(
+        r_sc.returncode == 2 and "REFUSED -- I6" in r_sc.stdout and "src/app.py" in r_sc.stdout
+        and PLACEHOLDER in read(sc, "uscha-kit/CHANGELOG-1.0.1.md"))
+    why["AC-RL-05"] = "rc=%s out=%r" % (r_sc.returncode, r_sc.stdout[-90:])
+
+    # --- AC-RL-06: the ritual runs in a WORKTREE (repo rule 9), where main is checked out in
+    # the primary tree. `git checkout main` there fails with "already checked out at ..." -- so
+    # the script must never check anything out: it pushes HEAD:main and lets the SERVER enforce
+    # the fast-forward, then leaves the local ref alone when a worktree holds it. This is the
+    # only case that drives all six steps, so it is also where I7 (SEALED at X+1) is measured.
+    sh(pristine, "git", "checkout", "-q", "-f", "main")
+    bare = sh(pristine, "git", "remote", "get-url", "origin").stdout.strip()
+    wt = tmp("uscha-rl-linked-")
+    shutil.rmtree(wt)
+    sh(pristine, "git", "worktree", "add", "-q", wt, "wip/1.0.1")
+    write(wt, "src/app.py", "x = 1" + NL + "# the feature, released from a worktree" + NL)
+    r6 = rel_run(wt, "1.0.1", "--message-file", "msg.txt", "--suite-cmd", SUITE)
+    x1 = sh(wt, "git", "rev-parse", "HEAD").stdout.strip()
+    pushed = sh(bare, "git", "rev-parse", "main").stdout.strip()
+    local_main = sh(pristine, "git", "rev-parse", "main").stdout.strip()
+    res["AC-RL-06"] = bool(
+        r6.returncode == 0 and "REFUSED" not in r6.stdout
+        and "SEALED" in r6.stdout
+        and x1 and x1 == pushed              # the push landed on origin/main
+        and local_main != x1                 # the busy local ref was left alone...
+        and "merge --ff-only" in r6.stdout)  # ...and handed to the human instead
+    why["AC-RL-06"] = "rc=%s X+1=%s origin/main=%s local-main=%s out=%r" % (
+        r6.returncode, x1[:8], pushed[:8], local_main[:8], r6.stdout[-160:])
+
+
+try:
+    measure()
+finally:
+    # every uscha-rl-* temp tree goes even if a case raised
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".rl-cases.json", res, merge=True)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T151" in
+  OK*) PASS=$((PASS+1)); echo "  ok   release ritual (AC-RL-01..05): $T151";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T151";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -11473,6 +11873,11 @@ results = []  # (id, name, failure_message_or_None)
 
 SKIP = object()   # criterion could not be measured (no source configured)
 
+# Why a given criterion is UNMEASURED. The generic reason ("no source configured") is right for a
+# family whose sidecar is absent; it is wrong for AC-DF-01, whose only absence is a tree git
+# cannot answer ancestry over. A skip that misnames its cause sends the reader to the wrong fix.
+SKIP_REASON = {"AC-DF-01": "shallow clone or no git: ancestry unmeasurable"}
+
 
 def check(ac, name, fn):
     try:
@@ -11696,6 +12101,10 @@ FAMILIES = (
      _seq("AC-LC", 1, 5)),
     (".au-cases.json", "audit-fixes", "T149",                       # 1.94.1
      _seq("AC-AU", 1, 6)),
+    (".df-cases.json", "dogfood-ancestry", "T150",                  # ADR-041
+     _seq("AC-DF", 2, 5)),
+    (".rl-cases.json", "release-ritual", "T151",                    # ADR-041
+     _seq("AC-RL", 1, 6)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036
@@ -11716,49 +12125,42 @@ for _sidecar, _label, _tref, _ids in FAMILIES:
         else:
             results.append((_cid, _label, "%s case failed or missing" % _tref))
 
-# Dogfooding (repo rule 9): the root ledger is re-recorded in or after the last engine change.
-# Same-commit release ritual: the commit that last touched the engine must also carry the ledger,
-# or the ledger's last readiness entry must be newer than that commit. No git = SKIP (UNMEASURED,
-# never a silent pass); a stale ledger is RED.
+# Dogfooding (repo rule 9): was the root ledger recorded AFTER the last engine change? The
+# question is about ORDER, and since 1.96.0 (ADR-041) it is answered by git ANCESTRY instead of by
+# a wall clock. `readiness_history[-1].at` compared a timestamp written into a JSON file against a
+# commit's committer time, and closing that unit mismatch cost a throwaway pre-suite
+# `readiness --record` whose only job was to be newer than a commit: it manufactured its own green,
+# it created the amend trap, and it filled the mirador time-lapse with the ritual instead of the
+# product. The DECISION lives in tests/_harness.dogfood_verdict and T150 drives its four outcomes
+# over real temp repos through that same function.
+#
+# The code commit X reads UNMEASURED here on purpose (the ledger lands in X+1); the tagged ledger
+# commit -- the only one publish.yml gates on -- reads measured.
 def _dogfood():
     eng = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
     led = os.path.join(root, "QA-LEDGER.json")
     if not os.path.isfile(led):
         return "root QA-LEDGER.json missing"
-    try:
-        # A SHALLOW clone cannot answer this question: at depth 1, git log -1 for a path
-        # returns HEAD for every path that exists, so engine and ledger always look like the
-        # same commit and the criterion passes without measuring anything (reproduced on a
-        # local --depth 1 clone: both files reported the same sha). CI checks out full
-        # history for exactly this reason (.github/workflows/smoke.yml); anywhere else a
-        # shallow tree is UNMEASURED, never a silent green.
-        shallow = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=root,
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 text=True).stdout.strip()
-        if shallow == "true":
-            return SKIP
-        h_eng = subprocess.run(["git", "log", "-1", "--format=%H %ct", "--", eng], cwd=root,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.split()
-        h_led = subprocess.run(["git", "log", "-1", "--format=%H", "--", led], cwd=root,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.split()
-    except OSError:
-        return SKIP
-    if not h_eng:
-        return SKIP
-    if h_led and h_led[0] == h_eng[0]:
+    sys.path.insert(0, os.path.join(kit, "tests"))
+    from _harness import dogfood_verdict, last_commit
+    # realpath BOTH sides before relpath: on Windows one API answers with an 8.3 short name and
+    # another with the long one, and the difference judges a file inside the tree to be outside it
+    # (the CI-only failure paid for on 2026-08-02).
+    def rel(path):
+        return os.path.relpath(os.path.realpath(path),
+                               os.path.realpath(root)).replace("\\", "/")
+    eng_rel, led_rel = rel(eng), rel(led)
+    verdict = dogfood_verdict(root, eng_rel, led_rel)
+    if verdict == "pass":
         return None
-    hist = json.load(open(led, encoding="utf-8")).get("readiness_history") or []
-    if not hist:
-        return "readiness_history empty -- run readiness --record"
-    import datetime as _dt
-    at = hist[-1].get("at", "")
-    try:
-        ts = _dt.datetime.strptime(at[:19], "%Y-%m-%dT%H:%M:%S").replace(
-            tzinfo=_dt.timezone.utc).timestamp()
-    except ValueError:
-        return "unparseable readiness_history[-1].at: %r" % at
-    return None if ts >= int(h_eng[1]) else (
-        "ledger last recorded %s, engine last changed in %s -- stale" % (at, h_eng[0][:7]))
+    if verdict != "fail":
+        # "skip" (HEAD is the code commit, or a shallow clone) and None (no git, nothing
+        # committed) are both UNMEASURED -- never a silent pass, never a manufactured red.
+        return SKIP
+    return ("ledger commit %s and engine commit %s are on diverged histories -- neither "
+            "contains the other, so the ledger was not recorded after the engine change"
+            % ((last_commit(root, led_rel) or "?")[:7],
+               (last_commit(root, eng_rel) or "?")[:7]))
 check("AC-DF-01", "dogfood-ledger-fresh", _dogfood)
 
 failed = sum(1 for _, _, m in results if m and m is not SKIP)
@@ -11774,7 +12176,8 @@ for ac, name, msg in results:
     if msg is SKIP:
         # UNMEASURED, on purpose: the engine counts a skipped testcase for neither
         # side, so the criterion stays open instead of turning green by default.
-        lines.append('    <skipped message="no source configured for this criterion"/>')
+        lines.append('    <skipped message="%s"/>'
+                     % esc(SKIP_REASON.get(ac, "no source configured for this criterion")))
     elif msg:
         lines.append(f'    <failure message="{esc(msg)}"/>')
     lines.append("  </testcase>")

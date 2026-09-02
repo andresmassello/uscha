@@ -63,3 +63,8 @@ uscha-kit/reports/
 # approval-testing residue: a green run leaves a .received identical to the golden;
 # a red run fails the harness itself, so git status is not the signal
 tests/golden/*.received.json
+
+# release ritual state (tools/release.py): X's identity and the suite counts, so a resumed
+# run can still catch an amend. Untracked AND ignored on purpose -- an untracked file the
+# seal can see would break check-terminado at X+1 (ADR-038).
+.uscha-release-state.json

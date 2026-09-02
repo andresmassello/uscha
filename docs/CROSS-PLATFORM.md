@@ -197,6 +197,10 @@ The Linux discovery run also scoped two larger threads, out of this document's o
   the current stays once, foreign preserved, idempotent on re-run.
 - **N-6 — root dogfooding config drift**: repo-root `uscha.config.json` says `1.44.0` vs kit
   `1.50.1`. T44 checks the KIT's config, so it does not gate; a one-line cleanup.
+  **CLOSED in 1.96.0**: the field is removed rather than re-synchronised. It was a SEVENTH
+  version surface that nothing gated and exactly one cosmetic `doctor` line read, so
+  keeping it in step by hand with six files it has nothing to do with bought nothing.
+  `uscha-kit/uscha.config.json` -- the template a consumer copies -- stays one of the six.
 - **A third install target, `pi`** (Earendil, Agent Skills standard): the 9 skills load
   unmodified; INV-GOLDEN-01 is portable to pi's blocking `tool_call` event as a small
   extension. This is a FEATURE, with ten design decisions (D-01…D-10 in the field handoff) the

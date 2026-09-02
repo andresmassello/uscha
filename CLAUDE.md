@@ -30,32 +30,56 @@ itself.
    must exit 0 BEFORE committing any change to `qa_ledger.py`. If the change
    adds behavior, its check is added to the suite in the same commit.
 6. **Versioning**: bump all **six** version surfaces + a `CHANGELOG-X.Y.Z.md` in the same
-   commit: `VERSION`, `uscha.config.json`, `uscha-kit/.claude-plugin/plugin.json`,
+   commit: `uscha-kit/VERSION`, `uscha-kit/uscha.config.json`, `uscha-kit/.claude-plugin/plugin.json`,
    `uscha-kit/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `package.json`.
    All six must match (smoke T44 verifies it).
 7. **Conventional commits** (`feat:`, `fix:`, `docs:`…), small and atomic.
 8. **Multi-ADR features get a `docs/<feature>/`** (curated 2026-08-17 with `uscha top`): the
    narrative SPEC + FIXTURES live there while the ADRs are `Proposed`; the ACs are promoted into
    `ACCEPTANCE.md` on acceptance. Single-ADR changes keep the plain `docs/adr/` + `ACCEPTANCE.md` path.
-9. **Dogfooding is measured, not narrated** (curated 2026-08-17): the root `QA-LEDGER.json` is this
-   repo's own truth. Every kit release runs the ritual on itself -- smoke (writes
-   `reports/junit/uscha-acceptance.xml`) -> `qa_ledger.py snapshot --repo uscha` -> `readiness --record`
-   -> ledger committed in its OWN commit right after the code commit (since 1.93.0 / ADR-039: the
-   snapshot's commit must exist and the difference must be non-source only; order = code commit X ->
-   `readiness --record` (dates the ledger after X, so AC-DF-01 is green while the suite runs) -> suite ->
-   `snapshot` + `readiness --record` -> ledger + JUnit + the CHANGELOG's suite counts committed as X+1;
-   NEVER amend X after the record: an amend re-dates X and orphans the snapshot's commit).
-   The release **tag** is pushed only once the `smoke` run for that exact SHA is green: `publish.yml`
-   polls for it and refuses to publish over a red or unfinished run, but the ritual must not lean on
-   that -- a tag on an unmeasured SHA turns a release into a wait. And the smoke suite checks that
-   `readiness_history[-1].at` is not older than the last commit that touched the engine (a stale
-   ledger is a FAIL, not a note). At session start the `uscha-status` skill is shown first, from the
-   ledger. The honest gap that made measured acceptance read 6/172 in 1.86.0 was the INSTRUMENT, not
-   the evidence: `_AC_TAG`/`_AC_ID` could not see the family-prefixed criteria. **Widened in 1.87.0
-   (ADR-036)** -- measured acceptance now reads `171/178` (the 7 unmeasured are the M2/M3 `uscha top` ids,
-   skipped on purpose) -- and it shipped as its own release,
-   never as a hand-edit of the ledger. That stays the rule: when the number is ugly, fix the
-   instrument or leave the number ugly.
+9. **Dogfooding is measured, not narrated** (curated 2026-08-17; the ritual became a SCRIPT in
+   1.96.0 / ADR-041): the root `QA-LEDGER.json` is this repo's own truth, and every kit release
+   runs the ritual on itself. Do NOT perform it by hand. Leave the work UNCOMMITTED, write the
+   changelog prose keeping the line `Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.`,
+   update the published version claims, then run
+
+       python tools/release.py X.Y.Z --message-file <msg> --tag
+
+   which performs the six steps -- preflight; bump the six surfaces + regenerate
+   `SYSTEM-FACTS.json`; commit **the working tree AND the bump together** as X; run the suite;
+   `snapshot` + `readiness --record` and commit the evidence as X+1; seal, push and tag -- and
+   REFUSES, naming the invariant:
+
+   - **I1** the branch is ahead of `origin/main` only, with no merge in progress and no unmerged
+     paths (a DIRTY tree is not refused: it is what X commits, and step 3 prints the staged list
+     before it commits anything);
+   - **I2** `uscha-kit/CHANGELOG-X.Y.Z.md` exists, still carries the placeholder line, and
+     `vX.Y.Z` is not already tagged;
+   - **I3** the six version surfaces move together (exactly one hit per file),
+     `SYSTEM-FACTS.json` is regenerated, and `facts --check` is green -- a drifted published
+     claim is a refusal and the HUMAN edits it (`facts --write` is 1.97.0);
+   - **I4** the suite runs at X with no source-relevant path dirty, and a non-zero exit is a
+     refusal, never a note;
+   - **I5** the evidence is recorded AFTER X and X's identity has not moved since --
+     **NEVER amend X after the record**: an amend re-dates X and orphans the snapshot's commit;
+   - **I6** X+1 carries evidence only: no source-relevant path in its staged set -- commit it
+     into X first, or drop it;
+   - **I7** `check-terminado` prints SEALED at X+1, and main advances by
+     `git push origin HEAD:main` (the server enforces the fast-forward), never by a
+     checkout -- the release runs in a worktree and main lives in the primary tree, so the
+     local ref is moved only when no worktree holds it;
+   - **I8** the tag is created only on X+1 and only once the `smoke` run for that exact SHA is
+     completed and successful (`publish.yml` polls for it too, but a tag on an unmeasured SHA
+     turns a release into a wait).
+
+   `AC-DF-01` is decided by git ANCESTRY, never by a clock (ADR-041). When X touches
+   `qa_ledger.py` it reads **UNMEASURED** -- honestly: the ledger lands in X+1 -- and the tagged
+   ledger commit X+1, the only one `publish.yml` gates on, reads measured. When X does not touch
+   the engine, X reads PASS like any other commit. There is no pre-suite `readiness --record`
+   any more, so `readiness_history` records measurements instead of the ritual. At session start
+   the `uscha-status` skill is shown first, from the ledger. And when the number is ugly, fix the
+   instrument or leave the number ugly: 1.87.0 (ADR-036) shipped the widened instrument as its
+   own release, never as a hand-edit of the ledger.
 10. **INV-GOLDEN-01 governs here too**: never write/rename a `.approved`
    (the kit's hook applies to this repo like any other).
 

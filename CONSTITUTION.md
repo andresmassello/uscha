@@ -30,7 +30,8 @@ readiness until a human `--resolve`s it.
   must exit 0 before any change to `qa_ledger.py` is committed; new behavior adds its check in the
   same change.
 
-- **INV-VERSION-01 — The six version surfaces agree.** `VERSION`, `uscha.config.json`, both
+- **INV-VERSION-01 — The six version surfaces agree.** `uscha-kit/VERSION`,
+  `uscha-kit/uscha.config.json`, both
   `plugin.json`, `marketplace.json` and `package.json` carry the same version, with a matching
   `CHANGELOG-<version>.md`, in the same commit.
 

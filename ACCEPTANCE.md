@@ -15,7 +15,7 @@ written by the run itself, never by hand.
   canonical one (`uscha-kit/.claude/skills/`). A Codex user and a Claude Code user run the
   same engine, or the twin promise is false.
 
-- [x] AC-02 — The six version surfaces (`VERSION`, `uscha.config.json`, both `plugin.json`,
+- [x] AC-02 — The six version surfaces (`uscha-kit/VERSION`, `uscha-kit/uscha.config.json`, both `plugin.json`,
   `marketplace.json`, `package.json`) all agree, and a `CHANGELOG-<version>.md` exists for the
   declared version. A release that disagrees with itself cannot be trusted about anything else.
 
@@ -714,7 +714,22 @@ form is claimed. Measured by T140 through the acceptance sidecar.
 
 ## Dogfooding (repo rule 9) - closes on green `AC-DF-nn` smoke assertions
 
-- [x] AC-DF-01 - the root `QA-LEDGER.json` is re-recorded in or after the last engine change: the commit that last touched `qa_ledger.py` also carries the ledger, or `readiness_history[-1].at` is newer than that commit; no git = UNMEASURED, stale = RED.
+Since 1.96.0 (ADR-041) the criterion is decided by git ANCESTRY, never by a clock. It used to
+have a second arm comparing `readiness_history[-1].at` -- a wall clock written into a JSON file --
+against the engine commit's committer time, and closing that unit mismatch cost a throwaway
+`readiness --record` BEFORE every suite run: a record taken on a tree whose tests had not been
+re-run, whose only job was to be newer than a commit. It manufactured the green it reported, it
+created the amend trap, and ~46% of `readiness_history` since 2026-08-18 is that step rather than
+the product. The question was always about ORDER, and git records order. AC-DF-02..04 are measured
+by T150 through the `.df-cases.json` sidecar, driving the outcomes over real temp git repos
+(including a real `git clone --depth 1`) through the SAME `dogfood_verdict` the acceptance
+emitter calls.
+
+- [x] AC-DF-01 - the root `QA-LEDGER.json` was recorded after the last engine change, decided by ancestry: the commit that last touched `qa_ledger.py` is the ledger's commit or an ancestor of it = GREEN; the ledger's commit is an ancestor of the engine's (HEAD is the code commit X, the evidence lands in X+1) = UNMEASURED; diverged histories = RED; shallow clone or no git = UNMEASURED. No clock is consulted.
+- [x] AC-DF-02 - the two green shapes both read `pass`: one commit carrying engine and ledger together, and the X -> X+1 ritual where the engine commit is an ancestor of the ledger commit.
+- [x] AC-DF-03 - HEAD is the code commit X (the ledger's commit is an ancestor of the engine's) reads `skip` = UNMEASURED - not green, not red: the honest report of a measurement that has not happened yet.
+- [x] AC-DF-04 - a ledger recorded on a history that does not contain the engine change (both branches merged, neither commit containing the other) reads `fail`; a tree with no git at all reads `None` = UNMEASURED, never a silent pass.
+- [x] AC-DF-05 - the shallow guard is MEASURED, not asserted: the SAME history reads `pass` in full and `skip` at `--depth 1`, because `git log -1 -- <path>` returns HEAD for every path in a shallow clone and the criterion would otherwise pass without measuring anything. Delete the guard and the shallow clone joins the greens.
 
 ## Audit fixes (1.94.1) - closes on green `AC-AU-nn` smoke assertions
 
@@ -735,6 +750,28 @@ silence and exited 0, and the synthetic `integration` scope crashing `fastpath-e
 - [x] AC-AU-04 - a well-formed report whose `LINE` counter is not a number (`missed="N/A"`) is the same named absence: `report_found` false, no traceback, never an invented percentage.
 - [x] AC-AU-05 - an EXPLICIT linter report path that does not exist fails closed (exit 2) naming the path, the same treatment an unparseable report already gets; a mistyped `--ruff` is a typo, never a gate with no findings. A report that IS there still ingests and exits 0.
 - [x] AC-AU-06 - `fastpath-eval --repo integration` and `cleanroom --repo integration` no longer die with `no config entry for repo 'integration'`: the synthetic scope goes through `_scope_path`, the helper extracted for exactly this crash class.
+
+## Release ritual (ADR-041) - closes on green `AC-RL-nn` smoke assertions
+
+Shipped in 1.96.0. The ritual was ~20 manual steps and eight ordering invariants written as prose
+in `CLAUDE.md` rule 9, with the most dangerous one -- never amend X after the record -- in capitals
+because it had been hit. Prose a human re-reads is not an instrument. `tools/release.py` performs
+the six steps and REFUSES loudly, naming the invariant (I1..I8) each refusal protects. It is
+repo-level and never shipped: `package.json` `files` does not carry `tools/`, so a bug in it can
+cost a release but can never reach an installed kit. It imports `_src_relevant` from the engine by
+path rather than re-typing the extension tables -- one definition of "a change that invalidates a
+test run" (ADR-039), not two. Measured by T151 through the `.rl-cases.json` sidecar, driving
+`--dry-run` for the refusals it can measure without committing (AC-RL-01, AC-RL-02) and REAL
+local runs against throwaway fixture repos for the ones that need commits to exist (AC-RL-03,
+AC-RL-04, AC-RL-05). `--dry-run` itself writes nothing and touches no network, so it can be run
+against the repo it is about to release.
+
+- [x] AC-RL-01 - I1 is about whether X can be a fast-forward, NOT about a clean tree: a branch diverged from `origin/main` is refused naming I1, a half-done merge (MERGE_HEAD plus an unmerged path) is refused naming I1, and the same branch ahead of `origin/main` only passes preflight **with the tree dirty** - the working tree is X's payload, not a reason to refuse.
+- [x] AC-RL-02 - a missing `uscha-kit/CHANGELOG-<X.Y.Z>.md`, or one whose `Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.` placeholder line is absent, is refused naming I2; an already-existing `v<X.Y.Z>` tag is refused naming I2 too.
+- [x] AC-RL-03 - the commits have the right shapes: X is the CODE commit - the six version surfaces (one hit per file), the regenerated `SYSTEM-FACTS.json` **and whatever the human left uncommitted** - while X+1 carries the ledger and the changelog counts line and nothing else.
+- [x] AC-RL-04 - X amended between the code commit and the record is refused naming I5: the recorded identity of X no longer matches HEAD, which is the trap the pre-record created and rule 9 wrote in capitals.
+- [x] AC-RL-05 - an X+1 whose staged set carries a source-relevant path (by the engine's own `_src_relevant`) is refused naming I6: the ledger commit carries evidence, never code.
+- [x] AC-RL-06 - the whole ritual runs from a `git worktree add` of a wip branch while main is checked out in the primary tree (repo rule 9's own shape): the six steps complete, `check-terminado` prints SEALED at X+1 (I7), the push lands on `origin/main`, and the busy local `main` ref is left untouched with `git -C <path> merge --ff-only <sha>` printed for the human. Nothing is ever checked out - `git checkout main` inside a worktree fails with "already checked out at ...", which would have refused every real release.
 
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
@@ -759,6 +796,7 @@ silence and exited 0, and the synthetic `integration` scope crashing `fastpath-e
 - ADR-037 — `o` triggers the command the HUMAN supplied at launch, then the engine's own `snapshot` ingests; the TUI never decides what to run and never writes.
 - ADR-038 — TERMINADO is sealed to the exact code state: reports are content-hashed at ingest, the seal is DERIVED at read time (never stored), and DONE does not render 100% while it is measured broken (INV-T1, INV-TOP-06).
 - ADR-039 — Evidence freshness is decided by CONTENT and COMMIT, not by the clock alone: a report is current when no source changed since the run that produced it, whatever the mtimes say; and the seal tolerates commits that touch no source (amends ADR-038).
+- ADR-041 — The dogfooding criterion is decided by git ANCESTRY, not by a wall clock — and the release ritual is a script that refuses (I1..I8), not prose a human re-reads.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change
