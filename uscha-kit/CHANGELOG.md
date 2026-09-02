@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.94.1** — [five ways a red thing read green: the audit fixes (2026-09-02)](CHANGELOG-1.94.1.md)
 - **1.94.0** — [a stack version is a decision with an expiry date: discovery interrogates the lifecycle, the engine measures "expired before go-live" (ADR-040) (2026-08-21)](CHANGELOG-1.94.0.md)
 - **1.93.1** — [evidence hashes are line-ending-insensitive: a clean checkout no longer reads its own green report as altered (2026-08-19)](CHANGELOG-1.93.1.md)
 - **1.93.0** — [evidence freshness by content and commit, not the clock alone; the seal tolerates non-source commits (ADR-039) (2026-08-19)](CHANGELOG-1.93.0.md)

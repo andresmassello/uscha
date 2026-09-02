@@ -44,7 +44,10 @@ itself.
    snapshot's commit must exist and the difference must be non-source only; order = code commit X ->
    `readiness --record` (dates the ledger after X, so AC-DF-01 is green while the suite runs) -> suite ->
    `snapshot` + `readiness --record` -> ledger + JUnit + the CHANGELOG's suite counts committed as X+1;
-   NEVER amend X after the record: an amend re-dates X and orphans the snapshot's commit) -- and the smoke suite checks that
+   NEVER amend X after the record: an amend re-dates X and orphans the snapshot's commit).
+   The release **tag** is pushed only once the `smoke` run for that exact SHA is green: `publish.yml`
+   polls for it and refuses to publish over a red or unfinished run, but the ritual must not lean on
+   that -- a tag on an unmeasured SHA turns a release into a wait. And the smoke suite checks that
    `readiness_history[-1].at` is not older than the last commit that touched the engine (a stale
    ledger is a FAIL, not a note). At session start the `uscha-status` skill is shown first, from the
    ledger. The honest gap that made measured acceptance read 6/172 in 1.86.0 was the INSTRUMENT, not

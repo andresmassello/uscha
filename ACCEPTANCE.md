@@ -707,7 +707,7 @@ form is claimed. Measured by T140 through the acceptance sidecar.
 
 - [x] AC-FA-01 - `_parse_acceptance_items` over a file mixing `AC-01`, `**AC-BC-07**`, `AC-T-24`, `ac_dd_3` and `AC-7-x` yields `AC-1, AC-BC-7, AC-T-24, AC-DD-3, AC-7` in that order (a numeric "family" is not one).
 - [x] AC-FA-02 - `_ac_tags` over testcase names `AC-BC-01_x`, `test_ac_bc_1_y`, `AC-01_z`, `testAC01Q`, `testACBC07x` and a skipped `AC-T-11_w` yields exactly `AC-BC-1` (2 green) and `AC-1` (2 green): no spurious bare tag beside a family one, no camelCase family, no key for a skipped case.
-- [x] AC-FA-03 - the bare form is unchanged: `readiness` and `dashboard --json` (minus the wall clock) from the committed HEAD engine and from this one, over a bare-id fixture, are byte-identical.
+- [x] AC-FA-03 - the bare form is unchanged: `readiness` and `dashboard --json` (minus the wall clock) from the engine read at tag `v1.86.1` - the last engine BEFORE the widening, never HEAD, which after the release commit would compare the new engine with itself - and from this one, over a bare-id fixture, are byte-identical. The anchor tag is re-pointed at a later release only by a changelog line that says so.
 - [x] AC-FA-04 - the statusline agrees with the ledger it summarizes: `uscha_progress.py` counts the same done/total `_parse_acceptance_items` counts (3 done / 5 total) over the AC-FA-01 file.
 - [x] AC-FA-05 - `top --json` over a ledger mixing both grammars emits the normalized obligation ids, `MEASURED_PASS` where a green testcase tags them, in the documented order (bare by number, then families alphabetically).
 - [x] AC-FA-06 - `discover` reads family ids too: its canonical map no longer assumes a bare id (it crashed on `AC-DD-07` on the first 1.87.0 run, caught by T125), and an observation whose statement names a family id anchors that criterion (`canonical_match`) exactly as a bare mention does.
@@ -715,6 +715,27 @@ form is claimed. Measured by T140 through the acceptance sidecar.
 ## Dogfooding (repo rule 9) - closes on green `AC-DF-nn` smoke assertions
 
 - [x] AC-DF-01 - the root `QA-LEDGER.json` is re-recorded in or after the last engine change: the commit that last touched `qa_ledger.py` also carries the ledger, or `readiness_history[-1].at` is newer than that commit; no git = UNMEASURED, stale = RED.
+
+## Audit fixes (1.94.1) - closes on green `AC-AU-nn` smoke assertions
+
+Shipped in 1.94.1. An audit of the harness and the engine found five ways a red thing could read
+green, and every one of them was the same mistake in a different costume: absence rendered as a
+number, or a measurement discarded before anyone read it. Two live in the SUITE -- a `chk` whose
+`FAIL=$((FAIL+1))` incremented a copy inside a `( cd ... )` subshell, and a T-block that ran after
+`SMOKE_STATUS` was frozen and after `$FAIL` was handed to the acceptance emitter -- so neither can
+be caught by running the suite: they are pinned by a STATIC scan of the suite file, the way T106
+pins version literals. Three live in the ENGINE: a corrupt JaCoCo module report summed as `(0, 0)`
+while `report_found` stayed true, an explicit `--<linter>` path that did not exist ingested as
+silence and exited 0, and the synthetic `integration` scope crashing `fastpath-eval` and
+`cleanroom` because they read `_repo_cfg` instead of `_scope_path`. Measured by T149 through the
+`.au-cases.json` sidecar.
+
+- [x] AC-AU-01 - no `chk` call sits inside a `( cd ... && ... )` subshell: the counter it raises dies with the subshell, so the check is reported and then discarded. Pinned statically over the suite's own source, because running the suite is exactly what cannot detect it.
+- [x] AC-AU-02 - the `== T85` header sits BEFORE the `RESULTADO BASE` line, so its verdict reaches both readers: `SMOKE_STATUS` (the process exit code) freezes there, and the acceptance emitter comes later still. Below that line T85 reached neither - it sat past the emitter too. Pinned as a line-order assertion over the suite's own source.
+- [x] AC-AU-03 - one unreadable module report makes the WHOLE JaCoCo reading UNMEASURED, and unmeasured means **0.0**, never the surviving modules' percentage: two valid maven modules sum to 50.0% and `check-coverage` says BELOW; truncate one and `check-coverage` refuses with no traceback, `snapshot` prints and persists `coverage=0.0% (found=False)`, and `readiness` scores the coverage dimension 0.0 - the reader that computes `pct/threshold` without consulting `report_found` is the one this invariant protects.
+- [x] AC-AU-04 - a well-formed report whose `LINE` counter is not a number (`missed="N/A"`) is the same named absence: `report_found` false, no traceback, never an invented percentage.
+- [x] AC-AU-05 - an EXPLICIT linter report path that does not exist fails closed (exit 2) naming the path, the same treatment an unparseable report already gets; a mistyped `--ruff` is a typo, never a gate with no findings. A report that IS there still ingests and exits 0.
+- [x] AC-AU-06 - `fastpath-eval --repo integration` and `cleanroom --repo integration` no longer die with `no config entry for repo 'integration'`: the synthetic scope goes through `_scope_path`, the helper extracted for exactly this crash class.
 
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).

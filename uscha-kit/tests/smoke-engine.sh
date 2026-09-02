@@ -462,8 +462,13 @@ sys.exit(0 if json.load(sys.stdin)['new_dependencies'] == [] else 1)" \
   || { FAIL=$((FAIL+1)); echo "  FAIL falso positivo de dep en codigo normal"; }
 
 echo "== T8 golden-diff: NOT-RUN y DIVERGE =="
-mkdir -p g && ( cd g && chk "cero fixtures -> NOT-RUN exit 2" 2 run golden-diff )
-( cd g && printf "x" > f.received.txt && chk "fixture sin aprobar -> DIVERGE exit 1" 1 run golden-diff )
+# chk NEVER runs inside a ( ... ) subshell: FAIL=$((FAIL+1)) would increment a COPY of the
+# counter and die with the subshell, so a red check read as green (audit 1.94.1, AC-AU-01).
+# golden-diff already takes --dir, so the cwd never has to move.
+mkdir -p g
+chk "cero fixtures -> NOT-RUN exit 2" 2 run golden-diff --dir g
+printf "x" > g/f.received.txt
+chk "fixture sin aprobar -> DIVERGE exit 1" 1 run golden-diff --dir g
 
 echo "== T9 spec-check: estructural bloquea, completo OK =="
 printf -- "# SPEC\n\n## Acceptance\n\n- [ ] when a then shall b exactly 80.00\n" > s1.md
@@ -3553,6 +3558,7 @@ rm -f "$KIT/reports/junit/.fa-cases.json"         # same rule for T140
 rm -f "$KIT/reports/junit/.ct-cases.json"         # same rule for T146
 rm -f "$KIT/reports/junit/.fr-cases.json"         # same rule for T147
 rm -f "$KIT/reports/junit/.lc-cases.json"         # same rule for T148
+rm -f "$KIT/reports/junit/.au-cases.json"         # same rule for T149
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -7554,7 +7560,7 @@ echo "== T138 (uscha top M1): render() is pure and its oracle is golden frames (
 # discriminator: byte-identical or red, with the negative-honesty frame carrying the whole
 # invariant on its own line.
 T138=$(pyin "$KIT" <<'PY'
-import ast, glob, io, json, os, subprocess, sys, tempfile, unicodedata
+import ast, io, json, os, subprocess, sys, tempfile, unicodedata
 kit = sys.argv[1]
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 TUI = os.path.join(SKILL, "uscha_top.py")
@@ -7838,18 +7844,12 @@ r = subprocess.run([sys.executable, TUI, "--once", "--ledger", "DOES-NOT-EXIST.j
 res["reg-ledger-not-found"] = bool(
     r.returncode == 1 and b"not found" in r.stderr and b"Traceback" not in r.stdout)
 
-# py3.8 is the floor the whole kit ships against: when a 3.8 interpreter is on this box the
-# frame must come out byte-identical there too (same lesson the round-trip aggregate taught).
-uv38 = glob.glob(os.path.expanduser(
-    "~/AppData/Roaming/uv/python/cpython-3.8*/python.exe"))
-ok38 = True
-if uv38:
-    r = subprocess.run([uv38[0], TUI, "--ledger", "QA-LEDGER.json",
-                        "--cols", "100", "--rows", "32"],
-                       cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    got = r.stdout.decode("utf-8").replace(chr(13), "").split(chr(10))[:-1]
-    ok38 = (r.returncode == 0 and got == piped)
-res["AC-T-19b"] = bool(ok38)
+# AC-T-19b (a py3.8 byte-identity frame, gated on a uv-installed cpython-3.8 under one
+# hard-coded Windows path) was DELETED in 1.94.1: the glob never matched on any CI cell nor on
+# the release machine, so `ok38` stayed True by absence and the case was green without ever
+# running. It was also excluded from the sidecar, so it closed no criterion and appeared in no
+# ACCEPTANCE.md row. A check that cannot go red measures nothing; the real py3.8 evidence is
+# the smoke matrix's own py3.8 cells, which DO run this file end to end.
 
 # AC-T-12 (M2): the mtime poll. What is measured here is the POLLING PRIMITIVE and the
 # rendered feed -- NOT a driven TTY session: the interactive loop needs a terminal this
@@ -8027,7 +8027,7 @@ try:
     prev = json.loads(io.open(sp, encoding="utf-8").read())
 except (OSError, ValueError):
     prev = {}
-prev.update({k: v for k, v in res.items() if k != "AC-T-19b"})
+prev.update(res)
 io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
@@ -8186,6 +8186,8 @@ res["AC-FA-02"] = bool(
 # over a bare-id fixture: readiness and dashboard --json (minus the wall clock) must not move a
 # single byte. Anchoring to HEAD would compare the new engine with itself after the release
 # commit (1.87.0 review). No git / tag not fetched -> UNMEASURED, never a silent pass.
+# POLICY: this anchor tag is re-pointed at a later release ONLY through a changelog line that
+# says so -- moving it silently retires the pin without anyone deciding to (audit 1.94.1).
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top", "fixture-honesty-negative")
 gsh = subprocess.run(["git", "show",
                       "v1.86.1:uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"],
@@ -10555,6 +10557,202 @@ case "$T148" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T148";;
 esac
 
+echo "== T149 (1.94.1): the audit fixes -- two false greens in the suite, three invented facts in the engine =="
+# An audit of the suite and the engine found five ways a red thing could read green. Two live in
+# the HARNESS (a chk whose counter died in a subshell; a T-block that ran after the exit status
+# was already frozen) and cannot be self-tested by running them -- they are pinned STATICALLY the
+# way T106 pins version literals. Three live in the ENGINE and are pinned by behaviour: a corrupt
+# coverage report summed as zero, an explicit linter path nobody could find ingested as silence,
+# and the synthetic `integration` scope crashing two commands that never learned about _scope_path.
+T149=$(pyin "$KIT" <<'PY'
+import io, json, os, re, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+SUITE = os.path.join(kit, "tests", "smoke-engine.sh")
+res = {}
+why = {}
+TMPS = []
+
+
+def write(p, body):
+    d = os.path.dirname(p)
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    with io.open(p, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(body)
+
+
+def eng(d, *a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=d, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix=prefix)
+    TMPS.append(d)
+    return d
+
+
+def init(d, cfg):
+    write(os.path.join(d, "c.json"), json.dumps(cfg))
+    eng(d, "init", "--config", "c.json", "--out", "L.json")
+
+
+JAC = ('<?xml version="1.0" encoding="UTF-8"?>' + chr(10)
+       + '<report name="%s"><counter type="LINE" missed="%s" covered="%s"/></report>' + chr(10))
+MVN_CFG = {"version": "1.0.0", "project": "au-app",
+           "defaults": {"acceptance_file": "ACCEPTANCE.md", "coverage_threshold": 60},
+           "repos": [{"name": "app", "path": ".", "type": "maven"}],
+           "integration": {"enabled": False}}
+PY_CFG = {"version": "1.0.0", "project": "au-app",
+          "defaults": {"acceptance_file": "ACCEPTANCE.md"},
+          "repos": [{"name": "app", "path": ".", "type": "python"}],
+          "integration": {"enabled": False}}
+INT_CFG = {"version": "1.0.0", "project": "au-app",
+           "defaults": {"acceptance_file": "ACCEPTANCE.md", "fast_path": {"enabled": True}},
+           "repos": [{"name": "app", "path": ".", "type": "python"}],
+           "integration": {"enabled": True}}
+
+
+def jacoco(d, module, missed, covered):
+    write(os.path.join(d, module, "target", "site", "jacoco", "jacoco.xml"),
+          JAC % (module, missed, covered))
+
+
+def measure():
+    # --- AC-AU-01: a chk call inside a ( cd ... && ... ) subshell cannot raise the suite's FAIL
+    # counter -- the increment lands on a COPY that dies with the subshell, so a red check was
+    # reported and then discarded. No self-test is possible for a shell scoping bug (the runner
+    # IS the thing under test), so the form is banned by a static scan of this very file: an
+    # opening paren, cd, a directory, && and a chk call, all on ONE line. (The pattern is
+    # deliberately not spelled out in prose here -- a comment that contained it would make this
+    # very block match itself, which is how the first draft went red.)
+    SUB_CHK = r"\(\s*cd\s+\S+\s*&&.*\bchk\b"
+    lines = io.open(SUITE, encoding="utf-8").read().split(chr(10))
+    hits = [str(n + 1) for n, ln in enumerate(lines) if re.search(SUB_CHK, ln)]
+    res["AC-AU-01"] = not hits
+    why["AC-AU-01"] = "chk inside a subshell at line(s) " + ",".join(hits)
+
+    # --- AC-AU-02: the == T85 header must sit BEFORE the RESULTADO BASE line. That line is where
+    # SMOKE_STATUS freezes the process exit code, and it also precedes the acceptance emitter,
+    # so a block above it reaches BOTH readers of the verdict. Below it, T85 reached neither: it
+    # sat past the emitter too. ($FAIL itself keeps moving after RESULTADO BASE -- the P0 roll-ups
+    # increment it and the emitter does read those; only SMOKE_STATUS is frozen there.)
+    i85 = next((n for n, ln in enumerate(lines)
+                if ln.startswith("echo ") and "== T85 " in ln), None)
+    ibase = next((n for n, ln in enumerate(lines)
+                  if ln.startswith("echo ") and "RESULTADO BASE" in ln), None)
+    res["AC-AU-02"] = bool(i85 is not None and ibase is not None and i85 < ibase)
+    why["AC-AU-02"] = "T85 at line %s, RESULTADO BASE at line %s" % (
+        i85 if i85 is None else i85 + 1, ibase if ibase is None else ibase + 1)
+
+    # --- AC-AU-03: one corrupt module report must not be read as a measured (0, 0). Two valid
+    # modules sum to a real percentage; truncate one -- a build killed mid-write -- and the WHOLE
+    # reading is UNMEASURED, which means 0.0 and not the higher number the survivors produce.
+    # Asserted on THREE surfaces on purpose: check-coverage's exit, the snapshot line that prints
+    # and persists the pct beside the flag, and readiness -- which scores pct/threshold WITHOUT
+    # consulting report_found, so a survivors' pct there would silently become score.
+    d3 = tmp("uscha-au-cov-")
+    jacoco(d3, "m1", 0, 100)
+    jacoco(d3, "m2", 100, 0)
+    init(d3, MVN_CFG)
+    r3a = eng(d3, "check-coverage", "--ledger", "L.json", "--repo", "app")
+    write(os.path.join(d3, "m2", "target", "site", "jacoco", "jacoco.xml"), "<report")
+    r3b = eng(d3, "check-coverage", "--ledger", "L.json", "--repo", "app")
+    r3s = eng(d3, "snapshot", "--ledger", "L.json", "--repo", "app")
+    try:
+        app3 = json.loads(eng(d3, "readiness", "--ledger", "L.json",
+                              "--json").stdout)["by_repo"]["app"]
+    except (ValueError, KeyError):
+        app3 = {}
+    facts3 = app3.get("facts") or {}
+    dims3 = app3.get("dims") or {}
+    res["AC-AU-03"] = bool(r3a.returncode == 1 and "50.0%" in r3a.stdout
+                           and r3b.returncode != 0
+                           and "NO coverage report" in r3b.stdout
+                           and "Traceback" not in r3b.stderr
+                           and "coverage=0.0% (found=False)" in r3s.stdout
+                           and facts3.get("coverage_pct") == 0.0
+                           and facts3.get("coverage_unmeasured") is True
+                           and dims3.get("coverage") == 0.0)
+    why["AC-AU-03"] = "valid=(%s,%r) truncated=(%s,%r) snap=%r pct=%r dim=%r" % (
+        r3a.returncode, r3a.stdout.strip()[-40:], r3b.returncode, r3b.stdout.strip()[-40:],
+        r3s.stdout.strip()[:60], facts3.get("coverage_pct"), dims3.get("coverage"))
+
+    # --- AC-AU-04: a well-formed report whose LINE counter is not a number is the same class of
+    # absence -- named, never a traceback and never an invented percentage.
+    d4 = tmp("uscha-au-cov-na-")
+    jacoco(d4, "m1", "N/A", 10)
+    init(d4, MVN_CFG)
+    r4 = eng(d4, "check-coverage", "--ledger", "L.json", "--repo", "app")
+    res["AC-AU-04"] = bool(r4.returncode != 0 and "Traceback" not in r4.stderr
+                           and "NO coverage report" in r4.stdout)
+    why["AC-AU-04"] = "rc=%s out=%r err=%r" % (r4.returncode, r4.stdout.strip()[-60:],
+                                               r4.stderr.strip()[-80:])
+
+    # --- AC-AU-05: an EXPLICIT linter report the operator named and that is not there is a typo
+    # or a build that never wrote it -- not a gate with no findings. It fails closed (exit 2)
+    # naming the path, the same treatment an unparseable report already gets; a report that IS
+    # there still ingests and exits 0.
+    d5 = tmp("uscha-au-ingest-")
+    write(os.path.join(d5, "reports", "ruff.json"), "[]" + chr(10))
+    init(d5, PY_CFG)
+    MISSING = os.path.join("reports", "ruff-typo.json")
+    r5a = eng(d5, "ingest-gate", "--ledger", "L.json", "--repo", "app",
+              "--iteration", "1", "--ruff", MISSING)
+    r5b = eng(d5, "ingest-gate", "--ledger", "L.json", "--repo", "app",
+              "--iteration", "1", "--ruff", os.path.join("reports", "ruff.json"))
+    res["AC-AU-05"] = bool(r5a.returncode == 2 and "ruff-typo.json" in r5a.stderr
+                           and r5b.returncode == 0)
+    why["AC-AU-05"] = "missing=(%s,%r) present=%s" % (
+        r5a.returncode, r5a.stderr.strip()[-80:], r5b.returncode)
+
+    # --- AC-AU-06: `integration` is the SYNTHETIC scope with no config entry, which is exactly
+    # what _scope_path exists for. fastpath-eval and cleanroom still went through _repo_cfg and
+    # died with "no config entry for repo 'integration'" -- the third recurrence of a crash class
+    # the helper was extracted to end.
+    d6 = tmp("uscha-au-integration-")
+    init(d6, INT_CFG)
+    r6a = eng(d6, "fastpath-eval", "--ledger", "L.json", "--repo", "integration")
+    r6b = eng(d6, "cleanroom", "--ledger", "L.json", "--repo", "integration",
+              "--run", "echo hi")
+    NOCFG = "no config entry"
+    res["AC-AU-06"] = bool(NOCFG not in r6a.stderr and NOCFG not in r6b.stderr
+                           and "Traceback" not in r6a.stderr
+                           and "Traceback" not in r6b.stderr)
+    why["AC-AU-06"] = "fastpath=%r cleanroom=%r" % (r6a.stderr.strip()[-70:],
+                                                    r6b.stderr.strip()[-70:])
+
+
+try:
+    measure()
+finally:
+    # the four uscha-au-* temp trees go even if a case raised -- a crashed T-block must not
+    # leave the box dirtier than it found it
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+side = os.path.join(kit, "reports", "junit")
+if not os.path.isdir(side):
+    os.makedirs(side)
+sp = os.path.join(side, ".au-cases.json")
+try:
+    prev = json.loads(io.open(sp, encoding="utf-8").read())
+except (OSError, ValueError):
+    prev = {}
+prev.update(res)
+io.open(sp, "w", encoding="utf-8").write(json.dumps(prev))
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T149" in
+  OK*) PASS=$((PASS+1)); echo "  ok   audit fixes (AC-AU-01..06): $T149";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T149";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -11047,6 +11245,38 @@ PY
 if [ "$T103" = "OK" ]; then
   PASS=$((PASS+1)); echo "  ok   hook_registered matches by script across interpreter change; no false positive on a foreign hook"; \
 else FAIL=$((FAIL+1)); echo "  FAIL $T103"; fi
+
+echo "== T85 (1.44.1): 'uscha init' is per-file, not all-or-nothing =="
+T85=$(mktemp -d)
+printf '# my own CLAUDE.md\n' > "$T85/CLAUDE.md"
+# init exits 1 on a pending conflict BY DESIGN; the || guards keep that from reading as a
+# suite failure. This block used to sit AFTER the exit status was frozen (SMOKE_STATUS,
+# below) and after PYACC was handed $FAIL -- so a red T85 counted for nothing and the suite
+# published a false green. It runs here, before the count is read (audit 1.94.1, AC-AU-02).
+T85_RC=0
+"$PY" "$KIT/install-uscha.py" init --repo "$T85" --json >"$T85/out.json" 2>&1 || T85_RC=$?
+T85_CHECK=0
+T85_HOME="$T85" "$PY" -c "
+import json, os, sys
+h = os.environ['T85_HOME']
+d = json.load(open(os.path.join(h, 'out.json'), encoding='utf-8'))
+wrote = {os.path.basename(p) for p in d.get('wrote', [])}
+conflicts = {os.path.basename(c['path']) for c in d['conflicts']}
+# the non-conflicting files were written despite the CLAUDE.md conflict: config, the two
+# other templates, the two statusline scripts, and the wired settings.json (kit 1.46.0)...
+ok = (d['status'] == 'partial'
+      and {'uscha.config.json', 'CONSTITUTION.md', '.gitattributes',
+           'uscha_statusline.py', 'uscha_progress.py', 'settings.json'} <= wrote
+      and conflicts == {'CLAUDE.md'}
+      and os.path.isfile(os.path.join(h, 'CONSTITUTION.md'))
+      and os.path.isfile(os.path.join(h, '.claude', 'scripts', 'uscha_statusline.py'))
+      # ...and the user's own CLAUDE.md was left untouched
+      and open(os.path.join(h, 'CLAUDE.md'), encoding='utf-8').read().strip() == '# my own CLAUDE.md')
+sys.exit(0 if ok else 1)" || T85_CHECK=$?
+rm -rf "$T85"
+if [ "$T85_RC" -eq 1 ] && [ "$T85_CHECK" -eq 0 ]; then
+  PASS=$((PASS+1)); echo "  ok   init writes the clean files, leaves the conflicting CLAUDE.md intact, exits 1"; \
+else FAIL=$((FAIL+1)); echo "  FAIL init still all-or-nothing (rc=$T85_RC check=$T85_CHECK)"; fi
 
 echo ""
 echo "RESULTADO BASE: $PASS ok · $FAIL fail"
@@ -11991,6 +12221,26 @@ for _n in range(1, 6):
     else:
         results.append((_lcid, "stack-lifecycle", "T148 case failed or missing"))
 
+# Audit fixes (1.94.1): measured by T149, same sidecar contract. A missing sidecar key is SKIP =
+# UNMEASURED -- these criteria exist because things read green without being measured, so they
+# are the last place a silent absence may pass for a pass.
+def _au_cases():
+    p = os.path.join(kit, "reports", "junit", ".au-cases.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+_auc = _au_cases()
+for _n in range(1, 7):
+    _auid = "AC-AU-%02d" % _n
+    if _auc is None or _auc.get(_auid) is None:
+        results.append((_auid, "audit-fixes", SKIP))
+    elif _auc.get(_auid) is True:
+        results.append((_auid, "audit-fixes", None))
+    else:
+        results.append((_auid, "audit-fixes", "T149 case failed or missing"))
+
 # Family-prefixed criteria (ADR-036): measured by T140, same sidecar contract. AC-FA-03 (the
 # bare form pinned byte-identical against the previous engine) reports None without git or the
 # HEAD copy -> emitted as skipped = UNMEASURED, never a silent pass.
@@ -12086,36 +12336,6 @@ print(f"ACCEPTANCE: {len(results) - failed - skipped}/{len(results)} criterios m
       + ("" if not failed else " · ROJO: "
          + ", ".join(ac for ac, _, m in results if m and m is not SKIP)))
 PYACC
-
-echo "== T85 (1.44.1): 'uscha init' is per-file, not all-or-nothing =="
-T85=$(mktemp -d)
-printf '# my own CLAUDE.md\n' > "$T85/CLAUDE.md"
-# init exits 1 on a pending conflict BY DESIGN; guard so `set -e` (left on by the P0
-# blocks above) does not abort the suite here.
-T85_RC=0
-"$PY" "$KIT/install-uscha.py" init --repo "$T85" --json >"$T85/out.json" 2>&1 || T85_RC=$?
-T85_CHECK=0
-T85_HOME="$T85" "$PY" -c "
-import json, os, sys
-h = os.environ['T85_HOME']
-d = json.load(open(os.path.join(h, 'out.json'), encoding='utf-8'))
-wrote = {os.path.basename(p) for p in d.get('wrote', [])}
-conflicts = {os.path.basename(c['path']) for c in d['conflicts']}
-# the non-conflicting files were written despite the CLAUDE.md conflict: config, the two
-# other templates, the two statusline scripts, and the wired settings.json (kit 1.46.0)...
-ok = (d['status'] == 'partial'
-      and {'uscha.config.json', 'CONSTITUTION.md', '.gitattributes',
-           'uscha_statusline.py', 'uscha_progress.py', 'settings.json'} <= wrote
-      and conflicts == {'CLAUDE.md'}
-      and os.path.isfile(os.path.join(h, 'CONSTITUTION.md'))
-      and os.path.isfile(os.path.join(h, '.claude', 'scripts', 'uscha_statusline.py'))
-      # ...and the user's own CLAUDE.md was left untouched
-      and open(os.path.join(h, 'CLAUDE.md'), encoding='utf-8').read().strip() == '# my own CLAUDE.md')
-sys.exit(0 if ok else 1)" || T85_CHECK=$?
-rm -rf "$T85"
-if [ "$T85_RC" -eq 1 ] && [ "$T85_CHECK" -eq 0 ]; then
-  PASS=$((PASS+1)); echo "  ok   init writes the clean files, leaves the conflicting CLAUDE.md intact, exits 1"; \
-else FAIL=$((FAIL+1)); echo "  FAIL init still all-or-nothing (rc=$T85_RC check=$T85_CHECK)"; fi
 
 echo ""
 printf 'RESULTADO: %s ok · %s fail\n' "$PASS" "$FAIL"

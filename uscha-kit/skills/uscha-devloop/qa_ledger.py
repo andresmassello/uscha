@@ -206,15 +206,49 @@ def _repo_cfg(ledger, name):
 # measurement: coverage
 # --------------------------------------------------------------------------- #
 def _jacoco_line_counter(xml_path):
-    """Return (missed, covered) for the report-level LINE counter."""
+    """Return (missed, covered) for the report-level LINE counter, or None when the report
+    could not be READ. The distinction is the whole point: a report that measured nothing
+    must never be summed as (0, 0) — that is an invented number, and with one module's XML
+    truncated mid-write it made the surviving modules' percentage look like the project's
+    (audit 1.94.1). Absence is never invented as a number — the rule `cobertura_coverage`
+    already states, applied to the JaCoCo readers too. A report with no LINE counter at all
+    is a real, readable zero and stays (0, 0)."""
     try:
         root = _parse_xml(xml_path).getroot()
-    except ET.ParseError:
-        return 0, 0
+    except (ET.ParseError, OSError, ReportTooLarge):
+        return None
     for c in root.findall("counter"):
         if c.get("type") == "LINE":
-            return int(c.get("missed", 0)), int(c.get("covered", 0))
+            try:
+                return int(c.get("missed", 0)), int(c.get("covered", 0))
+            except (TypeError, ValueError):
+                return None          # a counter that is not a number measured nothing
     return 0, 0
+
+
+def _jacoco_result(files):
+    """Sum the LINE counters of `files`, or report the WHOLE reading unmeasured. Shared by
+    maven/gradle/ant: three hand-copied versions of this sum is how one of them would drift.
+
+    ONE unreadable report makes the reading unmeasured, and an unmeasured reading is
+    (0, 0, 0.0) -- not the survivors' percentage with a false flag beside it. Every other
+    reader in this file returns pct 0.0 whenever report_found is False, and readers of the
+    result rely on it: `readiness` scores coverage as pct/threshold WITHOUT consulting
+    report_found, and `snapshot` prints and persists the pct next to the flag. Handing them
+    the surviving modules' number would score a project on a question nobody asked
+    (audit 1.94.1). The report paths are still listed -- the operator needs to know which
+    files were looked at."""
+    parsed = [_jacoco_line_counter(f) for f in files]
+    reports = [f.replace("\\", "/") for f in files]
+    if not files or any(p is None for p in parsed):
+        return {"covered": 0, "missed": 0, "pct": 0.0, "report_found": False,
+                "reports": reports}
+    missed = sum(p[0] for p in parsed)
+    covered = sum(p[1] for p in parsed)
+    total = missed + covered
+    pct = round(covered / total * 100, 2) if total else 0.0
+    return {"covered": covered, "missed": missed, "pct": pct,
+            "report_found": True, "reports": reports}
 
 
 def maven_coverage(repo_path):
@@ -231,16 +265,7 @@ def maven_coverage(repo_path):
         files = glob.glob(os.path.join(repo_path, "**", "target", "site",
                                        "jacoco", "jacoco.xml"),
                           recursive=True)
-    missed = covered = 0
-    for f in files:
-        m, c = _jacoco_line_counter(f)
-        missed += m
-        covered += c
-    total = missed + covered
-    pct = round(covered / total * 100, 2) if total else 0.0
-    return {"covered": covered, "missed": missed, "pct": pct,
-            "report_found": bool(files),
-            "reports": [f.replace("\\", "/") for f in files]}
+    return _jacoco_result(files)
 
 
 def flutter_coverage(repo_path):
@@ -343,16 +368,7 @@ def gradle_coverage(repo_path):
     if not files:
         files = glob.glob(os.path.join(repo_path, "**", "build", "reports",
                                        "jacoco", "jacoco.xml"), recursive=True)
-    missed = covered = 0
-    for f in files:
-        m, c = _jacoco_line_counter(f)
-        missed += m
-        covered += c
-    total = missed + covered
-    pct = round(covered / total * 100, 2) if total else 0.0
-    return {"covered": covered, "missed": missed, "pct": pct,
-            "report_found": bool(files),
-            "reports": [f.replace("\\", "/") for f in files]}
+    return _jacoco_result(files)
 
 
 def ant_coverage(repo_path):
@@ -360,16 +376,7 @@ def ant_coverage(repo_path):
     report task writes wherever the build file says -- so the report is discovered
     RECURSIVELY by name instead of guessing one convention."""
     files = _ant_reports(repo_path, "jacoco.xml")
-    missed = covered = 0
-    for f in files:
-        m, c = _jacoco_line_counter(f)
-        missed += m
-        covered += c
-    total = missed + covered
-    pct = round(covered / total * 100, 2) if total else 0.0
-    return {"covered": covered, "missed": missed, "pct": pct,
-            "report_found": bool(files),
-            "reports": [f.replace("\\", "/") for f in files]}
+    return _jacoco_result(files)
 
 
 def coverage(repo_path, repo_type):
@@ -1276,7 +1283,15 @@ def _mk_id(tool, rule, fname, line, granularity):
 
 def _find_all(base, patterns, explicit):
     if explicit:
-        return [explicit] if os.path.exists(explicit) else []
+        if not os.path.exists(explicit):
+            # An EXPLICIT path is a claim the operator made about where the report is. When
+            # it is not there, the honest reading is a typo or a build that never wrote it --
+            # not "this linter has no findings". Returning [] made ingest-gate log nothing
+            # and exit 0, so a mistyped --ruff read as a clean gate (audit 1.94.1). Same
+            # fail-closed exit an unparseable report already gets, with the path named.
+            _invalid_static_report(explicit, "linter",
+                                   "no such file (explicit path given, nothing to ingest)")
+        return [explicit]
     found = []
     for pat in patterns:
         found += glob.glob(os.path.join(base, pat), recursive=True)
@@ -3107,7 +3122,7 @@ def cmd_fastpath_eval(args):
         sig("configured", False, "defaults.fast_path present and enabled",
             "config.defaults.fast_path", False)
     else:
-        repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+        repo_path = _scope_path(ledger, args.repo)
         base, base_src = args.base, "--base"
         if base:
             probe = subprocess.run(["git", "rev-parse", "--verify", base + "^{commit}"],
@@ -3694,7 +3709,7 @@ def cmd_cleanroom(args):
     import time
     ledger = _load(args.ledger)
     _repo_node(ledger, args.repo)
-    repo_path = _repo_cfg(ledger, args.repo).get("path", ".")
+    repo_path = _scope_path(ledger, args.repo)
 
     def git(*a, **kw):
         cwd = kw.pop("cwd", repo_path)
