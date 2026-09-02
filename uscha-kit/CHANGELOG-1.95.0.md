@@ -113,4 +113,4 @@ rail: `T136` still runs `bench-roundtrip` over the full fixture **twice**, once 
 once for the `--out` document, and that subcommand takes `--out` and `--json` in one pass exactly
 the way `bench` does.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 438 checks · 0 fail; acceptance 217/217.
