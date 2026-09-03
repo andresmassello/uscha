@@ -101,26 +101,70 @@ ignore the gate.
 Two are architecturally real and blocked by kit constraints, recorded here so they are not
 silently lost:
 
+Both are **BLOCKED BY A DECISION**, not waiting for a spare afternoon — the wording matters,
+because "someday" invites a future reader to just do it, and doing it would break a declared
+contract (1.98.0 wording pass):
+
 - **`S324` — `sha1` (3 uses).** Used for FINGERPRINTING findings (oscillation detection), not
   for security. The canonical fix, `usedforsecurity=False`, needs Python **3.9+**; the kit's
-  floor is **3.8**. Cannot be applied without raising the floor.
+  declared floor is **3.8** and the Windows CI cell exists to hold it there. Applying it means
+  raising the floor, which is a release decision with its own ADR — not a lint fix.
 - **`S314` — `ET.parse` on report files (7 uses).** ruff prescribes `defusedxml`, a **new
-  dependency**, and the engine is stdlib-only *by design*. The real risk is an XML bomb in a
+  dependency**, and the engine is stdlib-only *by design* — a contract, not an oversight, so
+  this one does not get "fixed" as prescribed at all. The real risk is an XML bomb in a
   poisoned report → DoS of the measurement engine (not RCE, not exfiltration), already wrapped
-  in `try/except ParseError`. The stdlib-compatible mitigation is a **size guard before
-  parsing** — worth a small ADR, not a silent patch.
+  in `try/except ParseError` and behind the byte ceiling T112 pins. The stdlib-compatible
+  mitigation is a **size guard before parsing** — worth a small ADR, not a silent patch.
 
-## 1.69.0 fresh review — LOW (deferred, below the severity gate)
+## 1.69.0 fresh review — LOW (deferred, below the severity gate) — **ALL THREE RESOLVED in 1.98.0**
 
-- **Delta twin render: interior newlines in a narrated statement break the .md table row**
+> **Resolution (kit 1.98.0):** all three, with their assertions. They sat here for 33 releases
+> because each is individually small, and they turned out to share one shape that is not small:
+> the JSON stayed right and a HUMAN-facing surface lied. A rendered row split in two, a work
+> item silently suppressed, a gate silently not declared — none of them wrong in the ledger,
+> all of them wrong on the screen the human decides from. Criteria `AC-DE-01..03`, smoke T155,
+> sidecar `.de-cases.json`; each was verified RED against the 1.97.0 engine before its fix.
+> Entries kept for the record.
+
+- ~~**Delta twin render: interior newlines in a narrated statement break the .md table row**~~
   (the JSON and the OBS id survive; only the rendered view corrupts). Sanitize newlines in
   `_render_delta_md`.
-- **`promote` ISSUES-DEFERRED dedupe is a raw substring test**: an OBS id merely mentioned
+  **RESOLVED 1.98.0**: `_md_cell` renders every cell of that table — CR/LF collapse to a space,
+  `|` is escaped — so one observation is one row whatever its statement carries. A space rather
+  than `<br>`: every other cell is plain text and a lone HTML tag in one column would be the only
+  markup in the table. `AC-DE-01`.
+- ~~**`promote` ISSUES-DEFERRED dedupe is a raw substring test**~~: an OBS id merely mentioned
   in prose in that file suppresses its work item. Match on the structured `- [ ] OBS-` line
   shape instead.
-- **`fidelity --config` default resolves against cwd**: running from another directory
+  **RESOLVED 1.98.0**: `_deferred_carries` anchors on the `- [ ] OBS-<id>` line form with a
+  trailing word boundary. The question was never "does this text occur" but "does this file
+  already carry the WORK ITEM for this observation", and only the line shape answers it. The word
+  boundary also buys the case a substring test cannot express at all: `OBS-1` is not `OBS-10`.
+  `AC-DE-02`.
+- ~~**`fidelity --config` default resolves against cwd**~~: running from another directory
   silently means no gate declared (unnamed absence). Consider resolving relative to the
   ledger, or naming the miss.
+  **RESOLVED 1.98.0**: both halves of the suggestion, because either alone leaves a hole. The
+  relative default now resolves against the cwd **first** — an explicit config next to you is
+  what you meant, and no existing invocation changes behaviour — and then beside the `--ledger`;
+  and the output NAMES the path it read, or names the absence and the two places it looked. A
+  gate declared in a file the command never opened is a gate that does not exist, and it used to
+  be indistinguishable from having no gate at all. `AC-DE-03`.
+
+## Scope, decided by the human — dated deferrals (open, decided by the human)
+
+Not findings: DECISIONS. A design that was evaluated and set aside needs a **checkable record**
+with a date, or "deferred" is just another narrated label — the exact failure 1.98.0's round 1
+exists to close. One line per decision, dated, naming what was set aside and what survives.
+
+- **2026-09-02 — outer loop** (scheduled `/loop` + `/goal` wrapping the devloop, MCP connectors,
+  operational invariants): **DEFERRED by the maintainer, not on the roadmap**; the design slides
+  stay as a record. They are the two `Outer loop · design` / `Outer loop · security` slides in
+  `docs/uscha-claude-code-doc{,-EN}.html` and the atlas caption beside them; since 1.98.0 they
+  read *evaluated — deferred (2026-09-02)* instead of *proposal*, and
+  `tools/narrated-claims.txt` asserts the old badge does not come back. A documented design that
+  was considered and declined is worth more published than deleted — but not while it wears a
+  label that says someone is working on it.
 
 ## 1.82.0 hygiene block — measured debt (open, decided by the human)
 

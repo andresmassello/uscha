@@ -1,9 +1,10 @@
-# Cross-platform support — audit and roadmap
+# Cross-platform support — audit (measured)
 
 Status: **done — cross-platform is measured, not narrated.** Windows, macOS and Linux each run
-the full smoke suite (393/393) on the CI matrix (`ubuntu`/`macos`/`windows` × Python 3.8/3.13)
-on every push. This document is the audit trail of getting there — kept as the record of what
-was found and fixed, not an open roadmap.
+the full smoke suite (**444 checks at kit 1.98.0**) on the CI matrix: **three cells on a branch
+push or PR, all six on a tag or a manual dispatch** (since 1.97.0 — the table under *The
+measurement* says which cells and why). This document is the audit trail of getting there —
+kept as the record of what was found and fixed, not an open roadmap.
 
 ## Verdict up front
 
@@ -17,7 +18,8 @@ split, and the smoke suite's platform-gated fixtures.
 
 The real work was **three narrow seams and one missing measurement** — all now closed. The
 measurement came first, because — by the kit's own rule — *cross-platform stays narrated until
-the suite runs green on Linux and macOS.* It now does, on every push.
+the suite runs green on Linux and macOS.* It now does, on every push — three cells on a branch,
+all six on a tag.
 
 ## The measurement (do this first)
 
@@ -39,7 +41,8 @@ be discovered from a checks list:
 | push to a branch, pull request | **3** | `ubuntu`/3.13, `macos`/3.13, `windows`/3.8 |
 | tag `v*`, manual dispatch | **6** | the full `ubuntu`/`macos`/`windows` × `3.8`/`3.13` grid |
 
-Six cells of a ~35-minute suite on every push buys the same answer several times. The grid exists
+Six cells of a ~35-minute suite on every push bought the same answer several times — which is why
+the grid was reduced in 1.97.0, and not why it exists in the first place. The grid exists
 for the failures that are **invisible outside it**, and each of those has exactly one home in the
 reduced set: the bash 3.2 quoting trap lives on `macos` (macOS ships that bash whatever Python is
 installed), the Windows 8.3 short-path trap lives on `windows` under `runneradmin`, and the

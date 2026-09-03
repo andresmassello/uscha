@@ -44,10 +44,12 @@ much of the human-authored IR the mechanical reverse organs can anchor in each c
 -- 0.828, static AND behaviour footing since the 12 bench oracles were curated with per-case
 AC tags (kit 1.90, ADR-030 amended; it read 0.062 with behaviour UNMEASURED before that, a named
 absence rather than a zero); it anchors names and behaviour, and regenerates no spec); full code regenerability of arbitrary systems
-and a shared drift/discovery engine remain VISION, deferred until they can be measured (ADR-011). The framing is positioning where
-it says VISION and a measured mechanism where it says REAL.
+remains VISION, deferred until it can be measured. The shared drift/discovery engine is NOT deferred: ADR-011 REJECTED it as
+architecture -- spec-drift compares commit dates and reverse discovery proposes content, so there is no extraction engine to share.
+The framing is positioning where it says VISION, a measured mechanism where it says REAL, and a decision on the record where it
+says REJECTED.
 
-The kit (v1.97.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+The kit (v1.98.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil); only Claude Code and Codex are exercised against a real agent, the other five are verified by placement + read-back only —
 plus a pure-Python engine (qa_ledger.py, 53 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux
@@ -59,7 +61,7 @@ that ingests evidence from 11 language stacks. It runs on Windows, macOS and Lin
 - [Home](https://uscha.dev): landing page — the method, the five rules, the nine skills, the engine's numbers
 - [Why uscha exists](https://uscha.dev/why): essay — open loop vs. measured graph, who answers the gates, why the loop is caged
 - [How it works](https://uscha.dev/how): three diagrams — greenfield discovery, brownfield reverse discovery, and the curation mechanism (one human verdict, everything else measured)
-- [The diamond](https://uscha.dev/diamond): the thesis — specs as source code, code as build artifact, with the REAL vs VISION truth-pass table
+- [The diamond](https://uscha.dev/diamond): the thesis — specs as source code, code as build artifact, with the REAL vs VISION vs REJECTED truth-pass table
 - [2-day developer course](https://uscha.dev/docs/uscha-dev-course-EN.html): from zero to production — day 1 greenfield (discovery), day 2 migration (characterize, reverse-discovery)
 - [Complete documentation](https://uscha.dev/docs/uscha-claude-code-doc-EN.html): the whole method in one place — rules, phases, every skill, gates and the ledger
 - [Field note 001 — treasury migration](https://uscha.dev/field-notes/001-treasury-migration): a real, anonymized migration — the five times the measured graph contradicted an apparent "done"; not in production, readiness 79.4, stated up front

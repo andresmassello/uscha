@@ -40,7 +40,7 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.97.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v1.98.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -196,7 +196,7 @@ that same-model reruns differ structurally about as much as different models do 
 `NOISY`) — so one earlier variance narrative was **retracted**. Every claim above is a subcommand
 you can run; every unmeasured part is labeled. That honesty is the method applied to itself.
 
-→ The full thesis, with before/after diagrams and the REAL vs VISION table:
+→ The full thesis, with before/after diagrams and the REAL vs VISION vs REJECTED table:
 **[uscha.dev/diamond](https://uscha.dev/diamond)** · the mechanism, in three diagrams:
 **[uscha.dev/how](https://uscha.dev/how)**
 

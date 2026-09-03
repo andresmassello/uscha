@@ -46,6 +46,7 @@ body{background:var(--paper);color:var(--ink);font-family:var(--body);line-heigh
 .st.kit{background:var(--pass-soft);color:var(--pass);border:1px solid #b6d6c5}
 .st.new{background:var(--fail-soft);color:var(--fail);border:1px solid #e2bcb6}
 .st.prop{background:var(--amber-soft);color:var(--amber);border:1px solid #e6cfa6}
+.st.defer{background:#eef1f0;color:var(--mute);border:1px solid #cfd8d6}
 
 /* clause blocks with gutter annotations */
 .clause{position:relative;padding-top:52px;margin-top:8px}
@@ -146,7 +147,7 @@ tr:nth-child(even) td{background:#f5f8f6}
     <p class="abstract">Uscha is a spec-driven, tool-agnostic methodology that begins <em>before</em> the spec: from a vague idea and reference material, the assistant proposes the shape of the system, the human decides, and only then is the work specified, built, and advanced on evidence alone. This manual documents the instantiation in Claude Code via the <code>uscha-kit</code>.</p>
     <div class="meta"><span>Flow: <b>Idea → Discovery → Ready → SPEC → ADR? → Build → Verify → Evidence → Human gate</b></span></div>
     <div class="legend">
-      <span class="st kit">in the kit</span><span class="st new">new</span><span class="st prop">proposal</span>
+      <span class="st kit">in the kit</span><span class="st new">new</span><span class="st prop">proposal</span><span class="st defer">evaluated — deferred</span>
       <span style="font-family:var(--mono);font-size:.72rem;color:var(--mute);align-self:center">— status is stated per clause. No smoke: whatever isn't implemented is flagged.</span>
     </div>
   </div>
@@ -351,7 +352,7 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
   <!-- 11 -->
   <section class="clause" id="c11">
     <div class="head">
-      <div class="cnum">§11 · The outer loop <span class="st prop" style="margin-left:auto">proposal</span></div>
+      <div class="cnum">§11 · The outer loop <span class="st defer" style="margin-left:auto">evaluated — deferred 2026-09-02</span></div>
       <h2>Autonomy earns its cost, or costs more than it returns.</h2>
       <p>Uscha is the rigorous <em>inner</em> loop. The <em>outer</em> loop is the heartbeat that would trigger it on a cadence. Before automating anything, a 4-condition entry test: fail one and the loop costs more than a hand-written prompt.</p>
       <ul>

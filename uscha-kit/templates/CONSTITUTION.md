@@ -121,7 +121,7 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
 - [ ] **Runs without the human typing anything** — a script/agent autocompletes it; no routine forms
 - [ ] **Speaks only when it matters** — a failure, or a high-risk profile; if it always speaks, it is silenced by default
 - [ ] **Collapses into `readiness`** — one number + one line, not another screen (`--verbose` opens the detail)
-- [ ] **A trivial change skips it** — gated by risk profile <!-- principle: profiles A–E NOT yet mechanized in the engine -->
+- [ ] **A trivial change skips it** — gated by risk profile <!-- principle: profiles A–E are NOT mechanized in the engine, by design -- the paragraph above says why: this is design discipline and review judgment, not a check -->
 
 ## How it is enforced
 

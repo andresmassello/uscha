@@ -4140,6 +4140,47 @@ CANDIDATE_DELTA_FILE = "CANDIDATE-DELTA.json"    # under discovery/, machine-can
 CANDIDATE_DELTA_TWIN = "CANDIDATE-DELTA.md"      # rendered view, regenerated, never a source
 CANONICAL_FILE = "CANONICAL.json"                # under discovery/: the promoted package
 ISSUES_DEFERRED_FILE = "ISSUES-DEFERRED.md"
+# The shape of the work item `promote` writes for a `fix` verdict, and the shape it recognises
+# again on the next run. The dedupe used to be `o["id"] not in existing` -- a RAW SUBSTRING over
+# the whole file, so it suppressed the work item for any id merely MENTIONED in prose there and,
+# because the ids are a hash prefix, for any id that is a prefix of an already-written one
+# (1.69.0 fresh review, LOW, resolved 1.98.0). The question is not "does this text occur"; it is
+# "does this file already carry the WORK ITEM for this observation", and only the line shape
+# answers it. The word boundaries are what separate OBS-1 from OBS-10, and the `.*` between
+# the checkbox and the id is what lets a HUMAN reword the item -- prefix it with a date, a
+# severity, an owner -- without `promote` appending a second copy of it on the next run.
+_DEFERRED_ITEM_LINE = r"(?m)^[ \t]*[-*][ \t]*\[[ xX]\].*\b%s\b"
+
+
+def _deferred_carries(existing, oid):
+    """True when ISSUES-DEFERRED.md already holds the `- [ ] <oid>` work item for this OBS."""
+    return re.search(_DEFERRED_ITEM_LINE % re.escape(oid), existing) is not None
+
+
+def _config_beside_ledger(config, ledger_path):
+    """Where to LOOK for a config whose default is a bare relative name.
+
+    `--config` defaulted to the literal `uscha.config.json`, which `os.path.isfile` resolves
+    against the CWD. Run `fidelity --ledger /repo/QA-LEDGER.json` from anywhere but /repo and
+    the config beside the ledger was never opened -- so `defaults.fidelity.gate` was silently
+    not declared, and the INV-ADVISORY-01 refusal that reads it never fired. An UNNAMED absence
+    (1.69.0 fresh review, LOW, resolved 1.98.0): the command printed a full vector and exit 0,
+    exactly as it does when there genuinely is no config.
+
+    The cwd still WINS when it holds the file -- an explicit `--config` next to you is what you
+    meant, and no existing invocation changes behaviour. Only when it does not is the ledger's
+    own directory tried. Returns (path, found): callers report `path` so the answer to "which
+    file did you read" is in the output rather than in the reader's head.
+    """
+    if os.path.isfile(config):
+        return config, True
+    if not os.path.isabs(config):
+        beside = os.path.join(os.path.dirname(os.path.abspath(ledger_path)), config)
+        if os.path.isfile(beside):
+            return beside, True
+    return config, False
+
+
 OBS_TYPES = ("behavior", "invariant", "contract", "config", "dependency", "decision_trace")
 EVIDENCE_CLASSES = ("measured", "static", "narrated")
 # ADR-014 / INV-ADVISORY-01: dimensions an LLM judges can only advise. The QUARANTINE is an
@@ -4445,6 +4486,17 @@ def _match_canonical(statement, canon_ids):
     return None
 
 
+def _md_cell(text):
+    """One markdown TABLE cell. A `|` is escaped, and any CR/LF inside the value collapses to
+    a space -- a markdown row ENDS at a newline, so a statement or a provenance ref carrying
+    one used to split its observation across two rows and corrupt every column after it
+    (1.69.0 fresh review, LOW, resolved 1.98.0). The JSON and the OBS id always survived; only
+    this rendered view broke, and it is the artifact the human curates from. A space rather
+    than `<br>`: every other cell is plain text, and a lone HTML tag in one column would be
+    the only markup in the table."""
+    return re.sub(r"[\r\n]+", " ", "%s" % text).replace("|", "\\|")
+
+
 def _render_delta_md(delta, verdicts):
     lines = ["<!-- %s -->" % _DELTA_BANNER, "",
              "# CANDIDATE-DELTA (rendered view)", ""]
@@ -4460,9 +4512,10 @@ def _render_delta_md(delta, verdicts):
     for o in delta["observations"]:
         v = verdicts.get(o["id"], "(uncurated)")
         files = ", ".join(o["provenance"].get("files") or []) or "-"
-        stmt = o["statement"].replace("|", "\\|")
         lines.append("| %s | %s | %s | %s | %s | %s |"
-                     % (o["id"], o["type"], o["evidence_class"], v, stmt, files))
+                     % tuple(_md_cell(c) for c in (o["id"], o["type"],
+                                                   o["evidence_class"], v,
+                                                   o["statement"], files)))
     lines.append("")
     return "\n".join(lines)
 
@@ -4771,15 +4824,18 @@ def cmd_promote(args):
         if os.path.isfile(dpath):
             with open(dpath, encoding="utf-8-sig", errors="replace") as fh:
                 existing = fh.read()
-        add = [o for o in fixes if o["id"] not in existing]
+        add = [o for o in fixes if not _deferred_carries(existing, o["id"])]
         if add:
             with open(dpath, "a", encoding="utf-8", newline="\n") as fh:
                 if existing and not existing.endswith("\n"):
                     fh.write("\n")
                 for o in add:
+                    # a markdown checklist item ends at a newline just as a table row
+                    # does: a multi-line statement would split the work item in two and
+                    # leave the half _deferred_carries recognises without its text.
                     fh.write("- [ ] %s (curated `fix`): %s -- observed behavior the human "
                              "ruled a defect; NEVER canonical (ADR-013)\n"
-                             % (o["id"], o["statement"]))
+                             % (o["id"], _md_cell(o["statement"])))
             new_fix = [o["id"] for o in add]
     ledger["candidate_delta"] = {"repo": args.repo, "total": len(obs),
                                  "curated": len(obs),
@@ -4817,16 +4873,20 @@ def cmd_fidelity(args):
     node = _repo_node(ledger, args.repo)
     repo_path = _scope_path(ledger, args.repo)
     cfg = {}
-    if os.path.isfile(args.config):
+    # WHERE the config was looked for is part of the answer: a gate declared in a file the
+    # command never opened is a gate that does not exist, and the old cwd-only resolution said
+    # nothing about it (1.69.0 fresh review, resolved 1.98.0).
+    cfg_path, cfg_found = _config_beside_ledger(args.config, args.ledger)
+    if cfg_found:
         try:
-            with open(args.config, encoding="utf-8-sig") as fh:
+            with open(cfg_path, encoding="utf-8-sig") as fh:
                 cfg = json.load(fh)
         except (OSError, ValueError) as exc:
             # a config that cannot be parsed cannot declare gates -- swallowing the error
             # would DISABLE the INV-ADVISORY-01 refusal on a syntax slip (fresh-review
             # HIGH, reproduced). Malformation is exit 2, never a silent degrade.
             print("[qa_ledger] fidelity: %s unreadable: %s -- refusing to guess what it "
-                  "declares." % (args.config, exc), file=sys.stderr)
+                  "declares." % (cfg_path, exc), file=sys.stderr)
             sys.exit(2)
     declared = ((cfg.get("defaults") or {}).get("fidelity") or {}).get("gate") or []
     for dim in (ledger.get("config", {}).get("defaults", {}).get("fidelity")
@@ -4979,6 +5039,7 @@ def cmd_fidelity(args):
     dims["semantic"] = _fid_dim(None, "not wired: an LLM-judged comparison enters as "
                                       "advisory only and can NEVER gate (INV-ADVISORY-01)")
     out = {"repo": args.repo,
+           "config": cfg_path if cfg_found else None,
            **({"path": bound} if bound else {}),
            "dimensions": {k: dict(dims[k], **{"class": FIDELITY_DIMENSIONS[k]})
                           for k in ("traceability", "behavior", "contracts",
@@ -4990,6 +5051,11 @@ def cmd_fidelity(args):
     else:
         print("FIDELITY %s%s (vector -- no blend; each number stands on its own evidence):"
               % (args.repo, " [bounded to %s]" % bound if bound else ""))
+        if cfg_found:
+            print("  config           %s" % cfg_path)
+        else:
+            print("  config           none (looked for %r in the cwd and beside the ledger) "
+                  "-- no fidelity gate declared from a file" % args.config)
         for k, d in out["dimensions"].items():
             val = "UNMEASURED" if d["value"] is None else "%.2f" % d["value"]
             print("  %-17s %-10s [%s] %s" % (k, val, d["class"], d["provenance"]))
@@ -5211,8 +5277,8 @@ def _render_ir_md(graph):
              "|----|------|-----------|--------|"]
     for nd in graph.get("nodes") or []:
         src = "%s:%s" % (nd["source"]["file"], nd["source"]["line"])
-        stmt = (nd.get("statement") or "").replace("|", "\\|")
-        lines.append("| %s | %s | %s | %s |" % (nd["id"], nd["type"], stmt, src))
+        lines.append("| %s | %s | %s | %s |"
+                     % (nd["id"], nd["type"], _md_cell(nd.get("statement") or ""), src))
     lines += ["", "## Edges", "", "| from | type | to |", "|------|------|----|"]
     for e in graph.get("edges") or []:
         lines.append("| %s | %s | %s |" % (e["from"], e["type"], e["to"]))
@@ -5221,8 +5287,11 @@ def _render_ir_md(graph):
                   "| text | source | reason |", "|------|--------|--------|"]
         for u in graph["untyped"]:
             src = "%s:%s" % (u["source"]["file"], u["source"]["line"])
-            txt = (u.get("text") or "").replace("|", "\\|")[:80]
-            lines.append("| %s | %s | %s |" % (txt, src, u.get("reason", "")))
+            # truncate AFTER the cell is flattened: slicing raw text can cut mid-newline
+            # and leave the break inside the 80 characters that reach the row.
+            txt = _md_cell(u.get("text") or "")[:80]
+            lines.append("| %s | %s | %s |"
+                         % (txt, src, _md_cell(u.get("reason", ""))))
     lines.append("")
     return "\n".join(lines)
 
@@ -12500,7 +12569,9 @@ def build_parser():
     pfv.add_argument("--ledger", default="QA-LEDGER.json")
     pfv.add_argument("--repo", required=True)
     pfv.add_argument("--config", default="uscha.config.json",
-                     help="checked for defaults.fidelity.gate -- advisory there is a refusal")
+                     help="checked for defaults.fidelity.gate -- advisory there is a "
+                          "refusal. A relative name is resolved against the cwd first, "
+                          "then beside --ledger; the path actually read is reported")
     pfv.add_argument("--ir", action="store_true",
                      help="answer curation_closure as a path query over the IR graph "
                           "(ADR-015); reproduces v0 from the derived index")

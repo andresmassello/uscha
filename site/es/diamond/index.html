@@ -51,6 +51,7 @@
   }
   .chip.real{color:#16110f; background:var(--pass)}
   .chip.vision{color:#dbe8e6; background:#2a4341; border:1px solid var(--line)}
+  .chip.rejected{color:#ffd7cd; background:var(--coral-soft); border:1px solid var(--coral)}
   .article table td:first-child{min-width:200px}
 </style>
 </head>
@@ -271,7 +272,7 @@
         <tr><td>«El código es <em>totalmente</em> regenerable desde las specs» (sistemas arbitrarios)</td>
             <td><span class="chip vision">VISIÓN</span></td><td>la mitad acotada es REAL (fila de arriba): el bench corrió sobre 12 arquetipos, 9 regeneran al mismo sistema bajo un oráculo oculto, 3 PARTIAL. Lo que sigue siendo VISIÓN es la palabra <em>totalmente</em> y las palabras <em>sistemas arbitrarios</em> — generalizar más allá de arquetipos acotados es la frontera abierta que M5 existe para contestar, y ninguna corrida la contestó todavía (ADR-018)</td></tr>
         <tr><td>«Drift = reverse discovery incremental, mismo motor»</td>
-            <td><span class="chip vision">VISIÓN</span></td><td>idea válida, arquitectura rechazada · ADR-011</td></tr>
+            <td><span class="chip rejected">RECHAZADO</span></td><td>idea válida, arquitectura rechazada · ADR-011</td></tr>
       </tbody>
     </table>
     <p>Y nótese lo elegante: la parte del diamante que <strong>ya es real</strong> — la capa
@@ -289,7 +290,7 @@
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
       Estado verificado contra kit 1.96.0 · fuentes: ADR-009, ADR-010, ADR-011, ADR-016–ADR-030,
       CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.96.0 · los
-      estados REAL/VISIÓN siguen la regla
+      estados REAL/VISIÓN/RECHAZADO siguen la regla
       INV-TRUTH-01 del repo.
     </p>
 
@@ -350,7 +351,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../../diamond/index.html">English version</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.97.0</p>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.98.0</p>
   </div>
 </footer>
 

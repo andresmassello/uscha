@@ -51,6 +51,7 @@
   }
   .chip.real{color:#16110f; background:var(--pass)}
   .chip.vision{color:#dbe8e6; background:#2a4341; border:1px solid var(--line)}
+  .chip.rejected{color:#ffd7cd; background:var(--coral-soft); border:1px solid var(--coral)}
   .article table td:first-child{min-width:200px}
 </style>
 </head>
@@ -271,7 +272,7 @@
         <tr><td>"The code is <em>fully</em> regenerable from the specs" (arbitrary systems)</td>
             <td><span class="chip vision">VISION</span></td><td>the bounded half is REAL (row above): the bench ran on 12 archetypes, 9 regenerate to the same system under a withheld oracle, 3 PARTIAL. What stays VISION is the word <em>totally</em> and the words <em>arbitrary systems</em> — generalization past bounded archetypes is the open frontier M5 exists to answer, and no run has answered it yet (ADR-018)</td></tr>
         <tr><td>"Drift = incremental reverse discovery, same engine"</td>
-            <td><span class="chip vision">VISION</span></td><td>valid idea, rejected as architecture · ADR-011</td></tr>
+            <td><span class="chip rejected">REJECTED</span></td><td>valid idea, rejected as architecture · ADR-011</td></tr>
       </tbody>
     </table>
     <p>And note the elegant part: the piece of the diamond that <strong>is already real</strong>
@@ -288,7 +289,7 @@
 
     <p style="margin-top:32px;color:var(--mute);font-size:13px">
       State verified against kit 1.96.0 · sources: ADR-009, ADR-010, ADR-011, ADR-016–ADR-030,
-      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.96.0 · the REAL/VISION
+      CHANGELOG-1.64.0, CHANGELOG-1.65.0, CHANGELOG-1.72.0–1.96.0 · the REAL/VISION/REJECTED
       labels follow the repo's INV-TRUTH-01 rule.
     </p>
 
@@ -348,7 +349,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../es/diamond/index.html">Versión en español</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.97.0</p>
+    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.98.0</p>
   </div>
 </footer>
 

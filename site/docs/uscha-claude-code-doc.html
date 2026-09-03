@@ -122,6 +122,7 @@ td .t{font-family:var(--mono);font-size:.82rem;color:var(--ink)}
 .callout-status.real{background:var(--green-soft);color:var(--green);border:1px solid #1e5540}
 .callout-status.new{background:var(--red-soft);color:var(--red);border:1px solid #5e2a1e}
 .callout-status.prop{background:var(--amber-soft);color:var(--amber);border:1px solid #5e4a1a}
+.callout-status.defer{background:#1a2b2e;color:var(--ink-mute);border:1px solid #22403f}
 
 .footer{border-top:2px solid var(--ink);margin-top:3rem;padding-top:1.4rem;font-family:var(--mono);font-size:.76rem;color:var(--ink-mute)}
 
@@ -187,7 +188,7 @@ body::before{content:"";position:fixed;inset:0;background:
     <span><span class="dot">●</span> Idea → Discovery → Ready → SPEC → ADR? → Build → Verify → Evidence → Human gate</span>
   </div>
   <p class="small" style="margin-top:1rem;max-width:74ch">
-    Convención de este doc: <span class="callout-status real">en el kit</span> ya está implementado · <span class="callout-status new">nuevo</span> incorporado en esta versión · <span class="callout-status prop">propuesta</span> diseño acordado, todavía no en código. Sin humo: lo que no existe se marca.
+    Convención de este doc: <span class="callout-status real">en el kit</span> ya está implementado · <span class="callout-status new">nuevo</span> incorporado en esta versión · <span class="callout-status prop">propuesta</span> diseño acordado, todavía no en código · <span class="callout-status defer">evaluado — diferido</span> diseño registrado, descartado por ahora (fechado en ISSUES-DEFERRED.md). Sin humo: lo que no existe se marca.
   </p>
 </div></section>
 
@@ -218,7 +219,7 @@ body::before{content:"";position:fixed;inset:0;background:
       <path d="M841,141 C841,90 600,90 600,141" fill="none" stroke="#638079" stroke-width="2" marker-end="url(#smapAH)"/>
       <text x="720" y="82" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#9db3b0">loop interno · convergé, no persigas el cero</text>
       <path d="M1000,164 C1000,250 210,250 210,164" fill="none" stroke="#ff6b4a" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#smapAO)"/>
-      <text x="605" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#ff6b4a">loop externo · latido (propuesta) — el merge sigue siendo del humano</text>
+      <text x="605" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#ff6b4a">loop externo · latido (diferido 2026-09-02) — el merge sigue siendo del humano</text>
     </svg>
     <div style="display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:.7rem;color:var(--ink-soft);margin-top:.9rem">
       <span style="display:flex;align-items:center;gap:7px"><i style="width:15px;height:3px;border-radius:2px;display:inline-block;background:#dbe8e6"></i> estación</span>
@@ -879,7 +880,7 @@ $ python3 .claude/skills/uscha-devloop/qa_ledger.py simplicity-check --diff HEAD
 </section>
 
 <section class="slide" data-section="Outer loop · diseño">
-  <div class="kicker"><span class="n">↻</span> outer loop · el diseño <span class="callout-status prop">propuesta</span></div>
+  <div class="kicker"><span class="n">↻</span> outer loop · el diseño <span class="callout-status defer">evaluado — diferido (2026-09-02), fuera del roadmap</span></div>
   <h2>El outer loop de Uscha: <span class="accent">el latido que le falta.</span></h2>
   <p>Uscha es hoy <em>human-triggered</em>: lo disparás vos. El playbook aporta el <strong>heartbeat</strong> — lo que convierte "una corrida" en un loop. La síntesis: Uscha es el <em>payload</em> ideal de ese latido, porque ya trae el gate, el estado, los skills y el maker ≠ checker. Solo falta el disparador.</p>
   <pre><span class="c"># outer loop = schedule + /goal, envolviendo /uscha-devloop</span>
@@ -900,7 +901,7 @@ $ python3 .claude/skills/uscha-devloop/qa_ledger.py simplicity-check --diff HEAD
 </section>
 
 <section class="slide" data-section="Outer loop · seguridad">
-  <div class="kicker"><span class="n">↻</span> outer loop · el security tax <span class="callout-status prop">propuesta</span></div>
+  <div class="kicker"><span class="n">↻</span> outer loop · el security tax <span class="callout-status defer">evaluado — diferido (2026-09-02), fuera del roadmap</span></div>
   <h2>Un loop desatendido es una <span class="accent">superficie de ataque desatendida.</span></h2>
   <p>Tu seguridad hoy es <em>build-time</em> (static gate + CONSTITUTION con CWE). Cuando el loop corre solo aparecen riesgos <em>operacionales</em> que el playbook documenta. Entran como una <strong>capa operacional de la CONSTITUTION</strong>: invariantes que el outer loop no puede violar.</p>
   <table>

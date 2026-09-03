@@ -120,6 +120,7 @@ td .t{font-family:var(--mono);font-size:.82rem;color:var(--ink)}
 .callout-status.real{background:var(--green-soft);color:var(--green);border:1px solid #1e5540}
 .callout-status.new{background:var(--red-soft);color:var(--red);border:1px solid #5e2a1e}
 .callout-status.prop{background:var(--amber-soft);color:var(--amber);border:1px solid #5e4a1a}
+.callout-status.defer{background:#1a2b2e;color:var(--ink-mute);border:1px solid #22403f}
 
 .footer{border-top:2px solid var(--ink);margin-top:3rem;padding-top:1.4rem;font-family:var(--mono);font-size:.76rem;color:var(--ink-mute)}
 
@@ -183,7 +184,7 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(1300px
     <span><span class="dot">●</span> Idea → Discovery → Ready → SPEC → ADR? → Build → Verify → Evidence → Human gate</span>
   </div>
   <p class="small" style="margin-top:1rem;max-width:74ch">
-    Convention in this doc: <span class="callout-status real">in the kit</span> already implemented · <span class="callout-status new">new</span> added in this version · <span class="callout-status prop">proposal</span> design agreed, not yet in code. No smoke: whatever doesn't exist is flagged.
+    Convention in this doc: <span class="callout-status real">in the kit</span> already implemented · <span class="callout-status new">new</span> added in this version · <span class="callout-status prop">proposal</span> design agreed, not yet in code · <span class="callout-status defer">evaluated — deferred</span> design on the record, decided against for now (dated in ISSUES-DEFERRED.md). No smoke: whatever doesn't exist is flagged.
   </p>
 </div></section>
 
@@ -214,7 +215,7 @@ body::before{content:"";position:fixed;inset:0;background:radial-gradient(1300px
       <path d="M841,141 C841,90 600,90 600,141" fill="none" stroke="#638079" stroke-width="2" marker-end="url(#smapAH)"/>
       <text x="720" y="82" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#9db3b0">inner loop · converge, don't chase zero</text>
       <path d="M1000,164 C1000,250 210,250 210,164" fill="none" stroke="#ff6b4a" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#smapAO)"/>
-      <text x="605" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#ff6b4a">outer loop · heartbeat (proposal) — human still owns merge</text>
+      <text x="605" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#ff6b4a">outer loop · heartbeat (deferred 2026-09-02) — human still owns merge</text>
     </svg>
     <div style="display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:.7rem;color:var(--ink-soft);margin-top:.9rem">
       <span style="display:flex;align-items:center;gap:7px"><i style="width:15px;height:3px;border-radius:2px;display:inline-block;background:#dbe8e6"></i> station</span>
@@ -877,7 +878,7 @@ $ python3 .claude/skills/uscha-devloop/qa_ledger.py simplicity-check --diff HEAD
 </section>
 
 <section class="slide" data-section="Outer loop · design">
-  <div class="kicker"><span class="n">↻</span> outer loop · the design <span class="callout-status prop">proposal</span></div>
+  <div class="kicker"><span class="n">↻</span> outer loop · the design <span class="callout-status defer">evaluated — deferred (2026-09-02), not on the roadmap</span></div>
   <h2>The Uscha outer loop: <span class="accent">the heartbeat it lacks.</span></h2>
   <p>Uscha is <em>human-triggered</em> today: you fire it. The playbook contributes the <strong>heartbeat</strong> — what turns "one run" into a loop. The synthesis: Uscha is the ideal <em>payload</em> of that heartbeat, because it already brings the gate, the state, the skills, and the maker ≠ checker. Only the trigger is missing.</p>
   <pre><span class="c"># outer loop = schedule + /goal, wrapping /uscha-devloop</span>
@@ -898,7 +899,7 @@ $ python3 .claude/skills/uscha-devloop/qa_ledger.py simplicity-check --diff HEAD
 </section>
 
 <section class="slide" data-section="Outer loop · security">
-  <div class="kicker"><span class="n">↻</span> outer loop · the security tax <span class="callout-status prop">proposal</span></div>
+  <div class="kicker"><span class="n">↻</span> outer loop · the security tax <span class="callout-status defer">evaluated — deferred (2026-09-02), not on the roadmap</span></div>
   <h2>An unattended loop is an <span class="accent">unattended attack surface.</span></h2>
   <p>Your security today is <em>build-time</em> (static gate + CONSTITUTION with CWE). When the loop runs on its own, <em>operational</em> risks appear that the playbook documents. They enter as an <strong>operational layer of the CONSTITUTION</strong>: invariants the outer loop cannot violate.</p>
   <table>

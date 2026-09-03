@@ -1,0 +1,104 @@
+# Retired narrated claims (kit 1.98.0, smoke T154, AC-VC-01/02).
+#
+# A "VISION" / "planned" / "not yet" label is a promise the reader cannot check. The 1.98.0 rule
+# is that such a label either gets WIRED (built and measured) or gets REWRITTEN as the honest
+# state -- rejected, deferred by a dated decision, or by design. This file is the ledger of the
+# ones that were rewritten, and the smoke suite asserts they stay rewritten: a phrase listed here
+# MUST NOT appear in the path listed beside it.
+#
+# This is an ALLOWLIST, deliberately -- not a general ban on the word VISION. Two labels are
+# correct today and must survive: the diamond table's "arbitrary systems" row (still VISION: the
+# bounded half is measured, generalization is not) and "cross-vendor is not yet measured" (VISION
+# until the cross-vendor arm measures it). A blanket scan would flag those, and a gate that
+# flags what is right trains the reader to ignore it. It also means the historical record --
+# `uscha-kit/CHANGELOG-*.md`, `audits/`, the paper's "Future Work", ISSUES-DEFERRED.md as a
+# mechanism name, and every code/CSS token -- is out of scope by construction: nothing scans
+# them, because nothing but the paths below is scanned.
+#
+# Adding a row is how a release retires a claim. Removing one is how a release un-retires it,
+# and that needs a reason in the changelog.
+#
+# Syntax. Blank lines and `#` comments ignored. One directive or entry per line.
+#   base = <git ref>      the commit the twin comparison in [twins] is measured against
+#   [retired]             entries are `path :: phrase-that-must-be-absent`
+#   [twins]               entries are `pathA :: pathB`, an ES/EN twin pair
+# Paths are repo-relative with forward slashes and must exist (a row pointing at a deleted file
+# would pass by accident, which is the failure mode this whole file exists to refuse).
+
+base = v1.97.0
+
+[retired]
+
+# 1 -- ACCEPTANCE.md said the reverse-discovery slice-1 criteria were unticked "because the code
+# does not exist yet", directly above ten TICKED AC-RD ids. The code shipped in 1.64.0.
+ACCEPTANCE.md :: because the code does not exist yet
+
+# 2 -- the drift row. ADR-011 REJECTED the shared behavior-extraction engine as architecture; the
+# chip said VISION, which reads as "not built yet" rather than "decided against, reasons on file".
+site/diamond/index.html :: <span class="chip vision">VISION</span></td><td>valid idea, rejected as architecture
+site/es/diamond/index.html :: <span class="chip vision">VISIÓN</span></td><td>idea válida, arquitectura rechazada
+site/llms.txt :: a shared drift/discovery engine remain VISION, deferred until they can be measured
+README.md :: the REAL vs VISION table
+
+# 3 -- the CONSTITUTION's risk profiles are not mechanized BY DESIGN (the paragraph above the
+# checklist says so). "NOT yet" promised an engine check that was never coming.
+uscha-kit/templates/CONSTITUTION.md :: NOT yet mechanized
+
+# 4 -- CROSS-PLATFORM.md titled itself "audit and roadmap" while its own line 6 said the roadmap
+# was closed and the matrix measured.
+docs/CROSS-PLATFORM.md :: audit and roadmap
+
+# 5 -- the outer-loop slides. Evaluated and DEFERRED by decision on 2026-09-02; the design stays
+# published, the `proposal` badge does not, because it presented as pending kit work.
+docs/uscha-claude-code-doc-EN.html :: outer loop · the design <span class="callout-status prop">proposal</span>
+docs/uscha-claude-code-doc-EN.html :: outer loop · the security tax <span class="callout-status prop">proposal</span>
+docs/uscha-claude-code-doc.html :: outer loop · el diseño <span class="callout-status prop">propuesta</span>
+docs/uscha-claude-code-doc.html :: outer loop · el security tax <span class="callout-status prop">propuesta</span>
+# ... and their build-output copies, so a stale deploy cannot republish the retired badge. Same
+# hole `tools/facts-gated-files.txt` closed in 1.97.0: a fix that lands only in the canonical
+# twin is invisible until the next `site/sync-docs.sh`, and one that lands only in the copy is
+# deleted by it.
+site/docs/uscha-claude-code-doc-EN.html :: outer loop · the design <span class="callout-status prop">proposal</span>
+site/docs/uscha-claude-code-doc-EN.html :: outer loop · the security tax <span class="callout-status prop">proposal</span>
+site/docs/uscha-claude-code-doc.html :: outer loop · el diseño <span class="callout-status prop">propuesta</span>
+site/docs/uscha-claude-code-doc.html :: outer loop · el security tax <span class="callout-status prop">propuesta</span>
+
+# ... and the atlas SVG caption inside the same decks, which said `(proposal)` in a diagram while
+# the slide beside it said `deferred`. Found by a fresh review of the badge fix: a label lives in
+# more places than the one that was reported. The diagram SOURCE is listed too -- it is what the
+# decks' inline SVG is copied from, so a fix that skipped it would come back on the next redraw --
+# and so is the standalone atlas format, the fifth copy nobody had counted. No PNG is derived from
+# this diagram (the only tracked PNGs are the paper's three figures), so there is nothing to
+# re-render.
+docs/uscha-claude-code-doc-EN.html :: outer loop · heartbeat (proposal)
+docs/uscha-claude-code-doc.html :: loop externo · latido (propuesta)
+site/docs/uscha-claude-code-doc-EN.html :: outer loop · heartbeat (proposal)
+site/docs/uscha-claude-code-doc.html :: loop externo · latido (propuesta)
+docs/diagram-sources/atlas-map.html :: outer loop · heartbeat (proposal)
+formats/uscha-F-atlas.html :: outer loop · heartbeat (proposal)
+# and a sixth: the field manual's §11 clause wore the same `proposal` status chip. Six copies of
+# one label is the argument for a list rather than a memory.
+formats/uscha-A-field-manual.html :: §11 · The outer loop <span class="st prop"
+
+# 6 -- uscha top fixture F3, marked *planned* in a paragraph that argued its own redundancy.
+docs/uscha-top/FIXTURES.md :: *(planned)*
+docs/uscha-top/FIXTURES.md :: | F3 re-pinned scope | planned |
+
+[twins]
+
+# Repo rule 3: the twins travel together. For each pair the two files are diffed against `base`
+# and the changed-line counts must be EQUAL -- an edit that landed in one language and not the
+# other is exactly the drift this rule exists to catch, and it is otherwise invisible until a
+# reader who only speaks the other language finds it.
+#
+# Say what this measures, because the criterion is a PROXY and reading it as more would be its own
+# narrated claim: it compares changed-line COUNTS, not meaning. Equal counts cannot prove the two
+# edits say the same thing, and unequal counts do not prove one is wrong -- they prove the twins
+# moved differently, which is the cheap mechanical signal worth having. A deliberately asymmetric
+# edit is legitimate; whoever makes one bumps `base =` above to the release that carries it, and
+# says so in that release's changelog. That bump is the human judgment the count cannot supply.
+#
+# This file is NEVER added to tools/facts-gated-files.txt. It exists to hold the exact strings the
+# claims gate must never see again; a writer pointed at it would rewrite the evidence.
+docs/uscha-claude-code-doc-EN.html :: docs/uscha-claude-code-doc.html
+site/diamond/index.html :: site/es/diamond/index.html

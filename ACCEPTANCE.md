@@ -139,10 +139,11 @@ Opt-in: `defaults.clean_room` absent or `mode: "off"` and the gate does not exis
 
 ## Reverse discovery, slice 1 (ADR-009/010/011) - feature acceptance, closes on green `AC-RD-nn` tests
 
-Planned via `/uscha-adr-refine` against the sanitized reverse-discovery handoff; unticked
-because the code does not exist yet - criteria before implementation, as always. Slice 2
-(declared oracle divergences, spec-id, roundtrip) is out of scope here and gets its own
-criteria when it starts.
+Planned via `/uscha-adr-refine` against the sanitized reverse-discovery handoff - criteria
+before implementation, as always, and unticked while that was still the whole story. It is not:
+the code shipped in 1.64.0 and every criterion below has closed on its own green `AC-RD-nn`
+case since (measured by T120, sidecar `.curation-cases.json`). Slice 2 (declared oracle
+divergences, spec-id, roundtrip) has its own section below and shipped in 1.65.0.
 
 - [x] AC-RD-01 - candidate spec with valid `evidence`/`confidence` frontmatter accepted;
   malformed frontmatter -> exit 2.
@@ -808,6 +809,39 @@ claiming "nine agent skills and ... 53 subcommands" in one sentence. Measured by
 - [x] AC-FW-03 - a spelled-out count is a claim: a fixture reading "seven skills" is RED against a derived nine, naming `skills.count` and the word it read; the same fixture with the right word is green. The pattern is anchored on the kit's own noun phrases (`<n> skills`, `<n> agent skills`, `<n> subcommands`) and nothing wider, because a WRITER that guessed at "two other skills" would corrupt the sentence it fixed.
 - [x] AC-FW-04 - there is **one** gated file list (`tools/facts-gated-files.txt`, read by the deploy, the suite and the release), the written set IS the checked set, every path it names exists, the three paper paths are in it, and every `# deployed` path has its canonical twin in the `# canonical` section. That last clause is the load-bearing one: `site/docs/*` is build output that `site/sync-docs.sh` deletes with `rm -rf site/docs` and regenerates from `docs/`, so a rewrite that lands only in the copy is undone by the next deploy. Asserted by importing `tools/release.py`'s own `facts_gated_sections` - a second copy of the list here would be the very thing this change removed.
 - [x] AC-FW-05 - a gated file that is not valid UTF-8 is a **named skip**, never a traceback: `--write` names it, leaves its bytes untouched, still writes the rest of the list, and exits **2** so the release refuses (I3) instead of proceeding on a claim set it could not fully write. `--check` reads that same file with `errors="replace"` and still reports its claims, so nothing is hidden - but the writer must not read it that way, because writing a replaced byte back would destroy data to correct a version number.
+
+## Narrated backlog, round 1 (1.98.0) - closes on green `AC-VC-nn` smoke assertions
+
+A `VISION` / `planned` / `not yet` label is a promise the reader cannot check, and six of them
+had outlived their truth: this file said the reverse-discovery criteria were unticked for want
+of code that had in fact shipped, directly above ten ticked ids (the sentence is not reproduced
+here - `tools/narrated-claims.txt` holds it, and AC-VC-01 asserts it is gone from this file);
+the diamond table's drift row wore a VISION chip over a caption that already said ADR-011
+REJECTED it as architecture;
+the CONSTITUTION promised risk profiles were "NOT yet" mechanized when the paragraph above says
+they are design discipline BY DESIGN; `CROSS-PLATFORM.md` titled itself a roadmap six lines
+above declaring the roadmap closed; the outer-loop slides carried a `proposal` badge after the
+human deferred them on 2026-09-02; and `uscha top` fixture F3 read *planned* in a paragraph that
+argued its own redundancy. Each was WIRED or REWRITTEN as the honest state, and the rewrite is
+what is measured. Measured by T154 through the `.vc-cases.json` sidecar.
+
+- [x] AC-VC-01 - every claim `tools/narrated-claims.txt` records as retired is **absent** from the file it was retired from, and every path the list names still exists (a row pointing at a deleted file would pass by accident, which is the failure mode the list exists to refuse). It is an ALLOWLIST, deliberately, not a ban on the word VISION: the diamond table's "arbitrary systems" row and "cross-vendor is not yet measured" are CORRECT labels today and survive untouched, and the historical record - the per-release changelogs, `audits/`, `ISSUES-DEFERRED.md` as a mechanism name, the paper's Future Work, every code and CSS token - is out of scope by construction, because nothing outside the list is read. A gate that flags what is right teaches the reader to ignore it.
+- [x] AC-VC-02 - repo rule 3, measured: for each ES/EN twin pair the list names, the two files are diffed against the base ref and the changed-line counts are **equal**. An edit that landed in one language and not the other is invisible until a reader who only speaks the other one finds it. No git, no base ref, or a shallow clone -> UNMEASURED, never a silent pass.
+
+## The three 1.69.0 deferred LOWs, closed (1.98.0) - closes on green `AC-DE-nn` smoke assertions
+
+`ISSUES-DEFERRED.md` records findings below the severity gate so the loop can converge without
+chasing zero - it is not a graveyard. The three the 1.69.0 fresh review filed there share one
+shape: the JSON stayed right and a HUMAN-facing surface lied. Each carries its assertion, and
+each was verified RED against the 1.97.0 engine before the fix. A fresh review of the fix then
+found the same bug in two NEIGHBOURS the report had not named, which is `AC-DE-04`: a one-off fix
+at the site that was reported is how the second and third copies survive. Measured by T155
+through the `.de-cases.json` sidecar.
+
+- [x] AC-DE-01 - an observation whose statement carries an interior newline renders as **ONE** table row in the delta twin. A markdown row ends at a newline, so the old renderer split the observation across two physical lines and every column after the break landed in the wrong one. Counted as whole rows (six cells, seven pipes, closing with one) against the observation count, plus the statement present flattened. The JSON and the OBS id always survived; the twin is the artifact the HUMAN curates from, which is exactly why the rendered view is not cosmetic.
+- [x] AC-DE-02 - `promote`'s `ISSUES-DEFERRED.md` dedupe matches the **work item**, not the text. An OBS id merely mentioned in prose in that file used to suppress its work item forever - a `fix` verdict that quietly produced nothing - and the anchored `- [ ] OBS-<id>` line form is what answers the actual question. Both halves measured: end to end, a prose mention no longer suppresses the item and a second `promote` still writes it only once; at the function level, `OBS-1` is not `OBS-10`, the boundary a raw substring over hash-prefix ids cannot express.
+- [x] AC-DE-04 - the SAME cell writer is used everywhere a value reaches a one-line surface, not only at the site the review reported. Two neighbours carried the identical bug: `_render_ir_md` escaped a pipe and never touched a newline (both the node rows and the UNTYPED rows), and `promote` wrote the raw statement into a markdown **checklist item** - which ends at a newline exactly as a table row does, so a multi-line statement split the work item in two and left the half `_deferred_carries` recognises without its text. Measured on both: a synthetic IR graph with newlines in a node statement, an UNTYPED text and its reason renders one row each (the UNTYPED text is truncated AFTER flattening, so the cut cannot land mid-break), and a real `fix` verdict over a multi-line statement appends exactly one line with no stray remainder, still deduped on the second `promote`.
+- [x] AC-DE-03 - `fidelity --config` resolves a relative default against the cwd **first, then beside the `--ledger`**, and the output NAMES the path it read - or names the absence and where it looked. Run from any directory but the project root, the old resolution silently found no config, so `defaults.fidelity.gate` was never declared and the INV-ADVISORY-01 refusal that reads it never fired: an unnamed absence indistinguishable from having no gate at all. Measured from a foreign cwd on all three arms - absence named, path named and reported in `--json`, and the advisory-as-blocking refusal firing with exit 2.
 
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).

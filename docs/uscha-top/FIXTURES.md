@@ -93,13 +93,16 @@ criterion between MEASURED and UNMEASURED.
 - **N1 — honesty negative** (`fixture-honesty-negative/`, 24 obligations): 23 `MEASURED_PASS` + 1
   `UNMEASURED`. See §3 — this is the discriminator, not a happy path.
 
-**Planned — M2/M3, not shipped:**
+**Considered and DECLINED — neither is waited on by anything in v0.1:**
 
-- **F3 — re-pinned scope** (`fixture-repinned-scope/`) *(planned)*: a `readiness_history` with a
-  score step across a spec re-pin, and a changed obligation denominator. Would pin a denominator
-  differing from F1/F2/N1 so the fixed-per-commit `|O|` is exercised. M1 covers the score burn-up
-  and the honesty-beside-DONE rule through F1/F2/N1, which already carry three different
-  denominators (6, 8, 24).
+- **F3 — re-pinned scope** (`fixture-repinned-scope/`) *(DECLINED — M1's fixtures cover the
+  case)*: a `readiness_history` with a score step across a spec re-pin, and a changed obligation
+  denominator. It was drafted to pin a denominator differing from F1/F2/N1 so the fixed-per-commit
+  `|O|` would be exercised. It never had a gap to fill: M1 covers the score burn-up and the
+  honesty-beside-DONE rule through F1/F2/N1, which already carry **three different denominators**
+  (6, 8, 24) — the very variation this fixture existed to supply. The paragraph argued its own
+  redundancy from the day it was written and still read *planned*; it is recorded here as
+  considered and declined, like F4. Nothing in v0.1 is waiting on it.
 - **F4 — real demo module** (`fixture-demo-module/`) *(NOT NEEDED — superseded by M3)*: the demo
   module's real ledger, end-to-end. It was drafted as the fixture that would exercise the event feed
   from real `ledger["steps"]`. M2 shipped the feed without it: F2's synthetic steps cover the five
@@ -146,7 +149,7 @@ M1; VERDICTS frames arrive with VERDICTS mode (M3).
 | wide (CJK / full-width text) | ✓ shipped (1.90.0) | ✓ shipped (1.90.0) | — | — | — |
 | **drift (F2 + a real `spec-drift` run)** | — | — | — | — | ✓ shipped (1.91.0) |
 | **unsealed (F1 + a real broken seal)** | ✓ shipped (1.92.0) | ✓ shipped (1.92.0) | — | — | — |
-| F3 re-pinned scope | planned | planned | — | — | — |
+| F3 re-pinned scope | declined | declined | — | — | — |
 | F4 demo module | not needed | not needed | not needed | not needed | — |
 
 Ten frames ship in M1 (eight from the original four states, two from `state-empty.json`), two

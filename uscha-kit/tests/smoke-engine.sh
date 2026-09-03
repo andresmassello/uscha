@@ -11387,6 +11387,365 @@ case "$T153" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T153";;
 esac
 
+echo "== T154 (1.98.0): the narrated backlog stays retired, and the twins moved together =="
+# A VISION / planned / not-yet label is a promise the reader cannot check. Round 1 of 1.98.0
+# rewrote six of them into the honest state -- rejected, deferred by a dated decision, or by
+# design -- and this block is what keeps them rewritten. It is an ALLOWLIST scan, not a ban on
+# the word VISION: tools/narrated-claims.txt names the exact path and the exact phrase each
+# rewrite retired, so the two labels that are still CORRECT today (the diamond table's arbitrary
+# systems row, and cross-vendor not yet measured) survive untouched, and the historical record --
+# the per-release changelogs, audits/, the paper's Future Work -- is out of scope by construction
+# because nothing outside the list is read. A gate that flags what is right teaches the reader to
+# ignore it.
+T154=$(pyin "$KIT" <<'PY'
+import io, os, subprocess, sys
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+LIST = os.path.join(root, "tools", "narrated-claims.txt")
+res, why = {}, {}
+
+
+def parse(path):
+    """(base ref, retired [(path, phrase)], twins [(pathA, pathB)]). A file it cannot parse
+    raises: an unreadable criterion is a red one, never an empty pass."""
+    base, retired, twins, section = None, [], [], None
+    with io.open(path, encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line in ("[retired]", "[twins]"):
+                section = line
+                continue
+            if section is None and line.split("=")[0].strip() == "base":
+                base = line.split("=", 1)[1].strip()
+                continue
+            if " :: " not in line:
+                raise ValueError("unparsable entry: " + line)
+            left, right = line.split(" :: ", 1)
+            if section == "[retired]":
+                retired.append((left.strip(), right))
+            elif section == "[twins]":
+                twins.append((left.strip(), right.strip()))
+            else:
+                raise ValueError("entry outside a section: " + line)
+    return base, retired, twins
+
+
+def git(*a):
+    """(returncode, stdout). A git binary that is not on PATH at all comes back as rc 127, so
+    the criterion reports UNMEASURED for it exactly as it does for a ref it cannot resolve --
+    a traceback there would have read as a red instead of an absence."""
+    try:
+        r = subprocess.run(["git"] + list(a), cwd=root, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return 127, ""
+    return r.returncode, r.stdout
+
+
+def changed(ref, rel):
+    """(added, removed) for one path between ref and the WORKING TREE. An unchanged file
+    prints nothing, which is (0, 0). A binary file prints - -, which is not measurable here
+    and raises rather than counting as zero."""
+    out = git("diff", "--numstat", ref, "--", rel)[1]
+    add = rem = 0
+    for ln in out.split(chr(10)):
+        parts = ln.split(chr(9))
+        if len(parts) < 3:
+            continue
+        if parts[0] == "-" or parts[1] == "-":
+            raise ValueError("binary diff for " + rel)
+        add += int(parts[0])
+        rem += int(parts[1])
+    return add, rem
+
+
+base, retired, twins = None, [], []
+try:
+    base, retired, twins = parse(LIST)
+    parsed = None
+except (OSError, ValueError) as exc:
+    parsed = "%s: %s" % (type(exc).__name__, exc)
+
+# --- AC-VC-01: every retired phrase is ABSENT from the file it was retired from, and every
+# listed path still exists (a row pointing at a deleted file would pass by accident, which is
+# the whole failure mode this list exists to refuse).
+problems = []
+if parsed:
+    problems.append("tools/narrated-claims.txt unreadable -- " + parsed)
+elif not retired:
+    problems.append("no [retired] entries: the list is the criterion, an empty one measures "
+                    "nothing")
+else:
+    for rel, phrase in retired:
+        p = os.path.join(root, rel.replace("/", os.sep))
+        if not os.path.isfile(p):
+            problems.append("%s: listed path does not exist" % rel)
+            continue
+        with io.open(p, encoding="utf-8", errors="replace") as fh:
+            body = fh.read()
+        if phrase in body:
+            problems.append("%s still carries the retired claim %r" % (rel, phrase[:60]))
+res["AC-VC-01"] = not problems
+why["AC-VC-01"] = "; ".join(problems[:4]) or ("%d retired claim(s) absent" % len(retired))
+
+# --- AC-VC-02: repo rule 3 -- the twins travel together. Each ES/EN pair is diffed against the
+# base ref and the changed-line counts must MATCH. An edit that landed in one language and not
+# the other is invisible until a reader who only speaks the other one finds it.
+# Not a git checkout (no repository, no git binary), or a base ref this clone cannot resolve
+# (unfetched tag, shallow clone) -> None = UNMEASURED, never a silent pass.
+if parsed or not twins or git("rev-parse", "--verify", "--quiet", base or "")[0] != 0:
+    res["AC-VC-02"] = None
+    why["AC-VC-02"] = "not a git checkout, or base ref %r unresolvable" % base
+else:
+    tp = []
+    for a, b in twins:
+        if not (os.path.isfile(os.path.join(root, a.replace("/", os.sep)))
+                and os.path.isfile(os.path.join(root, b.replace("/", os.sep)))):
+            tp.append("%s / %s: one twin is missing" % (a, b))
+            continue
+        ca, cb = changed(base, a), changed(base, b)
+        if ca != cb:
+            tp.append("%s +%d-%d vs %s +%d-%d since %s"
+                      % (a, ca[0], ca[1], b, cb[0], cb[1], base))
+    res["AC-VC-02"] = not tp
+    why["AC-VC-02"] = "; ".join(tp[:3]) or ("%d twin pair(s) moved together" % len(twins))
+
+sidecar(kit, ".vc-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T154" in
+  OK*) PASS=$((PASS+1)); echo "  ok   narrated backlog (AC-VC-01..02): $T154";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T154";;
+esac
+
+echo "== T155 (1.98.0): the three 1.69.0 deferred LOWs, closed and pinned =="
+# ISSUES-DEFERRED.md is not a graveyard: the three findings the 1.69.0 fresh review filed below
+# the severity gate each get their fix and their assertion here. All three share a shape -- the
+# JSON stayed right and a HUMAN-facing surface lied: a rendered row split in two, a work item
+# silently suppressed, a gate silently not declared.
+T155=$(pyin "$KIT" <<'PY'
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+res, why, TMPS = {}, {}, []
+NL = chr(10)
+
+
+def workspace():
+    w = tempfile.mkdtemp(prefix="uscha-de-")
+    TMPS.append(w)
+    repo = os.path.join(w, "r")
+    os.makedirs(os.path.join(repo, "src"))
+    for a in (("git", "init", "-b", "main"), ("git", "config", "user.email", "t@t"),
+              ("git", "config", "user.name", "t")):
+        subprocess.run(list(a), cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    io.open(os.path.join(repo, "src", "app.py"), "w").write(
+        "def total(items):" + NL + "    return sum(items)" + NL)
+    io.open(os.path.join(repo, "ACCEPTANCE.md"), "w").write("- [ ] AC-1 - total sums" + NL)
+    subprocess.run(["git", "add", "-A"], cwd=repo, stdout=subprocess.PIPE)
+    subprocess.run(["git", "commit", "-m", "base"], cwd=repo, stdout=subprocess.PIPE,
+                   stderr=subprocess.PIPE)
+    # the repo path is ABSOLUTE on purpose: these cases run the engine from a foreign cwd, and
+    # a repo resolved relative to it would confound what is being measured with what is not.
+    io.open(os.path.join(w, "uscha.config.json"), "w").write(json.dumps(
+        {"defaults": {"acceptance_file": "ACCEPTANCE.md"},
+         "repos": [{"name": "r", "path": repo, "type": "python"}],
+         "integration": {"enabled": False}}))
+    eng(w, "init", "--config", os.path.join(w, "uscha.config.json"),
+        "--out", os.path.join(w, "L.json"))
+    return w, repo
+
+
+def eng(cwd, *a):
+    return subprocess.run([sys.executable, ENG] + list(a), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                          errors="replace")
+
+
+def discover(w, statements):
+    narr = os.path.join(w, "narr.json")
+    io.open(narr, "w").write(json.dumps(
+        [{"type": "behavior", "statement": s, "files": ["src/app.py:1"]}
+         for s in statements]))
+    r = eng(w, "discover", "--ledger", os.path.join(w, "L.json"), "--repo", "r",
+            "--narrated", narr)
+    return r
+
+
+def measure():
+    # --- AC-DE-01: a statement carrying an interior newline renders as ONE table row -------
+    # A markdown row ENDS at a newline, so the old renderer split the observation across two
+    # physical lines and every column after the break landed in the wrong one. The JSON and
+    # the OBS id always survived; the twin is the artifact the HUMAN curates from.
+    w, repo = workspace()
+    multi = "total() never rounds" + NL + "and never mutates its argument"
+    r = discover(w, [multi])
+    dpath = os.path.join(repo, "discovery", "CANDIDATE-DELTA.json")
+    tpath = os.path.join(repo, "discovery", "CANDIDATE-DELTA.md")
+    obs = json.load(io.open(dpath, encoding="utf-8"))["observations"]
+    md = io.open(tpath, encoding="utf-8").read()
+    rows = [ln for ln in md.split(NL) if ln.startswith("| OBS-")]
+    # a well-formed row is six cells, so seven pipes, and it closes with one
+    whole = [ln for ln in rows if ln.count("|") == 7 and ln.rstrip().endswith("|")]
+    flat = multi.replace(NL, " ")
+    res["AC-DE-01"] = bool(r.returncode == 0 and obs and len(rows) == len(obs)
+                           and len(whole) == len(obs) and flat in md)
+    why["AC-DE-01"] = "rc=%s obs=%d rows=%d whole=%d flat=%s" % (
+        r.returncode, len(obs), len(rows), len(whole), flat in md)
+
+    # --- AC-DE-02: the ISSUES-DEFERRED dedupe matches the WORK ITEM, not the text -----------
+    # Two halves. End to end: an OBS id merely MENTIONED in prose in that file used to
+    # suppress its work item forever -- a fix verdict that quietly produced nothing. And at
+    # the function level, the boundary a raw substring cannot express: OBS-1 is not OBS-10.
+    w2, repo2 = workspace()
+    discover(w2, ["total() must reject a non-numeric item"])
+    d2 = json.load(io.open(os.path.join(repo2, "discovery", "CANDIDATE-DELTA.json"),
+                           encoding="utf-8"))
+    ids = [o["id"] for o in d2["observations"]]
+    target = ids[0]
+    for oid in ids:
+        eng(w2, "curate", "--ledger", os.path.join(w2, "L.json"), "--repo", "r",
+            "--obs", oid, "--verdict", "fix")
+    dfile = os.path.join(repo2, "ISSUES-DEFERRED.md")
+    io.open(dfile, "w", encoding="utf-8").write(
+        "# ISSUES-DEFERRED" + NL + NL
+        + "The review discussed " + target + " at length and decided nothing." + NL)
+    p1 = eng(w2, "promote", "--ledger", os.path.join(w2, "L.json"), "--repo", "r", "--json")
+    wrote = json.loads(p1.stdout).get("fix_deferred") if p1.returncode == 0 else None
+    p2 = eng(w2, "promote", "--ledger", os.path.join(w2, "L.json"), "--repo", "r", "--json")
+    again = json.loads(p2.stdout).get("fix_deferred") if p2.returncode == 0 else None
+    body = io.open(dfile, encoding="utf-8").read()
+    once = body.count("- [ ] " + target) == 1
+    spec = importlib.util.spec_from_file_location("ql_de", ENG)
+    ql = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ql)
+    carries = getattr(ql, "_deferred_carries", None)
+    boundary = bool(carries
+                    and carries("- [ ] OBS-10 (curated fix): x" + NL, "OBS-10") is True
+                    and carries("- [ ] OBS-10 (curated fix): x" + NL, "OBS-1") is False
+                    and carries("see OBS-1 in the discussion" + NL, "OBS-1") is False)
+    res["AC-DE-02"] = bool(wrote == ids and again == [] and once and boundary)
+    why["AC-DE-02"] = "wrote=%s again=%s once=%s boundary=%s" % (wrote, again, once, boundary)
+
+    # --- AC-DE-03: fidelity finds the config beside the LEDGER, and names what it read ------
+    # The default resolved against the cwd alone, so running from anywhere but the project
+    # root meant defaults.fidelity.gate was never read and the INV-ADVISORY-01 refusal never
+    # fired: a gate silently not declared, indistinguishable from no gate at all.
+    w3, repo3 = workspace()
+    far = tempfile.mkdtemp(prefix="uscha-de-far-")
+    TMPS.append(far)
+    led = os.path.join(w3, "L.json")
+    cfgp = os.path.join(w3, "uscha.config.json")
+    plain = io.open(cfgp, encoding="utf-8").read()
+    # 1. no config resolvable from either place -> the absence is NAMED, not implied
+    bare = os.path.join(far, "L2.json")
+    shutil.copyfile(led, bare)
+    none_run = eng(far, "fidelity", "--ledger", bare, "--repo", "r")
+    named_absence = bool(none_run.returncode == 0
+                         and "none (looked for" in none_run.stdout)
+    # 2. the config beside the ledger IS read from a foreign cwd, and it is named
+    seen = eng(far, "fidelity", "--ledger", led, "--repo", "r")
+    seen_json = eng(far, "fidelity", "--ledger", led, "--repo", "r", "--json")
+    said = [ln for ln in seen.stdout.split(NL) if ln.strip().startswith("config ")]
+    named = bool(seen.returncode == 0 and len(said) == 1
+                 and os.path.realpath(said[0].split(None, 1)[1].strip())
+                 == os.path.realpath(cfgp))
+    reported = None
+    if seen_json.returncode == 0:
+        got = json.loads(seen_json.stdout).get("config")
+        reported = bool(got and os.path.realpath(got) == os.path.realpath(cfgp))
+    # 3. and BECAUSE it is read, a gate declared there refuses from the foreign cwd too
+    io.open(cfgp, "w", encoding="utf-8").write(json.dumps(
+        dict(json.loads(plain), defaults={"acceptance_file": "ACCEPTANCE.md",
+                                          "fidelity": {"gate": ["semantic"]}})))
+    gated = eng(far, "fidelity", "--ledger", led, "--repo", "r")
+    res["AC-DE-03"] = bool(named_absence and named and reported
+                           and gated.returncode == 2
+                           and "INV-ADVISORY-01" in gated.stderr)
+    why["AC-DE-03"] = "absence=%s named=%s reported=%s gated_rc=%s out=%r" % (
+        named_absence, named, reported, gated.returncode, seen.stdout[-160:])
+
+
+    # --- AC-DE-04: the SAME cell writer everywhere a value reaches a one-line surface ---------
+    # AC-DE-01 fixed the delta twin. Two neighbours carried the identical bug and were found by
+    # a fresh review of the fix, not by the fix: the IR twin escaped a pipe and never touched a
+    # newline, and promote wrote the raw statement into a markdown CHECKLIST item -- which ends
+    # at a newline exactly as a table row does, so a multi-line statement split the work item in
+    # two and left the half _deferred_carries recognises without its text. A one-off fix at the
+    # site that was reported is how the second and third copies survive.
+    spec2 = importlib.util.spec_from_file_location("ql_ir", ENG)
+    q2 = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(q2)
+    node_txt = "the scheduler holds a slot" + NL + "and never double-books it"
+    graph = {"stats": {"nodes": 1, "edges": 0, "untyped": 1, "untyped_rate": 0.5},
+             "nodes": [{"id": "REQ-1", "type": "REQ", "statement": node_txt,
+                        "source": {"file": "SPEC.md", "line": 3}}],
+             "edges": [],
+             "untyped": [{"text": "a convention" + NL + "spanning two lines",
+                          "source": {"file": "SPEC.md", "line": 9},
+                          "reason": "no typed" + NL + "anchor"}]}
+    ir_md = q2._render_ir_md(graph)
+    ir_rows = [ln for ln in ir_md.split(NL) if ln.startswith("| REQ-1 ")]
+    ir_untyped = [ln for ln in ir_md.split(NL) if ln.startswith("| a convention ")]
+    ir_ok = (len(ir_rows) == 1 and ir_rows[0].count("|") == 5
+             and ir_rows[0].rstrip().endswith("|")
+             and node_txt.replace(NL, " ") in ir_rows[0]
+             and len(ir_untyped) == 1 and ir_untyped[0].count("|") == 4
+             and ir_untyped[0].rstrip().endswith("|"))
+
+    # and the work item promote appends stays ONE line, still recognised on the second run
+    w4, repo4 = workspace()
+    multi4 = "totals are rounded at the boundary" + NL + "which the human ruled a defect"
+    discover(w4, [multi4])
+    d4 = json.load(io.open(os.path.join(repo4, "discovery", "CANDIDATE-DELTA.json"),
+                           encoding="utf-8"))
+    ids4 = [o["id"] for o in d4["observations"]]
+    for oid in ids4:
+        eng(w4, "curate", "--ledger", os.path.join(w4, "L.json"), "--repo", "r",
+            "--obs", oid, "--verdict", "fix")
+    eng(w4, "promote", "--ledger", os.path.join(w4, "L.json"), "--repo", "r", "--json")
+    body4 = io.open(os.path.join(repo4, "ISSUES-DEFERRED.md"), encoding="utf-8").read()
+    items = [ln for ln in body4.split(NL) if ln.startswith("- [ ] OBS-")]
+    stray = [ln for ln in body4.split(NL)
+             if ln.strip() and not ln.startswith("- [ ] OBS-")]
+    p4b = eng(w4, "promote", "--ledger", os.path.join(w4, "L.json"), "--repo", "r", "--json")
+    again4 = json.loads(p4b.stdout).get("fix_deferred") if p4b.returncode == 0 else None
+    bullet_ok = (len(items) == len(ids4) and not stray and again4 == []
+                 and any(multi4.replace(NL, " ") in ln for ln in items))
+    res["AC-DE-04"] = bool(ir_ok and bullet_ok)
+    why["AC-DE-04"] = "ir=%s bullet=%s items=%d stray=%d again=%s" % (
+        ir_ok, bullet_ok, len(items), len(stray), again4)
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".de-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T155" in
+  OK*) PASS=$((PASS+1)); echo "  ok   deferred LOWs closed (AC-DE-01..04): $T155";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T155";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -12447,6 +12806,10 @@ FAMILIES = (
      _seq("AC-DC", 1, 4)),
     (".fw-cases.json", "facts-writer", "T153",                      # 1.97.0
      _seq("AC-FW", 1, 5)),
+    (".vc-cases.json", "narrated-backlog", "T154",                  # 1.98.0
+     _seq("AC-VC", 1, 2)),
+    (".de-cases.json", "deferred-lows-closed", "T155",              # 1.98.0
+     _seq("AC-DE", 1, 4)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036
