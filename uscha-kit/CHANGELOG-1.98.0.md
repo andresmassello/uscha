@@ -137,4 +137,4 @@ discovery, all in the same direction — a delta twin that no longer corrupts on
 statement, a `fix` verdict that reliably produces its work item, and a `fidelity` that says which
 config it read. `fidelity --json` gains one key (`config`, null when none was found).
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 444 checks · 0 fail; acceptance 241/242.

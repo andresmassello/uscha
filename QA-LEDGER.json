@@ -2,7 +2,7 @@
   "schema": "dev-loop/qa-ledger@1",
   "run_id": "20260721-164219",
   "started_at": "2026-07-21T19:42:19+00:00",
-  "updated_at": "2026-09-03T12:16:20+00:00",
+  "updated_at": "2026-09-03T20:52:00+00:00",
   "config": {
     "version": "1.44.0",
     "project": "uscha (self-applied)",
@@ -32,7 +32,7 @@
       "enabled": false
     }
   },
-  "step_counter": 50,
+  "step_counter": 51,
   "repos": {
     "uscha": {
       "type": "python",
@@ -1766,6 +1766,57 @@
             "commit": "691542e4f3c4071ec2314da3caf0d04332501329",
             "dirty": true
           }
+        },
+        {
+          "at": "2026-09-03T20:52:00+00:00",
+          "coverage": {
+            "covered": 6752,
+            "missed": 1108,
+            "pct": 85.9,
+            "report_found": true,
+            "reports": [
+              "./reports/coverage.xml"
+            ]
+          },
+          "tests": {
+            "total": 242,
+            "executed": 241,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 1,
+            "passed": 241,
+            "report_found": true,
+            "reports": [
+              {
+                "path": "reports/junit/uscha-acceptance.xml",
+                "mtime_ns": 1788468720140612200,
+                "mtime": "2026-09-03T20:52:00.140612+00:00",
+                "sha256": "4f8e0ef031a7e099b3f1d178066238c0e8e8c9497992ddbd59f903f8b7d063b7",
+                "sha256_eol": "lf",
+                "fresh_by": "clock"
+              }
+            ],
+            "freshness": {
+              "status": "fresh",
+              "reason": "selected JUnit report(s) are current relative to source/test files",
+              "newest_source": {
+                "path": "uscha-kit/skills/uscha-devloop/qa_ledger.py",
+                "mtime_ns": 1788466466689478700,
+                "mtime": "2026-09-03T20:14:26.689479+00:00"
+              },
+              "tolerance_ns": 1000000000
+            }
+          },
+          "loc": {
+            "prod_loc": 29522,
+            "test_loc": 13383,
+            "prod_files": 17,
+            "test_files": 161
+          },
+          "origin": {
+            "commit": "9748c97be98d65b83560b6b7d8b75113d9cfec1c",
+            "dirty": true
+          }
         }
       ],
       "iterations": [
@@ -2425,6 +2476,13 @@
       "kind": "snapshot",
       "repo": "uscha",
       "phase": "post"
+    },
+    {
+      "n": 51,
+      "at": "2026-09-03T20:52:00+00:00",
+      "kind": "snapshot",
+      "repo": "uscha",
+      "phase": "post"
     }
   ],
   "escalations": [],
@@ -2432,7 +2490,7 @@
   "spec_doubts": [],
   "spec_change_requests": [],
   "integrity": {
-    "sha256": "a824d5e9649e839127019c22ca5205eef58ae5484505e9b4864c630009a5d434"
+    "sha256": "9d605481e6e38b1b8de87195c60d6f95eccc19530ce579c3d54bb0cb0d5a0c59"
   },
   "readiness_history": [
     {
@@ -2816,14 +2874,23 @@
         "count": 0,
         "reports": []
       }
+    },
+    {
+      "at": "2026-09-03T20:52:00+00:00",
+      "score": 99.9,
+      "cap_applied": null,
+      "stale_discarded": {
+        "count": 0,
+        "reports": []
+      }
     }
   ],
   "measured": {
-    "at": "2026-09-03T12:16:20+00:00",
+    "at": "2026-09-03T20:52:00+00:00",
     "score": 99.9,
     "band": "READY",
-    "acceptance_done": 235,
-    "acceptance_total": 236,
+    "acceptance_done": 241,
+    "acceptance_total": 242,
     "next": {
       "id": "AC-DF-1",
       "text": "the root `QA-LEDGER.json` was recorded after the last engine change, decided by ancestry: the commit that last touched `qa_ledger.py` is the ledger's commit or an ancestor of it = GREEN; the ledger's commit is an ancestor of the engine's (HEAD is the code commit X, the evidence lands in X+1) = UNMEASURED; diverged histories = RED; shallow clone or no git = UNMEASURED. No clock is consulted."
