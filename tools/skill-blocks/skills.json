@@ -1,0 +1,75 @@
+{
+  "uscha-discovery": {
+    "name": "discovery",
+    "variant": "full",
+    "here": [
+      "Here:   I grill you ONE question at a time, each with my recommended answer. You decide.",
+      "Output: CONTEXT.md · SPEC.md · docs/adr/*.md · ACCEPTANCE.md · RISKS.md",
+      "Next:   `/uscha-devloop` builds against the package. No code until the package exists."
+    ]
+  },
+  "uscha-adr-refine": {
+    "name": "adr-refine",
+    "variant": "full",
+    "here": [
+      "Here:   a precision interview on a feature whose shape you already know. I refuse to emit until the gaps close.",
+      "Output: docs/adr/ADR-NNN.md · ACCEPTANCE.md",
+      "Next:   `/uscha-devloop` builds against the ADR + ACCEPTANCE."
+    ]
+  },
+  "uscha-reverse-discovery": {
+    "name": "reverse-discovery",
+    "variant": "full",
+    "here": [
+      "Here:   I EXTRACT facts and OBSERVATIONS from the system that already exists. Observations stay quarantined until YOUR verdict promotes them.",
+      "Output: SYSTEM-MAP.md · DISCOVERY-SUMMARY.md · discovery/CANDIDATE-DELTA.json (+ rendered",
+      "        .md twin) -- endpoints, contracts, dependency graph, typed observations. The verdicts are yours, one OBS at a time.",
+      "Next:   `/uscha-characterize` freezes current behavior and a HUMAN approves the golden;",
+      "        only judged candidates reach the migration SPEC; the golden stays the oracle."
+    ]
+  },
+  "uscha-characterize": {
+    "name": "characterize",
+    "variant": "full",
+    "here": [
+      "Here:   I run the ORIGINAL code against real inputs and freeze what it does today.",
+      "Output: tests/golden/*.received -- and I STOP: a HUMAN approves the .approved, never me",
+      "Next:   you approve the goldens, then `/uscha-devloop` migrates against them."
+    ]
+  },
+  "uscha-devloop": {
+    "name": "devloop",
+    "variant": "full",
+    "here": [
+      "Here:   plan → build → a severity-gated QA loop that converges instead of chasing zero → PR.",
+      "Output: code, tests, and QA-LEDGER.json (every gate recorded with its evidence)",
+      "Next:   the human gate: review the PR and decide the merge. I stop there."
+    ]
+  },
+  "uscha-sysdoc": {
+    "name": "sysdoc",
+    "variant": "full",
+    "here": [
+      "Here:   I build a two-track deck (commercial + technical) from what the ledger already measured.",
+      "Output: a single self-contained HTML deck",
+      "Next:   nothing -- this is a read-only artifact you share."
+    ]
+  },
+  "uscha-rubric": {
+    "name": "rubric",
+    "variant": "full",
+    "here": [
+      "Here:   I grade what tests cannot: conventions, error handling, API ergonomics, doc quality -- against your versioned RUBRIC.md.",
+      "Output: a graded verdict ingested into the ledger (advisory unless you declared it a gate)",
+      "Next:   back to `/uscha-devloop`, or the human gate if the loop already converged."
+    ]
+  },
+  "uscha-mirador": {
+    "name": "mirador",
+    "variant": "short"
+  },
+  "uscha-status": {
+    "name": "status",
+    "variant": "short"
+  }
+}

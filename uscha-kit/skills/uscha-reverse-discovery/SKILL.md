@@ -23,6 +23,7 @@ first, always — and what cannot be fact yet becomes an OBSERVATION in quaranti
 evidence-classed, content-addressed, and promoted to the contract only by a per-observation
 human verdict (ADR-013).**
 
+<!-- uscha:orientation-block:begin -->
 ## First contact (show ONCE, then never again)
 
 **Only when this project has no uscha artifacts yet** -- no `QA-LEDGER.json`, no `SPEC.md` or
@@ -92,6 +93,7 @@ and say exactly what unblocks it.
 
 Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, `Produced`,
 `Blocks`, `Next`, `Run`) verbatim — they are the method's vocabulary and the smoke checks them.
+<!-- uscha:orientation-block:end -->
 
 ## The one non-negotiable: quarantine, not judgment (ADR-009)
 

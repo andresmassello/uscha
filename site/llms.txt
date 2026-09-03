@@ -47,7 +47,7 @@ absence rather than a zero); it anchors names and behaviour, and regenerates no 
 and a shared drift/discovery engine remain VISION, deferred until they can be measured (ADR-011). The framing is positioning where
 it says VISION and a measured mechanism where it says REAL.
 
-The kit (v1.96.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+The kit (v1.97.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil); only Claude Code and Codex are exercised against a real agent, the other five are verified by placement + read-back only —
 plus a pure-Python engine (qa_ledger.py, 53 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux

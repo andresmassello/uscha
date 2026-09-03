@@ -20,15 +20,19 @@ cp -r docs/paper site/docs/paper
 echo "site/docs synced from docs/"
 
 # --- factual-drift gate (ADR-012): every published claim must match the derived facts ---
-# Same scope as the smoke suite's T0-live check. Catches the residue a hand sweep misses:
-# a stale footer version on one page while the landing reads green.
+# The file list is READ from tools/facts-gated-files.txt -- the ONE list, shared with the smoke
+# suite's T0-live and with tools/release.py. Until 1.97.0 this script and the suite each carried
+# their own, and the difference was a hole: the release wrote the `site/docs/` copies (which the
+# `rm -rf site/docs` above deletes) while their canonical `docs/` twins were only checked.
+# Pure shell on purpose: bash 3.2 has no `mapfile`, and this must run wherever the deploy does.
 PY="${PYTHON:-python}"
 QL="uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"
-"$PY" "$QL" facts --check \
-  README.md uscha-kit/README.md \
-  site/index.html site/es/index.html site/llms.txt \
-  site/how/index.html site/es/how/index.html \
-  site/diamond/index.html site/es/diamond/index.html \
-  site/why/index.html site/es/why/index.html \
-  site/docs/uscha-claude-code-doc.html site/docs/uscha-claude-code-doc-EN.html   site/docs/paper/uscha-paper.html   site/docs/uscha-dev-course.html site/docs/uscha-dev-course-EN.html   site/field-notes/001-treasury-migration/index.html site/es/field-notes/001-treasury-migration/index.html
+GATED=""
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in ''|'#'*) continue;; esac
+  GATED="$GATED $line"
+done < tools/facts-gated-files.txt
+[ -n "$GATED" ] || { echo "tools/facts-gated-files.txt is empty or missing -- refusing to deploy on an unmeasured claim set"; exit 1; }
+# shellcheck disable=SC2086
+"$PY" "$QL" facts --check $GATED
 echo "facts gate: site claims match the derived facts -- safe to deploy"

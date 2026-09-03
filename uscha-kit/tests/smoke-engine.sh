@@ -7990,21 +7990,22 @@ echo "== T0 live: every published claim must match the derived facts (FACTUAL DR
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
 # Historical changelogs are archives, deliberately out of scope (ADR-012).
-# Scope = EVERY authored site page (ES/EN twins) + their footers, not just the landing: the
-# 1.85.0 sweep found /how at 1.65.0 and /diamond footers at 1.75.1 while the landing was
-# green -- pages outside this list are pages the gate cannot see.
-chk "site+README+manifests+docs claims match SYSTEM-FACTS" 0 \
-  "$PY" "$QL" facts --check \
-    "$ROOT/README.md" "$ROOT/uscha-kit/README.md" \
-    "$ROOT/site/index.html" "$ROOT/site/es/index.html" "$ROOT/site/llms.txt" \
-    "$ROOT/site/how/index.html" "$ROOT/site/es/how/index.html" \
-    "$ROOT/site/diamond/index.html" "$ROOT/site/es/diamond/index.html" \
-    "$ROOT/site/why/index.html" "$ROOT/site/es/why/index.html" \
-    "$ROOT/.claude-plugin/marketplace.json" "$ROOT/uscha-kit/.claude-plugin/plugin.json" \
-    "$ROOT/docs/uscha-claude-code-doc.html" "$ROOT/docs/uscha-claude-code-doc-EN.html" \
-    "$ROOT/site/docs/uscha-claude-code-doc.html" "$ROOT/site/docs/uscha-claude-code-doc-EN.html" \
-    "$ROOT/docs/paper/uscha-paper.html" "$ROOT/docs/uscha-dev-course.html" "$ROOT/docs/uscha-dev-course-EN.html" \
-    --out "$ROOT/SYSTEM-FACTS.json"
+# Scope = EVERY authored page + its footer + the two plugin manifests + the deployed copies, and
+# since 1.97.0 the list is READ from tools/facts-gated-files.txt rather than typed here. It used
+# to be typed in two places with different contents, which is how the paper's canonical .tex and
+# the site/docs copies ended up on opposite sides of the gate. Pages outside that file are pages
+# the gate cannot see -- adding one there adds it to the deploy and the release at the same time.
+T0_FILES=""
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in ''|'#'*) continue;; esac
+  T0_FILES="$T0_FILES $ROOT/$line"
+done < "$ROOT/tools/facts-gated-files.txt"
+if [ -z "$T0_FILES" ]; then
+  FAIL=$((FAIL+1)); echo "  FAIL tools/facts-gated-files.txt is empty or missing -- the claim set is UNMEASURED"
+else
+  chk "site+README+manifests+docs claims match SYSTEM-FACTS" 0 \
+    "$PY" "$QL" facts --check $T0_FILES --out "$ROOT/SYSTEM-FACTS.json"
+fi
 
 echo "== T139 (facts table drift): a doc's parser-surface table missing a subcommand row fails facts --check by name =="
 # The table is a claim too, not just the numeric count beside it (the founding T0-live gate
@@ -10868,9 +10869,12 @@ def fixture():
     write(d, "README.md", "A repo." + NL)
     write(d, "src/app.py", "x = 1" + NL)
     write(d, "msg.txt", "feat: 1.0.1" + NL)
-    write(d, "site/sync-docs.sh",
-          chr(34) + "$PY" + chr(34) + " " + chr(34) + "$QL" + chr(34)
-          + " facts --check " + BS + NL + "  README.md" + NL)
+    # the gated claim list release.py reads (1.97.0): one file, two sections. README.md carries
+    # no recognisable claim, so `facts --write` rewrites nothing and the --check after it is
+    # green -- what this fixture measures is the ORDER of the steps, not the claim rewriting
+    # (T153 measures that over its own fixtures).
+    write(d, "tools/facts-gated-files.txt",
+          "# canonical" + NL + "README.md" + NL + NL + "# deployed" + NL)
     write(d, "fake-suite.py",
           "print('RESULTADO: 7 ok " + DOT + " 0 fail')" + NL
           + "print('ACCEPTANCE: 5/5 criterios medidos en verde')" + NL)
@@ -11047,6 +11051,340 @@ PY
 case "$T151" in
   OK*) PASS=$((PASS+1)); echo "  ok   release ritual (AC-RL-01..05): $T151";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T151";;
+esac
+
+echo "== T152 (1.97.0): the SKILL.md orientation block is a GENERATED region, and the generator is measured =="
+# Seven of the nine SKILL.md files carried a byte-identical "First contact" + "Orientation
+# markers" block, and the two short ones a second copy: 18 runtime files, across two skill trees,
+# kept in step by hand. They must stay WHOLE -- an agent loads one SKILL.md and nothing else, so
+# there is no include mechanism to lean on -- but their SOURCE moved to tools/skill-blocks/, and
+# tools/gen-skill-blocks.py renders it into the region between the two markers.
+# A generator nobody runs is a suggestion. This block runs --check over the REAL repo (must be
+# green), then over a throwaway copy of the two trees with one word changed inside a region
+# (exit 1, and it must NAME the file), then over one whose begin marker was deleted (exit 2 --
+# a configuration fault is not a drift, and reporting them as the same thing would let a deleted
+# marker read as "nothing to update").
+T152=$(pyin "$KIT" <<'PY'
+import io, json, os, re, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+GEN = os.path.join(root, "tools", "gen-skill-blocks.py")
+BEGIN = "<!-- uscha:orientation-block:begin -->"
+MARK = "## Orientation markers (non-negotiable)"   # present in BOTH template variants
+TREES = (os.path.join("uscha-kit", ".claude", "skills"), os.path.join("uscha-kit", "skills"))
+res, why, TMPS = {}, {}, []
+
+
+def gen(*argv):
+    return subprocess.run([sys.executable, GEN] + list(argv), cwd=root,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace",
+                          env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+
+
+def read(path):
+    with io.open(path, encoding="utf-8", newline="") as fh:
+        return fh.read()
+
+
+def copy_tree():
+    """A throwaway root holding exactly what the generator reads: tools/skill-blocks/ and the
+    18 SKILL.md files, at the same relative paths. Copying the trees whole would drag in every
+    asset those skills ship for no gain -- the generator opens nothing else."""
+    d = tempfile.mkdtemp(prefix="uscha-dc-")
+    TMPS.append(d)
+    src_blocks = os.path.join(root, "tools", "skill-blocks")
+    dst_blocks = os.path.join(d, "tools", "skill-blocks")
+    os.makedirs(dst_blocks)
+    for name in sorted(os.listdir(src_blocks)):
+        shutil.copyfile(os.path.join(src_blocks, name), os.path.join(dst_blocks, name))
+    with io.open(os.path.join(src_blocks, "skills.json"), encoding="utf-8") as fh:
+        skills = sorted(json.load(fh))
+    rels = []
+    for tree in TREES:
+        for skill in skills:
+            rel = os.path.join(tree, skill, "SKILL.md")
+            dst = os.path.join(d, rel)
+            os.makedirs(os.path.dirname(dst))
+            shutil.copyfile(os.path.join(root, rel), dst)
+            rels.append(rel)
+    return d, rels
+
+
+def measure():
+    # --- AC-DC-01: the live repo is generated-and-in-step, checked by the real command ---
+    live = gen("--check")
+    res["AC-DC-01"] = bool(live.returncode == 0 and "matches the template" in live.stdout)
+    why["AC-DC-01"] = "rc=%s out=%r" % (live.returncode, live.stdout[-160:])
+
+    # --- AC-DC-02: one word changed inside one region is a NAMED drift, and --check writes ---
+    # nothing while saying so (a checker that repairs what it reports is not a checker).
+    d, rels = copy_tree()
+    control = gen("--check", "--root", d)
+    target = rels[0]
+    body = read(os.path.join(d, target))
+    mutated = body.replace(MARK, MARK.replace("non-negotiable", "negotiable"), 1)
+    with io.open(os.path.join(d, target), "w", encoding="utf-8", newline="") as fh:
+        fh.write(mutated)
+    before = dict((rel, read(os.path.join(d, rel))) for rel in rels)
+    drift = gen("--check", "--root", d)
+    after = dict((rel, read(os.path.join(d, rel))) for rel in rels)
+    res["AC-DC-02"] = bool(
+        control.returncode == 0 and mutated != body
+        and drift.returncode == 1
+        and target.replace(os.sep, "/") in drift.stdout
+        and "region(s) differ" in drift.stdout
+        and after == before)
+    why["AC-DC-02"] = "control=%s drift=%s named=%s untouched=%s out=%r" % (
+        control.returncode, drift.returncode, target.replace(os.sep, "/") in drift.stdout,
+        after == before, drift.stdout[-200:])
+
+    # --- AC-DC-03: an absent marker is a CONFIGURATION fault (exit 2), never a drift ---
+    d2, rels2 = copy_tree()
+    victim = rels2[0]
+    lines = read(os.path.join(d2, victim)).split(chr(10))
+    lines = [ln for ln in lines if ln.strip() != BEGIN]
+    with io.open(os.path.join(d2, victim), "w", encoding="utf-8", newline="") as fh:
+        fh.write(chr(10).join(lines))
+    fault = gen("--check", "--root", d2)
+    res["AC-DC-03"] = bool(fault.returncode == 2
+                           and victim.replace(os.sep, "/") in fault.stdout
+                           and "region(s) differ" not in fault.stdout)
+    why["AC-DC-03"] = "rc=%s out=%r" % (fault.returncode, fault.stdout[-200:])
+
+    # --- AC-DC-04: docs/adr/INDEX.md is the map over a FLAT folder, so nothing but a check ---
+    # keeps it a true one. It claims to cover every decision and to copy each status verbatim;
+    # both are mechanical. ADR-041 shipped in 1.96.0 with no row at all, and 1.97.0 first put
+    # its amendment in the INDEX row only -- an index that says something its source does not.
+    adr_dir = os.path.join(root, "docs", "adr")
+    index = os.path.join(adr_dir, "INDEX.md")
+    problems = []
+    if not os.path.isfile(index):
+        problems.append("INDEX.md missing")
+    else:
+        rows = {}
+        for ln in read(index).split(chr(10)):
+            m = re.match(r"\|\s*\[\*\*(ADR-\d+)\*\*\]\(([^)]+)\)", ln)
+            if not m:
+                continue
+            cells = [c.strip() for c in ln.strip().strip("|").split(" | ")]
+            rows.setdefault(m.group(1), []).append((m.group(2), cells[-1].strip("| ").strip()))
+        files = sorted(f for f in os.listdir(adr_dir)
+                       if f.startswith("ADR-") and f.endswith(".md"))
+        for f in files:
+            aid = f[:7]
+            got = rows.get(aid) or []
+            if len(got) != 1:
+                problems.append("%s: %d row(s), expected exactly 1" % (aid, len(got)))
+                continue
+            link, cell = got[0]
+            if link != f:
+                problems.append("%s: row links %r, file is %r" % (aid, link, f))
+            elif not os.path.isfile(os.path.join(adr_dir, link)):
+                problems.append("%s: row link does not resolve" % aid)
+            ms = re.search(r"(?m)^##\s*Status:\s*(.+?)\s*$", read(os.path.join(adr_dir, f)))
+            want = ms.group(1) if ms else None
+            if want is None:
+                problems.append("%s: no '## Status:' line to copy" % aid)
+            elif cell != want:
+                problems.append("%s: row status %r != ADR status %r" % (aid, cell, want))
+        for aid in sorted(set(rows) - set(f[:7] for f in files)):
+            problems.append("%s: row with no ADR file" % aid)
+    res["AC-DC-04"] = not problems
+    why["AC-DC-04"] = "; ".join(problems[:4]) or "clean"
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".dc-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T152" in
+  OK*) PASS=$((PASS+1)); echo "  ok   generated docs (AC-DC-01..04): $T152";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T152";;
+esac
+
+echo "== T153 (1.97.0): facts --write rewrites the claims it recognises, in the author's notation =="
+# ADR-012 made published claims comparable against derived facts; it never made them WRITABLE, so
+# every bump was ~25 hand edits across ~13 files and tools/release.py could only print the drift
+# and hand it back. --write closes that with the SAME recogniser --check uses, then re-runs
+# --check: a writer that reported its own success would be the self-graded evidence this engine
+# exists to refuse. Measured over throwaway fixtures, never over the repo's own pages.
+T153=$(pyin "$KIT" <<'PY'
+import importlib.util, io, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+CR, NL = chr(13), chr(10)
+res, why, TMPS = {}, {}, []
+
+
+def eng(*argv):
+    return subprocess.run([sys.executable, ENG] + list(argv), cwd=root, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                          errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-fw-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def read(path):
+    with io.open(path, "rb") as fh:
+        return fh.read()
+
+
+def spell(n):
+    """The engine's own speller, loaded from the engine -- a test that re-typed the word list
+    would pass while the engine spelled a different number."""
+    spec = importlib.util.spec_from_file_location("ql_fw", ENG)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod._spell(n)
+
+
+def measure():
+    d = tmp()
+    facts_out = os.path.join(d, "SYSTEM-FACTS.json")
+    made = eng("facts", "--out", facts_out)
+    if made.returncode != 0:
+        raise RuntimeError("facts --out failed: " + made.stdout)
+    import json
+    with io.open(facts_out, encoding="utf-8") as fh:
+        facts = json.load(fh)
+    version = facts["version"]
+    nskills = facts["skills"]["count"]
+    nsubs = facts["subcommands"]["count"]
+
+    # --- AC-FW-01: a stale claim is rewritten and the implied --check then passes ------------
+    # CRLF on purpose: the gated set mixes LF sources with CRLF-checked-out HTML, and a writer
+    # that normalised line endings would turn a one-token fix into a whole-file diff.
+    stale = os.path.join(d, "stale.md")
+    body = ("uscha-kit v0.0.1 is the release." + CR + NL
+            + "It ships seven skills and 3 subcommands." + CR + NL
+            + "Prose that claims nothing at all." + CR + NL)
+    write(stale, body)
+    w = eng("facts", "--write", stale, "--out", facts_out)
+    got = io.open(stale, encoding="utf-8", newline="").read()
+    want = ("uscha-kit v" + version + " is the release." + CR + NL
+            + "It ships " + spell(nskills) + " skills and " + str(nsubs) + " subcommands." + CR + NL
+            + "Prose that claims nothing at all." + CR + NL)
+    after = eng("facts", "--check", stale, "--out", facts_out)
+    res["AC-FW-01"] = bool(w.returncode == 0 and got == want and after.returncode == 0
+                           and "claim(s) rewritten" in w.stdout)
+    why["AC-FW-01"] = "rc=%s recheck=%s got=%r" % (w.returncode, after.returncode, got)
+
+    # --- AC-FW-02: a file with no claims is left byte-identical -----------------------------
+    clean = os.path.join(d, "clean.md")
+    write(clean, "No counts here, no version here, nothing to rewrite." + CR + NL)
+    before_bytes = read(clean)
+    w2 = eng("facts", "--write", clean, "--out", facts_out)
+    res["AC-FW-02"] = bool(w2.returncode == 0 and read(clean) == before_bytes
+                           and clean not in w2.stdout)
+    why["AC-FW-02"] = "rc=%s identical=%s out=%r" % (
+        w2.returncode, read(clean) == before_bytes, w2.stdout[-120:])
+
+    # --- AC-FW-03: a SPELLED-OUT count is a claim; a wrong one is red -----------------------
+    # This is the gap the paper review found: docs/paper/uscha-paper.tex said "nine agent skills"
+    # and "53 subcommands" in one sentence, and a digits-only gate read half of it.
+    spelled = os.path.join(d, "spelled.tex")
+    wrong = spell(7 if nskills != 7 else 6)
+    write(spelled, "A reference implementation (" + wrong + " agent skills)." + NL)
+    red = eng("facts", "--check", spelled, "--out", facts_out)
+    right = os.path.join(d, "right.tex")
+    write(right, "A reference implementation (" + spell(nskills) + " agent skills)." + NL)
+    green = eng("facts", "--check", right, "--out", facts_out)
+    res["AC-FW-03"] = bool(red.returncode == 1 and "skills.count" in red.stdout
+                           and wrong in red.stdout and green.returncode == 0)
+    why["AC-FW-03"] = "red=%s green=%s out=%r" % (red.returncode, green.returncode,
+                                                  red.stdout[-160:])
+
+    # --- AC-FW-04: ONE gated list, and the writer reaches the CANONICAL side of it ---------
+    # Parsed the way tools/release.py parses it, by importing release.py's own function -- a
+    # second copy of that list here would be the very thing the single-list change removed.
+    # The section split is the load-bearing part: `site/docs/*` is build output that
+    # site/sync-docs.sh deletes and regenerates, so a rewrite that lands only there is undone by
+    # the next deploy. Every deployed path must therefore have its canonical twin in the list.
+    spec = importlib.util.spec_from_file_location("uscha_release_for_t153",
+                                                  os.path.join(root, "tools", "release.py"))
+    rel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rel)
+    sections = rel.facts_gated_sections() or {"canonical": [], "deployed": []}
+    gated = rel.facts_check_files() or []
+    need = ("docs/paper/uscha-paper.tex", "site/docs/paper/uscha-paper.tex",
+            "site/docs/paper/uscha-paper.html")
+    missing = [f for f in need if f not in gated]
+    absent = [f for f in gated if not os.path.isfile(os.path.join(root, f))]
+    # a deployed copy is written only because its source is written too
+    orphans = [f for f in sections["deployed"]
+               if f.startswith("site/docs/") and f[len("site/"):] not in sections["canonical"]]
+    # and the written set IS the checked set: one list, no subset anywhere
+    same = sorted(gated) == sorted(sections["canonical"] + sections["deployed"])
+    res["AC-FW-04"] = bool(gated and sections["canonical"] and sections["deployed"]
+                           and not missing and not absent and not orphans and same)
+    why["AC-FW-04"] = "n=%d canon=%d dep=%d missing=%s absent=%s orphans=%s same=%s" % (
+        len(gated), len(sections["canonical"]), len(sections["deployed"]),
+        missing, absent, orphans, same)
+
+    # --- AC-FW-05: a byte that is not UTF-8 is a NAMED skip, never a traceback -------------
+    # --check reads the gated files with errors="replace" and would still report their claims;
+    # --write must not, because writing a replaced byte back destroys data to fix a version
+    # number. The file is named and left alone, the rest of the list is still written, and the
+    # exit code says the claim set was not fully written (release.py refuses on it, I3).
+    bad = os.path.join(d, "bad.md")
+    with io.open(bad, "wb") as fh:
+        fh.write(("uscha-kit v0.0.1 caf" + chr(10)).encode("utf-8").replace(
+            b"caf", b"caf" + bytes(bytearray([0xE9]))))
+    ok2 = os.path.join(d, "alongside.md")
+    write(ok2, "uscha-kit v0.0.1 here." + NL)
+    before_bad = read(bad)
+    w5 = eng("facts", "--write", bad, ok2, "--out", facts_out)
+    res["AC-FW-05"] = bool(
+        w5.returncode == 2
+        and "not valid UTF-8" in w5.stdout and "bad.md" in w5.stdout
+        and "Traceback" not in w5.stdout
+        and read(bad) == before_bad                      # not touched, not truncated
+        and version in io.open(ok2, encoding="utf-8").read())   # the rest still written
+    why["AC-FW-05"] = "rc=%s bytes-intact=%s out=%r" % (
+        w5.returncode, read(bad) == before_bad, w5.stdout[-200:])
+
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".fw-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T153" in
+  OK*) PASS=$((PASS+1)); echo "  ok   facts --write (AC-FW-01..05): $T153";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T153";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -12105,6 +12443,10 @@ FAMILIES = (
      _seq("AC-DF", 2, 5)),
     (".rl-cases.json", "release-ritual", "T151",                    # ADR-041
      _seq("AC-RL", 1, 6)),
+    (".dc-cases.json", "docs-generated", "T152",                    # 1.97.0
+     _seq("AC-DC", 1, 4)),
+    (".fw-cases.json", "facts-writer", "T153",                      # 1.97.0
+     _seq("AC-FW", 1, 5)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

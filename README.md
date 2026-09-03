@@ -40,78 +40,9 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.96.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v1.97.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
-
----
-
-## The diamond — specs are the source code, end to end
-
-Uscha closes a cycle most spec-driven tools only walk halfway. The **spec package plus its
-behavior ledger** is the canonical asset of a system; the code is a regenerable build artifact.
-An LLM compiles the package into code under a validated contract; reverse discovery decompiles
-existing code back into *curated* specs — passing, mandatorily, through the one step no
-automatic tool can perform: a human verdict.
-
-```
-                THE ASSET (solid) ── it appreciates with every model generation
-          ┌───────────────────────────────────────────────────────────────┐
-          │   SPEC PACKAGE  +  BEHAVIOR LEDGER  +  IR                     │
-          │   SPEC · ADRs · ACCEPTANCE · CONSTITUTION                     │
-          │   verdicts: preserve · fix · undefined                        │
-          └──────────────┬─────────────────────────────▲──────────────────┘
-                         │                             │
-        FORWARD          │                             │          REVERSE
-        the LLM compiles │                             │   reverse discovery
-                         ▼                             │
-   ┌─────────────────────────────────────┐   ┌─────────┴─────────────────────┐
-   │ compile-validate — output contract, │   │ CURATION · the human gate     │
-   │   mechanical only, model-blind      │   │ candidate ─▶ verdict ─▶ ledger │
-   │ withheld ORACLE — authored BEFORE   │   │ no verdict → PR blocked,      │
-   │   compiling, never in the prompt    │   │   the candidate is NAMED      │
-   └─────────────────┬───────────────────┘   └─────────▲─────────────────────┘
-                     │                                 │
-                     ▼                                 │
-   ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐   ┌─────────────┴─────────────────────┐
-     CODE (dashed) — build artifact,      │ discover · golden capture         │
-     regenerable, disposable          ───▶│ candidates: typed evidence        │
-   └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘   │   + confidence                    │
-                                          └───────────────────────────────────┘
-                                            ▲ also enters here: any LEGACY
-                                              system (= 100% drift)
-
-   round trip · bench-roundtrip — how much of the asset the reverse organs re-anchor
-   from the compiled code: 0.828 measured (12 archetypes) — names AND behaviour
-```
-
-**What each arrow is, in the engine (kit 1.96.0, 53 subcommands, all measured):**
-
-| Leg | Subcommands | What it establishes |
-|---|---|---|
-| Asset → typed graph | `ir-extract`, `ir-render` | the whole package becomes one canonical IR (M2, ADR-015) — deterministic, `UNTYPED` is a measurement not an error |
-| Forward, the compiler | `compile-validate`, `compile-ingest` | any model produces code; the engine validates the output contract and never compiles (M3, ADR-016) |
-| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 9 PASS · 3 PARTIAL**, three Claude-family models (Haiku · Sonnet · Opus — one vendor; cross-vendor not yet measured), JS included (M4/M5, ADR-017/018/028/029) |
-| Reverse, facts | `discover`, `golden-diff` (+ the `/uscha-characterize` skill) | system map + mechanically captured golden; typed candidate observations with evidence class (M1, ADR-013) |
-| Reverse, the human gate | `curate`, `promote`, `curation-check`, `bench-curate` | one verdict per candidate, append-only ledger verified against git; unjudged → `pr-ready` blocked naming it (ADR-009/010, INV-CURATION-01) |
-| Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.828**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |
-
-**Read the numbers the way the repo does.** 9 of 12 archetypes regenerate to the same system
-under an oracle the compilers never saw — that is the closed loop working. 0.828 is the mean
-*recoverability* of the asset from compiled code counting only static and behavioural
-footing. It read **0.062** until 1.90.0, with the behaviour dimension `UNMEASURED`, because no
-oracle case carried an AC tag — a named absence, not a zero. The 12 bench oracles are now
-curated per case (`ORACLE-TAGS-CURATED.json`, human-authored; payloads and expectations
-untouched), so the dimension is measured and the number says the reverse organs anchor **names
-and behaviour**. Both numbers are published rather than smoothed, and what moved between them
-was the tagging, not the code under test. And `bench-r2` measured
-that same-model reruns differ structurally about as much as different models do (aggregate
-`NOISY`) — so one earlier variance narrative was **retracted**. Every claim above is a subcommand
-you can run; every unmeasured part is labeled. That honesty is the method applied to itself.
-
-→ The full thesis, with before/after diagrams and the REAL vs VISION table:
-**[uscha.dev/diamond](https://uscha.dev/diamond)** · the mechanism, in three diagrams:
-**[uscha.dev/how](https://uscha.dev/how)**
 
 ---
 
@@ -202,6 +133,75 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
 - **Model-agnostic.** The engine never reads tokens, model names or vendor telemetry. Any
   model-reported number enters through an adapter, never the engine.
 
+## The diamond — specs are the source code, end to end
+
+Uscha closes a cycle most spec-driven tools only walk halfway. The **spec package plus its
+behavior ledger** is the canonical asset of a system; the code is a regenerable build artifact.
+An LLM compiles the package into code under a validated contract; reverse discovery decompiles
+existing code back into *curated* specs — passing, mandatorily, through the one step no
+automatic tool can perform: a human verdict.
+
+```
+                THE ASSET (solid) ── it appreciates with every model generation
+          ┌───────────────────────────────────────────────────────────────┐
+          │   SPEC PACKAGE  +  BEHAVIOR LEDGER  +  IR                     │
+          │   SPEC · ADRs · ACCEPTANCE · CONSTITUTION                     │
+          │   verdicts: preserve · fix · undefined                        │
+          └──────────────┬─────────────────────────────▲──────────────────┘
+                         │                             │
+        FORWARD          │                             │          REVERSE
+        the LLM compiles │                             │   reverse discovery
+                         ▼                             │
+   ┌─────────────────────────────────────┐   ┌─────────┴─────────────────────┐
+   │ compile-validate — output contract, │   │ CURATION · the human gate     │
+   │   mechanical only, model-blind      │   │ candidate ─▶ verdict ─▶ ledger │
+   │ withheld ORACLE — authored BEFORE   │   │ no verdict → PR blocked,      │
+   │   compiling, never in the prompt    │   │   the candidate is NAMED      │
+   └─────────────────┬───────────────────┘   └─────────▲─────────────────────┘
+                     │                                 │
+                     ▼                                 │
+   ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐   ┌─────────────┴─────────────────────┐
+     CODE (dashed) — build artifact,      │ discover · golden capture         │
+     regenerable, disposable          ───▶│ candidates: typed evidence        │
+   └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘   │   + confidence                    │
+                                          └───────────────────────────────────┘
+                                            ▲ also enters here: any LEGACY
+                                              system (= 100% drift)
+
+   round trip · bench-roundtrip — how much of the asset the reverse organs re-anchor
+   from the compiled code: 0.828 measured (12 archetypes) — names AND behaviour
+```
+
+**What each arrow is, in the engine (kit 1.96.0, 53 subcommands, all measured):**
+
+| Leg | Subcommands | What it establishes |
+|---|---|---|
+| Asset → typed graph | `ir-extract`, `ir-render` | the whole package becomes one canonical IR (M2, ADR-015) — deterministic, `UNTYPED` is a measurement not an error |
+| Forward, the compiler | `compile-validate`, `compile-ingest` | any model produces code; the engine validates the output contract and never compiles (M3, ADR-016) |
+| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 9 PASS · 3 PARTIAL**, three Claude-family models (Haiku · Sonnet · Opus — one vendor; cross-vendor not yet measured), JS included (M4/M5, ADR-017/018/028/029) |
+| Reverse, facts | `discover`, `golden-diff` (+ the `/uscha-characterize` skill) | system map + mechanically captured golden; typed candidate observations with evidence class (M1, ADR-013) |
+| Reverse, the human gate | `curate`, `promote`, `curation-check`, `bench-curate` | one verdict per candidate, append-only ledger verified against git; unjudged → `pr-ready` blocked naming it (ADR-009/010, INV-CURATION-01) |
+| Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.828**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |
+
+**Read the numbers the way the repo does.** 9 of 12 archetypes regenerate to the same system
+under an oracle the compilers never saw — that is the closed loop working. 0.828 is the mean
+*recoverability* of the asset from compiled code counting only static and behavioural
+footing. It read **0.062** until 1.90.0, with the behaviour dimension `UNMEASURED`, because no
+oracle case carried an AC tag — a named absence, not a zero. The 12 bench oracles are now
+curated per case (`ORACLE-TAGS-CURATED.json`, human-authored; payloads and expectations
+untouched), so the dimension is measured and the number says the reverse organs anchor **names
+and behaviour**. Both numbers are published rather than smoothed, and what moved between them
+was the tagging, not the code under test. And `bench-r2` measured
+that same-model reruns differ structurally about as much as different models do (aggregate
+`NOISY`) — so one earlier variance narrative was **retracted**. Every claim above is a subcommand
+you can run; every unmeasured part is labeled. That honesty is the method applied to itself.
+
+→ The full thesis, with before/after diagrams and the REAL vs VISION table:
+**[uscha.dev/diamond](https://uscha.dev/diamond)** · the mechanism, in three diagrams:
+**[uscha.dev/how](https://uscha.dev/how)**
+
+---
+
 ## Documentation
 
 - **[`uscha-kit/INSTALL.md`](uscha-kit/INSTALL.md)** — full install guide (npm, git, plugin)
@@ -209,6 +209,8 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
   subcommand, the readiness KPI, the simplicity and rebuild gates
 - **[`docs/`](docs/)** — the long deck, the operator's playbook, a skills reference and a
   one-pager (ES + EN)
+- **[`docs/adr/INDEX.md`](docs/adr/INDEX.md)** — every architecture decision, grouped by who
+  needs it, with a five-ADR reading order for a newcomer
 - **[`docs/paper/`](docs/paper/)** — the method written up as a paper
 
 Each release ships a `uscha-kit/CHANGELOG-X.Y.Z.md` explaining what changed and why.

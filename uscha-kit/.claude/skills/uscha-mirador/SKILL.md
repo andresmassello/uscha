@@ -17,6 +17,7 @@ allowed-tools: Read, Write, Glob, Grep, Bash
 Paints the REAL state of the project at a glance. It does not narrate or estimate: it
 wires the JSON the engine emits into the template. Read-only.
 
+<!-- uscha:orientation-block:begin -->
 ## Orientation markers (non-negotiable)
 
 The operator must never have to ask "where am I?" or "what happens now?".
@@ -40,6 +41,7 @@ Run:  <the exact command or skill to invoke>
 including any `Flow:` line in this file. If nothing is actionable, say that plainly rather
 than inventing a step. Keep the CONTENT in the conversation's language and the labels
 (`Next`, `Run`) verbatim — the smoke suite checks for them.
+<!-- uscha:orientation-block:end -->
 
 ## Contract
 

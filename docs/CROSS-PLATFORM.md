@@ -21,12 +21,43 @@ the suite runs green on Linux and macOS.* It now does, on every push.
 
 ## The measurement (do this first)
 
-`.github/workflows/smoke.yml` runs the 381-check smoke suite on a matrix of
-`ubuntu-latest` / `macos-latest` / `windows-latest` × Python `3.8` (the declared floor) and
-`3.13`. The audit below is **static** — nobody has executed the suite on a real Linux or macOS
+`.github/workflows/smoke.yml` runs the smoke suite on `ubuntu-latest` / `macos-latest` /
+`windows-latest` × Python `3.8` (the declared floor) and `3.13` — the full six on a tag or a
+manual dispatch, a three-cell subset on a branch push or PR (see the next section for which
+three and why). The audit below is **static** — nobody has executed the suite on a real Linux or macOS
 box. CI turns the audit's hypotheses into facts, surfaces anything the static read missed, and
 gives every fix below a red-to-green signal to build against. **Start here, then fix #1–#3 with
 evidence in hand.**
+
+### How many cells run, and when (1.97.0)
+
+The grid is not the same size on every event, and the difference is stated rather than left to
+be discovered from a checks list:
+
+| event | cells | which |
+|---|---|---|
+| push to a branch, pull request | **3** | `ubuntu`/3.13, `macos`/3.13, `windows`/3.8 |
+| tag `v*`, manual dispatch | **6** | the full `ubuntu`/`macos`/`windows` × `3.8`/`3.13` grid |
+
+Six cells of a ~35-minute suite on every push buys the same answer several times. The grid exists
+for the failures that are **invisible outside it**, and each of those has exactly one home in the
+reduced set: the bash 3.2 quoting trap lives on `macos` (macOS ships that bash whatever Python is
+installed), the Windows 8.3 short-path trap lives on `windows` under `runneradmin`, and the
+3.8-vs-3.9+ interpreter split is covered by pinning `windows` to the floor — which is also the
+slowest cell, so the wall clock barely moves. What the reduced grid does **not** measure, said out
+loud: `ubuntu`/3.8, `macos`/3.8, `windows`/3.13.
+
+Nothing is published on three cells. `tools/release.py` waits for the branch push's 3-cell run
+before it creates the tag (I8), the tag then triggers the 6-cell run on the same SHA, and
+`publish.yml` reuses **that** run — selected by `head_branch` (the tag name), never by "the
+newest run for this SHA", because both runs exist on that commit and "newest" is a race whose
+losing side would publish on three cells. No tag run, no publish-by-reuse: the job falls back to
+running the suite in the publish job itself and says, in the receipt, that it is one cell.
+
+Implementation note: GitHub does not expose the `matrix` context to a job-level `if:`, so a
+per-cell condition is not expressible. A small `grid` job computes the matrix JSON and the
+`smoke` job consumes it with `fromJSON` — which also means a reduced run has three jobs rather
+than six with three skipped.
 
 ### First run — what CI already found (the point, working)
 
@@ -59,7 +90,8 @@ account ran out of Actions minutes and every push produced a run that died in 6 
 *"The job was not started because recent account payments have failed"* — six red cells that
 measured nothing, so the workflow was set to `workflow_dispatch` only rather than leave a red
 grid that reads like a real failure. Making the repo **public** restored free standard runners,
-and the matrix is back on every push: `ubuntu` / `macos` / `windows` × Python 3.8/3.13, plus the
+and the matrix is back on every push: `ubuntu` / `macos` / `windows` × Python 3.8/3.13 (since
+1.97.0 the six run on tags and dispatches, three on branch pushes — see above), plus the
 REAL installer end-to-end (`install --target all` → `doctor --target all`, asserting `ok: true`
 and per-target `golden_guard`).
 

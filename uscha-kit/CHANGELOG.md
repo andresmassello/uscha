@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.97.0** — [the docs stop being hand-copied: one source for the skill block, a writer for the published claims, and a CI grid that measures what only it can (2026-09-02)](CHANGELOG-1.97.0.md)
 - **1.96.0** — [the ritual gets measured: dogfooding freshness by git ancestry, and a release script that refuses (ADR-041) (2026-09-02)](CHANGELOG-1.96.0.md)
 - **1.95.0** — [the suite gets cheaper: the same measurements in 14 minutes instead of 22 (2026-09-02)](CHANGELOG-1.95.0.md)
 - **1.94.1** — [five ways a red thing read green: the audit fixes (2026-09-02)](CHANGELOG-1.94.1.md)

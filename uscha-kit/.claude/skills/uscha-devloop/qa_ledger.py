@@ -7251,13 +7251,46 @@ def _derive_facts():
     }
 
 
+# Spelled-out counts are claims too, and the paper writes both forms in one sentence -- "nine
+# agent skills and a dependency-free Python engine with 53 subcommands". A gate that only sees
+# digits reads half of that sentence and calls the file green. 1..99 covers every count this repo
+# derives, with room; above it the number is written in digits everywhere it appears.
+_ONES = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+         "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+         "seventeen", "eighteen", "nineteen")
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+
+
+def _spell(n):
+    """1..99 in English words, hyphenated ("fifty-three"); None outside that range."""
+    if not 1 <= n <= 99:
+        return None
+    if n < 20:
+        return _ONES[n]
+    return _TENS[n // 10] + ("-" + _ONES[n % 10] if n % 10 else "")
+
+
+_SPELLED = dict((_spell(n), n) for n in range(1, 100))
+# longest alternative first: an alternation offering "six" before "sixty-three" matches the prefix
+_NUM_ALT = "|".join(sorted(_SPELLED, key=len, reverse=True))
+# the leading \b so that "someone skills" cannot be read as the claim "one skills"
+_COUNT = r"\b(\d+|" + _NUM_ALT + r")\s+"
+
+
+def _unspell(token):
+    """The integer a spelled-out count names, or None when the token is not one."""
+    return _SPELLED.get(token.lower())
+
+
 _CLAIM_PATTERNS = (
     # (fact key path, regex over one line, needs-context substring or None)
     ("version", r"v(\d+\.\d+\.\d+)", "kit"),
     ("version", r"uscha-kit\s+v?(\d+\.\d+\.\d+)", None),
-    ("subcommands.count", r"(\d+)\s+sub-?comm?ands", None),
+    ("subcommands.count", _COUNT + r"sub-?comm?ands", None),
     ("subcommands.count", r"(\d+)\s+subcomandos", None),
-    ("skills.count", r"(\d+)\s+skills", None),
+    # "agent skills" is the kit's own noun phrase and the paper's; nothing wider is let in,
+    # because a WRITER that guessed at "two other skills" would corrupt the sentence it fixed.
+    ("skills.count", _COUNT + r"(?:agent\s+)?skills", None),
 )
 
 
@@ -7268,6 +7301,110 @@ def _fact_value(facts, dotted):
     return str(cur)
 
 
+def _claim_norm(token):
+    """The comparable form of a claimed token: a spelled-out count normalises to its digits, so
+    "nine skills" and "9 skills" are one claim compared against one fact."""
+    n = _unspell(token)
+    return token if n is None else str(n)
+
+
+def _claim_rewrite(token, actual):
+    """The replacement for one claimed token, in the AUTHOR's notation: a spelled-out claim is
+    rewritten spelled out and keeps its leading capital, a numeric one numerically. Rewriting
+    "nine skills" as "10 skills" would fix the fact and break the sentence."""
+    if _unspell(token) is None:
+        return actual
+    word = _spell(int(actual)) if actual.isdigit() else None
+    if word is None:
+        return actual
+    return word[0].upper() + word[1:] if token[:1].isupper() else word
+
+
+def _iter_claims(line):
+    """Every recognised claim on ONE line, as (fact key, start, end, token).
+
+    ONE recogniser, two consumers: `--check` reports what this yields and `--write` rewrites
+    exactly what this yields. A writer that re-implemented the patterns could disagree with the
+    checker, and the disagreement would surface as a release that refuses after fixing itself.
+
+    HTML comment spans are SKIPPED rather than deleted -- a comment is not a published claim
+    (the first live run flagged a section marker reading "2 Skills"), and `--write` needs offsets
+    into the ORIGINAL line. Overlapping matches collapse: the two version patterns can name the
+    same digits, and rewriting one span twice would corrupt the line."""
+    spans = [m.span() for m in re.finditer(r"<!--.*?-->", line)]
+    low = line.lower()
+    found = []
+    for key, pat, ctx in _CLAIM_PATTERNS:
+        if ctx and ctx not in low:
+            continue
+        for m in re.finditer(pat, line, re.I):
+            if any(a <= m.start() < b for a, b in spans):
+                continue
+            found.append((m.start(1), m.end(1), key, m.group(1)))
+    out, taken = [], []
+    for start, end, key, token in sorted(found):
+        if any(start < e and s < end for s, e in taken):
+            continue
+        taken.append((start, end))
+        out.append((key, start, end, token))
+    return out
+
+
+def _write_claims(facts, paths):
+    """Rewrite every recognised STALE claim in `paths` to the derived fact, byte for byte
+    otherwise. Line endings are preserved PER FILE (newline="" on both ends): the gated set mixes
+    LF sources with CRLF-checked-out HTML, and normalising them would turn a one-token fix into a
+    whole-file diff nobody can review.
+
+    What it deliberately does NOT touch: anything the patterns do not recognise. A missing
+    subcommand table row, a count spelled outside 1..99, a claim phrased in prose -- those stay
+    for the human, and the --check that follows still fails on them."""
+    changed, total, problems = 0, 0, 0
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8", newline="") as fh:
+                body = fh.read()
+        except OSError as exc:
+            print("  !! %s: unreadable: %s" % (path, exc))
+            problems += 1
+            continue
+        except UnicodeDecodeError as exc:
+            # `--check` reads this file with errors="replace" and still reports its claims, so
+            # nothing is hidden. `--write` must NOT read it that way: writing a replaced byte
+            # back would destroy data to fix a version number, and a writer that corrupts a file
+            # to correct a claim is worse than the claim. Named, skipped, and the --check that
+            # follows still fails on whatever is stale in it.
+            print("  !! %s: not valid UTF-8 (%s) -- left untouched; --check still reads it"
+                  % (path, exc))
+            problems += 1
+            continue
+        lines = body.split("\n")
+        n = 0
+        for i, line in enumerate(lines):
+            claims = _iter_claims(line)
+            if not claims:
+                continue
+            # right to left: an earlier rewrite must not move the offsets of a later one
+            for key, start, end, token in sorted(claims, key=lambda c: c[1], reverse=True):
+                actual = _fact_value(facts, key)
+                if _claim_norm(token) == actual:
+                    continue
+                line = line[:start] + _claim_rewrite(token, actual) + line[end:]
+                n += 1
+            lines[i] = line
+        if not n:
+            continue
+        with open(path, "w", encoding="utf-8", newline="") as fh:
+            fh.write("\n".join(lines))
+        print("%s: %d claim(s) rewritten" % (path, n))
+        changed += 1
+        total += n
+    print("FACTS --write: %d claim(s) rewritten in %d of %d file(s)%s"
+          % (total, changed, len(paths),
+             "" if not problems else "; %d file(s) could not be read" % problems))
+    return problems
+
+
 def cmd_facts(args):
     """Generate SYSTEM-FACTS.json, or --check published claims against the derived facts.
 
@@ -7276,6 +7413,24 @@ def cmd_facts(args):
     about factual drift. A claim that CI does not compare against a derived fact will
     drift; this makes the comparison mechanical and the drift a named red."""
     facts = _derive_facts()
+    if args.write is not None:
+        # Until 1.97.0 there was no writer, so every bump was ~25 hand edits across ~13 files and
+        # the release script could only refuse and hand them back. `--write` rewrites the claims
+        # the SAME recogniser finds, then runs the SAME --check: a writer that reported its own
+        # success would be exactly the self-graded evidence this engine exists to refuse.
+        if args.check is not None:
+            # Before 1.97.0 this combination silently dropped --check's files: --write set
+            # args.check to ITS list. Two file sets given, one measured, no word about it.
+            print("[qa_ledger] facts: --check and --write are alternatives, not a pair -- "
+                  "--write already re-checks exactly the files it wrote.", file=sys.stderr)
+            sys.exit(2)
+        if not args.write:
+            print("[qa_ledger] facts: --write needs at least one file.", file=sys.stderr)
+            sys.exit(2)
+        if _write_claims(facts, args.write):
+            # an unreadable file is an UNMEASURED claim set, and unmeasured is not green
+            sys.exit(2)
+        args.check = list(args.write)
     if args.check:
         problems = []
         # 1) the committed facts file must match a fresh derivation (stale facts are drift)
@@ -7301,21 +7456,17 @@ def cmd_facts(args):
             table_names = []
             table_start = 0
             for n, line in enumerate(lines, 1):
-                # an HTML comment is not a published claim -- the first live run flagged a
-                # section marker (a comment reading "2 Skills") as a drifted count
-                line = re.sub(r"<!--.*?-->", "", line)
-                low = line.lower()
-                for key, pat, ctx in _CLAIM_PATTERNS:
-                    if ctx and ctx not in low:
-                        continue
-                    for m in re.finditer(pat, line, re.I):
-                        claimed = m.group(1)
-                        actual = _fact_value(facts, key)
-                        if claimed != actual:
-                            problems.append((path, n, key, claimed, actual))
+                # the claims come from the SHARED recogniser (`_iter_claims`), which skips HTML
+                # comment spans -- a comment is not a published claim
+                for key, _s, _e, claimed in _iter_claims(line):
+                    actual = _fact_value(facts, key)
+                    if _claim_norm(claimed) != actual:
+                        problems.append((path, n, key, claimed, actual))
                 # the parser-surface table (Subcommand/Subcomando header, one `<td class="t">`
                 # row per subcommand) is a claim too, just not a numeric one -- a row can go
                 # missing while the count beside it stays correct (the `top` row did, once).
+                # This half reads the comment-STRIPPED line: a commented-out row is not a row.
+                line = re.sub(r"<!--.*?-->", "", line)
                 if not in_table:
                     if re.search(r"<th>Sub ?comm?ando?s?</th>", line, re.I):
                         in_table, table_names, table_start = True, [], n
@@ -12288,6 +12439,10 @@ def build_parser():
     pfa.add_argument("--out", default="SYSTEM-FACTS.json")
     pfa.add_argument("--check", nargs="*", default=None,
                      help="files whose claims must match the derived facts; exit 1 on drift")
+    pfa.add_argument("--write", nargs="*", default=None,
+                     help="files whose recognised claims are REWRITTEN to the derived facts "
+                          "(spelled-out claims stay spelled out), then re-checked: exit 1 if "
+                          "anything still disagrees")
     pfa.set_defaults(func=cmd_facts)
 
     prt = sub.add_parser("roundtrip",

@@ -85,20 +85,27 @@ jobs:
             exit 1
           }
 
-      # The full 6-cell matrix runs on every push to main. Publishing is irreversible (npm
-      # unpublish is a 72h courtesy, not an undo), so the bytes about to ship must be green
-      # -- and "green" has to be a MEASURED fact about THESE bytes, never a belief. Same SHA
-      # = same bytes, so a completed, successful `smoke` run recorded by GitHub for exactly
-      # this commit IS that measurement (a fact in GitHub's ledger, not a narration). When
-      # such a run exists, it is cited as the receipt and the suite is not repeated here
-      # (~30 min saved per release, decided 2026-08-18).
+      # Publishing is irreversible (npm unpublish is a 72h courtesy, not an undo), so the bytes
+      # about to ship must be green -- and "green" has to be a MEASURED fact about THESE bytes,
+      # never a belief. Same SHA = same bytes, so a completed, successful `smoke` run recorded by
+      # GitHub for exactly this commit IS that measurement (a fact in GitHub's ledger, not a
+      # narration). When such a run exists it is cited as the receipt and the suite is not
+      # repeated here (~30 min saved per release, decided 2026-08-18).
+      #
+      # Since 1.97.0 a branch push runs THREE cells and a tag runs SIX (smoke.yml), so "a smoke
+      # run for this SHA" is no longer one thing: the same commit carries the 3-cell run from
+      # the push to main AND the 6-cell run from the tag. This step selects the TAG's run by
+      # `head_branch` -- for a tag-triggered or tag-dispatched run GitHub records the tag name
+      # there, and the push-to-main run records "main". Selecting the newest run instead would
+      # publish on whichever registered last, which is a race, and the race it loses is the one
+      # where three cells stand in for six. No tag run, no publish-by-reuse.
       #
       # Three outcomes, and only three (audit 1.94.1 -- the single-sample version of this
       # step read "still running" as "no run" and silently downgraded to the one-cell
       # fallback, and read "failed" the same way, which would have published over a RED
       # measurement):
-      #   still running -> WAIT, up to 40 minutes. The tag is normally pushed with the commit,
-      #                    so the matrix is usually still in flight when this job starts.
+      #   still running -> WAIT, up to 40 minutes. The tag's matrix is triggered by the same
+      #                    push that started this job, so it is normally still in flight.
       #   completed, not success -> FAIL. These exact bytes are measured red; re-running
       #                    the suite here cannot make them green, it can only find a
       #                    friendlier cell.
@@ -110,7 +117,12 @@ jobs:
       #   * A `gh api` ERROR and a genuinely empty listing look the same from here (both give
       #     no line), and downgrading a red matrix to the one-cell fallback because the API
       #     hiccuped would be the same false green. So an API error is retried, never read as
-      #     an answer, and "no run" needs TWO consecutive empty samples a minute apart.
+      #     an answer, and "no run" needs FIVE consecutive empty samples a minute apart -- the
+      #     same five-minute grace tools/release.py already gives a run to REGISTER. Two was
+      #     enough when the run predated the tag; now the run is triggered by this very push,
+      #     and a busy queue takes minutes to list it. When the grace runs out, the runs that DO
+      #     exist for the SHA are listed by branch before the downgrade: "three cells stood in
+      #     for six" must be a line in the log, never something a reader has to infer.
       #   * A fully queued 6-cell matrix can outlast the 40-minute window. That is ACCEPTED:
       #     the job fails closed with the reason named, and the tag can be re-pushed or this
       #     workflow re-run once the matrix finishes. Waiting forever is not a safer default.
@@ -121,7 +133,8 @@ jobs:
         run: |
           set -e
           API="repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&per_page=50"
-          SEL='[.workflow_runs[] | select(.name=="smoke")] | sort_by(.run_number) | last | [.status, (.conclusion // "none"), (.html_url // "")] | @tsv'
+          TAG="${GITHUB_REF_NAME}"
+          SEL="[.workflow_runs[] | select(.name==\"smoke\" and .head_branch==\"${TAG}\")] | sort_by(.run_number) | last | [.status, (.conclusion // \"none\"), (.html_url // \"\"), (.event // \"\")] | @tsv"
           EMPTY=0
           for i in $(seq 1 40); do
             RC=0
@@ -134,14 +147,22 @@ jobs:
             STATUS="$(printf '%s' "${LINE}" | cut -f1)"
             CONCL="$(printf '%s' "${LINE}" | cut -f2)"
             URL="$(printf '%s' "${LINE}" | cut -f3)"
+            EVENT="$(printf '%s' "${LINE}" | cut -f4)"
             if [ -z "${STATUS}" ]; then
               EMPTY=$((EMPTY + 1))
-              if [ "${EMPTY}" -ge 2 ]; then
-                echo "no smoke run recorded for ${GITHUB_SHA} (two consecutive empty samples) -- the suite runs here (fail-closed)."
+              if [ "${EMPTY}" -ge 5 ]; then
+                echo "no smoke run for ${GITHUB_SHA} on ref '${TAG}' (five consecutive empty samples) -- the suite runs here (fail-closed)."
+                OTHERS="$(gh api "${API}" --jq '[.workflow_runs[] | select(.name=="smoke") | .head_branch] | unique | join(", ")' 2>/dev/null || true)"
+                if [ -n "${OTHERS}" ]; then
+                  echo "smoke run(s) for ${GITHUB_SHA} exist on ${OTHERS} but none for tag ${TAG}; falling back to the one-cell suite."
+                  echo "a branch push runs THREE cells, so those runs are NOT the grid this publish needs (smoke.yml)."
+                else
+                  echo "no smoke run of any kind is recorded for ${GITHUB_SHA}."
+                fi
                 echo "reuse=false" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-              echo "no smoke run listed for ${GITHUB_SHA} (${i}/40) -- confirming in 60s before falling back"
+              echo "no smoke run for ${GITHUB_SHA} on ref '${TAG}' yet (${i}/40, grace ${EMPTY}/5) -- confirming in 60s before falling back"
               sleep 60
               continue
             fi
@@ -152,17 +173,18 @@ jobs:
               continue
             fi
             if [ "${CONCL}" = "success" ]; then
-              echo "smoke already green for ${GITHUB_SHA}: ${URL}"
+              echo "smoke green for ${GITHUB_SHA} on ref '${TAG}' (event ${EVENT}): ${URL}"
               echo "reuse=true" >> "$GITHUB_OUTPUT"
               echo "url=${URL}" >> "$GITHUB_OUTPUT"
+              echo "event=${EVENT}" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "REFUSING TO PUBLISH: the smoke run for ${GITHUB_SHA} completed '${CONCL}' (${URL})."
+            echo "REFUSING TO PUBLISH: the smoke run for ${GITHUB_SHA} on ref '${TAG}' completed '${CONCL}' (${URL})."
             echo "These exact bytes are measured RED. Running the suite here would not fix that."
             echo "Fix the commit, then re-tag."
             exit 1
           done
-          echo "REFUSING TO PUBLISH: 40 minutes of polling and the smoke run for ${GITHUB_SHA} never reported a completed status."
+          echo "REFUSING TO PUBLISH: 40 minutes of polling and the smoke run for ${GITHUB_SHA} on ref '${TAG}' never reported a completed status."
           echo "Re-run this workflow once the matrix finishes; publishing on an unfinished measurement is a belief."
           exit 1
 
@@ -170,9 +192,15 @@ jobs:
         if: steps.prior.outputs.reuse != 'true'
         run: bash uscha-kit/tests/smoke-engine.sh
 
+      # The receipt names WHICH run it leaned on. It used to assert "6/6 cells", which was true
+      # only because every run was six; now that a branch push runs three, the honest receipt is
+      # the ref the run was triggered on -- a tag run IS the six-cell grid by smoke.yml's rule.
       - name: Receipt of the measurement this publish relies on
         if: steps.prior.outputs.reuse == 'true'
-        run: echo "publishing on the strength of ${{ steps.prior.outputs.url }} (same SHA, 6/6 cells)"
+        run: |
+          echo "publishing on the strength of ${{ steps.prior.outputs.url }}"
+          echo "same SHA (${{ github.sha }}), smoke triggered on the TAG ${{ github.ref_name }} (event ${{ steps.prior.outputs.event }})"
+          echo "a tag run is the full grid: ubuntu/macos/windows x python 3.8/3.13 (smoke.yml)"
 
       - name: Receipt of the FALLBACK measurement (weaker than the matrix, said out loud)
         if: steps.prior.outputs.reuse != 'true'

@@ -6,7 +6,7 @@ governs:
 ---
 # ADR-041: The dogfooding criterion is decided by git ANCESTRY, not by a wall clock — and the release ritual is a script that refuses, not prose a human re-reads
 
-## Status: Accepted (1.96.0)
+## Status: Accepted (1.96.0) — **amended 1.97.0: I3 runs `facts --write` before the check**
 
 ## Context
 Repo rule 9 says the kit's own ledger is measured, not narrated, and `AC-DF-01` is the criterion
@@ -98,7 +98,9 @@ git is mid-operation, nothing more.
   and `v<X.Y.Z>` is not already tagged;
 - **I3** the six version surfaces move together (exactly one hit per file), `SYSTEM-FACTS.json` is
   regenerated, and `facts --check` is green — a drifted published claim is a refusal, never an
-  auto-edit;
+  auto-edit. *Amended in 1.97.0*: step 2 now runs `facts --write` first, which rewrites the claims
+  the engine RECOGNISES; the `facts --check` after it is still the gate, and a drift the writer
+  cannot express is still a refusal the human fixes by hand;
 - **I4** the suite runs at X with no source-relevant path dirty, and a non-zero exit is a refusal;
 - **I5** the evidence is recorded after X and X's identity has not moved since it was made (the
   amend trap, now caught by the script instead of remembered by the maintainer);
@@ -150,7 +152,9 @@ the tag. The script owns the mechanical order that was previously eight sentence
 
 ## What this ADR does NOT decide
 Whether `facts --check` should be able to WRITE the published claims it finds drifted (deferred to
-1.97.0: this release refuses and names them). Nor anything about the seal or the freshness rules —
+1.97.0: this release refuses and names them). **Answered in 1.97.0**: `facts --write` ships, sharing
+one recogniser with `--check` and always followed by it, so the gate is unchanged in what it
+demands — see `AC-FW-01..04`. Nor anything about the seal or the freshness rules —
 ADR-038 and ADR-039 are untouched, and `_src_relevant` remains the single definition of "a change
 that invalidates a test run", imported by the script rather than re-typed.
 

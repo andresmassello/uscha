@@ -10,9 +10,21 @@ name: smoke
 # measured NOTHING, which is worse than no signal because a red grid reads like a real failure.
 # The repo is PUBLIC as of 2026-07-26, so standard runners are free again and the matrix is back
 # on every push. macOS stops being UNMEASURED the moment this grid goes green (docs/CROSS-PLATFORM.md).
+
+# THREE cells on a branch push or PR, SIX on a tag or a manual dispatch (1.97.0). Six cells of a
+# ~35-minute suite on every push is a lot of measurement to buy the same answer twice: the grid
+# exists for the two failures that are INVISIBLE outside it -- bash 3.2 quoting on macOS and 8.3
+# short paths under `runneradmin` on Windows -- plus the 3.8-vs-3.9+ interpreter split. The
+# reduced grid keeps one cell for each: ubuntu/3.13 (the reference cell), macos/3.13 (the bash
+# 3.2 trap: macOS ships that bash whatever Python is installed) and windows/3.8 (the path trap
+# AND the floor interpreter, and the slowest cell, so wall time barely moves).
+# What the reduced grid does NOT measure is stated rather than implied: ubuntu/3.8, macos/3.8 and
+# windows/3.13. A tag runs all six before anything is published -- `publish.yml` gates on the
+# TAG's run, not on the branch push's.
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -26,13 +38,38 @@ permissions:
   contents: read
 
 jobs:
+  # Which grid to run. GitHub does not expose the `matrix` context to a job-level `if:`, so a
+  # per-cell condition is not expressible -- the matrix itself is computed here and consumed with
+  # `fromJSON`. That is also the better shape: a reduced run has THREE jobs, not six with three
+  # skipped, so the checks list says what was measured instead of needing to be read carefully.
+  grid:
+    name: choose the grid
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          FULL: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          set -e
+          SIX='{"include":[{"os":"ubuntu-latest","python":"3.8"},{"os":"ubuntu-latest","python":"3.13"},{"os":"macos-latest","python":"3.8"},{"os":"macos-latest","python":"3.13"},{"os":"windows-latest","python":"3.8"},{"os":"windows-latest","python":"3.13"}]}'
+          THREE='{"include":[{"os":"ubuntu-latest","python":"3.13"},{"os":"macos-latest","python":"3.13"},{"os":"windows-latest","python":"3.8"}]}'
+          if [ "$FULL" = "true" ]; then
+            echo "full grid: 6 cells (tag or manual dispatch)"
+            echo "matrix=$SIX" >> "$GITHUB_OUTPUT"
+          else
+            echo "reduced grid: 3 cells (branch push or PR) -- ubuntu/3.13, macos/3.13, windows/3.8"
+            echo "matrix=$THREE" >> "$GITHUB_OUTPUT"
+          fi
+
   smoke:
+    needs: grid
     name: smoke (${{ matrix.os }}, py${{ matrix.python }})
     strategy:
-      fail-fast: false   # one OS red must not hide the others -- we want the full grid
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.8", "3.13"]   # the declared floor and a current release
+      fail-fast: false   # one OS red must not hide the others -- we want the whole grid
+      matrix: ${{ fromJSON(needs.grid.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35   # the bench grew to 12 archetypes + r2 + roundtrip; Windows py3.8 crossed 20 (measured 2026-08-16)
     steps:

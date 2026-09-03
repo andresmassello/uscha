@@ -14,8 +14,9 @@ Six steps. Every refusal names the invariant it protects and exits non-zero:
     I2  the human wrote uscha-kit/CHANGELOG-<X.Y.Z>.md, it still carries the placeholder line,
         and v<X.Y.Z> is not already tagged
     I3  the six version surfaces move together (exactly one hit per file), SYSTEM-FACTS.json is
-        regenerated, and `facts --check` is green -- a drifted published claim is a refusal,
-        never an auto-edit
+        regenerated, `facts --write` rewrites every RECOGNISED published claim to the derived
+        fact, and the `facts --check` that follows is green -- a claim the writer cannot express
+        is still a refusal, because I3 was never about being able to fix a claim
     I4  the suite runs at X with no source-relevant path dirty, and a non-zero exit is a refusal
     I5  the evidence is recorded AFTER X, and X's identity has not moved since (the amend trap)
     I6  X+1 carries evidence only: no source-relevant path in its staged set
@@ -29,9 +30,10 @@ with `git add -A` and committed together. The script does not ask for a pre-made
 not make a bump-only one; it prints the staged list in the plan so the human sees exactly what X
 will carry before it exists.
 
-What this program does NOT do, on purpose: it does not write the changelog prose, it does not edit
-a published claim (it prints the drift and refuses -- `facts --write` is 1.97.0), and it does not
-create the GitHub release. The human writes, the human approves; the script enforces the order.
+What this program does NOT do, on purpose: it does not write the changelog prose, it does not
+invent a claim the fact table cannot derive (since 1.97.0 it rewrites the RECOGNISED ones with
+`facts --write` and still refuses on whatever is left), and it does not create the GitHub release.
+The human writes, the human approves; the script enforces the order.
 
 Repo-level and NEVER shipped: `package.json` `files` carries `bin/`, `uscha-kit/`, `README.md` and
 `LICENSE`, not `tools/`. A bug here can cost a release; it cannot reach an installed kit.
@@ -56,7 +58,7 @@ sys.dont_write_bytecode = True
 REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 ENGINE = os.path.join(REPO, "uscha-kit", ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 STATE = os.path.join(REPO, ".uscha-release-state.json")
-SYNC_DOCS = os.path.join(REPO, "site", "sync-docs.sh")
+GATED_LIST = os.path.join(REPO, "tools", "facts-gated-files.txt")
 FACTS_OUT = "SYSTEM-FACTS.json"
 
 # The line the human leaves in the changelog for step 5 to fill. Its presence is the receipt that
@@ -228,32 +230,42 @@ def src_relevant(paths):
     return module._src_relevant(paths)
 
 
-def facts_check_files():
-    """The file list `site/sync-docs.sh` already gates on, PARSED from it rather than copied.
+def facts_gated_sections():
+    """`tools/facts-gated-files.txt`, split into its two sections, or None when unreadable.
 
-    A second hand-maintained copy of this list is a guarantee that one day the release checks a
-    page the deploy does not, or the reverse. If the list cannot be parsed the caller refuses:
-    an unmeasured claim set is not a green one."""
+    ONE list, three readers (this script, `site/sync-docs.sh`, the suite's T0-live). Until
+    1.97.0 there were two hand-maintained lists with different scopes, and the difference was a
+    real hole rather than a tidiness complaint: the release wrote the six `site/docs/` copies --
+    build output that `sync-docs.sh` deletes with `rm -rf site/docs` and regenerates from
+    `docs/` -- while their canonical twins were only ever checked. A rewrite that lands in the
+    copy and not in the source is undone by the next deploy."""
     try:
-        lines = read(SYNC_DOCS).splitlines()
+        lines = read(GATED_LIST).splitlines()
     except OSError:
         return None
-    files, collecting = [], False
+    out, section = {"canonical": [], "deployed": []}, None
     for line in lines:
         stripped = line.strip()
-        if not collecting:
-            if "facts --check" in stripped:
-                collecting = True
-                stripped = stripped.split("facts --check", 1)[1]
-            else:
-                continue
-        more = stripped.endswith("\\")
-        if more:
-            stripped = stripped[:-1]
-        files.extend(t for t in stripped.split() if t and not t.startswith("-"))
-        if not more:
-            break
-    return files or None
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            for name in out:
+                if stripped[1:].strip().lower().startswith(name):
+                    section = name
+            continue
+        if section is None:
+            return None      # a path before any section header: unclassified, so UNMEASURED
+        out[section].append(stripped)
+    return out if out["canonical"] else None
+
+
+def facts_check_files():
+    """Every gated path, canonical section first. Written AND checked: the copies move with
+    their sources, so the tree is consistent between a release and the next deploy."""
+    sections = facts_gated_sections()
+    if not sections:
+        return None
+    return sections["canonical"] + sections["deployed"]
 
 
 def engine(*argv):
@@ -362,14 +374,32 @@ def step2(args, dry):
 
     files = facts_check_files()
     if not files:
-        refuse("I3", "could not parse the `facts --check` file list out of site/sync-docs.sh; "
-                     "an unparsed claim set is UNMEASURED, not green.")
+        refuse("I3", "could not parse tools/facts-gated-files.txt (missing, empty, or a path "
+                     "outside both sections); an unparsed claim set is UNMEASURED, not green.")
+    # Since 1.97.0 the bump also REWRITES the claims it can derive. Before that a version bump
+    # was ~25 hand edits across these files and this step could only print the drift and hand it
+    # back -- work with no judgement in it, done between two fourteen-minute suite runs.
+    if dry:
+        say("    would run: qa_ledger.py facts --write over %d file(s)" % len(files))
+    else:
+        w = engine(*(["facts", "--write"] + files))
+        say("    " + w.stdout.strip().replace("\n", "\n    "))
+        if w.returncode != 0:
+            # rc 2 = a file in the gated set could not be read at all. That is an UNMEASURED
+            # claim set, not a clean one -- and the --check below reads with errors="replace",
+            # so it could pass while the file is unreadable. Refuse here instead.
+            refuse("I3", "`facts --write` exited %d: the claim set could not be fully written. "
+                         "Fix the file(s) it named and re-run." % w.returncode)
+    # The gate is still the CHECK, run on its own. `--write` only touches the claims the engine
+    # recognises; a missing subcommand table row or a claim phrased in prose survives it, and a
+    # release that fixed what it could and shipped the rest would be exactly the self-graded
+    # evidence this repo refuses everywhere else.
     r = engine(*(["facts", "--check"] + files))
     if r.returncode != 0:
         say("    " + r.stdout.strip().replace("\n", "\n    "))
-        refuse("I3", "published claims disagree with the derived facts (%d file(s) checked). "
-                     "Edit them by hand and re-run -- this script does not guess at prose "
-                     "(`facts --write` is 1.97.0)." % len(files))
+        refuse("I3", "published claims still disagree with the derived facts after "
+                     "`facts --write` (%d file(s) checked) -- these are the ones the writer "
+                     "does not recognise. Edit them by hand and re-run." % len(files))
     say("    " + r.stdout.strip())
     return {}
 

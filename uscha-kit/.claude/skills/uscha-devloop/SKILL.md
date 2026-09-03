@@ -26,6 +26,7 @@ two tiers: **measured** records (snapshots, ingest-gate, log-gate — parsed fro
 artifacts; these can block) and **self-reported** agent counts (log-step — narration
 recorded for the retrospective; a measured red always overrides a narrated green).
 
+<!-- uscha:orientation-block:begin -->
 ## First contact (show ONCE, then never again)
 
 **Only when this project has no uscha artifacts yet** -- no `QA-LEDGER.json`, no `SPEC.md` or
@@ -93,6 +94,7 @@ and say exactly what unblocks it.
 
 Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, `Produced`,
 `Blocks`, `Next`, `Run`) verbatim — they are the method's vocabulary and the smoke checks them.
+<!-- uscha:orientation-block:end -->
 
 ## Non-negotiable principles
 

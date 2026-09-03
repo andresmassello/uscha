@@ -773,6 +773,42 @@ against the repo it is about to release.
 - [x] AC-RL-05 - an X+1 whose staged set carries a source-relevant path (by the engine's own `_src_relevant`) is refused naming I6: the ledger commit carries evidence, never code.
 - [x] AC-RL-06 - the whole ritual runs from a `git worktree add` of a wip branch while main is checked out in the primary tree (repo rule 9's own shape): the six steps complete, `check-terminado` prints SEALED at X+1 (I7), the push lands on `origin/main`, and the busy local `main` ref is left untouched with `git -C <path> merge --ff-only <sha>` printed for the human. Nothing is ever checked out - `git checkout main` inside a worktree fails with "already checked out at ...", which would have refused every real release.
 
+## Docs as generated artifacts (1.97.0) - closes on green `AC-DC-nn` smoke assertions
+
+Seven of the nine `SKILL.md` files carried a byte-identical "First contact" + "Orientation
+markers" block and the two short ones a second copy: 18 runtime files, across two skill trees,
+kept in step by hand. The files must stay WHOLE -- an agent loads one `SKILL.md` and nothing
+else, so there is no include mechanism to lean on -- so the duplication stays on disk and its
+SOURCE moves: the canonical text lives once under `tools/skill-blocks/` and
+`tools/gen-skill-blocks.py` renders it into the region between two markers. This is the same move
+`SYSTEM-FACTS` made for published claims (ADR-012): the artifact stays where its reader needs it,
+the truth moves upstream of it. Measured by T152 through the `.dc-cases.json` sidecar, driving
+the generator over the REAL repo and over throwaway copies of the two trees -- never mutating the
+repo it is testing, which is what the `--root` flag exists for.
+
+- [x] AC-DC-01 - `python tools/gen-skill-blocks.py --check` exits 0 over this repo: every one of the 18 marked regions equals what the template renders. A hand edit inside a region is therefore a red the suite reports, not a divergence someone notices six releases later.
+- [x] AC-DC-02 - one word changed inside one region of a throwaway copy makes `--check` exit **1** and NAME the file, and the check writes nothing while saying so - a checker that repaired what it reported would be a checker whose green means nothing.
+- [x] AC-DC-03 - a deleted begin marker makes `--check` exit **2** and name the file: a configuration fault is not a drift, and collapsing the two would let a deleted marker read as "nothing to update".
+- [x] AC-DC-04 - `docs/adr/INDEX.md` is measured, not trusted: every `docs/adr/ADR-*.md` has **exactly one** row, every row's link resolves to the file it names, every row's status text equals that ADR's own `## Status:` line **verbatim**, and no row names an ADR that does not exist. The index claims to be the map over a flat folder; nothing but a check keeps that true. ADR-041 shipped in 1.96.0 with no row at all, and the first draft of 1.97.0 put its amendment in the INDEX row only - an index saying something its source did not.
+
+## The claims writer (1.97.0) - closes on green `AC-FW-nn` smoke assertions
+
+ADR-012 made published claims comparable against derived facts; it never made them WRITABLE. So
+every version bump was ~25 hand edits across ~13 files, and `tools/release.py` could only print
+the drift and hand it back (I3). `facts --write` rewrites the claims the SAME recogniser finds --
+one `_iter_claims`, two consumers, because a writer that re-implemented the patterns could
+disagree with the checker -- and then re-runs `--check`: a writer that reported its own success
+would be exactly the self-graded evidence this engine exists to refuse. The recogniser also grew
+spelled-out counts, which is how the paper's canonical `.tex` had sat outside every gate while
+claiming "nine agent skills and ... 53 subcommands" in one sentence. Measured by T153 through the
+`.fw-cases.json` sidecar, over throwaway fixtures -- never over the repo's own pages.
+
+- [x] AC-FW-01 - `--write` rewrites a stale claim to the derived fact and the `--check` it implies then passes; the rewrite is in the AUTHOR's notation (a spelled-out claim stays spelled out, keeping its leading capital) and the file's CRLF line endings survive byte for byte, because normalising them would turn a one-token fix into an unreviewable whole-file diff.
+- [x] AC-FW-02 - `--write` over a file with no recognised claim leaves it **byte-identical** and does not report it: the writer only touches lines it recognises, and "no claims" is not a reason to rewrite a file.
+- [x] AC-FW-03 - a spelled-out count is a claim: a fixture reading "seven skills" is RED against a derived nine, naming `skills.count` and the word it read; the same fixture with the right word is green. The pattern is anchored on the kit's own noun phrases (`<n> skills`, `<n> agent skills`, `<n> subcommands`) and nothing wider, because a WRITER that guessed at "two other skills" would corrupt the sentence it fixed.
+- [x] AC-FW-04 - there is **one** gated file list (`tools/facts-gated-files.txt`, read by the deploy, the suite and the release), the written set IS the checked set, every path it names exists, the three paper paths are in it, and every `# deployed` path has its canonical twin in the `# canonical` section. That last clause is the load-bearing one: `site/docs/*` is build output that `site/sync-docs.sh` deletes with `rm -rf site/docs` and regenerates from `docs/`, so a rewrite that lands only in the copy is undone by the next deploy. Asserted by importing `tools/release.py`'s own `facts_gated_sections` - a second copy of the list here would be the very thing this change removed.
+- [x] AC-FW-05 - a gated file that is not valid UTF-8 is a **named skip**, never a traceback: `--write` names it, leaves its bytes untouched, still writes the rest of the list, and exits **2** so the release refuses (I3) instead of proceeding on a claim set it could not fully write. `--check` reads that same file with `errors="replace"` and still reports its claims, so nothing is hidden - but the writer must not read it that way, because writing a replaced byte back would destroy data to correct a version number.
+
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".

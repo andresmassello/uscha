@@ -18,6 +18,7 @@ return, you encode the same partial understanding that loses logic silently. **Y
 what the code DOES, mechanically, by running it — never what it should do.** You may write
 the capture harness; you may NOT create, rename, or edit any `.approved` file.
 
+<!-- uscha:orientation-block:begin -->
 ## First contact (show ONCE, then never again)
 
 **Only when this project has no uscha artifacts yet** -- no `QA-LEDGER.json`, no `SPEC.md` or
@@ -85,6 +86,7 @@ and say exactly what unblocks it.
 
 Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, `Produced`,
 `Blocks`, `Next`, `Run`) verbatim — they are the method's vocabulary and the smoke checks them.
+<!-- uscha:orientation-block:end -->
 
 ## Inputs
 

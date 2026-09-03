@@ -19,6 +19,7 @@ skill (**pull** — one screen when the human asks), and the **mirador** (bird's
 HTML). This skill exists because some surfaces never show a statusline; the answer
 is the same data, printed in chat when requested.
 
+<!-- uscha:orientation-block:begin -->
 ## Orientation markers (non-negotiable)
 
 The operator must never have to ask "where am I?" or "what happens now?".
@@ -42,6 +43,7 @@ Run:  <the exact command or skill to invoke>
 including any `Flow:` line in this file. If nothing is actionable, say that plainly rather
 than inventing a step. Keep the CONTENT in the conversation's language and the labels
 (`Next`, `Run`) verbatim — the smoke suite checks for them.
+<!-- uscha:orientation-block:end -->
 
 ## Contract
 

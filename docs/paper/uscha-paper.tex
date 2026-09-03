@@ -60,7 +60,8 @@ ten shipped improvements; and sustained self-application, in which fresh-context
 reviews repeatedly caught real defects before merge across the release series. We report design
 validation, self-application, and one bounded controlled evaluation --- the
 Diamond program, a blind, oracle-certified benchmark of implementation
-replaceability across twelve archetypes with a measured noise floor; a
+replaceability across twelve archetypes, compiled by three models of a single
+vendor and qualified by a measured noise floor; a
 controlled evaluation on external operators remains future work.
 \end{abstract}
 
@@ -246,6 +247,7 @@ checklists, acceptance file, risks, and handoff. Figure~\ref{fig:hierarchy}
 shows how the package's artifacts feed the evidence engine and how the engine
 verifies the result across six layers of truth.
 
+% TODO fig2: regenerate toolbar band, 9 skills
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{fig2-spec-hierarchy.png}
@@ -254,7 +256,8 @@ of truth (right: how it is verified), joined by the evidence engine. The
 bottom band states the four commitments the diagram encodes: evidence produced
 by execution rather than asserted by the author; merge and release decided by
 a person; convergence instead of perfection; and legacy awareness --- freeze
-the old debt, block the new.}
+the old debt, block the new. The implementation ships nine skills; the
+figure's toolbar band predates two of them.}
 \label{fig:hierarchy}
 \end{figure}
 
@@ -516,10 +519,13 @@ any instruction-following agent; the engine is invoked identically from each.}
 \end{table}
 
 The implementation carries its process in executable form. A smoke suite of
-432 checks exercises the implementation --- the engine against synthetic
-ledgers, plus the installer and the distribution router --- including,
+440 checks (at kit 1.96.0) exercises the implementation --- the engine against
+synthetic ledgers, plus the installer and the distribution router --- including,
 deliberately, the agnosticism claim: the rubric-layer tests fill the grader's
-JSON by hand, with no model in the loop. The engine also reports a passive Lean
+JSON by hand, with no model in the loop. The same run measures the
+implementation's own acceptance criteria the way the methodology prescribes for
+any project: 227 of 227 closed on green, name-tagged test evidence at that
+version. The engine also reports a passive Lean
 process metric --- first-time yield, the fraction of repositories that cleared
 QA on the first cycle with no rework or escalation --- derived from ledger facts
 and kept strictly informational, never a gate: it measures the process, not the
@@ -566,7 +572,7 @@ definition; only the numbers are opinion, and they now state their
 provenance), and the workflow state machine is derived rather than declared.
 
 \textbf{Self-application.} The implementation is developed under its own
-process. Across the self-application arc (versions 1.10 through 1.50), each engine
+process. Across the self-application arc (versions 1.10 through 1.96), each engine
 change carried smoke checks in the same commit, a fresh-context review before
 merge, and a version consistency check across every release artifact, enforced
 by the suite. These reviews repeatedly caught real defects prior to
@@ -589,7 +595,9 @@ Between July and August 2026 the methodology's central claim --- that a canonica
 specification package is the source and code is a build artifact --- was put under
 its own instruments. A \emph{Diamond Bench} of twelve bounded archetypes (eleven
 Python, one JavaScript, one multi-module with a decided seam) was compiled blind by
-three independent LLM compilers from the canonical package alone and certified by a
+three LLM compilers --- Claude Haiku, Sonnet and Opus: three models of a single
+vendor, so cross-vendor compilation is not yet measured --- from the canonical
+package alone and certified by a
 \emph{withheld oracle} authored before any compilation and shown discriminating
 against a degenerate stub and per-rule wrong implementations: nine archetypes PASS
 (three oracle-green, structurally distinct implementations of the same system),
@@ -598,26 +606,43 @@ A \emph{controlled-language arm} compared free-prose against EARS+STE authoring 
 the same package under the same oracle, deconfounded by same-generation runs of both
 arms, across five archetypes: REDUCED in one, IMPROVED in one, NO EFFECT in two,
 WORSE in one --- dense archetypes helped behaviourally, simple ones did not, and one
-rewrite sharpened a latent ambiguity into an over-commitment the oracle rejected.
-A \emph{noise-floor} run (thirty second blind runs of the same models) read NOISY:
-same-model reruns differ structurally about as much as different models (mean
-intra/inter distance ratio 0.98), while behaviour is stable (26/30 reruns fail the
+rewrite sharpened a latent ambiguity into an over-commitment the oracle rejected. The
+single REDUCED entry (the guard) carries its own qualifiers: it is classified NOISY at
+an intra/inter ratio of 0.642, and the same comparison reads MIXED under Python 3.8, so
+by the program's own doctrine structural variance alone no longer carries a claim.
+A \emph{noise-floor} run of second blind runs of the same models read NOISY, over the
+ten of twelve archetypes that have one (ledger-lite and rate-limiter have none) and at
+$n=2$ per model --- the minimum that yields a floor at all, and a floor rather than a
+distribution: SIGNAL in one entry, NOISY in five, and outright NOISE in four
+(\texttt{parser} 1.13, \texttt{state-machine} 1.12, \texttt{worker} 1.48,
+\texttt{scheduler} 1.78), for a mean intra/inter distance ratio of 0.98, while
+behaviour is stable (26/30 reruns fail the
 same oracle cases) --- so the program's variance claims now carry a per-entry
 qualifier and its controlled-language conclusion is stated behaviour-first, with one
 earlier variance narrative retracted. A \emph{round-trip} instrument measures how much
 of the human-authored intermediate representation the mechanical reverse organs can
-anchor in each compiled artifact: 0.828, counting static and behavioural footing. It
+anchor in each compiled artifact: 0.828 under Python 3.13 and 0.827 under 3.8, counting
+static and behavioural footing. It
 read 0.062 with the behavioural dimension unmeasured everywhere while no oracle tagged
 its cases per acceptance criterion; the twelve bench oracles were then curated case by
-case by a human, leaving payloads and expectations untouched, and the dimension became
+case by a human --- 201 of the 216 cases tagged, the remaining 15 owned by no single
+criterion, and three tags adjusted by hand --- leaving payloads and expectations
+untouched, and the dimension became
 measurable --- so the reverse half of the diamond now anchors names \emph{and}
 behaviour, and both numbers are published with the reason the second differs from the
 first. Every one of these numbers is regenerated by the engine from committed fixtures
-and pinned by the suite; each release passed an independent blind review before it
-shipped, and those reviews caught real defects in most releases --- each catch is recorded in that release's changelog --- including two
+and pinned by the suite; most releases passed an independent blind review before they
+shipped, with two exceptions that say so in their own changelogs --- 1.74.0 and 1.75.0
+were reviewed inline by the author, and the independent review later run on 1.74.0
+caught two report-honesty defects the inline self-review had missed. Those reviews
+caught real defects in most releases --- each catch is recorded in that release's
+changelog --- including two
 that changed how a result was stated (a spec found self-contradictory, a
 false-precision ratio). Human curation of the machine-generated code --- one verdict
-per observation, 108 across three rounds covering all twelve archetypes --- found eight defects the oracles had passed.
+per observation, 108 across three rounds covering all twelve archetypes --- found eight
+defects the oracles had passed; all 108 verdicts were recorded by a single curator (the
+author), and their coverage per archetype is uneven (17 on the guard, 2 on the state
+machine).
 This is a controlled evaluation of the artifact-level claim; it is not the
 operator-level study below.
 
@@ -633,7 +658,20 @@ program uses is coarse (LOC, AST size, imports) and interpreter-sensitive, which
 instrument now states.
 \textbf{Single-operator bias.} Self-application shares authorship context;
 although reviews run in fresh contexts, they share the model family and the
-author's configuration.
+author's configuration. The same bias reaches the Diamond program's human
+layer: all 108 curation verdicts over the compiled artifacts were recorded by
+that single operator, with no second curator and no inter-rater measurement.
+\textbf{One vendor.} The three blind compilers are three models of a single
+vendor (Claude Haiku, Sonnet, Opus). Replaceability across vendors is a
+different claim and is not measured here.
+\textbf{Noise-floor coverage.} The floor that qualifies every variance
+statement rests on ten of the twelve archetypes at $n=2$ per model; it is a
+floor, not a distribution, and two archetypes have no second run at all.
+\textbf{Structural distance on JavaScript.} The distance function is
+three-dimensional for Python (lines of code, AST size, import Jaccard) but
+two-dimensional for the JavaScript archetype: no standard-library JavaScript
+AST is available, so \texttt{ast\_nodes} reads UNMEASURED and the two arms are
+not directly comparable on that axis.
 \textbf{LLM non-determinism.} The rubric layer's grades vary across runs;
 the methodology bounds the blast radius (advisory by default,
 evidence-or-nothing, human-declared gating) but does not eliminate variance.
@@ -679,7 +717,8 @@ intermediate representation the mechanical reverse organs (static extraction,
 the withheld oracle's own case results) can anchor --- deliberately \emph{not}
 by regenerating a specification from code and diffing it, which would
 reintroduce the narrated inference the doctrine forbids. The measured result
-is stated as measured: mean recoverability 0.828, counting only static and
+is stated as measured: mean recoverability 0.828 (0.827 under Python 3.8, the
+aggregate being pinned as a range rather than a float), counting only static and
 behavioural footing (the compiler's own trace-manifest claims are excluded as
 tautological, since the blind prompt supplied the very node identifiers being
 ``recovered''). It read 0.062 in the instrument's first release, with the
@@ -713,7 +752,9 @@ history --- a central principle found inverted by adversarial audit, then
 wired into an engine that now blocks its own author when he crosses the line
 --- suggests that for LLM-assisted development, the difference between a
 methodology and a slogan is whether the checks are executable. The reference
-implementation will be released as open source (MIT).
+implementation is released as open source under the MIT license, published as
+the npm package \texttt{@andresmassello/uscha} with its repository at
+\url{https://github.com/andresmassello/uscha}.
 
 \begin{thebibliography}{9}
 
