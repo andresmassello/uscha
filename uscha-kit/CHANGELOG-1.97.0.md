@@ -197,4 +197,4 @@ unchanged in shape — `python tools/release.py X.Y.Z --message-file <msg> --tag
 fixes the published claims it can derive instead of printing them, and the tag waits on a 3-cell
 run while the publish waits on the tag's 6-cell one.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 442 checks · 0 fail; acceptance 235/236.

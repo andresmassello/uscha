@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="227" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="236" failures="0" errors="0" skipped="1">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -440,6 +440,24 @@
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-RL-06_release-ritual">
   </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DC-01_docs-generated">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DC-02_docs-generated">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DC-03_docs-generated">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-DC-04_docs-generated">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FW-01_facts-writer">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FW-02_facts-writer">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FW-03_facts-writer">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FW-04_facts-writer">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FW-05_facts-writer">
+  </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-01_family-ids">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-02_family-ids">
@@ -453,5 +471,6 @@
   <testcase classname="uscha.acceptance" name="AC-FA-06_family-ids">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
+    <skipped message="shallow clone or no git: ancestry unmeasurable"/>
   </testcase>
 </testsuite>
