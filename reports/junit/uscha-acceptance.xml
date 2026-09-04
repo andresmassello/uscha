@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="245" failures="0" errors="0" skipped="1">
+<testsuite name="uscha-acceptance" tests="252" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -476,6 +476,20 @@
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DE-04_deferred-lows-closed">
   </testcase>
+  <testcase classname="uscha.acceptance" name="AC-XV-01_cross-vendor-arm">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-XV-02_cross-vendor-arm">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-XV-03_cross-vendor-arm">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-XV-04_cross-vendor-arm">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-XV-05_cross-vendor-arm">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-XV-06_cross-vendor-arm">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-XV-07_cross-vendor-arm">
+  </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-01_family-ids">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-02_family-ids">
@@ -489,6 +503,5 @@
   <testcase classname="uscha.acceptance" name="AC-FA-06_family-ids">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
-    <skipped message="shallow clone or no git: ancestry unmeasurable"/>
   </testcase>
 </testsuite>

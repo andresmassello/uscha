@@ -175,4 +175,4 @@ T134/T135/T136.
 is not shipped inside the kit — from an extracted kit they report **UNMEASURED**, never a silent
 pass.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 445 checks · 0 fail; acceptance 252/252.
