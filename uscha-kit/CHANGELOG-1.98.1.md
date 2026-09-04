@@ -106,4 +106,4 @@ ADR-041 and CROSS-PLATFORM.md say the same thing.
 
 Acceptance goes 242 → 245 criteria; nothing was dropped.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 444 checks · 0 fail; acceptance 244/245.
