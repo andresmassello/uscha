@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "7fb7475c0463485d7262db40a7ef745e9866e04a40cea1ce2e080f09de9971de",
+    "schema_version": "0.1"
+  },
+  "target_stack": "javascript",
+  "implementation_constraints": [
+    "plain JavaScript for Node >= 18",
+    "CommonJS module with no dependencies",
+    "reads stdin only when executed as main",
+    "prints exactly one line: result JSON or ERROR",
+    "exports implementation functions without side effects on require"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.js",
+      "sha256": "70d5ef52314e51490a3f1b80b7e9af8f28982b1981be4c02ad5f8a4ecb931763"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.js",
+      "implements": [
+        "AC-RL-01",
+        "AC-RL-02",
+        "AC-RL-03",
+        "AC-RL-04",
+        "AC-RL-05",
+        "AC-RL-06",
+        "INV-RL-CLAMP-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-RL-05",
+      "decision": "Reject arrays, null, primitives, missing required fields, invalid integers, invalid events, and malformed JSON; ignore extra object fields.",
+      "rationale": "The contract defines required fields and malformed cases but does not forbid additional fields, so extra properties are treated as irrelevant input metadata."
+    },
+    {
+      "ir_region": "AC-RL-05",
+      "decision": "Use JavaScript Number.isInteger for integer validation rather than imposing Number.isSafeInteger.",
+      "rationale": "The spec says JSON integers and does not define a safe-integer limit; adding one would introduce an extra rejection rule not stated by the canonical package."
+    },
+    {
+      "ir_region": "AC-RL-06",
+      "decision": "Export parseInput, isValidConfig, runBucket, formatOutput, and main.",
+      "rationale": "The spec requires exposing functions but does not prescribe names; these names keep parsing, validation, policy replay, formatting, and CLI entrypoint separately testable."
+    },
+    {
+      "ir_region": "AC-RL-05",
+      "decision": "Any validation failure returns ERROR before replaying the event stream.",
+      "rationale": "The acceptance text requires no partial log for malformed input, so validation is completed for the whole input before state changes are simulated."
+    }
+  ],
+  "compilation_report": {
+    "stack": "javascript",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:44:00.661592+00:00",
+      "finished": "2026-09-04T01:44:35.469963+00:00"
+    },
+    "constraint_handling": "plain JavaScript for Node >= 18; CommonJS module with no dependencies; reads stdin only when executed as main; prints exactly one line: result JSON or ERROR; exports implementation functions without side effects on require",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "af9328034745e19453f8c705221a5130e934fc431b07c3ef0328fef3a8c004ee"
+}

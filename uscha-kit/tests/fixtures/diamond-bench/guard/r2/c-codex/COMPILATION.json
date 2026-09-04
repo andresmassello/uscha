@@ -1,0 +1,86 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python stdlib only: json, re, shlex, sys",
+    "Reads a single JSON object from stdin",
+    "Verdict is process exit code only: 0 allow, 2 block",
+    "Fail-closed on malformed JSON, unexpected input shape, and shell commands that cannot be proven read-only",
+    "Matches .approved as a case-insensitive substring"
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "8693abc9e13afc549273ac6197d5b45fb589be3424699302c26997883abc0604"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-GH-04",
+      "decision": "Recognize common read-only tool names exactly after lowercasing and removing separators, including read, grep, glob, ls, list, dir, find, search, web fetch/search, and notebook read variants.",
+      "rationale": "The package names tool families but not host-specific identifiers, so the implementation uses conservative common aliases for readers, searchers, listers, web fetch/search, and notebook readers without matching broad write-capable names."
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "Treat Bash, shell, sh, command, terminal, cmd, powershell, and pwsh style tool names as shell/command tools.",
+      "rationale": "The package gives Bash as an example and says shell/command tools may vary by host, so common command-execution tool names are handled with the shell policy."
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "Consider a shell command proven read-only only when every pipeline/sequence stage has a read-only executable and no redirection, assignment-like write option, or tee-like/file-writing command appears.",
+      "rationale": "The package requires default-deny for shell commands touching .approved files and specifically calls out later pipeline writers, redirection, and in-place/output write flags."
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "If shlex parsing fails, the command is blocked when it contains the .approved marker.",
+      "rationale": "A parse failure means the guard cannot prove read-only, and the posture is fail-closed."
+    },
+    {
+      "ir_region": "AC-GH-06",
+      "decision": "Allow unknown non-shell tools when their argument tree contains no .approved marker.",
+      "rationale": "The invariant concerns approved golden files; the package specifically says unknown tools block when the marker appears anywhere in arguments, leaving calls that do not mention approved goldens outside the protected surface."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:49:34.634865+00:00",
+      "finished": "2026-09-04T01:50:37.292700+00:00"
+    },
+    "constraint_handling": "Pure Python stdlib only: json, re, shlex, sys; Reads a single JSON object from stdin; Verdict is process exit code only: 0 allow, 2 block; Fail-closed on malformed JSON, unexpected input shape, and shell commands that cannot be proven read-only; Matches .approved as a case-insensitive substring",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "9f99e8c845451802da11e676dfdac8a0d611818ef7c013881817ccc8bff9a83f"
+}

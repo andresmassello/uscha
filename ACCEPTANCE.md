@@ -325,8 +325,10 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   reports all nine entries with a verdict (no PENDING at ship).
 - [x] AC-BG-02 - every new oracle rejects both its degenerate stub AND a plausible-wrong
   implementation violating a SPEC-named sharp edge, checked before any compilation ran.
-- [x] AC-BG-03 - all 15 new compilations `compile-validate` against their entry's pinned IR; no
-  compiler input references any oracle; `unresolved_intent` is each model's verbatim return.
+- [x] AC-BG-03 - all 20 new compilations (five entries x four compilers since ADR-042)
+  `compile-validate` against their entry's pinned IR; no compiler input references any oracle -
+  the cross-vendor arm's source is held to the same maker!=checker wall as the three Claude
+  arms; `unresolved_intent` is each model's verbatim return.
 - [x] AC-BG-04 - the worker entry's SPEC states the deterministic-scheduling boundary
   explicitly; the bench/changelog carry it as a named limitation.
 - [x] AC-BG-05 - the discrimination evidence is committed and reproducible: every
@@ -389,10 +391,12 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   `wrong/` implementation (each breaking exactly one rule) is red, and the bench's own
   discrimination gate over the entry agrees; the reference passing 100% is evidenced by the
   `c-opus` compilation, 30/30 (no separate reference implementation is committed).
-- [x] AC-SH-02 - the three blind `scheduler` compilations `compile-validate` against the pinned
+- [x] AC-SH-02 - the four blind `scheduler` compilations `compile-validate` against the pinned
   IR; each `unresolved_intent` is non-empty, bounded (2-5 entries), and model-distinct
   (verbatim, not synthesized); the bench verdict for `scheduler` is `PARTIAL` with the pinned
-  per-compiler oracle counts (opus 30/30, sonnet 26/30, haiku 25/30 of 30); the bench now
+  per-compiler oracle counts (codex 30/30, opus 30/30, sonnet 26/30, haiku 25/30 of 30 - the
+  cross-vendor arm matches opus and the entry stays PARTIAL, because PARTIAL is the min-rate
+  verdict, not the max); the bench now
   reports 10 entries.
 - [x] AC-LI-01 - the `lang-compare` verdict rule (REDUCED / IMPROVED / MIXED / NO EFFECT /
   WORSE, ADR-026) is reachable and correct across the five committed same-generation pairs;
@@ -413,33 +417,42 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 
 - [x] AC-R2-01 - `bench --dir BENCH --json` output is byte-identical whether the `r2/` second-run
   directories are present or removed; the real bench reports 12 entries with `PARTIAL` exactly
-  `{guard, rest-handler, scheduler}`.
+  `{guard, rest-handler, scheduler, transformer}` - `transformer` joined at 1.99.0, and it is
+  the cross-vendor arm's one loss (ADR-042).
 - [x] AC-R2-02 - `bench-r2 --dir BENCH --json` reports, for every entry, `has_r2` true, a `class`
   in `{SIGNAL, NOISY, NOISE}` equal to the expected function of the ratio (`< 0.5` SIGNAL,
-  `< 1.0` NOISY, else NOISE), float `intra_mean`/`inter`/`intra_over_inter`, and exactly 3 models
+  `< 1.0` NOISY, else NOISE), float `intra_mean`/`inter`/`intra_over_inter`, and exactly 4 models
   each with a float `intra_distance` and a boolean `behaviour_stable`; an entry with its `r2/`
   removed reports `has_r2` false, `class` null, and a non-empty `reason` (absent, never 0); an
   entry whose `r2/` is present but holds no parseable source reports `has_r2` true, `class` null
   and a non-empty `reason` (the review-found silent gap, now named);
   `protocol-adapter`'s reported `inter` matches an independent recomputation of the mean pairwise
-  `_struct_distance` over its three run-1 implementations to 4 decimal places.
-- [x] AC-R2-03 - all 30 `r2/` `COMPILATION.json` files `compile-validate` exit 0 against their
-  entry's `IR.json`; each `unresolved_intent` has 2-6 entries and the three per entry are
-  pairwise distinct; the aggregate is pinned (`verdict` NOISY, signal 1, noisy 5, noise 4, stable
-  26, reruns 30) and every per-entry class is pinned exactly: SIGNAL `protocol-adapter`; NOISY
-  `crud-store`, `guard`, `rest-handler`, `transformer`, `ui-render`; NOISE `parser`, `scheduler`,
-  `state-machine`, `worker`.
+  `_struct_distance` over its four run-1 implementations to 4 decimal places.
+- [x] AC-R2-03 - all 40 `r2/` `COMPILATION.json` files `compile-validate` exit 0 against their
+  entry's `IR.json`; each `unresolved_intent` has 2-6 entries and the four per entry are
+  pairwise distinct; the aggregate is pinned (`verdict` NOISY, signal 1, noisy 7, noise 2, stable
+  36, reruns 40) and every per-entry class is pinned exactly: SIGNAL `protocol-adapter`; NOISY
+  `crud-store`, `guard`, `parser`, `rest-handler`, `state-machine`, `transformer`, `ui-render`;
+  NOISE `scheduler`, `worker`. `parser` and `state-machine` left NOISE when the cross-vendor arm
+  joined (ADR-042): a fourth compiler from another vendor widened the inter-compiler spread more
+  than it raised the intra-model floor. Both landed within ~0.3 of the threshold (parser 0.73,
+  state-machine 0.81), which ADR-027
+  says to read as borderline - so the classes are pinned and the ratios are not.
 
 ## Non-Python archetype (ADR-028) - the method leaves Python
 
 - [x] AC-JS-01 - Python untouched: `bench --json` entries equal 12 and the eleven Python entries'
   verdicts equal the pins `{crud-store PASS, guard PARTIAL, ledger-lite PASS, parser PASS,
   protocol-adapter PASS, rest-handler PARTIAL, scheduler PARTIAL, state-machine PASS,
-  transformer PASS, ui-render PASS, worker PASS}`; `bench-r2 --json` aggregate stays `verdict`
-  NOISY, signal 1, noisy 5, noise 4, with 10 measured and both `rate-limiter` and `ledger-lite`
+  transformer PARTIAL, ui-render PASS, worker PASS}`; `bench-r2 --json` aggregate stays `verdict`
+  NOISY, signal 1, noisy 7, noise 2, with 10 measured and both `rate-limiter` and `ledger-lite`
   `has_r2` false; `lang-compare` on scheduler-free vs scheduler-controlled stays `IMPROVED` with
   variance scores in their interpreter-stable ranges (free 0.015–0.03, controlled 0.17–0.20; the exact decimals move between 3.8 and 3.13 per ADR-027) (the refactor left Python metrics identical); `_impl_metrics` on
-  a Python impl returns an `int` `ast_nodes`.
+  a Python impl returns an `int` `ast_nodes`. The pins above were re-measured at 1.99.0 when a
+  fourth compiler joined (ADR-042): `transformer` moved to PARTIAL and the r2 class counts to
+  7/2. Neither move is the ADR-028 refactor - this criterion asserts that JS support did not
+  disturb the Python path, and the values it compares against are whatever the current bench
+  measures, never a frozen copy of the 1.85.0 run.
 - [x] AC-JS-02 - the JS entry plus discrimination and the node-absent path: `rate-limiter`
   verdict `PASS`, each compilation oracle passed 25/25 with `compile_valid` true;
   `bootstrap-oracle` on `stub/stub.js` is not green; every file in `rate-limiter/wrong/*.js` is
@@ -460,14 +473,14 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
 
 - [x] AC-MU-01 - single-unit Python entries unchanged: `bench --json` verdicts equal the pins
   `{crud-store PASS, guard PARTIAL, parser PASS, protocol-adapter PASS, rate-limiter PASS,
-  rest-handler PARTIAL, scheduler PARTIAL, state-machine PASS, transformer PASS, ui-render PASS,
+  rest-handler PARTIAL, scheduler PARTIAL, state-machine PASS, transformer PARTIAL, ui-render PASS,
   worker PASS}`; `lang-compare` on scheduler-free vs scheduler-controlled stays `IMPROVED` with
   variance scores in their interpreter-stable ranges (free 0.015–0.03, controlled 0.17–0.20; the exact decimals move between 3.8 and 3.13 per ADR-027); `bench-r2 --json` aggregate stays `verdict` NOISY, signal 1,
-  noisy 5, noise 4, with 10 measured; a single-unit compilation (`guard`, `c-opus`) still reports
+  noisy 7, noise 2, with 10 measured; a single-unit compilation (`guard`, `c-opus`) still reports
   `entry_unit` `source/guard.py` and `units` 1.
 - [x] AC-MU-02 - `ledger-lite`'s `IR.json` carries at least one `DECISION` node and at least 2
   edges (the bench's first IR with edges, extracted from `docs/adr/ADR-001-model-cli-seam.md`);
-  each of the three blind `COMPILATION.json` files ships exactly 2 source units, `compile-validate`
+  each of the four blind `COMPILATION.json` files ships exactly 2 source units, `compile-validate`
   exits 0 against the IR, and `trace_manifest` names exactly `{source/model.py, source/cli.py}`;
   the bench record's verdict is `PASS`, each compilation's oracle is 24/24, and every compilation
   carries `entry_unit` `source/cli.py` and `units` 2; `bench --fidelity --json` reports
@@ -489,7 +502,7 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   still reads `IMPROVED` with variance scores in their interpreter-stable ranges (free 0.015–0.03, controlled 0.17–0.20; the exact decimals move between 3.8 and 3.13 per ADR-027), and `bench --json` still reports 12
   entries with the same verdict pins `{crud-store PASS, guard PARTIAL, ledger-lite PASS, parser
   PASS, protocol-adapter PASS, rate-limiter PASS, rest-handler PARTIAL, scheduler PARTIAL,
-  state-machine PASS, transformer PASS, ui-render PASS, worker PASS}` - this instrument changes
+  state-machine PASS, transformer PARTIAL, ui-render PASS, worker PASS}` - this instrument changes
   no bench verdict.
 - [x] AC-RT-02 - for every compilation of every entry: `recoverability` is between 0 and 1;
   `anchored` never exceeds `static_anchored + behaviour` (when behaviour is measured) and never
@@ -500,19 +513,28 @@ criteria already shipped under that prefix; renamed at planning time (ADR-013).
   `unanchored` is a list whose length equals `ir_nodes - anchored`; per-node detail carries the
   keys `id`/`static`/`manifest`/`behaviour`/`anchored`/`claimed`; `ledger-lite` - the bench's
   only entry with edges - reports `edges == 3` for every compilation and
-  `edges_recovered_mean == 1.00` (it was 0.33 while static footing was the only one that
-  anchored anything).
+  `edges_recovered_mean == 0.75`. That field is the mean COUNT of edges recovered per
+  compilation, not a ratio: only `c-opus` anchors both endpoints of all three edges and the
+  other arms anchor none, so the number is 3/N. It read 1.00 while N was 3, which looked like
+  "all edges, always" and never was; ADR-042's fourth compiler recovers 0 and makes N 4, so the
+  same 3 now reads 0.75.
 - [x] AC-RT-03 - the aggregate is pinned to today's measured state: 12 entries measured, mean
-  `recoverability` in `[0.82, 0.83]`, 1 entry with edges, behaviour measured in 12 of 12
+  `recoverability` in `[0.81, 0.82]`, 1 entry with edges, behaviour measured in 12 of 12
   entries, and `behaviour` an integer in every compilation of every entry; the per-entry
-  `recoverability_mean` is pinned exactly: `crud-store 0.857, guard 0.875, ledger-lite 0.704,
-  parser 0.714, protocol-adapter 0.714, rate-limiter 0.762, rest-handler 0.905, scheduler 0.875,
-  state-machine 0.857, transformer 0.905, ui-render 0.905, worker 0.857`; the instrument is
+  `recoverability_mean` is pinned exactly: `crud-store 0.857, guard 0.844, ledger-lite 0.667,
+  parser 0.714, protocol-adapter 0.714, rate-limiter 0.75, rest-handler 0.893, scheduler 0.875,
+  state-machine 0.857, transformer 0.857, ui-render 0.893, worker 0.857`; the instrument is
   id-regex + file reads + oracle runs with no AST involved, so a second Python interpreter (3.8)
-  reproduces the per-entry means EXACTLY - measured, not assumed. The aggregate is pinned as a
-  RANGE and never as a float: the twelve means sum to 9.930 and `9.930 / 12` is 0.8275 exactly,
-  a rounding boundary that lands on 0.828 under 3.13 and 0.827 under 3.8, so the cross-interpreter
-  expectation is "within one thousandth", compared in integer thousandths.
+  reproduces the per-entry means EXACTLY - measured, not assumed. Six of the twelve moved when
+  ADR-042's fourth compiler joined (`guard`, `ledger-lite`, `rate-limiter`, `rest-handler`,
+  `transformer`, `ui-render`), all downward: an entry's recoverability is the mean over its
+  compilations, and the cross-vendor arm anchors a slightly different subset of each IR than the
+  three Claude arms converge on. The aggregate is pinned as a RANGE and never as a float: before
+  ADR-042 the twelve means summed to 9.930 and `9.930 / 12` was 0.8275 exactly, a rounding
+  boundary that landed on 0.828 under 3.13 and 0.827 under 3.8. The 1.99.0 means sum to 9.778,
+  `/12` = 0.81483, which is not on a boundary - the range stays anyway, because whether a given
+  release's sum happens to be safe is not a property worth re-deciding every release. The
+  cross-interpreter expectation is "within one thousandth", compared in integer thousandths.
 - [x] AC-RT-04 - the curated `ac` tag is what is READ, and a tag asks a question rather than
   answering it. Over a TEMP COPY of one entry (the committed fixture is never written):
   stripping every `ac` field returns `behaviour` to the literal `UNMEASURED` in every
@@ -828,7 +850,7 @@ human deferred them on 2026-09-02; and `uscha top` fixture F3 read *planned* in 
 argued its own redundancy. Each was WIRED or REWRITTEN as the honest state, and the rewrite is
 what is measured. Measured by T154 through the `.vc-cases.json` sidecar.
 
-- [x] AC-VC-01 - every claim `tools/narrated-claims.txt` records as retired is **absent** from the file it was retired from, and every path the list names still exists (a row pointing at a deleted file would pass by accident, which is the failure mode the list exists to refuse). It is an ALLOWLIST, deliberately, not a ban on the word VISION: the diamond table's "arbitrary systems" row and "cross-vendor is not yet measured" are CORRECT labels today and survive untouched, and the historical record - the per-release changelogs, `audits/`, `ISSUES-DEFERRED.md` as a mechanism name, the paper's Future Work, every code and CSS token - is out of scope by construction, because nothing outside the list is read. A gate that flags what is right teaches the reader to ignore it.
+- [x] AC-VC-01 - every claim `tools/narrated-claims.txt` records as retired is **absent** from the file it was retired from, and every path the list names still exists (a row pointing at a deleted file would pass by accident, which is the failure mode the list exists to refuse). It is an ALLOWLIST, deliberately, not a ban on the word VISION: **ONE label is correct today** and survives untouched - the diamond table's "arbitrary systems" row, still VISION because the bounded half is measured and generalization is not. There were two until 1.99.0; the other was "cross-vendor is not yet measured", and ADR-042 retired it by MEASURING it rather than by rewriting it - entry 7 of the list records what happened to it, which is the outcome this whole doctrine is meant to produce. And the historical record - the per-release changelogs, `audits/`, `ISSUES-DEFERRED.md` as a mechanism name, the paper's Future Work, every code and CSS token - is out of scope by construction, because nothing outside the list is read. A gate that flags what is right teaches the reader to ignore it.
 - [x] AC-VC-02 - repo rule 3, measured: for each ES/EN twin pair the list names, the two files are diffed against the base ref and the changed-line counts are **equal**. An edit that landed in one language and not the other is invisible until a reader who only speaks the other one finds it. No git, no base ref, or a shallow clone -> UNMEASURED, never a silent pass.
 
 ## The three 1.69.0 deferred LOWs, closed (1.98.0) - closes on green `AC-DE-nn` smoke assertions
@@ -845,6 +867,72 @@ through the `.de-cases.json` sidecar.
 - [x] AC-DE-02 - `promote`'s `ISSUES-DEFERRED.md` dedupe matches the **work item**, not the text. An OBS id merely mentioned in prose in that file used to suppress its work item forever - a `fix` verdict that quietly produced nothing - and the anchored `- [ ] OBS-<id>` line form is what answers the actual question. Both halves measured: end to end, a prose mention no longer suppresses the item and a second `promote` still writes it only once; at the function level, `OBS-1` is not `OBS-10`, the boundary a raw substring over hash-prefix ids cannot express.
 - [x] AC-DE-04 - the SAME cell writer is used everywhere a value reaches a one-line surface, not only at the site the review reported. Two neighbours carried the identical bug: `_render_ir_md` escaped a pipe and never touched a newline (both the node rows and the UNTYPED rows), and `promote` wrote the raw statement into a markdown **checklist item** - which ends at a newline exactly as a table row does, so a multi-line statement split the work item in two and left the half `_deferred_carries` recognises without its text. Measured on both: a synthetic IR graph with newlines in a node statement, an UNTYPED text and its reason renders one row each (the UNTYPED text is truncated AFTER flattening, so the cut cannot land mid-break), and a real `fix` verdict over a multi-line statement appends exactly one line with no stray remainder, still deduped on the second `promote`.
 - [x] AC-DE-03 - `fidelity --config` resolves a relative default against the cwd **first, then beside the `--ledger`**, and the output NAMES the path it read - or names the absence and where it looked. Run from any directory but the project root, the old resolution silently found no config, so `defaults.fidelity.gate` was never declared and the INV-ADVISORY-01 refusal that reads it never fired: an unnamed absence indistinguishable from having no gate at all. Measured from a foreign cwd on all three arms - absence named, path named and reported in `--json`, and the advisory-as-blocking refusal firing with exit 2.
+
+## Cross-vendor arm (ADR-042) - closes on green `AC-XV-nn` smoke assertions
+
+Every blind compilation in the Diamond Bench came from ONE vendor until 1.99.0. Three models of
+the Claude family converging on the same reading of a spec is weaker evidence than it looks if
+they converge because they are relatives, and the repo said so on six pages: *cross-vendor not
+yet measured*. This arm is the falsification test. It ran the same 12 archetypes through the
+OpenAI Codex CLI (`gpt-5.5`) under ADR-017's protocol with the vendor swapped - 22 dispatches,
+22 promoted, 0 refused, **0 shell commands executed** - and the claim survived: 8 PASS, 4 PARTIAL,
+one verdict moved.
+
+The one that moved is the finding. `transformer` went PASS -> PARTIAL on a single oracle case,
+because the cross-vendor arm read *"an object with exactly the fields first/last/age"* as
+forbidding an extra field, **declared that reading in its `unresolved_intent` before the oracle
+judged it**, and reproduced it in a second independent run. The canonical package is genuinely
+ambiguous there; three related models had resolved it identically, so the ambiguity was
+invisible while every compiler came from one vendor. The controlled-language arm had found the
+same sentence from the other direction in 1.83.
+
+- [x] AC-XV-01 - all 12 `c-codex` compilations `compile-validate` exit 0 against their entry's
+  pinned `IR.json`; each `unresolved_intent` is verbatim, non-empty and bounded (2-6 entries);
+  the twelve are pairwise distinct; and **every `ir_region` names a real IR node**. That last
+  clause is not cosmetic: `compile-ingest` content-addresses a UINT on `(ir_region + decision)`,
+  so a compiler inventing its own region slugs would fork the UINT address space between arms
+  permanently. Compliance was 48/48.
+- [x] AC-XV-02 - no oracle reached the arm on either side of the dispatch. The INPUT half is
+  proven by RE-DERIVATION rather than trust: `CODEX-ARM-RUN.json` carries a sha256 per prompt
+  and no prompt bytes, and the block re-renders all twelve from the same slot table and the same
+  canonical package and compares - a prompt that had ever carried an oracle value would have to
+  carry it again to match. The OUTPUT half re-runs the dispatcher's own leak audit over all 22
+  compiled sources. Storing the prompt bytes was rejected: a prompt is the canonical package
+  plus the run contract, both already committed, and a second copy is how two copies start to
+  differ.
+- [x] AC-XV-03 - `bench` reports a `codex` compilation in all 12 entries; the anonymised model
+  map is the pinned four-key `{codex: M1, haiku: M2, opus: M3, sonnet: M4}` (the letters MOVED -
+  the map is built over sorted model names, so a silent re-lettering would make every published
+  `M<n>` claim wrong); every entry's four compilations are all-distinct; and the per-entry codex
+  counts and the twelve verdicts are pinned exactly as measured, including the two the arm WINS
+  (`rest-handler` 15/15, `scheduler` 30/30) and the one it loses (`transformer` 13/14).
+- [x] AC-XV-04 - a compilation that does not validate is a NAMED refusal. Measured on the real
+  `validate_and_place` function against a temp target root with a real corrupted fixture (one
+  source `sha256` rewritten), never by dispatching anything: the corrupted copy lands in
+  `x-codex-REFUSED/`, names the exit code, writes `VALIDATE-STDERR.txt`, and leaves NO `c-codex/`
+  for the bench's `c-*` discovery to find; the intact copy promotes cleanly. The committed run
+  record agrees that nothing was refused for real (12 + 10 promoted, 0 refused).
+- [x] AC-XV-05 - the arm has its own noise floor: `bench-r2` reports a float `intra_distance`
+  for `c-codex` in each of the 10 entries that carry an `r2/`, every codex rerun is
+  `behaviour_stable` and `run2_compile_valid`, and the per-entry classes are pinned with the two
+  that moved recorded before and after (`parser` NOISE -> NOISY, `state-machine` NOISE -> NOISY).
+  `ledger-lite` and `rate-limiter` still report `has_r2` false: they carry no second round for
+  ANY compiler, and a codex-only one there would report one model's rerun against four models'
+  spread under the same column as the ten - a different quantity printed as the same one.
+- [x] AC-XV-06 - the backend is on the record inside every one of the 22 compilations:
+  `vendor`, `cli`, `model_slug`, `reasoning_effort`, `sandbox`, `approval` and `write_mode`, with
+  `shell_commands_executed == 0` and nothing read outside the workspace. The zero is the
+  load-bearing one: it is what makes the `--write-mode return` deviation harmless to the
+  comparison, because an arm that ran no command is not exercising a capability the Claude arms
+  never had.
+- [x] AC-XV-07 - the published claim says what the committed fixture backs and no more, in BOTH
+  languages: six pages carry the measured statement (README, `site/llms.txt`, the diamond pair,
+  the how pair), and the six retired phrases are registered in `tools/narrated-claims.txt` where
+  `AC-VC-01` asserts their absence. Both halves are needed - a claim deleted from one page and
+  rewritten on the other is exactly the drift repo rule 3 exists to catch. The paper is
+  deliberately NOT in this list: its numbers are dated at 1.96.0 and it is revised in its own
+  round, and asserting a phrase into a document nobody has rewritten yet is the same narrated
+  claim pointed the other way.
 
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
@@ -870,6 +958,7 @@ through the `.de-cases.json` sidecar.
 - ADR-038 — TERMINADO is sealed to the exact code state: reports are content-hashed at ingest, the seal is DERIVED at read time (never stored), and DONE does not render 100% while it is measured broken (INV-T1, INV-TOP-06).
 - ADR-039 — Evidence freshness is decided by CONTENT and COMMIT, not by the clock alone: a report is current when no source changed since the run that produced it, whatever the mtimes say; and the seal tolerates commits that touch no source (amends ADR-038).
 - ADR-041 — The dogfooding criterion is decided by git ANCESTRY, not by a wall clock — and the release ritual is a script that refuses (I1..I8), not prose a human re-reads.
+- ADR-042 — The cross-vendor arm: a SECOND vendor compiles the whole bench, blind, under the same withheld oracles; `--write-mode return` because the machine's approval policy forbids exec writes, and 0 executed commands means the confound that mode would have introduced does not exist.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

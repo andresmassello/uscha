@@ -1,0 +1,75 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "be6c30a25404d31f9d322fd68d2b25833e4113aa0bebec1c6eebc373c74f8ae0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure Python standard library only",
+    "Python 3.8+ compatible",
+    "reads all input from stdin",
+    "prints exactly one line to stdout and exits 0",
+    "on malformed input prints ERROR for the whole batch"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "361c5d6ba66c87cf42d87749a411cf9eb2e13cd382f1d3f1295f9be0552da994"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-TR-01",
+        "AC-TR-02",
+        "AC-TR-03",
+        "AC-TR-04",
+        "AC-TR-05",
+        "AC-TR-06",
+        "INV-TR-ORDER-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-TR-05",
+      "decision": "Reject records with extra fields beyond first, last, and age.",
+      "rationale": "The input contract says each record is an object with exactly those fields, so additional fields are treated as malformed rather than ignored."
+    },
+    {
+      "ir_region": "AC-TR-05",
+      "decision": "Reject JSON booleans for age even though bool is a subclass of int in Python.",
+      "rationale": "The canonical package requires age to be an integer; JSON true/false are booleans, not integer ages."
+    },
+    {
+      "ir_region": "AC-TR-06",
+      "decision": "Emit compact JSON using separators without spaces between structural tokens.",
+      "rationale": "The acceptance criteria fix only structure and values, so compact formatting is a valid formatting choice."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:53:25.464494+00:00",
+      "finished": "2026-09-04T01:53:52.600317+00:00"
+    },
+    "constraint_handling": "pure Python standard library only; Python 3.8+ compatible; reads all input from stdin; prints exactly one line to stdout and exits 0; on malformed input prints ERROR for the whole batch",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "eac7a160525842a9cccaa78c8c3675a7faa528acee97069ea0ab0c93a0176b99"
+}

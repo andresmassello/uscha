@@ -68,3 +68,4 @@ tests/golden/*.received.json
 # run can still catch an amend. Untracked AND ignored on purpose -- an untracked file the
 # seal can see would break check-terminado at X+1 (ADR-038).
 .uscha-release-state.json
+tools/.codex-arm/

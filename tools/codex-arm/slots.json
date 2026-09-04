@@ -1,0 +1,214 @@
+{
+  "_generated_by": "tools/bench-compile-codex.py --emit-slots",
+  "_contract": "the run contract and stack constraints handed to the cross-vendor arm. Each entry records where its contract CAME FROM in `source`: `c-opus constraints` means it was lifted VERBATIM from that entry's c-opus implementation_constraints, so both arms compile against the same constraints (ADR-021 scaffolding parity). The oracle is NEVER a slot.",
+  "_residual": "RESOLVED in ADR-042. For five entries (crud-store, protocol-adapter, rest-handler, ui-render, worker) the c-opus constraints read as post-hoc narration of that implementation rather than as a run contract, and lifting them verbatim would hand the cross-vendor arm one arm's design decisions. Those five carry `source: canonical` instead: a two-line contract authored from the entry's own canonical SPEC.md `## Contract` section -- stack and file layout plus the I/O and exit contract, the same information the oracle harness needs to run the unit at all, and no design choice. The other seven (guard, parser, rate-limiter, ledger-lite, scheduler, state-machine, transformer) already carried genuine one-line run contracts and keep `source: c-opus constraints`.",
+  "entries": {
+    "crud-store": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "canonical",
+      "implementation_constraints": [
+        "Pure Python 3.8+ standard library only; single file `source/impl.py`, run as `python impl.py`; no third-party packages, no filesystem, no network.",
+        "Reads the WHOLE of stdin, prints the result to stdout, and ALWAYS exits 0 -- malformed input is signalled by printing exactly `ERROR`, never by a non-zero exit."
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "guard": {
+      "target_stack": "python",
+      "source_units": [
+        "source/guard.py"
+      ],
+      "tests_units": [],
+      "source": "c-opus constraints",
+      "implementation_constraints": [
+        "Pure Python stdlib only (json, re, shlex, sys)",
+        "reads one JSON object from stdin; verdict via exit code (0 allow, 2 block)",
+        "fail-closed everywhere; marker matched case-insensitive substring"
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "ledger-lite": {
+      "target_stack": "python",
+      "source_units": [
+        "source/model.py",
+        "source/cli.py"
+      ],
+      "tests_units": [],
+      "source": "c-opus constraints",
+      "implementation_constraints": [
+        "pure stdlib, python 3.8+",
+        "two units: source/model.py (pure) + source/cli.py (entry, imports model); run python cli.py from source/"
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md",
+        "docs/adr/ADR-001-model-cli-seam.md"
+      ]
+    },
+    "parser": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "c-opus constraints",
+      "implementation_constraints": [
+        "pure stdlib, python 3.8+",
+        "reads stdin, prints result, exits 0"
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "protocol-adapter": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "canonical",
+      "implementation_constraints": [
+        "Pure Python 3.8+ standard library only; single file `source/impl.py`, run as `python impl.py`; no third-party packages, no filesystem, no network.",
+        "Reads the WHOLE of stdin, prints the result to stdout, and ALWAYS exits 0 -- malformed input is signalled by printing exactly `ERROR`, never by a non-zero exit."
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "rate-limiter": {
+      "target_stack": "javascript",
+      "source_units": [
+        "source/impl.js"
+      ],
+      "tests_units": [],
+      "source": "c-opus constraints",
+      "implementation_constraints": [
+        "plain JavaScript, Node >= 18, no dependencies, CommonJS",
+        "reads one JSON value from stdin, prints one line, exits 0; module.exports + require.main guard"
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "rest-handler": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "canonical",
+      "implementation_constraints": [
+        "Pure Python 3.8+ standard library only; single file `source/impl.py`, run as `python impl.py`; no third-party packages, no filesystem, no network.",
+        "Reads the WHOLE of stdin, prints the result to stdout, and ALWAYS exits 0 -- malformed input is signalled by printing exactly `ERROR`, never by a non-zero exit."
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "scheduler": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "c-opus constraints",
+      "implementation_constraints": [
+        "pure stdlib, python 3.8+",
+        "reads one JSON value from stdin, prints one line, exits 0"
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "state-machine": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "c-opus constraints",
+      "implementation_constraints": [
+        "pure stdlib, python 3.8+",
+        "reads stdin, prints result, exits 0"
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "transformer": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "c-opus constraints",
+      "implementation_constraints": [
+        "pure stdlib, python 3.8+",
+        "reads stdin, prints result, exits 0"
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "ui-render": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "canonical",
+      "implementation_constraints": [
+        "Pure Python 3.8+ standard library only; single file `source/impl.py`, run as `python impl.py`; no third-party packages, no filesystem, no network.",
+        "Reads the WHOLE of stdin, prints the result to stdout, and ALWAYS exits 0 -- malformed input is signalled by printing exactly `ERROR`, never by a non-zero exit."
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    },
+    "worker": {
+      "target_stack": "python",
+      "source_units": [
+        "source/impl.py"
+      ],
+      "tests_units": [],
+      "source": "canonical",
+      "implementation_constraints": [
+        "Pure Python 3.8+ standard library only; single file `source/impl.py`, run as `python impl.py`; no third-party packages, no filesystem, no network.",
+        "Reads the WHOLE of stdin, prints the result to stdout, and ALWAYS exits 0 -- malformed input is signalled by printing exactly `ERROR`, never by a non-zero exit."
+      ],
+      "canonical_files": [
+        "SPEC.md",
+        "ACCEPTANCE.md",
+        "CONSTITUTION.md"
+      ]
+    }
+  }
+}

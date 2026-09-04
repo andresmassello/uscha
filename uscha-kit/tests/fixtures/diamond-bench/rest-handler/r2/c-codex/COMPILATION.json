@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only",
+    "Single file source/impl.py runnable as python impl.py",
+    "Reads all stdin and writes only stdout",
+    "No filesystem or network access",
+    "Always exits 0; malformed batch input prints exactly ERROR"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "80e2eea10baac10655a66ac9a82fc57bb90f2a5ad978f3af045c206242f15b86"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-RH-01",
+        "AC-RH-02",
+        "AC-RH-03",
+        "AC-RH-04",
+        "AC-RH-05",
+        "AC-RH-06",
+        "INV-RH-IDS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-RH-06",
+      "decision": "Request objects may contain extra fields beyond method, path, and optional body.",
+      "rationale": "The canonical shape names required fields but does not explicitly forbid extra metadata; ignoring it preserves batch processing without inventing new validation errors."
+    },
+    {
+      "ir_region": "AC-RH-04",
+      "decision": "HTTP methods are matched case-sensitively against the uppercase method names in the route table.",
+      "rationale": "The spec presents method tokens as exact strings and does not define method normalization."
+    },
+    {
+      "ir_region": "AC-RH-02",
+      "decision": "Paths are matched literally; trailing slashes, query strings, and fragments are not normalized or parsed.",
+      "rationale": "The package says query strings are out of scope and defines concrete path forms, so literal matching is the least surprising transport-free behavior."
+    },
+    {
+      "ir_region": "AC-RH-05",
+      "decision": "POST and PUT bodies may include fields besides name; only the presence of a string name is required.",
+      "rationale": "The error rule only rejects missing, non-object, or no string name bodies, and the resource itself only stores id and name."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:51:47.342342+00:00",
+      "finished": "2026-09-04T01:52:24.936857+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only; Single file source/impl.py runnable as python impl.py; Reads all stdin and writes only stdout; No filesystem or network access; Always exits 0; malformed batch input prints exactly ERROR",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "9edf5f33b91362d8012eed6c1548dc1e5ed989de42772899e1ad37e789c0f855"
+}

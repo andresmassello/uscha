@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e3754924dc80a7dbdfa6ee98c6aa82a06ecc57b577e930f3f2370248cbeea69c",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib only",
+    "python 3.8+ compatible",
+    "reads one JSON value from stdin",
+    "prints exactly one line: final state name or ERROR",
+    "exits with status 0 for all inputs handled by the contract"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "4866fe433cf1a0439196fc47316a979480ca49e4d61ca7831deb1360d3929861"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-SM-06",
+      "decision": "Treat empty stdin and whitespace-only stdin as invalid JSON and print ERROR.",
+      "rationale": "The package specifies invalid JSON prints ERROR but does not separately define empty input; json.loads naturally classifies it as invalid."
+    },
+    {
+      "ir_region": "AC-SM-06",
+      "decision": "Allow any top-level JSON array length, including very large arrays, and process it sequentially without imposing an extra limit.",
+      "rationale": "The contract defines a fold over a JSON array and gives no size cap, so adding one would be an unrequested behavior."
+    },
+    {
+      "ir_region": "AC-SM-05",
+      "decision": "Reject string values with any spelling, case, or surrounding whitespace other than exactly coin or push.",
+      "rationale": "The known event strings are specified literally as coin and push; normalization would silently admit additional events."
+    },
+    {
+      "ir_region": "AC-SM-04",
+      "decision": "Keep the reducer transition table explicit rather than deriving state changes with counters or parity.",
+      "rationale": "The constitution emphasizes a total closed state machine, and an explicit table makes every allowed state/event pair defined."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:53:06.134659+00:00",
+      "finished": "2026-09-04T01:53:25.002957+00:00"
+    },
+    "constraint_handling": "pure stdlib only; python 3.8+ compatible; reads one JSON value from stdin; prints exactly one line: final state name or ERROR; exits with status 0 for all inputs handled by the contract",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "cdd8c303ddbe9d7d81d14151fee3ec7326ede91f251f54a4c31af754395fd4a4"
+}

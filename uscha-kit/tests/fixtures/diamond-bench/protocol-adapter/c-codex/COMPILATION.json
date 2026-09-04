@@ -1,0 +1,79 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single file source/impl.py, executable as python impl.py.",
+    "Reads all stdin, writes exactly one stdout result, never uses filesystem or network.",
+    "All malformed input paths print exactly ERROR and allow normal process termination."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "929c9d33935c98200739b010c70e2675d1bc0279093902ac410a8c762905193c"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PA-01",
+        "AC-PA-02",
+        "AC-PA-03",
+        "AC-PA-04",
+        "AC-PA-05",
+        "AC-PA-06",
+        "INV-PA-ATOMIC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-PA-06",
+      "decision": "Reject top-level objects with extra or missing keys by requiring exactly direction+frames for decode and exactly direction+messages for encode.",
+      "rationale": "The contract defines the accepted shapes explicitly as either of those two objects; strict shape validation avoids silently accepting ambiguous input."
+    },
+    {
+      "ir_region": "AC-PA-05",
+      "decision": "Reject message objects with extra or missing keys by requiring exactly type and fields.",
+      "rationale": "A legal message is specified with only those two members, and strict validation keeps malformed-message handling atomic and predictable."
+    },
+    {
+      "ir_region": "AC-PA-05",
+      "decision": "Validate frame fields by requiring exactly one equals sign in each field segment.",
+      "rationale": "A segment without '=' is malformed, and more than one '=' means the value would contain '=', which a legal frame cannot produce."
+    },
+    {
+      "ir_region": "AC-PA-01",
+      "decision": "Decode output is emitted with compact json.dumps formatting and insertion order type then fields.",
+      "rationale": "Output formatting is free while JSON structure and values are fixed; constructing dictionaries in that order keeps output stable without adding semantic requirements."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:43:25.466904+00:00",
+      "finished": "2026-09-04T01:44:00.389106+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single file source/impl.py, executable as python impl.py.; Reads all stdin, writes exactly one stdout result, never uses filesystem or network.; All malformed input paths print exactly ERROR and allow normal process termination.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "d8aab003aee91710ea8b2f101c6d43dc35e15bbf9b8d5a1a189aa4832aabe8ff"
+}

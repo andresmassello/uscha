@@ -236,7 +236,7 @@
         <text class="lbl-b" x="576" y="61" text-anchor="middle" style="font-size:20px">&#8776;</text>
         <rect class="box-gem" x="606" y="30" width="94" height="50" rx="6"/>
         <text class="lbl-acc" x="653" y="61" text-anchor="middle">specs?</text>
-        <text class="lbl-s" x="362" y="112" text-anchor="middle">measured by ID coverage (uscha-spec) and, since 1.90, by static + behaviour recoverability (0.828, bounded) — see the truth-pass table</text>
+        <text class="lbl-s" x="362" y="112" text-anchor="middle">measured by ID coverage (uscha-spec) and, since 1.90, by static + behaviour recoverability (0.815, bounded) — see the truth-pass table</text>
       </svg>
       <figcaption><b>The methodology's self-test:</b> <code>discovery(forward(specs)) &#8776; specs</code>.
       Nobody in the spec-driven space measures the fidelity of their own methodology; this
@@ -262,15 +262,15 @@
         <tr><td>Round-trip by ID coverage (which specs are traceable in the code?)</td>
             <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
         <tr><td>Semantic round-trip (does the code <em>say the same thing</em> as the spec?)</td>
-            <td><span class="chip real">REAL</span> (measured, bounded)</td><td>recoverability 0.828 measured, behaviour measured in 12/12 — anchors names and behaviour · 1.90 · ADR-030 (amended)</td></tr>
-        <tr><td>Implementation replaceability, demonstrated on bounded systems — independent compilations regenerate the same system from the canonical package, a withheld oracle certifies it — three Claude-family models (Haiku · Sonnet · Opus), one vendor; cross-vendor is not yet measured</td>
-            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 archetypes (11 Python + 1 JavaScript, one multi-unit): 9 PASS, 3 PARTIAL · 1.74–1.85 · ADR-017/018/020/025/028/029</td></tr>
+            <td><span class="chip real">REAL</span> (measured, bounded)</td><td>recoverability 0.815 measured, behaviour measured in 12/12 — anchors names and behaviour · 1.90 · ADR-030 (amended)</td></tr>
+        <tr><td>Implementation replaceability, demonstrated on bounded systems — independent compilations regenerate the same system from the canonical package, a withheld oracle certifies it — four blind compilers across two vendors (Haiku · Sonnet · Opus · OpenAI Codex gpt-5.5) — one model of the second vendor, so the arm is a falsification test, not a survey</td>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 archetypes (11 Python + 1 JavaScript, one multi-unit): 8 PASS, 4 PARTIAL · 1.74–1.99 · ADR-017/018/020/025/028/029/042</td></tr>
         <tr><td>Per-compiler fidelity (reverse discovery over each compiled artifact) + human curation of machine-generated code, one verdict per observation</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED stays literal where no verdict exists</td></tr>
         <tr><td>Controlled authoring (EARS+STE) reduces inter-compiler variance</td>
             <td><span class="chip real">REAL</span> (measured, behaviour-first: dense archetypes helped, simple ones null/harm; structural variance alone no longer carries a claim — ADR-027)</td><td>deconfounded across 5 archetypes: REDUCED in 1 (guard −61%, NOISY 0.642), IMPROVED in 1 (scheduler, +1 oracle-green), two nulls, one WORSE · 1.76–1.84 · ADR-019/021/024/025/026/027</td></tr>
         <tr><td>"The code is <em>fully</em> regenerable from the specs" (arbitrary systems)</td>
-            <td><span class="chip vision">VISION</span></td><td>the bounded half is REAL (row above): the bench ran on 12 archetypes, 9 regenerate to the same system under a withheld oracle, 3 PARTIAL. What stays VISION is the word <em>totally</em> and the words <em>arbitrary systems</em> — generalization past bounded archetypes is the open frontier M5 exists to answer, and no run has answered it yet (ADR-018)</td></tr>
+            <td><span class="chip vision">VISION</span></td><td>the bounded half is REAL (row above): the bench ran on 12 archetypes, 8 regenerate to the same system under a withheld oracle, 4 PARTIAL. What stays VISION is the word <em>totally</em> and the words <em>arbitrary systems</em> — generalization past bounded archetypes is the open frontier M5 exists to answer, and no run has answered it yet (ADR-018)</td></tr>
         <tr><td>"Drift = incremental reverse discovery, same engine"</td>
             <td><span class="chip rejected">REJECTED</span></td><td>valid idea, rejected as architecture · ADR-011</td></tr>
       </tbody>
@@ -299,26 +299,29 @@
     <table>
       <thead><tr><th>Instrument</th><th>Measured result</th><th>Releases</th></tr></thead>
       <tbody>
-        <tr><td>Diamond Bench — 12 bounded archetypes × 3 blind compilers (Haiku · Sonnet · Opus — one vendor), each judged by a withheld oracle</td>
-            <td>9 PASS · 3 PARTIAL. The oracle also caught a convergent aliasing bug two independent compilers shared — a defect no code review of either would have flagged as suspicious.</td>
-            <td>1.74–1.83</td></tr>
+        <tr><td>Diamond Bench — 12 bounded archetypes × 4 blind compilers across two vendors (Haiku · Sonnet · Opus · OpenAI Codex gpt-5.5), each judged by a withheld oracle</td>
+            <td>8 PASS · 4 PARTIAL. The oracle also caught a convergent aliasing bug two independent compilers shared — a defect no code review of either would have flagged as suspicious.</td>
+            <td>1.74–1.99</td></tr>
         <tr><td>Controlled language, deconfounded — free prose vs EARS+STE, same generation, shared oracle, 5 archetypes</td>
             <td>REDUCED in 1, IMPROVED in 1: the decision-dense guard dropped variance −61%; the control and the state-machine read null; the transformer read WORSE — the rewrite sharpened a latent ambiguity ("exactly the fields") into a commitment the oracle rejects; the second decision-dense archetype (scheduler) gained an oracle-green and raised mean pass-rate while variance rose — two compilers had converged on the same bug in free prose.</td>
             <td>1.76–1.83</td></tr>
-        <tr><td>Intra-model variance, the noise floor — bench-r2 over 10 archetypes × 3 models × 2 runs</td>
-            <td>NOISY: same-model reruns differ structurally about as much as different models do (mean intra/inter 0.98), while behaviour stays stable on 26 of 30 reruns. Every variance claim the program makes now carries a per-entry SIGNAL/NOISY/NOISE qualifier, and the controlled-language reading above is behaviour-first.</td>
+        <tr><td>Intra-model variance, the noise floor — bench-r2 over 10 archetypes × 4 models × 2 runs</td>
+            <td>NOISY: same-model reruns differ structurally about as much as different models do (mean intra/inter 0.82), while behaviour stays stable on 36 of 40 reruns. Adding the second vendor moved two entries out of NOISE — it widened the inter-compiler spread more than the intra floor. Every variance claim the program makes now carries a per-entry SIGNAL/NOISY/NOISE qualifier, and the controlled-language reading above is behaviour-first.</td>
             <td>1.84</td></tr>
-        <tr><td>First non-Python archetype — a JavaScript token-bucket rate limiter, 3 blind compilers under a withheld oracle</td>
-            <td>PASS 25/25 × 3, distinct implementations, static surface (module exports listed by Node) 3/6/3 — the replaceability claim holds outside Python; a JS entry with no node on PATH reads PENDING/UNMEASURED, never a fake pass.</td>
+        <tr><td>First non-Python archetype — a JavaScript token-bucket rate limiter, 4 blind compilers under a withheld oracle</td>
+            <td>PASS 25/25 × 4, distinct implementations, static surface (module exports listed by Node) 3/6/3 and 8 — the replaceability claim holds outside Python; a JS entry with no node on PATH reads PENDING/UNMEASURED, never a fake pass.</td>
             <td>1.85</td></tr>
-        <tr><td>First multi-unit archetype — ledger-lite: two modules joined by a seam ADR, compile/0.1 exercised over 2 source units, 3 blind compilers under a withheld oracle</td>
-            <td>The bench's first IR with real edges (3, extracted from the seam decision): PASS 24/24 × 3, entry unit routed through the CLI over both units, static surface main+post — the seam holds under 3 independent compilers; the wrong/ that breaks the seam (balance logic moved into the CLI) and the one that ignores the model unit entirely both read red.</td>
+        <tr><td>First multi-unit archetype — ledger-lite: two modules joined by a seam ADR, compile/0.1 exercised over 2 source units, 4 blind compilers under a withheld oracle</td>
+            <td>The bench's first IR with real edges (3, extracted from the seam decision): PASS 24/24 × 4, entry unit routed through the CLI over both units, static surface main+post — the seam holds under 4 independent compilers, across two vendors; the wrong/ that breaks the seam (balance logic moved into the CLI) and the one that ignores the model unit entirely both read red.</td>
             <td>1.85</td></tr>
-        <tr><td>Round-trip recoverability — how much of the pinned IR the mechanical reverse organs anchor, over 12 archetypes × 3 compilers each</td>
-            <td>Mean recoverability 0.828, measured — the reverse organs anchor names and behaviour; the manifest footing would read 1.000 and is excluded as tautological (it is what the compiler CLAIMED, not what was recovered). It read 0.062 with the behaviour dimension UNMEASURED in 12/12 until the 12 oracles were curated with per-case AC tags (1.90, ADR-030 amended): a named absence, not a zero, and what moved the number was the tagging — payloads and expectations untouched. The diamond's reverse half is a measurement with a stated ceiling, not a promise.</td>
+        <tr><td>Round-trip recoverability — how much of the pinned IR the mechanical reverse organs anchor, over 12 archetypes × 4 compilers each</td>
+            <td>Mean recoverability 0.815, measured — the reverse organs anchor names and behaviour; the manifest footing would read 1.000 and is excluded as tautological (it is what the compiler CLAIMED, not what was recovered). It read 0.062 with the behaviour dimension UNMEASURED in 12/12 until the 12 oracles were curated with per-case AC tags (1.90, ADR-030 amended): a named absence, not a zero, and what moved the number was the tagging — payloads and expectations untouched. The diamond's reverse half is a measurement with a stated ceiling, not a promise.</td>
             <td>1.90</td></tr>
+        <tr><td>Cross-vendor arm — the same 12 archetypes compiled blind by a SECOND vendor (OpenAI Codex, gpt-5.5 via codex-cli), same canonical packages, same withheld oracles (ADR-042)</td>
+            <td>The arm validates on all 12 and beats the Claude arms on two entries (rest-handler 15/15, scheduler 30/30). It loses exactly one case, on transformer, and that case is the finding: it read “an object with exactly the fields first/last/age” as forbidding an extra field, <em>declared that reading in its unresolved_intent before the oracle judged it</em>, and reproduced it in a second independent run. Three Claude models had converged on the other reading, so the ambiguity was invisible while every compiler came from one vendor — the same latent ambiguity the controlled-language row above surfaced from the other direction. The entry moved PASS → PARTIAL. What stays UNMEASURED: one model of that vendor, n=2 runs, two vendors of many.</td>
+            <td>1.99</td></tr>
         <tr><td>Fidelity per compiler — the M1 static extractor applied to each compiled artifact</td>
-            <td>Behaviourally near-identical compilers expose visibly different surfaces: 19–21/23 on the same oracle through 5, 4 and 8 public functions.</td>
+            <td>Behaviourally near-identical compilers expose visibly different surfaces: 19–21/23 on the same oracle through 4, 5, 8 and 13 public functions.</td>
             <td>1.79</td></tr>
         <tr><td>Curation of machine-generated code — one human verdict per observation, append-only, fail-closed store</td>
             <td>Closure is measured where a human judged and stays the literal UNMEASURED where none did — absence named, never faked.</td>
@@ -349,7 +352,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../es/diamond/index.html">Versión en español</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.98.1</p>
+    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v1.99.0</p>
   </div>
 </footer>
 

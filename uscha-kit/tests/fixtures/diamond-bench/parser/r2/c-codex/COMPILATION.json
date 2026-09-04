@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "87a1fb592f34dc31209436f0ea035945b4b463de13d285bef26f46eba4121ba0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib only",
+    "python 3.8+",
+    "reads the whole stdin as one expression",
+    "prints exactly one line: integer value or ERROR",
+    "exits 0 for both success and grammar/evaluation errors"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "fd6bd4e7e486ebd24967de53d836982b3808531a8cc0c60c207c008a59139bc5"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-PR-03",
+      "decision": "Allow chained unary minus such as --3 and - -3 by parsing unary minus recursively.",
+      "rationale": "The grammar permits unary minus and does not forbid repeated unary operators; recursive parsing keeps precedence deterministic."
+    },
+    {
+      "ir_region": "AC-PR-01",
+      "decision": "Accept integer literals with leading zeroes as ordinary decimal integers.",
+      "rationale": "The package defines non-negative integer literals but does not restrict their textual form beyond digits."
+    },
+    {
+      "ir_region": "AC-PR-05",
+      "decision": "Treat unary plus as invalid input rather than accepting it as a synonym for positive.",
+      "rationale": "Only unary minus is listed in the grammar, so a leading + is a stray token/operator use."
+    },
+    {
+      "ir_region": "AC-PR-06",
+      "decision": "Always use print() for the single required output line, including ERROR.",
+      "rationale": "The contract says print the result or ERROR and forbids extra text, but does not require suppressing the final newline."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:50:37.703621+00:00",
+      "finished": "2026-09-04T01:51:12.750084+00:00"
+    },
+    "constraint_handling": "pure stdlib only; python 3.8+; reads the whole stdin as one expression; prints exactly one line: integer value or ERROR; exits 0 for both success and grammar/evaluation errors",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "aaabf823034036c2232b9fa2eec4c6591640923a7448fd98338c7f6b46473bd5"
+}

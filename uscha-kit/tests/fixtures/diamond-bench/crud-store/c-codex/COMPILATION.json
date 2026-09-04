@@ -1,0 +1,79 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single file source/impl.py, executable as python impl.py.",
+    "Reads the whole stdin once, writes only stdout, performs no filesystem or network access.",
+    "Malformed batch input prints exactly ERROR and exits 0; per-operation failures are represented in the result array."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "b546beef05088e7df447c31d02bd78ee44093a65ee67b64727f1ea2522f16650"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-CS-01",
+        "AC-CS-02",
+        "AC-CS-03",
+        "AC-CS-04",
+        "AC-CS-05",
+        "AC-CS-06",
+        "INV-CS-STRICT-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-CS-06",
+      "decision": "Invalid JSON, a non-array top-level value, or any non-object element in the top-level array prints exactly ERROR instead of producing partial results.",
+      "rationale": "The contract defines malformed input as input that is not a JSON array of operation objects; individual bad-op results only apply once each array element is an operation object."
+    },
+    {
+      "ir_region": "AC-CS-06",
+      "decision": "Extra fields on operation objects are ignored for all operations, including list.",
+      "rationale": "The canonical package only defines unknown ops and missing required fields as bad operations, and says list has no other fields required."
+    },
+    {
+      "ir_region": "AC-CS-06",
+      "decision": "A present key field whose value is not a string returns a per-operation bad op result.",
+      "rationale": "Keys are specified as strings; treating a typed-but-invalid operation object as bad op preserves batch processing instead of aborting the whole input."
+    },
+    {
+      "ir_region": "AC-CS-05",
+      "decision": "Output JSON is emitted in compact form using json.dumps default structural encoding choices.",
+      "rationale": "The specification says output formatting is free and only structure and values are fixed."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:40:47.216300+00:00",
+      "finished": "2026-09-04T01:41:24.063411+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single file source/impl.py, executable as python impl.py.; Reads the whole stdin once, writes only stdout, performs no filesystem or network access.; Malformed batch input prints exactly ERROR and exits 0; per-operation failures are represented in the result array.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "5313aa7a3067544665f5bbd7d2e4405c8ea8592e220739510ec95cb91c2b33d0"
+}

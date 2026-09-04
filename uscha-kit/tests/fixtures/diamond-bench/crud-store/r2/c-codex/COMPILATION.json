@@ -1,0 +1,79 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "b367dbcd537e834629c391c7c0aadbf345056142b651c0fc8cb95689a3770bb7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single file source/impl.py, executable as python impl.py.",
+    "Reads all stdin once, writes only to stdout, and returns from main so process exits 0 even on malformed input.",
+    "No filesystem, network, persistence, transactions, TTLs, nested key paths, or value validation beyond JSON/operation shape required by the contract."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "722096b036ec07e6728efacf410df188a0607ff476e2d8085d49f794a852a8e8"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-CS-01",
+        "AC-CS-02",
+        "AC-CS-03",
+        "AC-CS-04",
+        "AC-CS-05",
+        "AC-CS-06",
+        "INV-CS-STRICT-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-CS-06",
+      "decision": "Reject an input array containing any non-object element by printing exactly ERROR.",
+      "rationale": "The contract says malformed input includes anything that is not a JSON array of operation objects, while per-operation bad op is reserved for malformed operation objects."
+    },
+    {
+      "ir_region": "AC-CS-06",
+      "decision": "Treat a present key whose value is not a string as a bad op result rather than a batch-level ERROR.",
+      "rationale": "The operation is still an object in the batch, and the semantics define keys as strings plus missing required fields as bad op; handling type mismatch locally preserves the failed-operation-does-not-abort rule."
+    },
+    {
+      "ir_region": "AC-CS-06",
+      "decision": "Ignore extra fields on otherwise valid operation objects, including list operations.",
+      "rationale": "The spec names required fields but does not forbid additional fields, and says list has no other fields required rather than no other fields allowed."
+    },
+    {
+      "ir_region": "AC-CS-06",
+      "decision": "Use strict JSON parsing by rejecting NaN, Infinity, and -Infinity constants.",
+      "rationale": "The input is specified as JSON; those constants are accepted by Python's default parser but are outside standard JSON."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:48:57.393937+00:00",
+      "finished": "2026-09-04T01:49:34.159624+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single file source/impl.py, executable as python impl.py.; Reads all stdin once, writes only to stdout, and returns from main so process exits 0 even on malformed input.; No filesystem, network, persistence, transactions, TTLs, nested key paths, or value validation beyond JSON/operation shape required by the contract.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "41ecfcf6d1873a8458c7770cbb78fd684edc56025da2d5bdb75c808ca5fc23bc"
+}

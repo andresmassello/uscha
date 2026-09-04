@@ -37,11 +37,11 @@ compiler, reverse discovery is the decompiler — and code becomes a regenerable
 artifact, so the spec package + behavior ledger is the canonical asset of a system.
 Truth-pass status: the human-judgment layer (curation, oracle, id-level roundtrip) is
 real and shipped; implementation replaceability is now demonstrated for bounded systems
-(the Diamond Bench, kit 1.74–1.85, three Claude-family models — one vendor, cross-vendor not yet measured: 9 of 12 archetypes (11 Python + 1 JavaScript, one
+(the Diamond Bench, kit 1.74–1.99, four blind compilers across two vendors — Haiku, Sonnet, Opus and OpenAI Codex gpt-5.5: 8 of 12 archetypes (11 Python + 1 JavaScript, one
 multi-unit) regenerate to the same system, mechanically certified by a withheld oracle
 — ADR-017/018/020/025/028/029); semantic round-trip is now REAL but bounded (kit 1.85/1.90, ADR-030 amended: bench-roundtrip measures how
 much of the human-authored IR the mechanical reverse organs can anchor in each compiled artifact
--- 0.828, static AND behaviour footing since the 12 bench oracles were curated with per-case
+-- 0.815, static AND behaviour footing since the 12 bench oracles were curated with per-case
 AC tags (kit 1.90, ADR-030 amended; it read 0.062 with behaviour UNMEASURED before that, a named
 absence rather than a zero); it anchors names and behaviour, and regenerates no spec); full code regenerability of arbitrary systems
 remains VISION, deferred until it can be measured. The shared drift/discovery engine is NOT deferred: ADR-011 REJECTED it as
@@ -49,7 +49,7 @@ architecture -- spec-drift compares commit dates and reverse discovery proposes 
 The framing is positioning where it says VISION, a measured mechanism where it says REAL, and a decision on the record where it
 says REJECTED.
 
-The kit (v1.98.1, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+The kit (v1.99.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil); only Claude Code and Codex are exercised against a real agent, the other five are verified by placement + read-back only —
 plus a pure-Python engine (qa_ledger.py, 53 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux

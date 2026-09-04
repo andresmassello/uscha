@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "87a1fb592f34dc31209436f0ea035945b4b463de13d285bef26f46eba4121ba0",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure Python standard library only",
+    "Python 3.8+ compatible",
+    "reads complete stdin as one expression",
+    "prints exactly one result line: integer value or ERROR",
+    "exits with status 0 for both success and errors"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "1251d6f5e39ef270ba28969615f7081abb7a4872e17da5206d429fc7c276517c"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PR-01",
+        "AC-PR-02",
+        "AC-PR-03",
+        "AC-PR-04",
+        "AC-PR-05",
+        "AC-PR-06",
+        "INV-PARSE-DETERMINISM-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-PR-03",
+      "decision": "Allow repeated unary minus operators, such as --3 and - -3.",
+      "rationale": "The grammar includes unary minus and does not forbid nesting unary expressions; recursive unary parsing is the deterministic extension."
+    },
+    {
+      "ir_region": "AC-PR-05",
+      "decision": "Reject adjacent complete expressions, such as 1 2 or 2(3), as stray trailing tokens.",
+      "rationale": "The contract says stdin is one expression and stray tokens are errors, so parsing must consume all non-whitespace input."
+    },
+    {
+      "ir_region": "AC-PR-04",
+      "decision": "Implement truncation toward zero with integer arithmetic using absolute-value floor division and sign restoration.",
+      "rationale": "Using float division could lose precision or overflow for large integer literals; pure integer arithmetic preserves deterministic behavior."
+    },
+    {
+      "ir_region": "AC-PR-05",
+      "decision": "Treat any non-ASCII digit operator/parenthesis/whitespace character as an invalid token.",
+      "rationale": "The specified grammar only names integer literals and the listed ASCII operators and parentheses; unsupported characters cannot be parsed."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:42:53.093294+00:00",
+      "finished": "2026-09-04T01:43:25.201570+00:00"
+    },
+    "constraint_handling": "pure Python standard library only; Python 3.8+ compatible; reads complete stdin as one expression; prints exactly one result line: integer value or ERROR; exits with status 0 for both success and errors",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "4689357d0f82066dcfede715a43f6fe564b5692ae033aea34bae6d0d1b3f74d1"
+}

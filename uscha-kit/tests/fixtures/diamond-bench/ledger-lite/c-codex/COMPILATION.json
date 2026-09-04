@@ -1,0 +1,94 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "1b4e614b94fdcbe75e064f02ab26e0e8ad40aa3a5b71f66a5809671ed06eabae",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib, Python 3.8+",
+    "exactly two runtime units",
+    "source/model.py contains pure journal logic with no I/O",
+    "source/cli.py is the entry point, imports model, owns stdin/stdout, JSON parsing, and shape validation",
+    "run as python cli.py from the source/ directory"
+  ],
+  "source": [
+    {
+      "unit": "source/model.py",
+      "sha256": "a2b6892801fefcaf1717c22042a6f133fb11b6a9ca521bbb5b3e6956f36c656c"
+    },
+    {
+      "unit": "source/cli.py",
+      "sha256": "8bb60d91b1fffe09f03bd9e54db96009f3633e8c0fdffdf6f83c45edb279122b"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/model.py",
+      "implements": [
+        "AC-LG-01",
+        "AC-LG-02",
+        "AC-LG-03",
+        "AC-LG-04",
+        "INV-LG-BALANCE-01",
+        "INV-LG-SEAM-01",
+        "ADR-001"
+      ]
+    },
+    {
+      "unit": "source/cli.py",
+      "implements": [
+        "AC-LG-04",
+        "AC-LG-05",
+        "AC-LG-06",
+        "INV-LG-SEAM-01",
+        "ADR-001"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-LG-04",
+      "decision": "Preserve Python dict insertion order for balances, reflecting the first accepted touch of each account.",
+      "rationale": "The package fixes output structure and values but not JSON member order, so insertion order is a deterministic stdlib choice without adding sorting behavior."
+    },
+    {
+      "ir_region": "AC-LG-05",
+      "decision": "Allow extra keys on posting and line objects during shape validation.",
+      "rationale": "The contract requires certain fields and their types, but does not declare additional fields malformed; ignoring them keeps validation limited to the specified shape."
+    },
+    {
+      "ir_region": "AC-LG-05",
+      "decision": "Return exit status 0 after printing ERROR for malformed input.",
+      "rationale": "The error section specifies the exact output text but not a distinct nonzero status; using 0 keeps the observable contract centered on stdout."
+    },
+    {
+      "ir_region": "ADR-001",
+      "decision": "Expose main() in cli.py while still invoking it only under the __main__ guard.",
+      "rationale": "The ADR fixes the seam at model.post and the run mode, but leaves entry-point organization open; a main function keeps I/O contained and simple."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:42:20.778469+00:00",
+      "finished": "2026-09-04T01:42:52.792882+00:00"
+    },
+    "constraint_handling": "pure stdlib, Python 3.8+; exactly two runtime units; source/model.py contains pure journal logic with no I/O; source/cli.py is the entry point, imports model, owns stdin/stdout, JSON parsing, and shape validation; run as python cli.py from the source/ directory",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "935f43c1124b3d95c3a5ff102c737ff635c22234a18b6fae06ca46d91b90bb94"
+}

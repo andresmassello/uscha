@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "656d528a8b6ac2932c08a603349498656201b5fb74034f1cc8af59af2d95d5c7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single file source/impl.py, executable as python impl.py.",
+    "Reads all stdin and writes only the final result to stdout.",
+    "No filesystem access, no network access, no third-party packages.",
+    "All malformed or invalid inputs produce exactly ERROR and the program does not intentionally exit non-zero."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "e9e4d51d83020fda410782495467cb3943bacb951786cb08dc1099398c02f00d"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-WK-01",
+        "AC-WK-02",
+        "AC-WK-03",
+        "AC-WK-04",
+        "AC-WK-05",
+        "AC-WK-06",
+        "INV-WK-DET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-WK-06",
+      "decision": "Reject bool values for priority even though bool is a subclass of int in Python.",
+      "rationale": "The contract says priority is an int; accepting JSON true/false as priorities would blur the job schema and create surprising ordering behavior."
+    },
+    {
+      "ir_region": "AC-WK-06",
+      "decision": "Allow extra keys on the top-level object and on job objects, ignoring them.",
+      "rationale": "The canonical package specifies required job fields and validation failures, but does not explicitly forbid additional metadata; ignoring it preserves the defined scheduling contract without expanding behavior."
+    },
+    {
+      "ir_region": "AC-WK-05",
+      "decision": "Detect dependency cycles before running any job, even if a cycle would be unreachable because another dependency later fails.",
+      "rationale": "The contract treats cycles as structural errors that reject the whole input rather than permitting a partial schedule."
+    },
+    {
+      "ir_region": "AC-WK-04",
+      "decision": "Emit compact JSON with insertion-ordered status keys following the input job order.",
+      "rationale": "Output formatting is free, and Python dict insertion order gives deterministic, readable status ordering without affecting the required JSON structure."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:54:32.351258+00:00",
+      "finished": "2026-09-04T01:55:10.172463+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single file source/impl.py, executable as python impl.py.; Reads all stdin and writes only the final result to stdout.; No filesystem access, no network access, no third-party packages.; All malformed or invalid inputs produce exactly ERROR and the program does not intentionally exit non-zero.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "35f9838dc04719704aaf64cba8d94b2067fc07d06792ad3512689636a7a80627"
+}

@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **1.99.0** — [the bench meets a stranger: a second vendor compiles all 12 archetypes blind, and finds the ambiguity three relatives had agreed on (ADR-042) (2026-09-04)](CHANGELOG-1.99.0.md)
 - **1.98.1** — [a fixture that measured the clock instead of the amend, and a go-live the field declared but `readiness` could not see (2026-09-03)](CHANGELOG-1.98.1.md)
 - **1.98.0** — [the narrated backlog, round 1: six labels that outlived their truth, and three deferred LOWs that outlived their deferral (2026-09-03)](CHANGELOG-1.98.0.md)
 - **1.97.0** — [the docs stop being hand-copied: one source for the skill block, a writer for the published claims, and a CI grid that measures what only it can (2026-09-02)](CHANGELOG-1.97.0.md)

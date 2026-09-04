@@ -1,0 +1,79 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "3f9dfc336cde664f73c424e1b3c924a75ff0f0851f47215c65a410ce5d3ad421",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single executable file at source/impl.py; reads all stdin and writes one stdout result.",
+    "No filesystem or network access from implementation.",
+    "All validation is atomic: any malformed input prints exactly ERROR and exits 0."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "61491347d1c8db413587bb939314ef49414348ee2d6df228838fa1c8a89351f2"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-PA-01",
+        "AC-PA-02",
+        "AC-PA-03",
+        "AC-PA-04",
+        "AC-PA-05",
+        "AC-PA-06",
+        "INV-PA-ATOMIC-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-PA-06",
+      "decision": "Treat top-level objects as exact shapes: decode requires only direction and frames; encode requires only direction and messages.",
+      "rationale": "Exact shape prevents silently accepting ambiguous or misspelled inputs while preserving the protocol's stated two valid request forms."
+    },
+    {
+      "ir_region": "AC-PA-05",
+      "decision": "Treat message objects as exact shapes with only type and fields keys.",
+      "rationale": "Extra message keys cannot be reproduced by decode(encode(messages)), so accepting them would violate the identity law for legal inputs."
+    },
+    {
+      "ir_region": "AC-PA-05",
+      "decision": "Require each field pair in messages to be a JSON array of exactly two strings.",
+      "rationale": "The canonical message representation specifies fields as an array of pairs, and JSON has arrays rather than tuples."
+    },
+    {
+      "ir_region": "AC-PA-05",
+      "decision": "Reject frame field segments containing more than one equals sign by requiring exactly one '=' per field segment.",
+      "rationale": "A legal value cannot contain '=', so a segment like key=a=b is malformed rather than parsed with a split at the first equals."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:51:13.080118+00:00",
+      "finished": "2026-09-04T01:51:46.758532+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single executable file at source/impl.py; reads all stdin and writes one stdout result.; No filesystem or network access from implementation.; All validation is atomic: any malformed input prints exactly ERROR and exits 0.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "3a9dbbd7535d12650b055c2e9932362ed94de2649d29d01c6818407e69ea71d9"
+}

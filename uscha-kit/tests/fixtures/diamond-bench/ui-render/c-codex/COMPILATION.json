@@ -1,0 +1,79 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "073d8935a3aa14dfb844ed9d77e683c213f2e85d9e985cb4f7213a38b09d54af",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single executable file at source/impl.py, intended to run as python impl.py.",
+    "Reads all of stdin once, writes only stdout, and never performs filesystem or network I/O.",
+    "All malformed input paths print exactly ERROR and allow normal process termination with exit code 0."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "db74878655437050b4881bc02bb8f91a7f1108406cb9c7ee7763fecc7bdfa387"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-UI-01",
+        "AC-UI-02",
+        "AC-UI-03",
+        "AC-UI-04",
+        "AC-UI-05",
+        "AC-UI-06",
+        "INV-UI-RESET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-UI-06",
+      "decision": "Reject objects with extra or missing keys at the top level, model, field, and event levels.",
+      "rationale": "The package defines precise JSON shapes and classifies shape errors as malformed input, so strict key validation is the least ambiguous interpretation."
+    },
+    {
+      "ir_region": "AC-UI-06",
+      "decision": "Reject input events whose value is not a string, even when the target field is a string.",
+      "rationale": "The model supports only string and bool field values, and input is specified as setting a string field; accepting another JSON type would introduce an unsupported field value."
+    },
+    {
+      "ir_region": "AC-UI-05",
+      "decision": "Preserve field insertion order from the initial model when building the output fields object.",
+      "rationale": "JSON object order is not semantically required, but preserving model order keeps the view deterministic and aligns with the errors field-order rule."
+    },
+    {
+      "ir_region": "INV-UI-RESET-01",
+      "decision": "Determine field kind from the initial model value and preserve a separate initial-values mapping for reset.",
+      "rationale": "Reset must restore the born-with model exactly, and event type checks should remain tied to the declared initial field kind."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:46:45.987891+00:00",
+      "finished": "2026-09-04T01:47:24.061214+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single executable file at source/impl.py, intended to run as python impl.py.; Reads all of stdin once, writes only stdout, and never performs filesystem or network I/O.; All malformed input paths print exactly ERROR and allow normal process termination with exit code 0.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "87b2a6391996710dade6014131430ee1cd5b5abf0c513525e96e2ba336ecebbf"
+}

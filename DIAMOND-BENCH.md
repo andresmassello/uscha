@@ -6,107 +6,119 @@ Regeneration fidelity of canonical representations across archetypes. Each row i
 
 | Archetype | Verdict | Compilers (oracle pass / total) | Distinct | Oracle cases |
 |-----------|---------|--------------------------------|----------|--------------|
-| crud-store | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
-| guard | PARTIAL | M1 19/23, M2 21/23, M3 21/23 | yes | 23 |
-| ledger-lite | PASS | M1 24/24, M2 24/24, M3 24/24 | yes | 24 |
-| parser | PASS | M1 21/21, M2 21/21, M3 21/21 | yes | 21 |
-| protocol-adapter | PASS | M1 15/15, M2 15/15, M3 15/15 | yes | 15 |
-| rate-limiter | PASS | M1 25/25, M2 25/25, M3 25/25 | yes | 25 |
-| rest-handler | PARTIAL | M1 14/15, M2 14/15, M3 15/15 | yes | 15 |
-| scheduler | PARTIAL | M1 25/30, M2 30/30, M3 26/30 | yes | 30 |
-| state-machine | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
-| transformer | PASS | M1 14/14, M2 14/14, M3 14/14 | yes | 14 |
-| ui-render | PASS | M1 13/13, M2 13/13, M3 13/13 | yes | 13 |
-| worker | PASS | M1 12/12, M2 12/12, M3 12/12 | yes | 12 |
+| crud-store | PASS | M1 12/12, M2 12/12, M3 12/12, M4 12/12 | yes | 12 |
+| guard | PARTIAL | M1 20/23, M2 19/23, M3 21/23, M4 21/23 | yes | 23 |
+| ledger-lite | PASS | M1 24/24, M2 24/24, M3 24/24, M4 24/24 | yes | 24 |
+| parser | PASS | M1 21/21, M2 21/21, M3 21/21, M4 21/21 | yes | 21 |
+| protocol-adapter | PASS | M1 15/15, M2 15/15, M3 15/15, M4 15/15 | yes | 15 |
+| rate-limiter | PASS | M1 25/25, M2 25/25, M3 25/25, M4 25/25 | yes | 25 |
+| rest-handler | PARTIAL | M1 15/15, M2 14/15, M3 14/15, M4 15/15 | yes | 15 |
+| scheduler | PARTIAL | M1 30/30, M2 25/30, M3 30/30, M4 26/30 | yes | 30 |
+| state-machine | PASS | M1 12/12, M2 12/12, M3 12/12, M4 12/12 | yes | 12 |
+| transformer | PARTIAL | M1 13/14, M2 14/14, M3 14/14, M4 14/14 | yes | 14 |
+| ui-render | PASS | M1 13/13, M2 13/13, M3 13/13, M4 13/13 | yes | 13 |
+| worker | PASS | M1 12/12, M2 12/12, M3 12/12, M4 12/12 | yes | 12 |
 
-**Coverage:** 3 PARTIAL, 9 PASS (of 12 entries).
+**Coverage:** 4 PARTIAL, 8 PASS (of 12 entries).
 
-**Model map (published, not the headline):** M1 = haiku, M2 = opus, M3 = sonnet.
+**Model map (published, not the headline):** M1 = codex, M2 = haiku, M3 = opus, M4 = sonnet.
 
 ## Per-entry detail
 
 ### crud-store — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 12/12 GREEN
-- `c-opus` (M2): oracle 12/12 GREEN
-- `c-sonnet` (M3): oracle 12/12 GREEN
+*all 4 compilations oracle-green and genuinely different -- the same system*
+- `c-codex` (M1): oracle 12/12 GREEN
+- `c-haiku` (M2): oracle 12/12 GREEN
+- `c-opus` (M3): oracle 12/12 GREEN
+- `c-sonnet` (M4): oracle 12/12 GREEN
 - discrimination stub: 1/12 (oracle rejects the stub)
 
 ### guard — PARTIAL
 *core identity (min 83% of cases); divergence isolated*
-- `c-haiku` (M1): oracle 19/23
-- `c-opus` (M2): oracle 21/23
-- `c-sonnet` (M3): oracle 21/23
+- `c-codex` (M1): oracle 20/23
+- `c-haiku` (M2): oracle 19/23
+- `c-opus` (M3): oracle 21/23
+- `c-sonnet` (M4): oracle 21/23
 - discrimination stub: 11/23 (oracle rejects the stub)
 
 ### ledger-lite — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 24/24 GREEN
-- `c-opus` (M2): oracle 24/24 GREEN
-- `c-sonnet` (M3): oracle 24/24 GREEN
+*all 4 compilations oracle-green and genuinely different -- the same system*
+- `c-codex` (M1): oracle 24/24 GREEN
+- `c-haiku` (M2): oracle 24/24 GREEN
+- `c-opus` (M3): oracle 24/24 GREEN
+- `c-sonnet` (M4): oracle 24/24 GREEN
 - discrimination stub: 1/24 (oracle rejects the stub)
 
 ### parser — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 21/21 GREEN
-- `c-opus` (M2): oracle 21/21 GREEN
-- `c-sonnet` (M3): oracle 21/21 GREEN
+*all 4 compilations oracle-green and genuinely different -- the same system*
+- `c-codex` (M1): oracle 21/21 GREEN
+- `c-haiku` (M2): oracle 21/21 GREEN
+- `c-opus` (M3): oracle 21/21 GREEN
+- `c-sonnet` (M4): oracle 21/21 GREEN
 - discrimination stub: 9/21 (oracle rejects the stub)
 
 ### protocol-adapter — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 15/15 GREEN
-- `c-opus` (M2): oracle 15/15 GREEN
-- `c-sonnet` (M3): oracle 15/15 GREEN
+*all 4 compilations oracle-green and genuinely different -- the same system*
+- `c-codex` (M1): oracle 15/15 GREEN
+- `c-haiku` (M2): oracle 15/15 GREEN
+- `c-opus` (M3): oracle 15/15 GREEN
+- `c-sonnet` (M4): oracle 15/15 GREEN
 - discrimination stub: 6/15 (oracle rejects the stub)
 
 ### rate-limiter — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 25/25 GREEN
-- `c-opus` (M2): oracle 25/25 GREEN
-- `c-sonnet` (M3): oracle 25/25 GREEN
+*all 4 compilations oracle-green and genuinely different -- the same system*
+- `c-codex` (M1): oracle 25/25 GREEN
+- `c-haiku` (M2): oracle 25/25 GREEN
+- `c-opus` (M3): oracle 25/25 GREEN
+- `c-sonnet` (M4): oracle 25/25 GREEN
 - discrimination stub: 0/25 (oracle rejects the stub)
 
 ### rest-handler — PARTIAL
 *core identity (min 93% of cases); divergence isolated*
-- `c-haiku` (M1): oracle 14/15
-- `c-opus` (M2): oracle 14/15
-- `c-sonnet` (M3): oracle 15/15 GREEN
+- `c-codex` (M1): oracle 15/15 GREEN
+- `c-haiku` (M2): oracle 14/15
+- `c-opus` (M3): oracle 14/15
+- `c-sonnet` (M4): oracle 15/15 GREEN
 - discrimination stub: 1/15 (oracle rejects the stub)
 
 ### scheduler — PARTIAL
 *core identity (min 83% of cases); divergence isolated*
-- `c-haiku` (M1): oracle 25/30
-- `c-opus` (M2): oracle 30/30 GREEN
-- `c-sonnet` (M3): oracle 26/30
+- `c-codex` (M1): oracle 30/30 GREEN
+- `c-haiku` (M2): oracle 25/30
+- `c-opus` (M3): oracle 30/30 GREEN
+- `c-sonnet` (M4): oracle 26/30
 - discrimination stub: 1/30 (oracle rejects the stub)
 
 ### state-machine — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 12/12 GREEN
-- `c-opus` (M2): oracle 12/12 GREEN
-- `c-sonnet` (M3): oracle 12/12 GREEN
+*all 4 compilations oracle-green and genuinely different -- the same system*
+- `c-codex` (M1): oracle 12/12 GREEN
+- `c-haiku` (M2): oracle 12/12 GREEN
+- `c-opus` (M3): oracle 12/12 GREEN
+- `c-sonnet` (M4): oracle 12/12 GREEN
 - discrimination stub: 5/12 (oracle rejects the stub)
 
-### transformer — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 14/14 GREEN
-- `c-opus` (M2): oracle 14/14 GREEN
-- `c-sonnet` (M3): oracle 14/14 GREEN
+### transformer — PARTIAL
+*core identity (min 93% of cases); divergence isolated*
+- `c-codex` (M1): oracle 13/14
+- `c-haiku` (M2): oracle 14/14 GREEN
+- `c-opus` (M3): oracle 14/14 GREEN
+- `c-sonnet` (M4): oracle 14/14 GREEN
 - discrimination stub: 1/14 (oracle rejects the stub)
 
 ### ui-render — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 13/13 GREEN
-- `c-opus` (M2): oracle 13/13 GREEN
-- `c-sonnet` (M3): oracle 13/13 GREEN
+*all 4 compilations oracle-green and genuinely different -- the same system*
+- `c-codex` (M1): oracle 13/13 GREEN
+- `c-haiku` (M2): oracle 13/13 GREEN
+- `c-opus` (M3): oracle 13/13 GREEN
+- `c-sonnet` (M4): oracle 13/13 GREEN
 - discrimination stub: 2/13 (oracle rejects the stub)
 
 ### worker — PASS
-*all 3 compilations oracle-green and genuinely different -- the same system*
-- `c-haiku` (M1): oracle 12/12 GREEN
-- `c-opus` (M2): oracle 12/12 GREEN
-- `c-sonnet` (M3): oracle 12/12 GREEN
+*all 4 compilations oracle-green and genuinely different -- the same system*
+- `c-codex` (M1): oracle 12/12 GREEN
+- `c-haiku` (M2): oracle 12/12 GREEN
+- `c-opus` (M3): oracle 12/12 GREEN
+- `c-sonnet` (M4): oracle 12/12 GREEN
 - discrimination stub: 4/12 (oracle rejects the stub)
 
 *JS pairs use a 2-dimensional distance (LOC + import Jaccard; no stdlib JS AST).*

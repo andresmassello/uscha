@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "5cce78667c3c282f59d8ce253da0a74f3559d89e89279d5fc6053432d7c2001f",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python standard library only: json, re, shlex, sys.",
+    "Reads exactly one JSON object from stdin and communicates allow/block by exit code 0/2.",
+    "Fails closed for invalid JSON, invalid object shape, malformed shell parsing, or commands that cannot be proven read-only.",
+    "Matches the .approved marker as a case-insensitive substring."
+  ],
+  "source": [
+    {
+      "unit": "source/guard.py",
+      "sha256": "20e3237ae397cf0283b3dd199a8c0265bd78c3ab7940e51d483ff4fc8954159c"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/guard.py",
+      "implements": [
+        "AC-GH-01",
+        "AC-GH-02",
+        "AC-GH-03",
+        "AC-GH-04",
+        "AC-GH-05",
+        "AC-GH-06",
+        "AC-GH-07",
+        "INV-GOLDEN-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-GH-04",
+      "decision": "Recognize a conservative explicit set of read-only tool names: Read, Grep, Glob, LS, List, Find, Search, WebFetch, WebSearch, NotebookRead, after case-insensitive normalization that removes punctuation.",
+      "rationale": "The package names tool families but not host-specific exact names; an explicit allowlist avoids treating arbitrary unknown tools as safe merely because their names contain read-like words."
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "Treat Bash, Sh, Shell, Cmd, PowerShell, Pwsh, Terminal, and Command as shell/command tools.",
+      "rationale": "The package gives Bash as an example and describes a shell/command family; these are common host names for tools that execute command strings and need the same default-deny handling."
+    },
+    {
+      "ir_region": "AC-GH-05",
+      "decision": "Allow shell commands naming .approved only when every parsed command segment begins with a known read-only executable and contains no redirection, assignment-like write target, or write/in-place flag.",
+      "rationale": "The package requires proving the whole command read-only but leaves the parser boundary unspecified; segment-wise token analysis is conservative without executing or inspecting the filesystem."
+    },
+    {
+      "ir_region": "AC-GH-06",
+      "decision": "For non-shell unknown tools, inspect both dictionary keys and values recursively for the marker, but only string content is marker-bearing.",
+      "rationale": "The acceptance text says the marker appearing anywhere in arguments blocks; keys can carry paths in some tool schemas, while non-string JSON primitives are not filenames or textual arguments."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:41:24.321613+00:00",
+      "finished": "2026-09-04T01:42:20.508748+00:00"
+    },
+    "constraint_handling": "Pure Python standard library only: json, re, shlex, sys.; Reads exactly one JSON object from stdin and communicates allow/block by exit code 0/2.; Fails closed for invalid JSON, invalid object shape, malformed shell parsing, or commands that cannot be proven read-only.; Matches the .approved marker as a case-insensitive substring.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "1d85610f13d1613f885d8f5d9ba9fc6c3633d9d2c7a0f4f283f8d9e0ff62eae0"
+}

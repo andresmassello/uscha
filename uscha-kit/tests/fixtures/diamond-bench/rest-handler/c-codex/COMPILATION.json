@@ -1,0 +1,79 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "ae4108fdeceda4fec98917f448623ee9c1499bff5836ac6904a09c131d569130",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single executable file at source/impl.py.",
+    "Reads all stdin, writes only stdout, performs no filesystem or network access.",
+    "Always exits 0; malformed batch input prints exactly ERROR."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "47c1a9b3867dcaecce7e53ac59d4eafa18beb52812bcfe756089b063b0fe30c8"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-RH-01",
+        "AC-RH-02",
+        "AC-RH-03",
+        "AC-RH-04",
+        "AC-RH-05",
+        "AC-RH-06",
+        "INV-RH-IDS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-RH-06",
+      "decision": "A request object is structurally valid when it is a JSON object with string method and string path; body, when present, may be any JSON value.",
+      "rationale": "The batch-level malformed-input rule says request objects require method/path/body shape, while AC-RH-05 needs non-object POST/PUT bodies to become per-request 400 responses rather than aborting the whole batch."
+    },
+    {
+      "ir_region": "AC-RH-04",
+      "decision": "Any method on exactly /items other than GET or POST returns 405, and any method on /items/<positive integer> other than GET, PUT, or DELETE returns 405.",
+      "rationale": "Those URL shapes are defined resources even when a specific method is unsupported, so they must be distinguished from paths the API does not define."
+    },
+    {
+      "ir_region": "AC-RH-02",
+      "decision": "Returned item objects are shallow copies of stored items, and GET /items returns a new list preserving current stored order.",
+      "rationale": "The API is transport-shaped and JSON-serialized, so responses should reflect values without exposing internal mutable state during processing."
+    },
+    {
+      "ir_region": "AC-RH-02",
+      "decision": "Paths are matched literally; query strings, trailing slashes such as /items/, and extra path segments are treated as undefined paths returning 404.",
+      "rationale": "Query strings and extra routing behavior are out of scope, and the canonical routes only define exact /items and /items/<id> shapes."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:44:35.744562+00:00",
+      "finished": "2026-09-04T01:45:15.931900+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single executable file at source/impl.py.; Reads all stdin, writes only stdout, performs no filesystem or network access.; Always exits 0; malformed batch input prints exactly ERROR.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "b0d74f86c98719492e8096391a4a0b05f651636ac0481b6d151caa1faf5d3bc3"
+}

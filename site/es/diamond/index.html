@@ -236,7 +236,7 @@
         <text class="lbl-b" x="576" y="61" text-anchor="middle" style="font-size:20px">&#8776;</text>
         <rect class="box-gem" x="606" y="30" width="94" height="50" rx="6"/>
         <text class="lbl-acc" x="653" y="61" text-anchor="middle">¿specs?</text>
-        <text class="lbl-s" x="362" y="112" text-anchor="middle">medido por cobertura de ID (uscha-spec) y, desde 1.90, por recuperabilidad estática + comportamental (0.828, acotado) — ver la tabla truth-pass</text>
+        <text class="lbl-s" x="362" y="112" text-anchor="middle">medido por cobertura de ID (uscha-spec) y, desde 1.90, por recuperabilidad estática + comportamental (0.815, acotado) — ver la tabla truth-pass</text>
       </svg>
       <figcaption><b>El self-test de la metodología:</b> <code>discovery(forward(specs)) &#8776; specs</code>.
       Nadie en el espacio spec-driven mide la fidelidad de su propia metodología; este ciclo
@@ -262,15 +262,15 @@
         <tr><td>Round-trip por cobertura de ID (¿qué specs son trazables en el código?)</td>
             <td><span class="chip real">REAL</span></td><td>1.65.0 · roundtrip, advisory</td></tr>
         <tr><td>Round-trip semántico (¿el código <em>dice lo mismo</em> que la spec?)</td>
-            <td><span class="chip real">REAL</span> (medido, acotado)</td><td>recoverability 0.828 medido, comportamiento medido en 12/12 — ancla nombres y comportamiento · 1.90 · ADR-030 (enmendado)</td></tr>
-        <tr><td>Reemplazabilidad de implementación, demostrada en sistemas acotados — compilaciones independientes regeneran el mismo sistema desde el paquete canónico, y un oráculo oculto lo certifica — tres modelos de la familia Claude (Haiku · Sonnet · Opus), un solo vendor; cross-vendor no está medido todavía</td>
-            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 arquetipos (11 Python + 1 JavaScript, uno multi-unidad): 9 PASS, 3 PARTIAL · 1.74–1.85 · ADR-017/018/020/025/028/029</td></tr>
+            <td><span class="chip real">REAL</span> (medido, acotado)</td><td>recoverability 0.815 medido, comportamiento medido en 12/12 — ancla nombres y comportamiento · 1.90 · ADR-030 (enmendado)</td></tr>
+        <tr><td>Reemplazabilidad de implementación, demostrada en sistemas acotados — compilaciones independientes regeneran el mismo sistema desde el paquete canónico, y un oráculo oculto lo certifica — cuatro compiladores ciegos de dos vendors (Haiku · Sonnet · Opus · OpenAI Codex gpt-5.5) — un solo modelo del segundo vendor, así que el brazo es un test de falsación, no un relevamiento</td>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 arquetipos (11 Python + 1 JavaScript, uno multi-unidad): 8 PASS, 4 PARTIAL · 1.74–1.99 · ADR-017/018/020/025/028/029/042</td></tr>
         <tr><td>Fidelidad por compilador (reverse discovery sobre cada artefacto compilado) + curación humana de código generado por máquina, un veredicto por observación</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED queda literal donde no hay veredicto</td></tr>
         <tr><td>La autoría controlada (EARS+STE) reduce la varianza entre compiladores</td>
             <td><span class="chip real">REAL</span> (medido, comportamiento-primero: los arquetipos densos ayudaron, los simples dieron nulo/daño; la varianza estructural sola ya no sostiene una afirmación — ADR-027)</td><td>deconfundido en 5 arquetipos: REDUCED en 1 (guard −61%, NOISY 0.642), IMPROVED en 1 (scheduler, +1 verde de oráculo), dos nulos, uno WORSE · 1.76–1.84 · ADR-019/021/024/025/026/027</td></tr>
         <tr><td>«El código es <em>totalmente</em> regenerable desde las specs» (sistemas arbitrarios)</td>
-            <td><span class="chip vision">VISIÓN</span></td><td>la mitad acotada es REAL (fila de arriba): el bench corrió sobre 12 arquetipos, 9 regeneran al mismo sistema bajo un oráculo oculto, 3 PARTIAL. Lo que sigue siendo VISIÓN es la palabra <em>totalmente</em> y las palabras <em>sistemas arbitrarios</em> — generalizar más allá de arquetipos acotados es la frontera abierta que M5 existe para contestar, y ninguna corrida la contestó todavía (ADR-018)</td></tr>
+            <td><span class="chip vision">VISIÓN</span></td><td>la mitad acotada es REAL (fila de arriba): el bench corrió sobre 12 arquetipos, 8 regeneran al mismo sistema bajo un oráculo oculto, 4 PARTIAL. Lo que sigue siendo VISIÓN es la palabra <em>totalmente</em> y las palabras <em>sistemas arbitrarios</em> — generalizar más allá de arquetipos acotados es la frontera abierta que M5 existe para contestar, y ninguna corrida la contestó todavía (ADR-018)</td></tr>
         <tr><td>«Drift = reverse discovery incremental, mismo motor»</td>
             <td><span class="chip rejected">RECHAZADO</span></td><td>idea válida, arquitectura rechazada · ADR-011</td></tr>
       </tbody>
@@ -301,26 +301,29 @@
     <table>
       <thead><tr><th>Instrumento</th><th>Resultado medido</th><th>Releases</th></tr></thead>
       <tbody>
-        <tr><td>Diamond Bench — 12 arquetipos acotados × 3 compiladores ciegos (Haiku · Sonnet · Opus — un solo vendor), cada uno juzgado por un oráculo oculto</td>
-            <td>9 PASS · 3 PARTIAL. El oráculo además cazó un bug de aliasing convergente que dos compiladores independientes compartían — un defecto que ninguna revisión de código de uno solo habría marcado como sospechoso.</td>
-            <td>1.74–1.83</td></tr>
+        <tr><td>Diamond Bench — 12 arquetipos acotados × 4 compiladores ciegos de dos vendors (Haiku · Sonnet · Opus · OpenAI Codex gpt-5.5), cada uno juzgado por un oráculo oculto</td>
+            <td>8 PASS · 4 PARTIAL. El oráculo además cazó un bug de aliasing convergente que dos compiladores independientes compartían — un defecto que ninguna revisión de código de uno solo habría marcado como sospechoso.</td>
+            <td>1.74–1.99</td></tr>
         <tr><td>Lenguaje controlado, deconfundido — prosa libre vs EARS+STE, misma generación, oráculo compartido, 5 arquetipos</td>
             <td>REDUCED en 1, IMPROVED en 1: el guard, denso en decisiones, bajó la varianza −61%; el control y la state-machine leyeron nulo; el transformer leyó WORSE — la reescritura afiló una ambigüedad latente («exactly the fields») hacia un compromiso que el oráculo rechaza; el segundo arquetipo denso en decisiones (scheduler) ganó un verde de oráculo y subió el pass-rate medio mientras la varianza subía — dos compiladores habían convergido en el mismo error en prosa libre.</td>
             <td>1.76–1.83</td></tr>
-        <tr><td>Varianza intra-modelo, el piso de ruido — bench-r2 sobre 10 arquetipos × 3 modelos × 2 corridas</td>
-            <td>NOISY: las re-corridas del mismo modelo difieren estructuralmente casi tanto como modelos distintos (intra/inter medio 0.98), mientras el comportamiento se mantiene estable en 26 de 30 re-corridas. Toda afirmación de varianza del programa lleva ahora un calificador SIGNAL/NOISY/NOISE por arquetipo, y la lectura del lenguaje controlado de arriba es comportamiento-primero.</td>
+        <tr><td>Varianza intra-modelo, el piso de ruido — bench-r2 sobre 10 arquetipos × 4 modelos × 2 corridas</td>
+            <td>NOISY: las re-corridas del mismo modelo difieren estructuralmente casi tanto como modelos distintos (intra/inter medio 0.82), mientras el comportamiento se mantiene estable en 36 de 40 re-corridas. Sumar el segundo vendor sacó dos arquetipos de NOISE — ensanchó la dispersión entre compiladores más que el piso intra. Toda afirmación de varianza del programa lleva ahora un calificador SIGNAL/NOISY/NOISE por arquetipo, y la lectura del lenguaje controlado de arriba es comportamiento-primero.</td>
             <td>1.84</td></tr>
-        <tr><td>Primer arquetipo no-Python — un rate limiter de token-bucket en JavaScript, 3 compiladores ciegos bajo un oráculo oculto</td>
-            <td>PASS 25/25 × 3, implementaciones distintas, superficie estática (exports del módulo listados por Node) 3/6/3 — la afirmación de reemplazabilidad se sostiene fuera de Python; una entrada JS sin node en el PATH se lee como PENDING/UNMEASURED, nunca como un pase falso.</td>
+        <tr><td>Primer arquetipo no-Python — un rate limiter de token-bucket en JavaScript, 4 compiladores ciegos bajo un oráculo oculto</td>
+            <td>PASS 25/25 × 4, implementaciones distintas, superficie estática (exports del módulo listados por Node) 3/6/3 y 8 — la afirmación de reemplazabilidad se sostiene fuera de Python; una entrada JS sin node en el PATH se lee como PENDING/UNMEASURED, nunca como un pase falso.</td>
             <td>1.85</td></tr>
-        <tr><td>Primer arquetipo multi-unidad — ledger-lite: dos módulos unidos por un ADR de costura, compile/0.1 ejercitado sobre 2 unidades fuente, 3 compiladores ciegos bajo un oráculo oculto</td>
-            <td>El primer IR del bench con aristas reales (3, extraídas de la decisión de costura): PASS 24/24 × 3, unidad de entrada enrutada a través del CLI sobre ambas unidades, superficie estática main+post — la costura se sostiene bajo 3 compiladores independientes; el wrong/ que rompe la costura (lógica de balance movida al CLI) y el que ignora por completo la unidad del modelo leen ambos en rojo.</td>
+        <tr><td>Primer arquetipo multi-unidad — ledger-lite: dos módulos unidos por un ADR de costura, compile/0.1 ejercitado sobre 2 unidades fuente, 4 compiladores ciegos bajo un oráculo oculto</td>
+            <td>El primer IR del bench con aristas reales (3, extraídas de la decisión de costura): PASS 24/24 × 4, unidad de entrada enrutada a través del CLI sobre ambas unidades, superficie estática main+post — la costura se sostiene bajo 4 compiladores independientes, de dos vendors; el wrong/ que rompe la costura (lógica de balance movida al CLI) y el que ignora por completo la unidad del modelo leen ambos en rojo.</td>
             <td>1.85</td></tr>
-        <tr><td>Recuperabilidad round-trip — cuánto de la IR fijada pueden anclar los órganos reversos mecánicos, sobre 12 arquetipos × 3 compiladores cada uno</td>
-            <td>Recoverability media 0.828, medida — los órganos reversos anclan nombres y comportamiento; el anclaje del manifest leería 1.000 y se excluye por tautológico (es lo que el compilador CLAIMEÓ, no lo recuperado). Leía 0.062 con la dimensión de comportamiento UNMEASURED en 12/12 hasta que los 12 oráculos fueron curados con tags de AC por caso (1.90, ADR-030 enmendado): una ausencia nombrada, no un cero, y lo que movió el número fue el tagging — payloads y expectativas intactos. La mitad reversa del diamante es una medición con techo declarado, no una promesa.</td>
+        <tr><td>Recuperabilidad round-trip — cuánto de la IR fijada pueden anclar los órganos reversos mecánicos, sobre 12 arquetipos × 4 compiladores cada uno</td>
+            <td>Recoverability media 0.815, medida — los órganos reversos anclan nombres y comportamiento; el anclaje del manifest leería 1.000 y se excluye por tautológico (es lo que el compilador CLAIMEÓ, no lo recuperado). Leía 0.062 con la dimensión de comportamiento UNMEASURED en 12/12 hasta que los 12 oráculos fueron curados con tags de AC por caso (1.90, ADR-030 enmendado): una ausencia nombrada, no un cero, y lo que movió el número fue el tagging — payloads y expectativas intactos. La mitad reversa del diamante es una medición con techo declarado, no una promesa.</td>
             <td>1.90</td></tr>
+        <tr><td>Brazo cross-vendor — los mismos 12 arquetipos compilados a ciegas por un SEGUNDO vendor (OpenAI Codex, gpt-5.5 vía codex-cli), mismos paquetes canónicos, mismos oráculos ocultos (ADR-042)</td>
+            <td>El brazo valida en los 12 y le gana a los brazos Claude en dos entradas (rest-handler 15/15, scheduler 30/30). Pierde exactamente un caso, en transformer, y ese caso es el hallazgo: leyó «un objeto con exactamente los campos first/last/age» como una prohibición de campos extra, <em>declaró esa lectura en su unresolved_intent antes de que el oráculo la juzgara</em>, y la reprodujo en una segunda corrida independiente. Los tres modelos Claude habían convergido en la otra lectura, así que la ambigüedad era invisible mientras todos los compiladores venían de un solo vendor — la misma ambigüedad latente que la fila de lenguaje controlado, más arriba, destapó desde el otro lado. La entrada pasó de PASS a PARTIAL. Lo que sigue SIN MEDIR: un solo modelo de ese vendor, n=2 corridas, dos vendors de muchos.</td>
+            <td>1.99</td></tr>
         <tr><td>Fidelidad por compilador — el extractor estático de M1 aplicado a cada artefacto compilado</td>
-            <td>Compiladores casi idénticos en conducta exponen superficies visiblemente distintas: 19–21/23 sobre el mismo oráculo a través de 5, 4 y 8 funciones públicas.</td>
+            <td>Compiladores casi idénticos en conducta exponen superficies visiblemente distintas: 19–21/23 sobre el mismo oráculo a través de 4, 5, 8 y 13 funciones públicas.</td>
             <td>1.79</td></tr>
         <tr><td>Curación de código generado por máquina — un veredicto humano por observación, append-only, store fail-closed</td>
             <td>El cierre se mide donde un humano juzgó y queda el literal UNMEASURED donde nadie lo hizo — la ausencia se nombra, nunca se inventa.</td>
@@ -351,7 +354,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../../diamond/index.html">English version</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.98.1</p>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v1.99.0</p>
   </div>
 </footer>
 

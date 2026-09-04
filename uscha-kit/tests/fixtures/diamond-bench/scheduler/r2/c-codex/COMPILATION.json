@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure Python standard library only",
+    "Python 3.8+ compatible",
+    "reads exactly one JSON value from stdin and prints exactly one line",
+    "does not read, write, search, list, or execute any other file"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "fcc0e6076431b66d3a203f3eb9f5f363ba9e938111123e1285faf093088c57ff"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-SC-07",
+      "decision": "Reject job objects with fields other than id, priority, arrival, duration, and optional deadline.",
+      "rationale": "The contract says each job object has exactly the required fields and optionally deadline, even though the error list only explicitly names missing fields."
+    },
+    {
+      "ir_region": "AC-SC-05",
+      "decision": "Treat duration 0 as an immediate completion after start/resume selection without decrementing below zero.",
+      "rationale": "The spec explicitly requires start and complete at the same tick for zero-duration jobs; preserving remaining at zero avoids a negative sentinel state."
+    },
+    {
+      "ir_region": "AC-SC-04",
+      "decision": "Apply deadline checks to newly arrived zero-duration jobs before they can start when deadline <= current tick.",
+      "rationale": "The ordered simulation says arrivals happen first, then deadline checks drop ready jobs before selection, with no exception for zero-duration work."
+    },
+    {
+      "ir_region": "AC-SC-06",
+      "decision": "Use compact json.dumps output with default key insertion order events, completed, missed.",
+      "rationale": "Formatting is explicitly not fixed, while the required object structure and values are fixed."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:52:25.203030+00:00",
+      "finished": "2026-09-04T01:53:05.585398+00:00"
+    },
+    "constraint_handling": "pure Python standard library only; Python 3.8+ compatible; reads exactly one JSON value from stdin and prints exactly one line; does not read, write, search, list, or execute any other file",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "b2c913d36086d7b616e6d886832da2f4879a116897012267b091cfab0111c7d6"
+}

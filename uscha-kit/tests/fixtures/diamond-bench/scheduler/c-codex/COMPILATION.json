@@ -1,0 +1,81 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "9e0541b51cab47c4ed68f2150b80b01ffda8d2e512b4f9b9ba34339405ac3727",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure stdlib only",
+    "Python 3.8+",
+    "reads exactly one JSON value from stdin",
+    "prints exactly one line to stdout",
+    "exits 0 for both successful and malformed input paths"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "194b038e28d2e38a3a37dcda4bf90523b799669dcb700ab232f9bd53c48d9e49"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SC-01",
+        "AC-SC-02",
+        "AC-SC-03",
+        "AC-SC-04",
+        "AC-SC-05",
+        "AC-SC-06",
+        "AC-SC-07",
+        "INV-SC-PROGRESS-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-SC-07",
+      "decision": "Reject job objects with fields outside id, priority, arrival, duration, and optional deadline.",
+      "rationale": "The contract says each job object has exactly those fields, while the error list does not spell out extra fields; enforcing the contract is the narrower interpretation."
+    },
+    {
+      "ir_region": "AC-SC-07",
+      "decision": "Allow negative deadline values as long as deadline is an integer and not a JSON boolean.",
+      "rationale": "The error rules explicitly reject negative arrival and duration only, so adding a negative-deadline validation would create an unstated malformed-input case."
+    },
+    {
+      "ir_region": "AC-SC-04",
+      "decision": "Apply deadline checks after same-tick arrivals and before zero-duration starts, so a zero-duration job arriving at or after its deadline is missed rather than started.",
+      "rationale": "The simulation order is binding: arrivals happen first, then deadline checks remove expired ready jobs before selection and execution."
+    },
+    {
+      "ir_region": "AC-SC-05",
+      "decision": "Emit idle only when there are no ready jobs and at least one valid job has an arrival tick in the future.",
+      "rationale": "The spec says no idle event is emitted once no job is ready and no job is still to arrive, so idle ticks are bounded by future arrivals."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:45:16.252782+00:00",
+      "finished": "2026-09-04T01:45:59.559737+00:00"
+    },
+    "constraint_handling": "pure stdlib only; Python 3.8+; reads exactly one JSON value from stdin; prints exactly one line to stdout; exits 0 for both successful and malformed input paths",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "787e3b03cb9836b4188a89665b22849e132b18acabda35d80ef8bd2369a7a4ac"
+}

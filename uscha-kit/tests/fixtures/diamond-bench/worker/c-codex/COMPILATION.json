@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "656d528a8b6ac2932c08a603349498656201b5fb74034f1cc8af59af2d95d5c7",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single executable file at source/impl.py, intended to run as python impl.py.",
+    "Reads all stdin and writes exactly one result to stdout.",
+    "Never uses filesystem, network, third-party packages, real concurrency, timers, retries, or resource limits.",
+    "All invalid input and structural graph errors are reported by printing exactly ERROR while allowing process exit status 0."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "7b013adeb7ca891597c54aacdf167c4c596365825a53d5fab3c55db3f91c813c"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-WK-01",
+        "AC-WK-02",
+        "AC-WK-03",
+        "AC-WK-04",
+        "AC-WK-05",
+        "AC-WK-06",
+        "INV-WK-DET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-WK-06",
+      "decision": "Reject JSON booleans for priority even though Python bool is a subclass of int.",
+      "rationale": "The contract says priority is an int; accepting true or false would blur the stated JSON type boundary and make malformed input look valid."
+    },
+    {
+      "ir_region": "AC-WK-06",
+      "decision": "Allow extra keys on the top-level object and individual job objects.",
+      "rationale": "The canonical package specifies required fields and error cases but does not state that unknown fields are invalid, so ignoring them preserves forward compatibility without affecting scheduling."
+    },
+    {
+      "ir_region": "AC-WK-04",
+      "decision": "Emit status keys in the original job input order.",
+      "rationale": "JSON object ordering is not semantically fixed by the contract, but input order gives a deterministic and readable representation."
+    },
+    {
+      "ir_region": "AC-WK-05",
+      "decision": "Detect dependency cycles before executing any job, even if a failing job could have prevented part of the graph from running.",
+      "rationale": "The contract treats cycles as structural errors that reject the whole input rather than producing a partial schedule."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:47:24.659954+00:00",
+      "finished": "2026-09-04T01:48:02.934339+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single executable file at source/impl.py, intended to run as python impl.py.; Reads all stdin and writes exactly one result to stdout.; Never uses filesystem, network, third-party packages, real concurrency, timers, retries, or resource limits.; All invalid input and structural graph errors are reported by printing exactly ERROR while allowing process exit status 0.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "d7730109fd8afdd54cf6c12a88a52238a53e53b9b6a3fab6f22fe8fe04e87afe"
+}

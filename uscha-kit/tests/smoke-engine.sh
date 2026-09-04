@@ -5528,8 +5528,12 @@ res["AC-DB-03"] = (byarch.get("parser", {}).get("verdict") == "PASS"
 # AC-DB-05: an entry with no compilations is PENDING, counted, not dropped
 res["AC-DB-05"] = (tv.get("pending") == "PENDING")
 # AC-DB-04: model identities anonymized in the headline; raw mapping present
-res["AC-DB-04"] = (d.get("model_map") == {"haiku": "M1", "opus": "M2", "sonnet": "M3"}
-                   and all(any(mm in t["compilers"] for mm in ("M1", "M2", "M3"))
+# ADR-042: four compilers now, and the letters MOVED -- the map is built over the sorted
+# model names, so `codex` takes M1 and haiku/opus/sonnet each shift one letter. Pinning the
+# exact map is the point: a silent re-lettering would make every published M<n> claim wrong.
+res["AC-DB-04"] = (d.get("model_map") == {"codex": "M1", "haiku": "M2", "opus": "M3",
+                                          "sonnet": "M4"}
+                   and all(any(mm in t["compilers"] for mm in ("M1", "M2", "M3", "M4"))
                            for t in d["table"] if t["verdict"] in ("PASS", "PARTIAL")))
 
 def refs(p):
@@ -5565,10 +5569,13 @@ def refs_orc(p):
         return "oracle" in t or "expected_exit" in t or "expected_stdout" in t
     except OSError:
         return True
+# 4 since ADR-042: the cross-vendor arm compiles every entry, and its source is held to the
+# same maker!=checker wall. Every NEW5 entry is Python (the JS entry, rate-limiter, is not one
+# of them), so the unit path is source/impl.py for all four compilers.
 res["AC-BG-03"] = all(all(c["compile_valid"] for c in byarch.get(e, {}).get("compilations", []))
-                      and len(byarch.get(e, {}).get("compilations", [])) == 3
+                      and len(byarch.get(e, {}).get("compilations", [])) == 4
                       and all(not refs_orc(os.path.join(BENCH, e, "c-" + m, "source", "impl.py"))
-                              for m in ("opus", "sonnet", "haiku"))
+                              for m in ("codex", "opus", "sonnet", "haiku"))
                       for e in NEW5)
 wk_spec = io.open(os.path.join(BENCH, "worker", "canonical", "SPEC.md"),
                   encoding="utf-8").read()
@@ -6112,13 +6119,13 @@ disc_ok = (bool(sched_raw)
            and (sched_raw[0].get("discrimination") or {}).get("stub_green") is False)
 res["AC-SH-01"] = stub_ok and wrong_ok and disc_ok and len(wrongs) == 9
 
-# AC-SH-02: the three blind compilations validate against the pinned IR; unresolved_intent is
+# AC-SH-02: the four blind compilations validate against the pinned IR; unresolved_intent is
 # non-empty, bounded, and model-distinct (verbatim, not synthesized); the bench verdict for
 # scheduler is PARTIAL with the pinned per-compiler oracle counts; entries == 12 (rate-limiter
 # and ledger-lite have since joined the ninth archetype).
 cv_ok = True
 ui_fps = []
-for m in ("opus", "sonnet", "haiku"):
+for m in ("codex", "opus", "sonnet", "haiku"):
     rv = run("compile-validate", "--ir", os.path.join(SCHED, "IR.json"), "--compilation",
              os.path.join(SCHED, "c-" + m, "COMPILATION.json"))
     if rv.returncode != 0:
@@ -6129,10 +6136,12 @@ for m in ("opus", "sonnet", "haiku"):
     if not (2 <= len(ui) <= 5):
         cv_ok = False
     ui_fps.append(json.dumps(ui, sort_keys=True))
-distinct_ok = len(set(ui_fps)) == 3
+distinct_ok = len(set(ui_fps)) == 4
 sched_entry = sched_raw[0] if sched_raw else {}
 per_comp = dict((c["model"], c["oracle"]["passed"]) for c in sched_entry.get("compilations", []))
-counts_ok = (per_comp == {"opus": 30, "sonnet": 26, "haiku": 25}
+# codex 30/30 (ADR-042), matching opus. The entry stays PARTIAL: haiku and sonnet still miss
+# the four deadline cases, and PARTIAL is the min-rate verdict, not the max.
+counts_ok = (per_comp == {"codex": 30, "opus": 30, "sonnet": 26, "haiku": 25}
             and all(c["oracle"]["total"] == 30 for c in sched_entry.get("compilations", [])))
 res["AC-SH-02"] = (cv_ok and distinct_ok and sched_entry.get("verdict") == "PARTIAL"
                    and counts_ok and d0.get("entries") == 12)
@@ -6253,8 +6262,11 @@ def bench_r2_json(dirpath):
 
 # AC-R2-01: bench --json is byte-identical with r2/ present vs r2/ hidden -- bench ignores the
 # second-run dirs entirely. The real bench now reports 12 entries, PARTIAL exactly
-# {guard, rest-handler, scheduler}.
-# byte-identity is proven over a ONE-entry copy (protocol-adapter: 3 run-1 + 3 r2
+# {guard, rest-handler, scheduler, transformer} -- `transformer` joined at 1.99.0, and it is
+# the cross-vendor arm's one loss (ADR-042): the fourth compiler read "an object with exactly
+# the fields first/last/age" as forbidding an extra field, so its 13/14 drags the entry's
+# min-rate verdict down. Re-pinned FROM the measured run, not adjusted to keep the list short.
+# byte-identity is proven over a ONE-entry copy (protocol-adapter: 4 run-1 + 4 r2
 # compilations) -- a full 10-entry double bench pass is minutes of subprocess launches on
 # Windows and proves nothing more; the real bench is run once below for the pins.
 tcopy = os.path.join(tempfile.mkdtemp(), "bench")
@@ -6267,7 +6279,7 @@ d0 = bench_cached("bench")
 partial = sorted(r["archetype"] for r in d0.get("raw", []) if r["verdict"] == "PARTIAL")
 res["AC-R2-01"] = (with_r2.stdout == without_r2.stdout and with_r2.returncode == 0
                    and d0.get("entries") == 12
-                   and partial == ["guard", "rest-handler", "scheduler"])
+                   and partial == ["guard", "rest-handler", "scheduler", "transformer"])
 
 # AC-R2-02: bench-r2 --json shape and per-entry class-from-ratio recomputation; an entry with
 # its r2/ removed reports has_r2 False, class None, a non-empty reason (absent, never 0).
@@ -6299,7 +6311,7 @@ for r in raw:
     if r.get("class") != expect_class(r.get("intra_over_inter")):
         shape_ok = False
     models = r.get("models") or []
-    if len(models) != 3:
+    if len(models) != 4:                        # + c-codex since ADR-042
         shape_ok = False
     for m in models:
         if not isinstance(m.get("intra_distance"), float):
@@ -6318,7 +6330,7 @@ absent_ok = (absrec.get("has_r2") is False and absrec.get("class") is None
 # (unparseable r2 sources) left class None AND reason None -- a silent absence. Rebuild the
 # r2/ dir on the copy with broken sources and demand a named reason.
 os.makedirs(os.path.join(tcopy, "protocol-adapter", "r2"))
-for m in ("c-opus", "c-sonnet", "c-haiku"):
+for m in ("c-codex", "c-opus", "c-sonnet", "c-haiku"):
     shutil.copytree(os.path.join(BENCH, "protocol-adapter", "r2", m),
                     os.path.join(tcopy, "protocol-adapter", "r2", m))
     bad_src = os.path.join(tcopy, "protocol-adapter", "r2", m, "source", "impl.py")
@@ -6330,7 +6342,7 @@ gap_ok = (gaprec.get("has_r2") is True and gaprec.get("class") is None
 
 pa_dir = os.path.join(BENCH, "protocol-adapter")
 run1_metrics = []
-for m in ("c-opus", "c-sonnet", "c-haiku"):
+for m in ("c-codex", "c-opus", "c-sonnet", "c-haiku"):
     cj = os.path.join(pa_dir, m, "COMPILATION.json")
     with io.open(cj, encoding="utf-8-sig") as fh:
         c = json.load(fh)
@@ -6347,9 +6359,9 @@ commensurable_ok = round(pa_rec.get("inter", -1), 4) == round(inter_recomputed, 
 
 res["AC-R2-02"] = shape_ok and absent_ok and gap_ok and commensurable_ok
 
-# AC-R2-03: all 30 r2 COMPILATION.json compile-validate against their entry's IR; each
-# unresolved_intent has 2..6 entries, the three per entry are pairwise distinct; the aggregate
-# and every per-entry class are pinned exactly as measured for 1.84.0.
+# AC-R2-03: all 40 r2 COMPILATION.json compile-validate against their entry's IR; each
+# unresolved_intent has 2..6 entries, the four per entry are pairwise distinct; the aggregate
+# and every per-entry class are pinned exactly as measured for 1.99.0 (ADR-042).
 cv_ok = True
 ui_bounds_ok = True
 entries = sorted(d for d in os.listdir(BENCH) if os.path.isdir(os.path.join(BENCH, d, "r2")))
@@ -6357,7 +6369,7 @@ for e in entries:
     r2 = os.path.join(BENCH, e, "r2")
     ir = os.path.join(BENCH, e, "IR.json")
     fps = []
-    for m in ("c-opus", "c-sonnet", "c-haiku"):
+    for m in ("c-codex", "c-opus", "c-sonnet", "c-haiku"):
         cj = os.path.join(r2, m, "COMPILATION.json")
         rv = run("compile-validate", "--ir", ir, "--compilation", cj)
         if rv.returncode != 0:
@@ -6368,19 +6380,29 @@ for e in entries:
         if not (2 <= len(ui) <= 6):
             ui_bounds_ok = False
         fps.append(json.dumps(ui, sort_keys=True))
-    if len(set(fps)) != 3:
+    if len(set(fps)) != 4:
         ui_bounds_ok = False
+# still 10: the cross-vendor arm's second round covered exactly the entries that already
+# carried an r2/. ledger-lite and rate-limiter joined the bench after ADR-027's second round
+# and have no r2 for ANY compiler; a codex-only second run there would make their intra/inter
+# one model's rerun measured against four models' spread -- a different quantity from the ten,
+# reported under the same column. Named absent (AC-JS-01 pins the absence), never measured.
 res["AC-R2-03-compile"] = cv_ok and ui_bounds_ok and len(entries) == 10
 
-WANT_CLASS = {"crud-store": "NOISY", "guard": "NOISY", "parser": "NOISE",
+# Re-measured for ADR-042. parser 1.13 -> 0.73 and state-machine 1.12 -> 0.81 both crossed out
+# of NOISE: the fourth compiler widened `inter` more than it raised `intra`. Both landed within
+# ~0.3 of the 1.0 threshold (0.27 and 0.19), which the ADR-027 note says to read as
+# borderline -- so the
+# CLASSES are pinned and the ratios are not.
+WANT_CLASS = {"crud-store": "NOISY", "guard": "NOISY", "parser": "NOISY",
              "protocol-adapter": "SIGNAL", "rest-handler": "NOISY", "scheduler": "NOISE",
-             "state-machine": "NOISE", "transformer": "NOISY", "ui-render": "NOISY",
+             "state-machine": "NOISY", "transformer": "NOISY", "ui-render": "NOISY",
              "worker": "NOISE"}
 classes_ok = all(next((r for r in raw if r["archetype"] == a), {}).get("class") == c
                  for a, c in WANT_CLASS.items())
 agg = r2d0.get("aggregate", {})
-agg_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 5
-         and agg.get("noise") == 4 and agg.get("stable") == 26 and agg.get("reruns") == 30
+agg_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 7
+         and agg.get("noise") == 2 and agg.get("stable") == 36 and agg.get("reruns") == 40
          and len(WANT_CLASS) == 10)
 res["AC-R2-03"] = res["AC-R2-03-compile"] and classes_ok and agg_ok
 del res["AC-R2-03-compile"]
@@ -6428,9 +6450,12 @@ def bench_json(dirpath, fidelity=False):
 # is byte-for-byte the same computation (the refactor routes JS and multi-unit entries through
 # new organs, it does not touch the Python single-unit metrics path at all).
 d0 = bench_cached("bench")
+# transformer moved PASS -> PARTIAL in 1.99.0 (ADR-042) -- the cross-vendor arm is the only
+# compiler that fails `extra-field-tolerated`, and it declared that exact reading in its
+# unresolved_intent before the oracle disagreed with it.
 WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "ledger-lite": "PASS",
                 "parser": "PASS", "protocol-adapter": "PASS", "rest-handler": "PARTIAL",
-                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PASS",
+                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PARTIAL",
                 "ui-render": "PASS", "worker": "PASS"}
 py_verdicts_ok = all(
     next((r for r in d0.get("raw", []) if r["archetype"] == a), {}).get("verdict") == v
@@ -6439,8 +6464,11 @@ r2d0 = bench_cached("r2")
 agg = r2d0.get("aggregate", {})
 rl_r2 = next((r for r in r2d0.get("raw", []) if r["archetype"] == "rate-limiter"), {})
 ll_r2 = next((r for r in r2d0.get("raw", []) if r["archetype"] == "ledger-lite"), {})
-r2_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 5
-        and agg.get("noise") == 4 and agg.get("measured") == 10 and rl_r2.get("has_r2") is False
+# re-pinned with AC-R2-03 (ADR-042). `measured` stays 10 and both these entries stay
+# has_r2 False: the cross-vendor arm's second round deliberately covered only the entries that
+# already had one, so rate-limiter and ledger-lite are still absent rather than half-measured.
+r2_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 7
+        and agg.get("noise") == 2 and agg.get("measured") == 10 and rl_r2.get("has_r2") is False
         and ll_r2.get("has_r2") is False)
 rc_sh = run("lang-compare", "--free", os.path.join(CL, "scheduler-free"),
            "--controlled", os.path.join(CL, "scheduler-controlled"), "--json")
@@ -6472,7 +6500,7 @@ if node is None:
     res["AC-JS-02"] = bool(rl_rec.get("verdict") == "PENDING"
                            and "node not on PATH" in (rl_rec.get("reason") or ""))
 else:
-    comp_ok = (rl_rec.get("verdict") == "PASS" and len(rl_rec.get("compilations", [])) == 3
+    comp_ok = (rl_rec.get("verdict") == "PASS" and len(rl_rec.get("compilations", [])) == 4
               and all(c.get("compile_valid") and c.get("oracle", {}).get("passed") == 25
                       and c.get("oracle", {}).get("total") == 25
                       for c in rl_rec.get("compilations", [])))
@@ -6556,7 +6584,11 @@ else:
     fid_ok = bool(rl_fid.get("compilations"))
     for c in rl_fid.get("compilations", []):
         ss = c.get("fidelity", {}).get("static_surface")
-        if not isinstance(ss, dict) or ss.get("functions") not in (3, 6):
+        # 3 (sonnet, haiku), 6 (opus), 8 (codex, ADR-042). The set is pinned as MEASURED
+        # exports, not as a bound: the claim here is that node reports the module's own surface,
+        # so a compiler that decomposes further is a legitimate new value, and a value NOT in
+        # this set means the reader stopped being node.
+        if not isinstance(ss, dict) or ss.get("functions") not in (3, 6, 8):
             fid_ok = False
             continue
         names = ss.get("names")
@@ -6601,7 +6633,7 @@ byarch = {r["archetype"]: r for r in d0.get("raw", [])}
 # c-opus) still carries entry_unit/units exactly as a one-source-file entry always has.
 WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "parser": "PASS",
                 "protocol-adapter": "PASS", "rate-limiter": "PASS", "rest-handler": "PARTIAL",
-                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PASS",
+                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PARTIAL",
                 "ui-render": "PASS", "worker": "PASS"}
 py_verdicts_ok = all(byarch.get(a, {}).get("verdict") == v for a, v in WANT_VERDICT.items())
 rc_sh = run("lang-compare", "--free", os.path.join(CL, "scheduler-free"),
@@ -6618,8 +6650,8 @@ lang_ok = (rep_sh.get("verdict") == "IMPROVED"
           and 0.17 <= (rep_sh.get("controlled", {}).get("variance_score") or 0) <= 0.20)
 r2d0 = bench_cached("r2")
 agg = r2d0.get("aggregate", {})
-r2_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 5
-        and agg.get("noise") == 4 and agg.get("measured") == 10)
+r2_ok = (agg.get("verdict") == "NOISY" and agg.get("signal") == 1 and agg.get("noisy") == 7
+        and agg.get("noise") == 2 and agg.get("measured") == 10)
 guard_opus = next((c for c in byarch.get("guard", {}).get("compilations", [])
                    if c.get("model") == "opus"), {})
 guard_unit_ok = (guard_opus.get("entry_unit") == "source/guard.py"
@@ -6634,7 +6666,7 @@ ir = json.load(io.open(os.path.join(LL, "IR.json"), encoding="utf-8"))
 ir_ok = (sum(1 for n in ir.get("nodes", []) if n.get("type") == "DECISION") >= 1
         and len(ir.get("edges", [])) >= 2)
 comp_ok = True
-for m in ("opus", "sonnet", "haiku"):
+for m in ("codex", "opus", "sonnet", "haiku"):
     cpath = os.path.join(LL, "c-" + m, "COMPILATION.json")
     with io.open(cpath, encoding="utf-8-sig") as fh:
         c = json.load(fh)
@@ -6776,7 +6808,7 @@ lang_ok = (rep_sh.get("verdict") == "IMPROVED"
 
 WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "parser": "PASS",
                 "protocol-adapter": "PASS", "rest-handler": "PARTIAL",
-                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PASS",
+                "scheduler": "PARTIAL", "state-machine": "PASS", "transformer": "PARTIAL",
                 "ui-render": "PASS", "worker": "PASS", "rate-limiter": "PASS",
                 "ledger-lite": "PASS"}
 b0 = bench_cached("bench")
@@ -6849,30 +6881,40 @@ for r in recs:
     if r["archetype"] == "ledger-lite":
         if not all(c.get("edges") == 3 for c in r.get("compilations", [])):
             ll_edges_ok = False
-        # 3 edges, and BOTH endpoints of all three are anchored since the behaviour dimension
-        # started attributing nodes (ADR-030 amended, 1.90.0 -- it read 0.33 while only the
-        # static footing existed). This is the bench's only entry with IR edges, so it is the
-        # only place the edge arithmetic is exercised at all.
-        if r.get("edges_recovered_mean") != 1.0:
+        # 3 edges, and `edges_recovered_mean` is the mean COUNT of edges recovered per
+        # compilation -- not a ratio. Only `c-opus` anchors both endpoints of all three; the
+        # other arms anchor none, so the number is 3/N. It read 1.0 while N was 3 (ADR-030
+        # amended, 1.90.0), which looked like "all edges, always" and was never that; ADR-042's
+        # fourth compiler recovers 0 and makes N 4, so the same 3 now reads 0.75. This is the
+        # bench's only entry with IR edges, so it is the only place the edge arithmetic is
+        # exercised at all.
+        if r.get("edges_recovered_mean") != 0.75:
             ll_edges_ok = False
 res["AC-RT-02"] = bool(per_ok and ll_edges_ok)
 
 # AC-RT-03: the aggregate pinned to today's measured state. Behaviour is MEASURED in every
 # entry since 1.90.0 (ADR-030 amended: the 12 diamond-bench oracles carry curated per-case
-# `ac` tags), which is what moved the mean from 0.062 -- static footing alone -- to ~0.83.
+# `ac` tags), which is what moved the mean from 0.062 -- static footing alone -- to ~0.83;
+# ADR-042's fourth compiler then moved it to ~0.81.
 # The per-entry means ARE interpreter-stable and pinned exactly: the id-regex + file-read +
 # oracle-run path carries no AST. The AGGREGATE is pinned as a RANGE and never as a float,
-# because it is a rounding boundary: the twelve pinned means sum to 9.930, /12 = 0.8275
-# exactly, and `round(0.8275, 3)` lands on 0.828 under python 3.13 and 0.827 under 3.8 --
-# same inputs, different last binary digit. A float pin there would be a red about IEEE754.
+# because it CAN land on a rounding boundary: before ADR-042 the twelve means summed to 9.930,
+# /12 = 0.8275 exactly, and `round(0.8275, 3)` gave 0.828 under python 3.13 and 0.827 under 3.8
+# -- same inputs, different last binary digit. The 1.99.0 means sum to 9.778, /12 = 0.81483,
+# which is not on a boundary; the range stays anyway, because whether a given release's sum
+# happens to be safe is not a property worth re-deciding every release.
+# re-measured for ADR-042 over FOUR compilations per entry. Six moved (guard, ledger-lite,
+# rate-limiter, rest-handler, transformer, ui-render), all downward: an entry's recoverability
+# is the mean over its compilations, and the cross-vendor arm recovers a slightly different
+# subset of each IR than the three Claude arms converge on. Six unchanged.
 WANT_MEAN = {
-    "crud-store": 0.857, "guard": 0.875, "ledger-lite": 0.704, "parser": 0.714,
-    "protocol-adapter": 0.714, "rate-limiter": 0.762, "rest-handler": 0.905,
-    "scheduler": 0.875, "state-machine": 0.857, "transformer": 0.905, "ui-render": 0.905,
+    "crud-store": 0.857, "guard": 0.844, "ledger-lite": 0.667, "parser": 0.714,
+    "protocol-adapter": 0.714, "rate-limiter": 0.75, "rest-handler": 0.893,
+    "scheduler": 0.875, "state-machine": 0.857, "transformer": 0.857, "ui-render": 0.893,
     "worker": 0.857,
 }
 per_entry_ok = all(r.get("recoverability_mean") == WANT_MEAN.get(r["archetype"]) for r in recs)
-agg_ok = (0.82 <= (agg.get("mean_recoverability") or 0) <= 0.83 and agg.get("with_edges") == 1
+agg_ok = (0.81 <= (agg.get("mean_recoverability") or 0) <= 0.82 and agg.get("with_edges") == 1
          and agg.get("behaviour_measured") == 12 and agg.get("measured") == 12)
 # ...and behaviour is a COUNT everywhere, never the word: the dimension is measured, not named
 # absent, in every compilation of every entry.
@@ -6899,7 +6941,8 @@ if uv38_candidates:
                # 0.0010000000000000009 in IEEE754 and fails a test that is arithmetically true
                and abs(int(round((a38.get("mean_recoverability") or 0) * 1000))
                        - int(round((agg.get("mean_recoverability") or 0) * 1000))) <= 1
-               and 0.82 <= (a38.get("mean_recoverability") or 0) <= 0.83)
+               # the same band as `agg_ok` above -- 0.81..0.82 since ADR-042 moved the mean
+               and 0.81 <= (a38.get("mean_recoverability") or 0) <= 0.82)
 res["AC-RT-03"] = bool(per_entry_ok and agg_ok and beh_measured_ok and uv38_ok)
 why["AC-RT-03"] = [n for n, v in (("per-entry-means", per_entry_ok), ("aggregate", agg_ok),
                                   ("behaviour-is-a-count", beh_measured_ok),
@@ -11467,10 +11510,12 @@ esac
 echo "== T154 (1.98.0): the narrated backlog stays retired, and the twins moved together =="
 # A VISION / planned / not-yet label is a promise the reader cannot check. Round 1 of 1.98.0
 # rewrote six of them into the honest state -- rejected, deferred by a dated decision, or by
-# design -- and this block is what keeps them rewritten. It is an ALLOWLIST scan, not a ban on
-# the word VISION: tools/narrated-claims.txt names the exact path and the exact phrase each
-# rewrite retired, so the two labels that are still CORRECT today (the diamond table's arbitrary
-# systems row, and cross-vendor not yet measured) survive untouched, and the historical record --
+# design -- and this block is what keeps them rewritten. 1.99.0 retired a seventh the other way:
+# the cross-vendor label was correct until ADR-042 MEASURED it, so it moved into this list once
+# the fixture backed the replacement (T157, AC-XV-07 asserts the replacement is present). It is
+# an ALLOWLIST scan, not a ban on the word VISION: tools/narrated-claims.txt names the exact path
+# and the exact phrase each rewrite retired, so the one label that is still CORRECT today (the
+# diamond table's arbitrary systems row) survives untouched, and the historical record --
 # the per-release changelogs, audits/, the paper's Future Work -- is out of scope by construction
 # because nothing outside the list is read. A gate that flags what is right teaches the reader to
 # ignore it.
@@ -11821,6 +11866,335 @@ PY
 case "$T155" in
   OK*) PASS=$((PASS+1)); echo "  ok   deferred LOWs closed (AC-DE-01..04): $T155";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T155";;
+esac
+
+echo "== T157 (ADR-042): the cross-vendor arm -- a second VENDOR compiles the whole bench, blind =="
+# Until 1.99.0 every blind compilation in the Diamond Bench came from one vendor, so the
+# program's central claim -- implementation replaceability certified by a withheld oracle --
+# could not distinguish a property of the METHOD from a property of the Claude family. This
+# block is what keeps the fourth arm honest: it is blind by construction (the prompt hash is
+# re-derivable and carries no oracle), it validates like every other arm, its refusal path is
+# exercised on the real function rather than described, and the claim text on the site says
+# only what the committed fixture backs.
+T157=$(pyin "$KIT" "$ROOT" <<'PY'
+import hashlib, importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import bench_cached, sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+MANIFEST = os.path.join(BENCH, "CODEX-ARM-RUN.json")
+ARM = os.path.join(root, "tools", "bench-compile-codex.py")
+ENTRIES = ("crud-store", "guard", "ledger-lite", "parser", "protocol-adapter", "rate-limiter",
+           "rest-handler", "scheduler", "state-machine", "transformer", "ui-render", "worker")
+R2_ENTRIES = tuple(e for e in ENTRIES if e not in ("ledger-lite", "rate-limiter"))
+res, why, TMPS = {}, {}, []
+
+
+def run(*a):
+    return subprocess.run([sys.executable, ENG] + list(a), capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
+
+
+def read_json(p):
+    with io.open(p, encoding="utf-8-sig") as fh:
+        return json.load(fh)
+
+
+def comp(entry, sub="c-codex"):
+    return read_json(os.path.join(BENCH, entry, sub, "COMPILATION.json"))
+
+
+def arm_module():
+    """The dispatcher, imported. It lives at the REPO root, not inside the kit, so an extracted
+    kit tarball does not carry it -- absence is UNMEASURED (None), never a silent pass."""
+    if not os.path.isfile(ARM):
+        return None
+    try:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location("bench_compile_codex_t157", ARM)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:
+        return None
+
+
+# Wrapped in measure()/try/finally (the T151-T152 idiom): AC-XV-04 builds temp trees, and a
+# case that raises before the cleanup would leave uscha-xv-* dirs behind on every red run.
+def measure():
+    # --- AC-XV-01: the fourth arm is a compilation like any other -----------------------------
+    # Every c-codex validates against its entry's PINNED IR, its unresolved_intent is verbatim
+    # (non-empty, bounded), the twelve are pairwise distinct, and every ir_region names a real IR
+    # node. That last clause is new in ADR-042 and it is not cosmetic: compile-ingest
+    # content-addresses a UINT on (ir_region + decision), so a compiler that invents its own region
+    # slugs makes two arms reporting the SAME intent gap two different gaps forever.
+    p1 = []
+    fps = []
+    for e in ENTRIES:
+        cj = os.path.join(BENCH, e, "c-codex", "COMPILATION.json")
+        if not os.path.isfile(cj):
+            p1.append("%s: no c-codex" % e)
+            continue
+        if run("compile-validate", "--ir", os.path.join(BENCH, e, "IR.json"),
+               "--compilation", cj).returncode != 0:
+            p1.append("%s: compile-validate refused" % e)
+        c = read_json(cj)
+        ui = c.get("unresolved_intent") or []
+        if not (2 <= len(ui) <= 6):
+            p1.append("%s: unresolved_intent is %d entries" % (e, len(ui)))
+        ids = set(n["id"] for n in read_json(os.path.join(BENCH, e, "IR.json")).get("nodes") or [])
+        stray = sorted(set(u.get("ir_region") for u in ui) - ids)
+        if stray:
+            p1.append("%s: ir_region not an IR node: %s" % (e, stray[:3]))
+        fps.append(json.dumps(ui, sort_keys=True))
+    if len(set(fps)) != len(ENTRIES):
+        p1.append("the 12 unresolved_intent sets are not pairwise distinct (%d distinct)"
+                  % len(set(fps)))
+    res["AC-XV-01"] = not p1
+    why["AC-XV-01"] = "; ".join(p1[:4]) or "12 compilations valid, ir_region always an IR node"
+
+    # --- AC-XV-02: no oracle reached the arm, on either side of the dispatch -------------------
+    # The INPUT half is proven by re-derivation, not by trust: the committed manifest carries a
+    # sha256 per prompt, and this re-renders all twelve from the same slot table and the same
+    # canonical package and compares. A prompt that had ever carried an oracle value would have to
+    # carry it again to match. The OUTPUT half re-runs the dispatcher's own leak audit over every
+    # compiled source. Without the dispatcher this is UNMEASURED, never a pass.
+    mod = arm_module()
+    if mod is None or not os.path.isfile(MANIFEST):
+        res["AC-XV-02"] = None
+        why["AC-XV-02"] = "tools/bench-compile-codex.py or CODEX-ARM-RUN.json not present"
+    else:
+        man = read_json(MANIFEST)
+        slots = json.loads(io.open(mod.SLOTS, encoding="utf-8-sig").read())["entries"]
+        p2 = []
+        for e in ENTRIES:
+            want = (man.get("entries") or {}).get(e, {}).get("prompt_sha256")
+            prompt, canon = mod.render_prompt(BENCH, e, slots[e], man.get("write_mode") or "return")
+            got = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+            if want != got:
+                p2.append("%s: prompt sha %s re-renders as %s" % (e, str(want)[:12], got[:12]))
+            strings = mod.oracle_strings(BENCH, e)
+            if not strings:
+                p2.append("%s: the oracle yielded no distinctive strings -- the audit measures "
+                          "nothing" % e)
+            if mod.leaks(prompt, canon, strings):
+                p2.append("%s: oracle strings in the PROMPT" % e)
+            for sub in ("c-codex",) + (("r2/c-codex",) if e in R2_ENTRIES else ()):
+                d = os.path.join(BENCH, e, sub.replace("/", os.sep))
+                body = "".join(io.open(os.path.join(d, u["unit"].replace("/", os.sep)),
+                                       encoding="utf-8-sig").read()
+                               for u in comp(e, sub.replace("/", os.sep))["source"])
+                if mod.leaks(body, canon, strings):
+                    p2.append("%s/%s: oracle strings in the SOURCE" % (e, sub))
+        res["AC-XV-02"] = not p2
+        why["AC-XV-02"] = "; ".join(p2[:4]) or "12 prompt hashes re-derived, 22 sources leak-free"
+
+    # --- AC-XV-03: the bench reports the fourth arm, and the verdicts are as MEASURED ----------
+    # The model map is pinned here as well as in AC-DB-04 on purpose: this is the block that would
+    # notice if the arm silently stopped being discovered, and a four-letter map is the cheapest
+    # evidence that it is still there. transformer is the one verdict the arm moved.
+    d0 = bench_cached("bench")
+    byarch = {r["archetype"]: r for r in d0.get("raw", [])}
+    WANT_VERDICT = {"crud-store": "PASS", "guard": "PARTIAL", "ledger-lite": "PASS",
+                    "parser": "PASS", "protocol-adapter": "PASS", "rate-limiter": "PASS",
+                    "rest-handler": "PARTIAL", "scheduler": "PARTIAL", "state-machine": "PASS",
+                    "transformer": "PARTIAL", "ui-render": "PASS", "worker": "PASS"}
+    # per-entry codex pass counts, read off the committed fixture. The two the arm WINS
+    # (rest-handler 15/15, scheduler 30/30) and the one it loses (transformer 13/14) are the
+    # result; pinning them is what makes a later drift a red instead of a shrug.
+    WANT_CODEX = {"crud-store": (12, 12), "guard": (20, 23), "ledger-lite": (24, 24),
+                  "parser": (21, 21), "protocol-adapter": (15, 15), "rate-limiter": (25, 25),
+                  "rest-handler": (15, 15), "scheduler": (30, 30), "state-machine": (12, 12),
+                  "transformer": (13, 14), "ui-render": (13, 13), "worker": (12, 12)}
+    p3 = []
+    if d0.get("model_map") != {"codex": "M1", "haiku": "M2", "opus": "M3", "sonnet": "M4"}:
+        p3.append("model map is %s" % json.dumps(d0.get("model_map"), sort_keys=True))
+    for e in ENTRIES:
+        rec = byarch.get(e) or {}
+        cx = next((c for c in rec.get("compilations") or [] if c.get("model") == "codex"), None)
+        if cx is None:
+            p3.append("%s: the bench does not report a codex compilation" % e)
+            continue
+        if (cx["oracle"]["passed"], cx["oracle"]["total"]) != WANT_CODEX[e]:
+            p3.append("%s: codex %d/%d, pinned %d/%d"
+                      % (e, cx["oracle"]["passed"], cx["oracle"]["total"], *WANT_CODEX[e]))
+        if rec.get("verdict") != WANT_VERDICT[e]:
+            p3.append("%s: verdict %s, pinned %s" % (e, rec.get("verdict"), WANT_VERDICT[e]))
+        if (rec.get("variance") or {}).get("all_distinct") is not True:
+            p3.append("%s: the four compilations are not all distinct" % e)
+    res["AC-XV-03"] = not p3
+    why["AC-XV-03"] = "; ".join(p3[:4]) or "12 entries carry a codex arm, verdicts as measured"
+
+    # --- AC-XV-04: a compilation that does not validate is a NAMED refusal ---------------------
+    # The behaviour that decides whether this whole arm is evidence or decoration. Measured on the
+    # real function against a TEMP target root, with a real corrupted fixture -- one source sha256
+    # rewritten, which is exactly what a tampered or mis-staged unit looks like to the engine --
+    # and never by dispatching anything. Both directions are asserted: the intact copy promotes,
+    # the corrupted one lands in x-codex-REFUSED, names the exit code, and leaves NO c-codex
+    # behind for the bench to discover.
+    if mod is None:
+        res["AC-XV-04"] = None
+        why["AC-XV-04"] = "tools/bench-compile-codex.py not present"
+    else:
+        p4 = []
+        ir = os.path.join(BENCH, "guard", "IR.json")
+        for corrupt in (False, True):
+            w = tempfile.mkdtemp(prefix="uscha-xv-")
+            TMPS.append(w)
+            staged = os.path.join(w, "staged")
+            shutil.copytree(os.path.join(BENCH, "guard", "c-codex"), staged)
+            if corrupt:
+                cp = os.path.join(staged, "COMPILATION.json")
+                c = read_json(cp)
+                c["source"][0]["sha256"] = "0" * 64
+                io.open(cp, "w", encoding="utf-8", newline="\n").write(
+                    json.dumps(c, indent=2, ensure_ascii=False) + "\n")
+            troot = os.path.join(w, "target")
+            os.makedirs(troot)
+            status, dest, reason, vexit, _out = mod.validate_and_place(
+                ir, staged, troot, "guard", False, [])
+            promoted = os.path.isdir(os.path.join(troot, "guard", "c-codex"))
+            refused = os.path.isdir(os.path.join(troot, "guard", "x-codex-REFUSED"))
+            if corrupt:
+                if not (status == "REFUSED" and refused and not promoted and vexit == 2
+                        and reason and "compile-validate" in reason
+                        and os.path.isfile(os.path.join(dest, "VALIDATE-STDERR.txt"))):
+                    p4.append("corrupted: status=%s promoted=%s refused=%s exit=%s reason=%r"
+                              % (status, promoted, refused, vexit, reason))
+            else:
+                if not (status == "PROMOTED" and promoted and not refused and vexit == 0
+                        and reason is None):
+                    p4.append("intact: status=%s promoted=%s refused=%s exit=%s"
+                              % (status, promoted, refused, vexit))
+        # and the committed run record agrees that nothing was refused for real
+        if os.path.isfile(MANIFEST):
+            t = (read_json(MANIFEST).get("totals") or {})
+            if t.get("refused") != 0 or t.get("promoted_round1") != 12 \
+                    or t.get("promoted_round2") != 10:
+                p4.append("manifest totals %s" % json.dumps(t, sort_keys=True))
+        res["AC-XV-04"] = not p4
+        why["AC-XV-04"] = "; ".join(p4[:3]) or "refusal named, promotion clean, 0 refused on record"
+
+    # --- AC-XV-05: the arm has its own noise floor --------------------------------------------
+    # A second blind dispatch of the SAME model on the SAME package, for the ten entries that
+    # already carried an r2/. Two entries left NOISE for NOISY, both because the fourth compiler
+    # widened the inter-compiler spread more than it raised the intra floor -- pinned before and
+    # after, because a class that moves back is a finding, not a flake. The arm's own reruns are
+    # behaviour-stable everywhere, which is what makes the transformer failure a READING of the
+    # canonical package rather than a sampling accident.
+    r2d = bench_cached("r2")
+    r2by = {r["archetype"]: r for r in r2d.get("raw", [])}
+    WANT_CLASS = {"crud-store": "NOISY", "guard": "NOISY", "parser": "NOISY",
+                  "protocol-adapter": "SIGNAL", "rest-handler": "NOISY", "scheduler": "NOISE",
+                  "state-machine": "NOISY", "transformer": "NOISY", "ui-render": "NOISY",
+                  "worker": "NOISE"}
+    MOVED = {"parser": ("NOISE", "NOISY"), "state-machine": ("NOISE", "NOISY")}
+    p5 = []
+    for e in R2_ENTRIES:
+        rec = r2by.get(e) or {}
+        cx = next((m for m in rec.get("models") or [] if m.get("dir") == "c-codex"), None)
+        if cx is None or cx.get("r2") == "absent":
+            p5.append("%s: no codex intra measured" % e)
+            continue
+        if not isinstance(cx.get("intra_distance"), float):
+            p5.append("%s: codex intra_distance is not a number" % e)
+        if cx.get("behaviour_stable") is not True:
+            p5.append("%s: the codex reruns disagree on an oracle case" % e)
+        if cx.get("run2_compile_valid") is not True:
+            p5.append("%s: the codex second run does not compile-validate" % e)
+        if rec.get("class") != WANT_CLASS[e]:
+            p5.append("%s: class %s, pinned %s" % (e, rec.get("class"), WANT_CLASS[e]))
+    for e, (before, after) in MOVED.items():
+        if WANT_CLASS[e] != after or before == after:
+            p5.append("%s: the recorded move %s -> %s disagrees with the pin" % (e, before, after))
+    for e in ("ledger-lite", "rate-limiter"):
+        if (r2by.get(e) or {}).get("has_r2") is not False:
+            p5.append("%s: has_r2 is not False -- these two carry no r2 for ANY compiler, and a "
+                      "codex-only second run there would report one model's rerun against four "
+                      "models' spread under the same column as the ten" % e)
+    res["AC-XV-05"] = not p5
+    why["AC-XV-05"] = "; ".join(p5[:4]) or "10 codex intras, classes pinned, 2 moved out of NOISE"
+
+    # --- AC-XV-06: the backend is on the record, in the compilation itself ---------------------
+    # A cross-vendor claim that does not say WHICH vendor, WHICH cli, WHICH model and under WHICH
+    # sandbox is a narrated claim. shell_commands_executed == 0 is the load-bearing one: it is what
+    # makes the write-mode deviation harmless to the comparison, because an arm that ran no command
+    # is not exercising a capability the Claude arms never had.
+    WANT_BACKEND = {"vendor": "openai", "cli": "codex-cli 0.142.5", "model_slug": "gpt-5.5",
+                    "reasoning_effort": "high", "sandbox": "workspace-write",
+                    "write_mode": "return"}
+    p6 = []
+    for e in ENTRIES:
+        for sub in ("c-codex",) + (("r2/c-codex",) if e in R2_ENTRIES else ()):
+            b = ((comp(e, sub.replace("/", os.sep)).get("compilation_report") or {})
+                 .get("backend") or {})
+            for k, v in WANT_BACKEND.items():
+                if b.get(k) != v:
+                    p6.append("%s/%s: backend.%s is %r" % (e, sub, k, b.get(k)))
+            if b.get("shell_commands_executed") != 0:
+                p6.append("%s/%s: ran %s shell command(s)" % (e, sub,
+                                                              b.get("shell_commands_executed")))
+            if b.get("files_read_outside_workspace"):
+                p6.append("%s/%s: read outside the workspace" % (e, sub))
+            if not b.get("approval"):
+                p6.append("%s/%s: no approval posture recorded" % (e, sub))
+    res["AC-XV-06"] = not p6
+    why["AC-XV-06"] = "; ".join(p6[:4]) or "22 compilations carry the full backend record"
+
+    # --- AC-XV-07: the published claim says what the fixture backs, and no more ----------------
+    # The other half of this is tools/narrated-claims.txt, where the retired phrases are listed and
+    # T154 asserts their ABSENCE. Here the replacement is asserted PRESENT, in both languages,
+    # because a claim deleted from one page and rewritten on the other is the exact drift repo
+    # rule 3 exists to catch. The paper is deliberately NOT in this list: it is revised in its own
+    # round, and asserting a phrase into a document nobody has rewritten yet would be the same
+    # narrated claim in the other direction.
+    CLAIMS = (
+        ("README.md", "four blind compilers across two vendors"),
+        ("site/diamond/index.html", "four blind compilers across two vendors"),
+        ("site/es/diamond/index.html", "cuatro compiladores ciegos de dos vendors"),
+        ("site/llms.txt", "four blind compilers across two vendors"),
+        ("site/how/index.html", "four blind compilers, two vendors"),
+        ("site/es/how/index.html", "cuatro compiladores ciegos, dos vendors"),
+    )
+    p7 = []
+    for rel, phrase in CLAIMS:
+        p = os.path.join(root, rel.replace("/", os.sep))
+        if not os.path.isfile(p):
+            p7.append("%s: missing" % rel)
+            continue
+        body = io.open(p, encoding="utf-8", errors="replace").read()
+        if phrase not in body:
+            p7.append("%s does not carry the measured claim %r" % (rel, phrase[:44]))
+    # and the retirement is registered where the absence gate can see it
+    ncl = os.path.join(root, "tools", "narrated-claims.txt")
+    if os.path.isfile(ncl):
+        reg = io.open(ncl, encoding="utf-8", errors="replace").read()
+        for needle in ("cross-vendor is not yet measured", "cross-vendor not yet measured",
+                       "cross-vendor no est"):
+            if needle not in reg:
+                p7.append("tools/narrated-claims.txt does not retire %r" % needle)
+    else:
+        p7.append("tools/narrated-claims.txt missing")
+    res["AC-XV-07"] = not p7
+    why["AC-XV-07"] = "; ".join(p7[:4]) or "6 pages carry the measured claim; 3 phrases retired"
+
+try:
+    measure()
+finally:
+    # every uscha-xv-* temp tree goes even if a case raised
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".xv-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T157" in
+  OK*) PASS=$((PASS+1)); echo "  ok   cross-vendor arm (AC-XV-01..07): $T157";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T157";;
 esac
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -12887,6 +13261,11 @@ FAMILIES = (
      _seq("AC-VC", 1, 2)),
     (".de-cases.json", "deferred-lows-closed", "T155",              # 1.98.0
      _seq("AC-DE", 1, 4)),
+    # AC-XV-02 and AC-XV-04 read tools/bench-compile-codex.py, which lives at the REPO root and
+    # is not shipped inside the kit -- from an extracted kit they report None = UNMEASURED,
+    # never a silent pass.
+    (".xv-cases.json", "cross-vendor-arm", "T157",                  # ADR-042
+     _seq("AC-XV", 1, 7)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

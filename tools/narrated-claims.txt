@@ -6,11 +6,13 @@
 # ones that were rewritten, and the smoke suite asserts they stay rewritten: a phrase listed here
 # MUST NOT appear in the path listed beside it.
 #
-# This is an ALLOWLIST, deliberately -- not a general ban on the word VISION. Two labels are
+# This is an ALLOWLIST, deliberately -- not a general ban on the word VISION. ONE label is
 # correct today and must survive: the diamond table's "arbitrary systems" row (still VISION: the
-# bounded half is measured, generalization is not) and "cross-vendor is not yet measured" (VISION
-# until the cross-vendor arm measures it). A blanket scan would flag those, and a gate that
-# flags what is right trains the reader to ignore it. It also means the historical record --
+# bounded half is measured, generalization is not). Until 1.99.0 there was a second --
+# "cross-vendor is not yet measured" -- and entry 7 below is what happened to it: ADR-042
+# measured it, so the label was retired by being ANSWERED rather than by being rewritten, which
+# is the outcome this whole doctrine is supposed to produce. A blanket scan would flag the
+# survivor, and a gate that flags what is right trains the reader to ignore it. It also means the historical record --
 # `uscha-kit/CHANGELOG-*.md`, `audits/`, the paper's "Future Work", ISSUES-DEFERRED.md as a
 # mechanism name, and every code/CSS token -- is out of scope by construction: nothing scans
 # them, because nothing but the paths below is scanned.
@@ -83,6 +85,23 @@ formats/uscha-A-field-manual.html :: §11 · The outer loop <span class="st prop
 # 6 -- uscha top fixture F3, marked *planned* in a paragraph that argued its own redundancy.
 docs/uscha-top/FIXTURES.md :: *(planned)*
 docs/uscha-top/FIXTURES.md :: | F3 re-pinned scope | planned |
+
+# 7 (1.99.0) -- the cross-vendor label, retired by MEASUREMENT. Every blind compilation in the
+# Diamond Bench came from one vendor until ADR-042 ran the whole bench through OpenAI Codex:
+# 12 entries, 10 of them twice, every compilation validated, zero refusals. So the pages stop
+# saying the arm is missing and say what it found -- including the part that is not flattering,
+# which is that the fourth compiler moved `transformer` from PASS to PARTIAL. The replacement
+# text is asserted PRESENT by T157 (AC-XV-07); its absence here is asserted by T154. Both halves
+# are needed: a claim deleted from one page and rewritten on the other is the drift repo rule 3
+# exists to catch. Of these six paths only FOUR are twins -- the diamond pair and the how
+# pair; README.md and site/llms.txt have no ES twin at all, so AC-VC-02's equal-changed-line
+# check covers two pairs here, not three.
+README.md :: cross-vendor not yet measured
+site/llms.txt :: cross-vendor not yet measured
+site/diamond/index.html :: cross-vendor is not yet measured
+site/es/diamond/index.html :: cross-vendor no está medido todavía
+site/how/index.html :: three Claude-family models (one vendor)
+site/es/how/index.html :: tres modelos de la familia Claude (un solo vendor)
 
 [twins]
 

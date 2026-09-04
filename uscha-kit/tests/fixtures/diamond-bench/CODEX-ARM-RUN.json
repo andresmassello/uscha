@@ -1,0 +1,309 @@
+{
+  "_generated_by": "tools/bench-compile-codex.py, harvested into this manifest (ADR-042)",
+  "_contract": "The cross-vendor arm's run record. Round 1 wrote <entry>/c-codex/ for all 12 entries; round 2 wrote <entry>/r2/c-codex/ for the 10 entries that already carried an r2/. No prompt bytes are stored: a prompt is the entry's canonical package (committed beside this file) plus the run contract in tools/codex-arm/slots.json, so the sha256 is re-derivable -- `bench-compile-codex.py --dry-run` re-renders it and smoke T157 (AC-XV-02) compares. Storing the bytes would put a second copy of the canonical package in the repo, which is how two copies start to differ.",
+  "vendor": "openai",
+  "cli": "codex-cli 0.142.5",
+  "model_slug": "gpt-5.5",
+  "reasoning_effort": "high",
+  "write_mode": "return",
+  "sandbox": "workspace-write",
+  "approval_requested": "never",
+  "run1_generated": "2026-09-04T01:48:03.241001+00:00",
+  "run2_generated": "2026-09-04T01:55:10.450717+00:00",
+  "totals": {
+    "entries_round1": 12,
+    "entries_round2": 10,
+    "promoted_round1": 12,
+    "promoted_round2": 10,
+    "refused": 0,
+    "shell_commands_executed": 0,
+    "files_read_outside_workspace": 0,
+    "wall_seconds": 801.2
+  },
+  "entries": {
+    "crud-store": {
+      "prompt_sha256": "5a1fe91216493ec1cbc2ec884ed7debb0bf53fd54824572f43baedd41a1f8877",
+      "prompt_bytes": 4393,
+      "oracle_strings_checked": 20,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 36.8,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 16912,
+        "output_tokens": 1592
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 36.8,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 16912,
+        "output_tokens": 1636
+      }
+    },
+    "guard": {
+      "prompt_sha256": "9d4e91f8676957baa1d0fe569191fbb1198cb47857d22380e2fd1189a31d7688",
+      "prompt_bytes": 8617,
+      "oracle_strings_checked": 54,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 56.2,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 18375,
+        "output_tokens": 2800
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 62.7,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 18368,
+        "output_tokens": 3190
+      }
+    },
+    "ledger-lite": {
+      "prompt_sha256": "f0634949b8db7f290e281bcd246db0420a46828ff7c9f3deb566e77519c831ac",
+      "prompt_bytes": 6933,
+      "oracle_strings_checked": 30,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 32.0,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 18020,
+        "output_tokens": 1483
+      },
+      "run2": null,
+      "run2_absent_reason": "this entry carries no r2/ for any compiler (ADR-028/029 added it after ADR-027's second round), so a codex-only second run would make its intra/inter ratio a different quantity from the other ten -- one model's rerun against four models' spread. Named absent, never measured as zero."
+    },
+    "parser": {
+      "prompt_sha256": "75a25379c4e5c2a29b871e462e263a3489bedd3572d59d24396918c8200028b0",
+      "prompt_bytes": 4128,
+      "oracle_strings_checked": 34,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 32.1,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17334,
+        "output_tokens": 1535
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 35.0,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17334,
+        "output_tokens": 1570
+      }
+    },
+    "protocol-adapter": {
+      "prompt_sha256": "2e1f1ea79c099971e7f70fc1b93db0e0f538a08022f20ddb907b9cd453a66f8a",
+      "prompt_bytes": 4594,
+      "oracle_strings_checked": 23,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 34.9,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17448,
+        "output_tokens": 1705
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 33.7,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17441,
+        "output_tokens": 1578
+      }
+    },
+    "rate-limiter": {
+      "prompt_sha256": "8974112b081a65cf65431bbb8896b29d7d8019b7e8f6cf530d795751e9c454cd",
+      "prompt_bytes": 4997,
+      "oracle_strings_checked": 31,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 34.8,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17579,
+        "output_tokens": 1531
+      },
+      "run2": null,
+      "run2_absent_reason": "this entry carries no r2/ for any compiler (ADR-028/029 added it after ADR-027's second round), so a codex-only second run would make its intra/inter ratio a different quantity from the other ten -- one model's rerun against four models' spread. Named absent, never measured as zero."
+    },
+    "rest-handler": {
+      "prompt_sha256": "7131b28881d189ae35a919fec6a5d17ae560b276f5ee20f6a651e85a5fe0ac5c",
+      "prompt_bytes": 5126,
+      "oracle_strings_checked": 31,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 40.2,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17675,
+        "output_tokens": 2009
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 37.6,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17668,
+        "output_tokens": 1814
+      }
+    },
+    "scheduler": {
+      "prompt_sha256": "0bc2890741a8ee633da14b8679abf397c01ba708b6c3fad03af8d03b9a282a05",
+      "prompt_bytes": 6561,
+      "oracle_strings_checked": 37,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 43.3,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 18002,
+        "output_tokens": 2130
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 40.4,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17995,
+        "output_tokens": 1995
+      }
+    },
+    "state-machine": {
+      "prompt_sha256": "73a275dab2e6012c855fbc47bd12403d8e5b01ab18ad0f8ef17fe45293660cd8",
+      "prompt_bytes": 3604,
+      "oracle_strings_checked": 20,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 19.8,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17222,
+        "output_tokens": 860
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 18.9,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17533,
+        "output_tokens": 759
+      }
+    },
+    "transformer": {
+      "prompt_sha256": "1a6a5553eef56ff5c46610ac6dd7616bb1895027c85d46f2fe8cb6ee083f36f8",
+      "prompt_bytes": 3831,
+      "oracle_strings_checked": 24,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 25.7,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17305,
+        "output_tokens": 1132
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 27.1,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17595,
+        "output_tokens": 1172
+      }
+    },
+    "ui-render": {
+      "prompt_sha256": "fb0e82e7a1a2b32344b2d8569a559d55d2ac4236863ba2820bee2bbb6f056489",
+      "prompt_bytes": 4423,
+      "oracle_strings_checked": 20,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 38.1,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17401,
+        "output_tokens": 1858
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 39.0,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17387,
+        "output_tokens": 1799
+      }
+    },
+    "worker": {
+      "prompt_sha256": "25a1e7644b97de102d94220ddf0bdbf54f66c4195a00d85e33f133780b46d1d3",
+      "prompt_bytes": 4539,
+      "oracle_strings_checked": 19,
+      "run1": {
+        "status": "PROMOTED",
+        "wall_seconds": 38.3,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17721,
+        "output_tokens": 1826
+      },
+      "run2": {
+        "status": "PROMOTED",
+        "wall_seconds": 37.8,
+        "shell_commands_executed": 0,
+        "files_read_outside_workspace": [],
+        "validate_exit": 0,
+        "output_schema_honoured": "schema-honoured",
+        "input_tokens": 17410,
+        "output_tokens": 1855
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "073d8935a3aa14dfb844ed9d77e683c213f2e85d9e985cb4f7213a38b09d54af",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "Pure Python 3.8+ standard library only.",
+    "Single file source/impl.py, executable as python impl.py.",
+    "Reads all stdin and writes only the final JSON view or exactly ERROR to stdout.",
+    "Does not use filesystem, network, or third-party packages.",
+    "All malformed input is handled in-process and exits with status 0."
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "445eabbe2eac8e87d30f3cc66e09065a0d81537b23aaf5797446efc084475feb"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-UI-01",
+        "AC-UI-02",
+        "AC-UI-03",
+        "AC-UI-04",
+        "AC-UI-05",
+        "AC-UI-06",
+        "INV-UI-RESET-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-UI-06",
+      "decision": "Reject objects with extra or missing keys at every contract level: root, model, field, and event.",
+      "rationale": "The canonical package defines precise JSON shapes and treats malformed shape as ERROR, so exact-key validation is the most deterministic interpretation."
+    },
+    {
+      "ir_region": "AC-UI-01",
+      "decision": "Require input event values to be strings, since input applies only to string fields.",
+      "rationale": "The model has only string and boolean fields; accepting non-string JSON values for a string field would create an unsupported field value type."
+    },
+    {
+      "ir_region": "AC-UI-05",
+      "decision": "Input and toggle events do not clear errors or change submitted; only submit and reset affect those state fields.",
+      "rationale": "The spec assigns submitted/errors effects only to submit and reset, and says events keep applying after failed submit without defining edit-time revalidation."
+    },
+    {
+      "ir_region": "AC-UI-05",
+      "decision": "Preserve the initial field order in the emitted fields object and in validation error ordering.",
+      "rationale": "Errors are explicitly ordered by field order, and using the same order for the view keeps output deterministic while preserving every field."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:53:52.964367+00:00",
+      "finished": "2026-09-04T01:54:31.958145+00:00"
+    },
+    "constraint_handling": "Pure Python 3.8+ standard library only.; Single file source/impl.py, executable as python impl.py.; Reads all stdin and writes only the final JSON view or exactly ERROR to stdout.; Does not use filesystem, network, or third-party packages.; All malformed input is handled in-process and exits with status 0.",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "9428c24ae340e38f830a46fb382ea5735b5bf779fcf47410ed21c35893681270"
+}

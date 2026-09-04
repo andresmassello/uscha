@@ -40,7 +40,7 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v1.98.1** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v1.99.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -169,7 +169,7 @@ automatic tool can perform: a human verdict.
                                               system (= 100% drift)
 
    round trip · bench-roundtrip — how much of the asset the reverse organs re-anchor
-   from the compiled code: 0.828 measured (12 archetypes) — names AND behaviour
+   from the compiled code: 0.815 measured (12 archetypes) — names AND behaviour
 ```
 
 **What each arrow is, in the engine (kit 1.96.0, 53 subcommands, all measured):**
@@ -178,20 +178,25 @@ automatic tool can perform: a human verdict.
 |---|---|---|
 | Asset → typed graph | `ir-extract`, `ir-render` | the whole package becomes one canonical IR (M2, ADR-015) — deterministic, `UNTYPED` is a measurement not an error |
 | Forward, the compiler | `compile-validate`, `compile-ingest` | any model produces code; the engine validates the output contract and never compiles (M3, ADR-016) |
-| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 9 PASS · 3 PARTIAL**, three Claude-family models (Haiku · Sonnet · Opus — one vendor; cross-vendor not yet measured), JS included (M4/M5, ADR-017/018/028/029) |
+| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 8 PASS · 4 PARTIAL**, four blind compilers across two vendors (Haiku · Sonnet · Opus · OpenAI Codex `gpt-5.5`), JS included (M4/M5, ADR-017/018/028/029/042) |
 | Reverse, facts | `discover`, `golden-diff` (+ the `/uscha-characterize` skill) | system map + mechanically captured golden; typed candidate observations with evidence class (M1, ADR-013) |
 | Reverse, the human gate | `curate`, `promote`, `curation-check`, `bench-curate` | one verdict per candidate, append-only ledger verified against git; unjudged → `pr-ready` blocked naming it (ADR-009/010, INV-CURATION-01) |
-| Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.828**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |
+| Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.815**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |
 
-**Read the numbers the way the repo does.** 9 of 12 archetypes regenerate to the same system
-under an oracle the compilers never saw — that is the closed loop working. 0.828 is the mean
-*recoverability* of the asset from compiled code counting only static and behavioural
-footing. It read **0.062** until 1.90.0, with the behaviour dimension `UNMEASURED`, because no
-oracle case carried an AC tag — a named absence, not a zero. The 12 bench oracles are now
-curated per case (`ORACLE-TAGS-CURATED.json`, human-authored; payloads and expectations
-untouched), so the dimension is measured and the number says the reverse organs anchor **names
-and behaviour**. Both numbers are published rather than smoothed, and what moved between them
-was the tagging, not the code under test. And `bench-r2` measured
+**Read the numbers the way the repo does.** 8 of 12 archetypes regenerate to the same system
+under an oracle the compilers never saw — that is the closed loop working. It was 9 of 12 until
+1.99.0, when a fourth compiler from a second vendor read one genuinely ambiguous sentence in
+`transformer` the other way and lost a case the three Claude-family models had agreed on
+(ADR-042). The number went down because the bench got harder, and the whole point of the arm was
+to let it. 0.815 is the mean *recoverability* of the asset from compiled code counting only
+static and behavioural footing. It read **0.062** until 1.90.0, with the behaviour dimension
+`UNMEASURED`, because no oracle case carried an AC tag — a named absence, not a zero. The 12
+bench oracles are now curated per case (`ORACLE-TAGS-CURATED.json`, human-authored; payloads and
+expectations untouched), so the dimension is measured and the number says the reverse organs
+anchor **names and behaviour**; it read 0.828 over three compilers and 0.815 over four, because
+an entry's recoverability is the mean over its compilations. Every number is published rather
+than smoothed, and what moved between them was the tagging and the arm, not the code under test.
+And `bench-r2` measured
 that same-model reruns differ structurally about as much as different models do (aggregate
 `NOISY`) — so one earlier variance narrative was **retracted**. Every claim above is a subcommand
 you can run; every unmeasured part is labeled. That honesty is the method applied to itself.

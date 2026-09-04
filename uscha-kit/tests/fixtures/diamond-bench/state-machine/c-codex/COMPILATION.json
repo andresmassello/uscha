@@ -1,0 +1,80 @@
+{
+  "schema_version": "compile/0.1",
+  "canonical_ir": {
+    "ir_hash": "e3754924dc80a7dbdfa6ee98c6aa82a06ecc57b577e930f3f2370248cbeea69c",
+    "schema_version": "0.1"
+  },
+  "target_stack": "python",
+  "implementation_constraints": [
+    "pure Python standard library only",
+    "Python 3.8+ compatible",
+    "reads all input from stdin",
+    "prints exactly one line: final state name or ERROR",
+    "exits normally with status 0"
+  ],
+  "source": [
+    {
+      "unit": "source/impl.py",
+      "sha256": "391fbada17df6d2294b932ec587ba367f805c794337678618d90ab1b1c9f5224"
+    }
+  ],
+  "tests": [],
+  "trace_manifest": [
+    {
+      "unit": "source/impl.py",
+      "implements": [
+        "AC-SM-01",
+        "AC-SM-02",
+        "AC-SM-03",
+        "AC-SM-04",
+        "AC-SM-05",
+        "AC-SM-06",
+        "INV-SM-TOTAL-01"
+      ]
+    }
+  ],
+  "unresolved_intent": [
+    {
+      "ir_region": "AC-SM-06",
+      "decision": "Read the entire stdin stream before parsing JSON.",
+      "rationale": "The package specifies stdin contains one JSON value but does not constrain whitespace or line layout, so whole-stream parsing accepts arrays spread across lines while still rejecting invalid JSON."
+    },
+    {
+      "ir_region": "AC-SM-05",
+      "decision": "Reject every non-string JSON element, including null, numbers, booleans, objects, and arrays.",
+      "rationale": "The package says non-string elements are errors; JSON booleans become Python bool values and must not be treated as event names."
+    },
+    {
+      "ir_region": "INV-SM-TOTAL-01",
+      "decision": "Use an explicit transition table containing all four valid (state, event) pairs.",
+      "rationale": "The constitution requires the machine to be total and closed over known states and events, and an explicit table makes undefined valid pairs impossible."
+    },
+    {
+      "ir_region": "AC-SM-04",
+      "decision": "Stop processing and print ERROR immediately when an invalid event is encountered.",
+      "rationale": "The final successful state is only meaningful for a fully valid event array; the package does not require continuing after detecting an error."
+    }
+  ],
+  "compilation_report": {
+    "stack": "python",
+    "model": "codex",
+    "model_version": "gpt-5.5 via codex-cli 0.142.5",
+    "timestamps": {
+      "started": "2026-09-04T01:45:59.827936+00:00",
+      "finished": "2026-09-04T01:46:19.625233+00:00"
+    },
+    "constraint_handling": "pure Python standard library only; Python 3.8+ compatible; reads all input from stdin; prints exactly one line: final state name or ERROR; exits normally with status 0",
+    "backend": {
+      "vendor": "openai",
+      "cli": "codex-cli 0.142.5",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "high",
+      "sandbox": "workspace-write",
+      "approval": "requested never; see run report for what the CLI applied",
+      "write_mode": "return",
+      "shell_commands_executed": 0,
+      "files_read_outside_workspace": []
+    }
+  },
+  "_integrity": "01a97346ca3dc62332bcc83990e9c268c6f12a13e55d57d11e4bcef0fe16a747"
+}
