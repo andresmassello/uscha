@@ -50,7 +50,7 @@ installed), the Windows 8.3 short-path trap lives on `windows` under `runneradmi
 slowest cell, so the wall clock barely moves. What the reduced grid does **not** measure, said out
 loud: `ubuntu`/3.8, `macos`/3.8, `windows`/3.13.
 
-Nothing is published on three cells. `tools/release.py` waits for the branch push's 3-cell run
+Nothing is published on three cells. `tools/release.py` tags right after the push (1.98.1);
 before it creates the tag (I8), the tag then triggers the 6-cell run on the same SHA, and
 `publish.yml` reuses **that** run — selected by `head_branch` (the tag name), never by "the
 newest run for this SHA", because both runs exist on that commit and "newest" is a race whose

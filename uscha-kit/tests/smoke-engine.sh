@@ -10333,19 +10333,22 @@ def adr_block(comps):
     return "\n".join(out)
 
 
-def fixture(comps, go_live="2026-12-01", adr=True):
+def fixture(comps, go_live="2026-12-01", adr=True, spec_head=None, init=True):
     d = tempfile.mkdtemp(prefix="uscha-lc-")
     TMPS.append(d)
     os.makedirs(os.path.join(d, "docs", "adr"))
     head = "# SPEC\n\n"
     if go_live:
         head += "**Go-live:** " + go_live + "\n\n"
+    if spec_head is not None:      # 1.98.1: a SPEC that declares the go-live some other way
+        head = spec_head
     write(os.path.join(d, "SPEC.md"), head + SPEC_BODY)
     write(os.path.join(d, "ACCEPTANCE.md"), "# ACCEPTANCE\n\n- [x] AC-01 - lifecycle\n")
     write(os.path.join(d, "c.json"), json.dumps(CFG))
     if adr:
         write(os.path.join(d, "docs", "adr", "ADR-007-stack.md"), adr_block(comps))
-    eng(d, "init", "--config", "c.json", "--out", "L.json")
+    if init:      # a parse-only case reads spec-check, which needs no ledger (1.98.1)
+        eng(d, "init", "--config", "c.json", "--out", "L.json")
     return d
 
 
@@ -10447,6 +10450,68 @@ res["AC-LC-05"] = bool(sa and sa == sb
                        and "lifecycle" not in ready(d5c)
                        and "lifecycle" not in dash(d5c))
 
+
+def lc_line(out):
+    """The one advisory line as the reader sees it, with whatever bullet precedes it stripped.
+    Both surfaces render the SAME _lifecycle_summary, so comparing them is the pin."""
+    hit = [ln[ln.index("lifecycle:"):].strip() for ln in out.split("\n") if "lifecycle:" in ln]
+    return hit[0] if hit else None
+
+
+# --- AC-LC-06 (1.98.1, field report): the same SPEC must read the same on BOTH surfaces.
+# readiness reads SPEC.md itself, and it used to glue a newline in FRONT of the file: the
+# opening fence was no longer line 0, the frontmatter went invisible, and a SPEC that
+# spec-check measured read "UNMEASURED - no go-live declared" under readiness. The pin
+# compares the two surfaces against EACH OTHER, not against a literal, so a reworded line
+# cannot make it pass or fail for the wrong reason.
+d6 = fixture([OK_C, EXPIRED],
+             spec_head="---\ngo_live: 2026-12-01\n---\n\n# SPEC\n\n")
+j6 = scj(d6)
+l6 = lc_line(ready(d6))
+res["AC-LC-06"] = bool(j6["status"] == "measured" and j6["go_live"] == "2026-12-01"
+                       and l6 and l6 == lc_line(sc(d6)[1])
+                       and "UNMEASURED" not in l6)
+
+def go_live_of(head):
+    """What the engine reads as the declared go-live of a SPEC that opens with `head`.
+    Parse-only, so the fixture skips `init`: spec-check takes --spec and needs no ledger."""
+    return scj(fixture([OK_C, EXPIRED], spec_head=head, init=False))["go_live"]
+
+
+# --- AC-LC-07 (1.98.1, field report): the inline form is a declaration wherever a human
+# writes it -- as a list item of any marker, inside a blockquote, and with prose after the
+# date. Every prefix the pattern claims is MEASURED here rather than narrated in a comment.
+# The date stays a WHOLE token: 2026-12-011 is not a go-live with a stray digit, it is not
+# a go-live at all.
+d7 = fixture([OK_C, EXPIRED],
+             spec_head="# SPEC\n\n- **Go-live:** 2026-12-01 (delivery 1). The rest is prose.\n\n")
+j7 = scj(d7)
+l7 = lc_line(ready(d7))
+res["AC-LC-07"] = bool(j7["status"] == "measured" and j7["go_live"] == "2026-12-01"
+                       and l7 and l7 == lc_line(sc(d7)[1])
+                       and go_live_of("# S\n\n* **Go-live:** 2026-12-01\n") == "2026-12-01"
+                       and go_live_of("# S\n\n1. **Go-live:** 2026-12-01\n") == "2026-12-01"
+                       and go_live_of("# S\n\n> **Go-live:** 2026-12-01\n") == "2026-12-01"
+                       and go_live_of("# S\n\n> - **Go-live:** 2026-12-01\n") == "2026-12-01"
+                       and go_live_of("# S\n\n   **Go-live:** 2026-12-01\n") == "2026-12-01"
+                       and go_live_of("# S\n\n- **Go-live:** 2026-12-011\n") is None)
+
+# --- AC-LC-08 (1.98.1): where the pattern must NOT fire. A SPEC that QUOTES the template is
+# showing the form, not declaring a date -- and the quoted line comes FIRST, so a scan that
+# read it would let an example beat the real declaration below. Both fence markers are
+# skipped; an indented block is the same thing without a fence (four spaces or a tab opens
+# one, which is why the prefix allows at most three spaces and never a tab); and a marker
+# glued to the label is not a list item.
+BT = chr(96) * 3
+FENCED = ("# S\n\n" + BT + "\n**Go-live:** 2020-01-01\n" + BT
+          + "\n\n**Go-live:** 2026-12-01\n")
+TILDED = "# S\n\n~~~\n**Go-live:** 2020-01-01\n~~~\n\n**Go-live:** 2026-12-01\n"
+res["AC-LC-08"] = bool(go_live_of(FENCED) == "2026-12-01"
+                       and go_live_of(TILDED) == "2026-12-01"
+                       and go_live_of("# S\n\n    **Go-live:** 2026-12-01\n") is None
+                       and go_live_of("# S\n\n\t**Go-live:** 2026-12-01\n") is None
+                       and go_live_of("# S\n\n-**Go-live:** 2026-12-01\n") is None)
+
 sidecar(kit, ".lc-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if v is False]
 skip = [k for k, v in res.items() if v is None]
@@ -10457,7 +10522,7 @@ print(("OK %d cases" % len(res)) + tail if not bad else "BAD " + ",".join(sorted
 PY
 )
 case "$T148" in
-  OK*) PASS=$((PASS+1)); echo "  ok   stack lifecycle vs go-live (AC-LC-01..05): $T148";;
+  OK*) PASS=$((PASS+1)); echo "  ok   stack lifecycle vs go-live (AC-LC-01..08): $T148";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T148";;
 esac
 
@@ -10995,11 +11060,23 @@ def measure():
         and PLACEHOLDER not in cl_after and FILLED in cl_after)
     why["AC-RL-03"] = "rc=(%s,%s) X=%s X+1=%s" % (r14.returncode, r5.returncode, x_paths, x1_paths)
 
+    # The amend must be a REAL amend whatever the clock says. A bare `--amend --no-edit` reuses
+    # the tree, the message, the author and the author date, and takes the committer date from
+    # NOW: run inside the same second that created X it produces a BYTE-IDENTICAL commit object,
+    # X's sha does not move, there is nothing for I5 to detect, and the case goes green by
+    # no-op. That is how it stayed green on ubuntu and windows -- which happened to cross a
+    # second boundary -- and went red on the faster macos/py3.8 cell (1.98.0). Pinning the
+    # author date to a fixed instant makes the amended object differ every time, and the sha
+    # move is ASSERTED: a fixture that failed to amend now reports ITSELF, never a pass.
     am = fork("uscha-rl-amend-", base)
-    sh(am, "git", "commit", "--amend", "--no-edit", "-q")
+    x_before = sh(am, "git", "rev-parse", "HEAD").stdout.strip()
+    sh(am, "git", "commit", "--amend", "--no-edit", "-q", "--date=2001-02-03T04:05:06+00:00")
+    x_after = sh(am, "git", "rev-parse", "HEAD").stdout.strip()
     r_am = rel_run(am, "1.0.1", "--suite-cmd", SUITE, "--from-step", "5", "--to-step", "5")
-    res["AC-RL-04"] = bool(r_am.returncode == 2 and "REFUSED -- I5" in r_am.stdout)
-    why["AC-RL-04"] = "rc=%s out=%r" % (r_am.returncode, r_am.stdout[-90:])
+    res["AC-RL-04"] = bool(x_before and x_after and x_before != x_after
+                           and r_am.returncode == 2 and "REFUSED -- I5" in r_am.stdout)
+    why["AC-RL-04"] = "amend %s->%s rc=%s out=%r" % (
+        x_before[:8], x_after[:8], r_am.returncode, r_am.stdout[-90:])
 
     sc = fork("uscha-rl-src-", base)
     write(sc, "src/app.py", "x = 2" + NL)
@@ -11049,7 +11126,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T151" in
-  OK*) PASS=$((PASS+1)); echo "  ok   release ritual (AC-RL-01..05): $T151";;
+  OK*) PASS=$((PASS+1)); echo "  ok   release ritual (AC-RL-01..06): $T151";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T151";;
 esac
 
@@ -12795,7 +12872,7 @@ FAMILIES = (
     (".fr-cases.json", "freshness-content", "T147",                 # ADR-039
      _seq("AC-FR", 1, 11)),
     (".lc-cases.json", "stack-lifecycle", "T148",                   # ADR-040
-     _seq("AC-LC", 1, 5)),
+     _seq("AC-LC", 1, 8)),
     (".au-cases.json", "audit-fixes", "T149",                       # 1.94.1
      _seq("AC-AU", 1, 6)),
     (".df-cases.json", "dogfood-ancestry", "T150",                  # ADR-041

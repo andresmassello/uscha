@@ -112,8 +112,9 @@ git is mid-operation, nothing more.
   `HEAD:main` and lets the SERVER enforce the fast-forward, then moves the local ref only
   when no worktree holds it (otherwise it prints the `git -C <path> merge --ff-only <sha>`
   for the human);
-- **I8** the tag is created only on X+1 and only once the `smoke` run for that exact SHA is
-  completed and successful.
+- **I8** the tag is created only on X+1, right after the push; `publish.yml` waits for the tag's
+  own six-cell smoke run and refuses on red (amended 1.98.1: the branch-run wait before tagging
+  was redundant with that gate and cost ~20 minutes per release; `--wait-ci` keeps it opt-in).
 
 The human still writes the changelog prose, still owns the published claims, and still approves
 the tag. The script owns the mechanical order that was previously eight sentences of prose.

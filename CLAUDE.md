@@ -78,14 +78,13 @@ itself.
      `git push origin HEAD:main` (the server enforces the fast-forward), never by a
      checkout -- the release runs in a worktree and main lives in the primary tree, so the
      local ref is moved only when no worktree holds it;
-   - **I8** the tag is created only on X+1 and only once the `smoke` run for that exact SHA is
-     completed and successful. Since 1.97.0 the two runs are not the same grid: a branch push
-     runs **3 cells** (ubuntu/3.13, macos/3.13, windows/3.8 -- one per platform-only trap plus
-     the interpreter floor) and a tag runs the **6**. So the TAG waits for the 3-cell run of
-     X+1, and `publish.yml` waits for the 6-cell run the tag itself triggers -- it selects that
-     run by `head_branch` (the tag name), never by "the newest run for this SHA", because both
-     exist on the same commit and "newest" is a race whose losing side publishes on three cells.
-     A tag on an unmeasured SHA still turns a release into a wait.
+   - **I8** the tag is created only on X+1, right after the push (1.98.1). A branch push runs
+     **3 cells** (ubuntu/3.13, macos/3.13, windows/3.8 -- one per platform-only trap plus the
+     interpreter floor) and a tag runs the **6**; `publish.yml` waits for the 6-cell run the
+     tag itself triggers -- it selects that run by `head_branch` (the tag name), never by
+     "the newest run for this SHA" -- and refuses on red. So a red tag is a wait, never a
+     publish (1.98.0 proved it: red on macos/py3.8, nothing reached npm). The script no longer
+     waits for the branch run before tagging; `--wait-ci` polls it first, opt-in.
 
    `AC-DF-01` is decided by git ANCESTRY, never by a clock (ADR-041). When X touches
    `qa_ledger.py` it reads **UNMEASURED** -- honestly: the ledger lands in X+1 -- and the tagged

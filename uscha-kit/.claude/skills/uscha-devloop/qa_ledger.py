@@ -11258,18 +11258,33 @@ def _lc_valid_date(s):
         return False
 _LC_KEY = re.compile(r"^lifecycle\s*:\s*(.*)$")
 _LC_GOLIVE_FM = re.compile(r"^go[-_ ]?live\s*:\s*(.+?)\s*$", re.I)
-_LC_GOLIVE_LINE = re.compile(r"^\s*\*\*\s*go[-_ ]?live\s*:?\s*\*\*\s*:?\s*"
+# the body form. A list marker or a blockquote prefix in front of the bold label is still the
+# same declaration -- a SPEC that writes it as a bullet used to read as "no go-live declared"
+# (1.98.1, field report). The prefix is markdown-CORRECT, not merely permissive: at most three
+# leading spaces and never a tab, because four spaces or a tab opens an INDENTED CODE BLOCK --
+# an example, not a declaration -- and a list marker must be FOLLOWED by whitespace, so the
+# glued `-**Go-live:**` is not a list item. Fenced blocks are skipped by the caller for the
+# same reason. The trailing \b keeps the date a WHOLE token: it must be followed by a
+# non-digit or the end of the line, so a longer number can never be truncated into a date,
+# while ordinary prose after it ("(delivery 1). ...") is allowed.
+_LC_GOLIVE_LINE = re.compile(r"^ {0,3}(?:> ?)*(?:(?:[-*+]|\d+[.)])\s+)?"
+                             r"\*\*\s*go[-_ ]?live\s*:?\s*\*\*\s*:?\s*"
                              r"(\d{4}-\d{2}-\d{2})\b", re.I)
 _LC_FIELDS = ("component", "version", "eol", "source", "checked")
 
 
 def _lc_frontmatter(lines):
     """The lines INSIDE a leading `---` frontmatter block, or None when there is none.
+    Leading blank lines and a BOM are skipped before the fence is looked for: a file whose
+    text reached us with anything glued in front still opens its block at the top (1.98.1).
     An unterminated fence is not data: a half-written block reads as absent."""
-    if not lines or lines[0].strip() != "---":
+    i = 0
+    while i < len(lines) and not lines[i].lstrip("\ufeff").strip():
+        i += 1
+    if i >= len(lines) or lines[i].lstrip("\ufeff").strip() != "---":
         return None
     body = []
-    for ln in lines[1:]:
+    for ln in lines[i + 1:]:
         if ln.strip() == "---":
             return body
         body.append(ln)
@@ -11321,7 +11336,8 @@ def _lc_parse(lines):
 
 def _lc_go_live(text):
     """The declared go-live of a SPEC: frontmatter `go_live: YYYY-MM-DD`, or a
-    `**Go-live:** YYYY-MM-DD` line anywhere in the body. None = not declared."""
+    `**Go-live:** YYYY-MM-DD` line anywhere in the body OUTSIDE a fenced block.
+    None = not declared."""
     lines = [ln.rstrip("\r") for ln in (text or "").split("\n")]
     fm = _lc_frontmatter(lines)
     if fm:
@@ -11333,7 +11349,14 @@ def _lc_go_live(text):
                 v = m.group(1).strip().strip("\x27\x22")
                 if _lc_valid_date(v):
                     return v
+    in_fence = False
     for ln in lines:
+        st = ln.strip()
+        if st.startswith("```") or st.startswith("~~~"):
+            in_fence = not in_fence
+            continue
+        if in_fence:      # a SPEC that QUOTES the form is showing it, not declaring a date --
+            continue      # and the quoted line comes FIRST (the fence idiom of _spec_check_text)
         m = _LC_GOLIVE_LINE.match(ln)
         if m and _lc_valid_date(m.group(1)):
             return m.group(1)
@@ -11445,7 +11468,12 @@ def _lifecycle_for(root, adr_dir=None, spec_text=None, fallback=True):
         if os.path.isfile(sp):
             try:
                 with open(sp, "r", encoding="utf-8", errors="replace") as fh:
-                    spec_text = (spec_text or "") + "\n" + fh.read()
+                    body = fh.read()
+                # join only when there is something to join TO. Gluing a newline in front of
+                # the file pushed its `---` off line 0, so the frontmatter went invisible and
+                # `readiness` read "no go-live declared" on a SPEC that `spec-check` measured
+                # (1.98.1, field report).
+                spec_text = (spec_text + "\n" + body) if spec_text else body
             except OSError:
                 pass
     return _lifecycle_report(adr_dir or os.path.join(root, "docs", "adr"), spec_text)

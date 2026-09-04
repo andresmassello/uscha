@@ -21,8 +21,9 @@ Six steps. Every refusal names the invariant it protects and exits non-zero:
     I5  the evidence is recorded AFTER X, and X's identity has not moved since (the amend trap)
     I6  X+1 carries evidence only: no source-relevant path in its staged set
     I7  check-terminado prints SEALED at X+1
-    I8  the tag is created only on X+1 and only once the `smoke` run for that exact SHA is
-        completed and successful
+    I8  the tag is created only on X+1, right after the push; publish.yml waits for the tag's
+        own six-cell smoke run and refuses on red, so a red tag is a wait, never a publish
+        (--wait-ci also polls the branch push's run before tagging: opt-in, off by default)
 
 X is the CODE commit: the working tree as the human left it -- the feature, the docs, the
 changelog prose -- PLUS the six version surfaces and the regenerated `SYSTEM-FACTS.json`, staged
@@ -648,7 +649,7 @@ def step6(args, dry, state):
         say("    would verify: check-terminado prints SEALED at X+1")
         say("    would push HEAD:main to origin (never a checkout: the ritual runs in a "
             "worktree), then %s"
-            % ("wait for the smoke run of X+1 and tag v" + args.version if args.tag
+            % ("tag v" + args.version + " and push it (publish.yml gates on the tag's six-cell run)" if args.tag
                else "stop -- no --tag, so nothing is published"))
         return {}
     r = engine("check-terminado")
@@ -697,11 +698,11 @@ def step6(args, dry, state):
         say("    no --tag: the tag is not created. Nothing is published until it is.")
         return {}
     tag = "v" + args.version
-    if args.no_wait_ci:
-        say("    --no-wait-ci: I8 is UNMEASURED for this tag -- nobody checked that the smoke "
-            "run for %s is green." % head[:7])
-    else:
+    if args.wait_ci:
         wait_for_smoke(head)
+    else:
+        say("    tagging right after the push: publish.yml waits for the tag's own six-cell smoke "
+            "run and refuses on red (1.98.1; --wait-ci polls the branch run first).")
     if git("tag", "-a", tag, "-m", "uscha-kit " + args.version, head).returncode != 0:
         refuse("git failure", "git tag %s failed" % tag)
     if git("push", "origin", tag).returncode != 0:
@@ -736,9 +737,11 @@ def build_parser():
                    help="write NOTHING: run every read-only check, report each verdict, print "
                         "the plan for the write steps, exit 0")
     p.add_argument("--no-push", action="store_true", help="stop step 6 before merge and push")
+    p.add_argument("--wait-ci", action="store_true",
+                   help="poll the branch push's smoke run before tagging (off by default since "
+                        "1.98.1: publish.yml already gates on the tag's six-cell run)")
     p.add_argument("--no-wait-ci", action="store_true",
-                   help="do not poll for the smoke run of X+1 before tagging (I8 UNMEASURED: "
-                        "say so out loud when you use it)")
+                   help="accepted for compatibility; this is the default since 1.98.1")
     p.add_argument("--tag", action="store_true",
                    help="create and push the annotated tag v<X.Y.Z> on X+1")
     return p
