@@ -10936,7 +10936,13 @@ from _harness import sidecar
 res, why, TMPS = {}, {}, []
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 REL = os.path.join(root, "tools", "release.py")
+GEN = os.path.join(root, "tools", "gen-skill-blocks.py")
 DOT, BS, NL = chr(183), chr(92), chr(10)
+# the two SKILL.md files the fixture's generator renders -- since 2.2.0 the version lives in
+# 18 runtime files as well as the six surfaces, and step 2 must carry them into X
+FX_SKILL = "uscha-status"
+FX_SKILLS_MD = ("uscha-kit/.claude/skills/" + FX_SKILL + "/SKILL.md",
+                "uscha-kit/skills/" + FX_SKILL + "/SKILL.md")
 PLACEHOLDER = "Suite: __SUITE__ checks " + DOT + " 0 fail; acceptance __ACC__."
 FILLED = "Suite: 7 checks " + DOT + " 0 fail; acceptance 5/5."
 SURFACES = ("uscha-kit/VERSION", "uscha-kit/uscha.config.json",
@@ -10997,6 +11003,22 @@ def fixture():
     shutil.copyfile(ENG, os.path.join(d, "uscha-kit", ".claude", "skills", "uscha-devloop",
                                       "qa_ledger.py"))
     shutil.copyfile(REL, os.path.join(d, "tools", "release.py"))
+    # 2.2.0: step 2 also re-renders the SKILL.md orientation blocks, because each one carries
+    # the kit version now. The fixture therefore ships the REAL generator plus a two-line
+    # template -- the point measured here is that the bump reaches those runtime files and that
+    # they land in X, not the wording of the block (T152 owns that).
+    shutil.copyfile(GEN, os.path.join(d, "tools", "gen-skill-blocks.py"))
+    write(d, "tools/skill-blocks/orientation-block.md",
+          "<!-- uscha kit: {{version}} -->" + NL + "full block for {{skill}}" + NL
+          + "{{here}}" + NL)
+    write(d, "tools/skill-blocks/orientation-block-short.md",
+          "<!-- uscha kit: {{version}} -->" + NL + "short block for {{skill}}" + NL)
+    write(d, "tools/skill-blocks/skills.json",
+          json.dumps({FX_SKILL: {"name": "status", "variant": "short"}}, indent=2) + NL)
+    for rel in FX_SKILLS_MD:
+        write(d, rel, "# s" + NL * 2 + "<!-- uscha:orientation-block:begin -->" + NL
+              + "<!-- uscha:orientation-block:end -->" + NL)
+    sh(d, sys.executable, os.path.join(d, "tools", "gen-skill-blocks.py"))
     write(d, "uscha-kit/CHANGELOG-1.0.1.md",
           "# uscha-kit 1.0.1" + NL * 2 + "prose." + NL * 2 + PLACEHOLDER + NL)
     write(d, "uscha.config.json", json.dumps({
@@ -11123,15 +11145,23 @@ def measure():
     r5 = rel_run(ok, "1.0.1", "--suite-cmd", SUITE, "--from-step", "5", "--to-step", "5")
     x_paths, x1_paths = touched(ok, "HEAD~1"), touched(ok, "HEAD")
     cl_after = read(ok, "uscha-kit/CHANGELOG-1.0.1.md")
-    # X = the six surfaces + the regenerated facts + WHATEVER WAS DIRTY (here src/app.py, the
-    # "feature" AC-RL-01 left uncommitted). A bump-only X would fail this: the point of the
-    # redesign is that the code commit carries the code.
+    # X = the six surfaces + the re-rendered orientation blocks + the regenerated facts +
+    # WHATEVER WAS DIRTY (here src/app.py, the "feature" AC-RL-01 left uncommitted). A bump-only
+    # X would fail this: the point of the redesign is that the code commit carries the code.
+    # The SKILL.md pair is the 2.2.0 half -- the version lives in 18 runtime files as well as
+    # the six surfaces, and a marker the release forgot to re-render is a marker that lies about
+    # which kit an install is running.
+    stamped = [read(ok, rel) for rel in FX_SKILLS_MD]
     res["AC-RL-03"] = bool(
         r14.returncode == 0 and r5.returncode == 0
-        and x_paths == sorted(list(SURFACES) + ["SYSTEM-FACTS.json", "src/app.py"])
+        and x_paths == sorted(list(SURFACES) + ["SYSTEM-FACTS.json", "src/app.py"]
+                              + list(FX_SKILLS_MD))
+        and all("uscha kit: 1.0.1" in body for body in stamped)
         and x1_paths == ["QA-LEDGER.json", "uscha-kit/CHANGELOG-1.0.1.md"]
         and PLACEHOLDER not in cl_after and FILLED in cl_after)
-    why["AC-RL-03"] = "rc=(%s,%s) X=%s X+1=%s" % (r14.returncode, r5.returncode, x_paths, x1_paths)
+    why["AC-RL-03"] = "rc=(%s,%s) X=%s X+1=%s stamped=%s" % (
+        r14.returncode, r5.returncode, x_paths, x1_paths,
+        [("uscha kit: 1.0.1" in b) for b in stamped])
 
     # The amend must be a REAL amend whatever the clock says. A bare `--amend --no-edit` reuses
     # the tree, the message, the author and the author date, and takes the committer date from
@@ -11240,11 +11270,14 @@ def read(path):
 
 
 def copy_tree():
-    """A throwaway root holding exactly what the generator reads: tools/skill-blocks/ and the
-    18 SKILL.md files, at the same relative paths. Copying the trees whole would drag in every
-    asset those skills ship for no gain -- the generator opens nothing else."""
+    """A throwaway root holding exactly what the generator reads: tools/skill-blocks/,
+    uscha-kit/VERSION (the block carries `uscha kit: X.Y.Z` since 2.2.0) and the 18 SKILL.md
+    files, at the same relative paths. Copying the trees whole would drag in every asset those
+    skills ship for no gain -- the generator opens nothing else."""
     d = tempfile.mkdtemp(prefix="uscha-dc-")
     TMPS.append(d)
+    os.makedirs(os.path.join(d, "uscha-kit"))
+    shutil.copyfile(os.path.join(kit, "VERSION"), os.path.join(d, "uscha-kit", "VERSION"))
     src_blocks = os.path.join(root, "tools", "skill-blocks")
     dst_blocks = os.path.join(d, "tools", "skill-blocks")
     os.makedirs(dst_blocks)
@@ -11364,7 +11397,7 @@ case "$T152" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T152";;
 esac
 
-echo "== T153 (1.97.0): facts --write rewrites the claims it recognises, in the author's notation =="
+echo "== T153 (1.97.0, extended 2.2.0): facts --write rewrites the claims it recognises, in the author's notation; the Diamond headline is one of them =="
 # ADR-012 made published claims comparable against derived facts; it never made them WRITABLE, so
 # every bump was ~25 hand edits across ~13 files and tools/release.py could only print the drift
 # and hand it back. --write closes that with the SAME recogniser --check uses, then re-runs
@@ -11378,7 +11411,18 @@ sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 CR, NL = chr(13), chr(10)
+FW_PREV_TAG = "v2.1.0"
 res, why, TMPS = {}, {}, []
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
 
 
 def eng(*argv):
@@ -11517,6 +11561,102 @@ def measure():
     why["AC-FW-05"] = "rc=%s bytes-intact=%s out=%r" % (
         w5.returncode, read(bad) == before_bad, w5.stdout[-200:])
 
+    # --- AC-FW-06: the Diamond headline is DERIVED, never typed ----------------------------
+    # The homepage said 9/12 for nine releases after ADR-042 moved `transformer` to PARTIAL. The
+    # fix is only worth anything if the number now comes from the bench's own recorded verdicts,
+    # so this case doctors a COPY of DIAMOND-BENCH.md -- one row PASS -> FAIL -- inside a
+    # throwaway kit and asserts the derived fact MOVES with it. A fact that stayed 8 there would
+    # be a constant with a comment, which is what was replaced.
+    live = json.loads(io.open(facts_out, encoding="utf-8").read())["diamond"]
+    doc = os.path.join(root, "DIAMOND-BENCH.md")
+    body_doc = io.open(doc, encoding="utf-8").read()
+    rows = [ln for ln in body_doc.split(NL)
+            if ln.startswith("|") and (" PASS " in ln or " PARTIAL " in ln)]
+    n_pass = sum(1 for ln in rows if " PASS " in ln)
+    n_part = sum(1 for ln in rows if " PARTIAL " in ln)
+
+    def kit_tree(engine_src, bench_body):
+        """A throwaway kit the facts derivation can locate itself in: VERSION beside an engine,
+        and the bench report one level above it, exactly where the real repo puts it."""
+        base = tmp()
+        edir = os.path.join(base, "uscha-kit", ".claude", "skills", "uscha-devloop")
+        os.makedirs(edir)
+        write(os.path.join(base, "uscha-kit", "VERSION"), "uscha-kit 9.9.9" + NL)
+        write(os.path.join(edir, "qa_ledger.py"), engine_src)
+        write(os.path.join(base, "DIAMOND-BENCH.md"), bench_body)
+        return base, os.path.join(edir, "qa_ledger.py")
+
+    def facts_json(engine_path, cwd):
+        out = os.path.join(cwd, "f.json")
+        subprocess.run([sys.executable, engine_path, "facts", "--out", out], cwd=cwd,
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                       encoding="utf-8", errors="replace",
+                       env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        if not os.path.isfile(out):
+            return out, None
+        return out, json.loads(io.open(out, encoding="utf-8").read())
+
+    here_src = io.open(ENG, encoding="utf-8", newline="").read()
+    first = rows[0]
+    fake_root, fake_eng = kit_tree(
+        here_src, body_doc.replace(first, first.replace(" PASS ", " FAIL ", 1), 1))
+    _fk, fake_facts = facts_json(fake_eng, fake_root)
+    doctored = (fake_facts or {}).get("diamond")
+    res["AC-FW-06"] = bool(
+        live and doctored
+        # the live fact equals the report's own rows, counted independently here
+        and live["pass"] == n_pass and live["partial"] == n_part and live["entries"] == len(rows)
+        # and it MOVES when the recorded verdicts move: one row less PASS, one more FAIL
+        and doctored["pass"] == n_pass - 1 and doctored["fail"] == 1
+        and doctored["entries"] == live["entries"])
+    why["AC-FW-06"] = "live=%r rows=(%d,%d,%d) doctored=%r" % (
+        live, n_pass, n_part, len(rows), doctored)
+
+    # --- AC-FW-07: the `<n>/12 archetypes` grammar, and what it must NOT touch --------------
+    # The claim lives across markup on the homepage (`9<small>/12</small></div><div ...
+    # >archetypes`), which is exactly why no gate saw it. The neighbours in this fixture are the
+    # two sentences a wider recogniser DID catch when it was tried: the repo's own historical
+    # "It was 9 of 12 until ..." and the paper's "nine archetypes PASS ... three PARTIAL".
+    site = os.path.join(d, "page.html")
+    stale_line = ('<div class="stat"><div class="v">9<small>/12</small></div>'
+                  + '<div class="k">archetypes regenerate</div></div>')
+    keep = ("It was 9 of 12 until ADR-042 moved transformer." + NL
+            + "nine archetypes PASS (three oracle-green)," + NL
+            + "implementations of the same system), three PARTIAL." + NL)
+    write(site, stale_line + NL + keep)
+    chk = eng("facts", "--check", site, "--out", facts_out)
+    wr = eng("facts", "--write", site, "--out", facts_out)
+    after_w = io.open(site, encoding="utf-8", newline="").read()
+    want_line = stale_line.replace(">9<", ">%d<" % live["pass"])
+    res["AC-FW-07"] = bool(
+        chk.returncode == 1 and "diamond.pass" in chk.stdout and "page.html:1" in chk.stdout
+        and "'9'" in chk.stdout.replace(chr(34), chr(39))
+        and wr.returncode == 0 and after_w == want_line + NL + keep)
+    why["AC-FW-07"] = "chk=%s wr=%s line=%r kept=%s" % (
+        chk.returncode, wr.returncode, after_w.split(NL)[0][-70:],
+        after_w.endswith(keep))
+
+    # --- AC-FW-08: the RED PROBE -- the PREV_TAG engine cannot see that claim ---------------
+    prev = git_show(FW_PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-FW-08"] = None
+        why["AC-FW-08"] = FW_PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        # the same UNTOUCHED bench report and the same stale page, under the OLD engine: it
+        # derives no Diamond fact at all and reads the 9/12 tile as prose, exit 0. That is the
+        # nine releases of green this criterion exists to make impossible.
+        prev_root, prev_eng = kit_tree(prev, body_doc)
+        pf, prev_facts = facts_json(prev_eng, prev_root)
+        stale2 = os.path.join(prev_root, "page-probe.html")
+        write(stale2, stale_line + NL + keep)
+        po = subprocess.run([sys.executable, prev_eng, "facts", "--check", stale2, "--out", pf],
+                            cwd=prev_root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, encoding="utf-8", errors="replace",
+                            env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        res["AC-FW-08"] = bool(prev_facts is not None and "diamond" not in prev_facts
+                               and po.returncode == 0 and "diamond" not in po.stdout)
+        why["AC-FW-08"] = "prev rc=%s keys=%s out=%r" % (
+            po.returncode, sorted(prev_facts or {}), po.stdout[-140:])
 
 
 try:
@@ -11533,7 +11673,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T153" in
-  OK*) PASS=$((PASS+1)); echo "  ok   facts --write (AC-FW-01..05): $T153";;
+  OK*) PASS=$((PASS+1)); echo "  ok   facts --write (AC-FW-01..08): $T153";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T153";;
 esac
 
@@ -13857,6 +13997,251 @@ case "$T161" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T161";;
 esac
 
+echo "== T162 (2.2.0): an installed skill says which kit it came from, and doctor compares it =="
+# THE FIELD CASE, reproduced rather than described: skills under ~/.claude/skills/uscha-* dated
+# before 1.54.0 while the kit was 1.97.0. A whole discovery ran on three-month-old prose and
+# nothing said a word -- a SKILL.md carried no version at all, so there was nothing to compare.
+# Since 2.2.0 the GENERATED orientation block opens with `<!-- uscha kit: X.Y.Z ... -->`,
+# tools/release.py re-renders it at every bump (AC-RL-03), and `doctor` reads the marker out of
+# every install root the installer writes to. Advisory throughout: this reports, it never gates.
+T162=$(pyin "$KIT" <<'PY'
+import io, json, os, re, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+GEN = os.path.join(root, "tools", "gen-skill-blocks.py")
+PREV_TAG = "v2.1.0"
+MARK = re.compile(r"uscha kit:\s*(\d+\.\d+\.\d+)")
+BEGIN = "<!-- uscha:orientation-block:begin -->"
+END = "<!-- uscha:orientation-block:end -->"
+TREES = (os.path.join("uscha-kit", ".claude", "skills"), os.path.join("uscha-kit", "skills"))
+NL = chr(10)
+res, why, TMPS = {}, {}, []
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-sk-")
+    TMPS.append(d)
+    return d
+
+
+def read(path):
+    with io.open(path, encoding="utf-8", newline="") as fh:
+        return fh.read()
+
+
+def write(path, body):
+    dd = os.path.dirname(path)
+    if dd and not os.path.isdir(dd):
+        os.makedirs(dd)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def gen(*argv):
+    return subprocess.run([sys.executable, GEN] + list(argv), cwd=root, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                          errors="replace", env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+
+
+def doctor(cwd, argv, engine=None):
+    return subprocess.run([sys.executable, engine or ENG, "doctor"] + list(argv), cwd=cwd,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace",
+                          env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+
+
+def gen_root():
+    """A throwaway root holding what the generator reads: the templates, uscha-kit/VERSION and
+    the 18 SKILL.md files. Same shape T152 uses -- the generator opens nothing else."""
+    d = tmp()
+    write(os.path.join(d, "uscha-kit", "VERSION"), read(os.path.join(kit, "VERSION")))
+    src_blocks = os.path.join(root, "tools", "skill-blocks")
+    for name in sorted(os.listdir(src_blocks)):
+        write(os.path.join(d, "tools", "skill-blocks", name),
+              read(os.path.join(src_blocks, name)))
+    with io.open(os.path.join(src_blocks, "skills.json"), encoding="utf-8") as fh:
+        skills = sorted(json.load(fh))
+    rels = []
+    for tree in TREES:
+        for skill in skills:
+            rel = os.path.join(tree, skill, "SKILL.md")
+            write(os.path.join(d, rel), read(os.path.join(root, rel)))
+            rels.append(rel)
+    return d, rels
+
+
+def plant(version, skills=("uscha-devloop", "uscha-status"), marker=True):
+    """An install root shaped like the installer's output, stamped with `version` (or with the
+    pre-2.2.0 shape -- a block carrying no marker at all -- when marker is False)."""
+    d = tmp()
+    stamp = ("<!-- uscha kit: " + version + " -->" + NL) if marker else ""
+    for s in skills:
+        write(os.path.join(d, s, "SKILL.md"),
+              "---" + NL + "name: " + s + NL + "---" + NL + NL
+              + BEGIN + NL + stamp + "block" + NL + END + NL)
+    return d
+
+
+def rows(out):
+    try:
+        return json.loads(out).get("skills_installed") or []
+    except ValueError:
+        return []
+
+
+def measure():
+    kit_version = read(os.path.join(kit, "VERSION")).strip().split()[-1]
+
+    # --- AC-SK-01: every rendered block carries the kit version, and it is RENDERED ---------
+    # The 18 runtime files must agree with uscha-kit/VERSION, and the stamp must come from the
+    # ONE template -- 18 hand-typed version strings would be the duplication 1.97.0 removed,
+    # wearing a new hat.
+    tpl = [read(os.path.join(root, "tools", "skill-blocks", n))
+           for n in ("orientation-block.md", "orientation-block-short.md")]
+    seen, bad = [], []
+    for tree in TREES:
+        for skill in sorted(os.listdir(os.path.join(root, tree))):
+            path = os.path.join(root, tree, skill, "SKILL.md")
+            if not os.path.isfile(path):
+                continue
+            body = read(path)
+            if BEGIN not in body:
+                continue
+            region = body.split(BEGIN, 1)[1].split(END, 1)[0]
+            m = MARK.search(region)
+            seen.append(path)
+            if m is None:
+                bad.append(skill + ": no `uscha kit:` marker in the generated region")
+            elif m.group(1) != kit_version:
+                bad.append("%s: block says %s, VERSION says %s"
+                           % (skill, m.group(1), kit_version))
+    res["AC-SK-01"] = bool(len(seen) == 18 and not bad
+                           and all("{{version}}" in t for t in tpl))
+    why["AC-SK-01"] = "files=%d templated=%s %s" % (
+        len(seen), [("{{version}}" in t) for t in tpl], "; ".join(bad[:3]) or "all in step")
+
+    # --- AC-SK-02: --check goes RED when VERSION moves and the blocks do not ----------------
+    d, rels = gen_root()
+    control = gen("--check", "--root", d)
+    write(os.path.join(d, "uscha-kit", "VERSION"), "uscha-kit 99.0.0" + NL)
+    before = dict((rel, read(os.path.join(d, rel))) for rel in rels)
+    drift = gen("--check", "--root", d)
+    after = dict((rel, read(os.path.join(d, rel))) for rel in rels)
+    fix = gen("--root", d)
+    stamped = []
+    for rel in rels:
+        m = MARK.search(read(os.path.join(d, rel)))
+        stamped.append(m.group(1) if m else None)
+    green = gen("--check", "--root", d)
+    res["AC-SK-02"] = bool(
+        control.returncode == 0 and drift.returncode == 1
+        and "region(s) differ" in drift.stdout and len(rels) == 18
+        and after == before                      # a checker that repaired it is not a checker
+        and fix.returncode == 0 and green.returncode == 0
+        and stamped == ["99.0.0"] * 18)
+    why["AC-SK-02"] = "control=%s drift=%s fix=%s green=%s stamps=%s" % (
+        control.returncode, drift.returncode, fix.returncode, green.returncode,
+        sorted(set(stamped)))
+
+    # --- AC-SK-03: doctor reports outdated with BOTH versions, and current, exit 0 both -----
+    work = tmp()
+    old_root = plant("1.54.0")
+    new_root = plant(kit_version)
+    r_old = doctor(work, ["--installed", old_root, "--json"])
+    r_new = doctor(work, ["--installed", new_root, "--json"])
+    r_txt = doctor(work, ["--installed", old_root])
+    ro = rows(r_old.stdout)
+    rn = rows(r_new.stdout)
+    res["AC-SK-03"] = bool(
+        r_old.returncode == 0 and r_new.returncode == 0 and r_txt.returncode == 0
+        and len(ro) == 1 and ro[0]["status"] == "outdated"
+        and ro[0]["installed"] == "1.54.0" and ro[0]["kit"] == kit_version
+        and len(rn) == 1 and rn[0]["status"] == "current"
+        and rn[0]["installed"] == kit_version
+        and "SKILLS OUTDATED" in r_txt.stdout
+        and "1.54.0" in r_txt.stdout and kit_version in r_txt.stdout
+        and "Traceback" not in r_txt.stdout)
+    why["AC-SK-03"] = "rc=(%s,%s,%s) old=%r new=%r" % (
+        r_old.returncode, r_new.returncode, r_txt.returncode,
+        ro[:1], rn[:1])
+
+    # --- AC-SK-04: a missing install dir is `not installed`, never an error -----------------
+    gone = os.path.join(tmp(), "no-such-root")
+    empty = tmp()
+    r_abs = doctor(work, ["--installed", gone, "--installed", empty, "--json"])
+    ra = rows(r_abs.stdout)
+    res["AC-SK-04"] = bool(
+        r_abs.returncode == 0 and len(ra) == 2
+        and all(x["status"] == "not installed" and x["installed"] is None for x in ra)
+        and "Traceback" not in r_abs.stdout
+        and "error" not in json.loads(r_abs.stdout)["verdict"].lower())
+    why["AC-SK-04"] = "rc=%s rows=%r" % (r_abs.returncode, ra)
+
+    # --- AC-SK-05: a block with NO marker is outdated with a NAMED absence, never a version -
+    # Every install that predates 2.2.0 looks like this. Reporting it as `current` would be the
+    # silent green the field case already paid for; inventing a number for it would be worse.
+    pre = plant("unused", marker=False)
+    r_pre = doctor(work, ["--installed", pre, "--json"])
+    rp = rows(r_pre.stdout)
+    res["AC-SK-05"] = bool(
+        r_pre.returncode == 0 and len(rp) == 1 and rp[0]["status"] == "outdated"
+        and rp[0]["installed"] is None and sorted(rp[0]["unmarked"]) == [
+            "uscha-devloop", "uscha-status"]
+        and "SKILLS OUTDATED" in doctor(work, ["--installed", pre]).stdout)
+    why["AC-SK-05"] = "rc=%s row=%r" % (r_pre.returncode, rp[:1])
+
+    # --- AC-SK-06: the RED PROBE -- the PREV_TAG engine cannot answer the question ----------
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-SK-06"] = None
+        why["AC-SK-06"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        old_eng = os.path.join(tmp(), "prev_engine.py")
+        write(old_eng, prev)
+        p_flag = doctor(work, ["--installed", old_root, "--json"], engine=old_eng)
+        p_bare = doctor(work, ["--json"], engine=old_eng)
+        try:
+            bare = json.loads(p_bare.stdout)
+        except ValueError:
+            bare = {}
+        res["AC-SK-06"] = bool(
+            p_flag.returncode != 0 and "--installed" in p_flag.stdout
+            and "skills_installed" not in bare)
+        why["AC-SK-06"] = "flag rc=%s keys=%s out=%r" % (
+            p_flag.returncode, sorted(bare), p_flag.stdout[-120:])
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".sk-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T162" in
+  OK*) PASS=$((PASS+1)); echo "  ok   installed-skill freshness (AC-SK-01..06): $T162";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T162";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -14915,8 +15300,10 @@ FAMILIES = (
      _seq("AC-RL", 1, 6)),
     (".dc-cases.json", "docs-generated", "T152",                    # 1.97.0
      _seq("AC-DC", 1, 4)),
-    (".fw-cases.json", "facts-writer", "T153",                      # 1.97.0
-     _seq("AC-FW", 1, 5)),
+    # AC-FW-08 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
+    # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
+    (".fw-cases.json", "facts-writer", "T153",                      # 1.97.0, 2.2.0
+     _seq("AC-FW", 1, 8)),
     (".vc-cases.json", "narrated-backlog", "T154",                  # 1.98.0
      _seq("AC-VC", 1, 2)),
     (".de-cases.json", "deferred-lows-closed", "T155",              # 1.98.0
@@ -14942,6 +15329,10 @@ FAMILIES = (
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".ff-cases.json", "field-fixes", "T161",                        # 2.2.0
      _seq("AC-FF", 1, 10)),
+    # AC-SK-06 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
+    # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
+    (".sk-cases.json", "installed-skill-freshness", "T162",           # 2.2.0
+     _seq("AC-SK", 1, 6)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

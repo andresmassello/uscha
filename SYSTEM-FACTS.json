@@ -1,9 +1,17 @@
 {
   "_derivation": {
+    "diamond": "verdict rows of DIAMOND-BENCH.md, the report `bench` generates over uscha-kit/tests/fixtures/diamond-bench (regenerate it with: qa_ledger.py bench --dir uscha-kit/tests/fixtures/diamond-bench --out DIAMOND-BENCH.md)",
     "omitted": "stack matrix and REAL/VISION registry: no mechanical source exists yet -- omitted, not guessed (ADR-012)",
     "skills": "SKILL.md inventory under uscha-kit/.claude/skills/",
     "subcommands": "argparse introspection of build_parser()",
     "version": "uscha-kit/VERSION"
+  },
+  "diamond": {
+    "entries": 12,
+    "fail": 0,
+    "partial": 4,
+    "pass": 8,
+    "pending": 0
   },
   "skills": {
     "count": 9,

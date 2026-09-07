@@ -7502,25 +7502,75 @@ def _render_lang_md(r, has_js=False):
 FACTS_FILE = "SYSTEM-FACTS.json"
 
 
-def _derive_facts():
-    """Facts derived from the ARTIFACTS themselves, never from prose and never from greps
-    over documentation: the subcommand list comes from introspecting the REAL parser, the
-    skill list from the REAL kit tree, the version from the kit VERSION file. No timestamp
-    on purpose: regeneration over an unchanged repo must be byte-identical (AC-SF-01)."""
-    here = os.path.abspath(__file__)
-    # kit root by MARKER, not by fixed depth: the canonical engine sits 4 levels deep
-    # (.claude/skills/uscha-devloop/) and the Codex twin 3 (skills/uscha-devloop/). A fixed
-    # dirname walk made the twin silently derive the OUTER repo root -- version None,
-    # 0 skills, no error (fresh-review HIGH, reproduced by running both copies).
-    kit, cur = None, os.path.dirname(here)
+def _kit_root():
+    """The kit directory this engine belongs to, or None.
+
+    By MARKER, not by fixed depth: the canonical engine sits 4 levels deep
+    (.claude/skills/uscha-devloop/) and the Codex twin 3 (skills/uscha-devloop/). A fixed
+    dirname walk made the twin silently derive the OUTER repo root -- version None,
+    0 skills, no error (fresh-review HIGH, reproduced by running both copies)."""
+    cur = os.path.dirname(os.path.abspath(__file__))
     for _ in range(6):
         if os.path.isfile(os.path.join(cur, "VERSION")):
-            kit = cur
-            break
+            return cur
         nxt = os.path.dirname(cur)
         if nxt == cur:
             break
         cur = nxt
+    return None
+
+
+BENCH_DOC = "DIAMOND-BENCH.md"
+# One generated table row per archetype: `| crud-store | PASS | M1 12/12, ... |`. Anchored at the
+# line start and on the closing pipe so the per-entry prose below the table ("### guard -- PARTIAL")
+# cannot be counted twice.
+_BENCH_ROW = re.compile(r"^\|\s*([A-Za-z0-9][\w.-]*)\s*\|\s*(PASS|PARTIAL|FAIL|PENDING)\s*\|")
+
+
+def _derive_bench(kit):
+    """The Diamond Bench headline, COUNTED out of the bench's own generated report, or None.
+
+    `DIAMOND-BENCH.md` is written by `qa_ledger.py bench` over the committed fixture and carries
+    the "do not hand-edit" banner: every row in it is a measured run. Re-running the bench here
+    would be the honest derivation and is not affordable -- a full pass is ~650 child processes,
+    and `facts` runs on every suite, every deploy and twice per release. So the fact is counted
+    from the RECORDED verdicts, per archetype, never from the summary sentence beside them and
+    never from a number typed into a document.
+
+    The report lives at the REPO root, one level above the kit: an installed kit has no bench,
+    which is why this returns None instead of guessing. `--check` then reports any claim about it
+    as UNMEASURED rather than letting it pass unexamined."""
+    if not kit:
+        return None
+    for cand in (os.path.join(os.path.dirname(kit), BENCH_DOC),
+                 os.path.join(kit, BENCH_DOC)):
+        if not os.path.isfile(cand):
+            continue
+        try:
+            with open(cand, encoding="utf-8-sig") as fh:
+                body = fh.read()
+        except OSError:
+            continue
+        verdicts = []
+        for line in body.split("\n"):
+            m = _BENCH_ROW.match(line.strip())
+            if m:
+                verdicts.append(m.group(2))
+        if not verdicts:
+            continue
+        return {"entries": len(verdicts), "pass": verdicts.count("PASS"),
+                "partial": verdicts.count("PARTIAL"), "fail": verdicts.count("FAIL"),
+                "pending": verdicts.count("PENDING")}
+    return None
+
+
+def _derive_facts():
+    """Facts derived from the ARTIFACTS themselves, never from prose and never from greps
+    over documentation: the subcommand list comes from introspecting the REAL parser, the
+    skill list from the REAL kit tree, the version from the kit VERSION file, the Diamond
+    headline from the bench's own generated report. No timestamp on purpose: regeneration
+    over an unchanged repo must be byte-identical (AC-SF-01)."""
+    kit = _kit_root()
     if kit is None:
         print("[qa_ledger] facts: no VERSION file found walking up from the engine -- "
               "facts that cannot locate their own kit are not facts.", file=sys.stderr)
@@ -7537,14 +7587,24 @@ def _derive_facts():
             skills = sorted(d for d in os.listdir(sdir)
                             if os.path.isfile(os.path.join(sdir, d, "SKILL.md")))
             break
+    bench = _derive_bench(kit)
     return {
         "version": version,
         "subcommands": {"count": len(subs), "list": subs},
         "skills": {"count": len(skills), "list": skills},
+        # null, never a zero: an installed kit ships no bench report, and "0 PASS" would be a
+        # measured-looking answer to a question this tree cannot answer.
+        "diamond": bench,
         "_derivation": {
             "version": "uscha-kit/VERSION",
             "subcommands": "argparse introspection of build_parser()",
             "skills": "SKILL.md inventory under uscha-kit/.claude/skills/",
+            "diamond": ("verdict rows of DIAMOND-BENCH.md, the report `bench` generates over "
+                        "uscha-kit/tests/fixtures/diamond-bench (regenerate it with: qa_ledger.py "
+                        "bench --dir uscha-kit/tests/fixtures/diamond-bench --out "
+                        "DIAMOND-BENCH.md)" if bench else
+                        "UNMEASURED: no DIAMOND-BENCH.md beside the kit -- claims about the "
+                        "bench headline are reported as undecidable, never as green"),
             "omitted": "stack matrix and REAL/VISION registry: no mechanical "
                        "source exists yet -- omitted, not guessed (ADR-012)",
         },
@@ -7574,7 +7634,18 @@ _SPELLED = dict((_spell(n), n) for n in range(1, 100))
 # longest alternative first: an alternation offering "six" before "sixty-three" matches the prefix
 _NUM_ALT = "|".join(sorted(_SPELLED, key=len, reverse=True))
 # the leading \b so that "someone skills" cannot be read as the claim "one skills"
-_COUNT = r"\b(\d+|" + _NUM_ALT + r")\s+"
+_NUM = r"\b(\d+|" + _NUM_ALT + r")"
+# HTML splits a claim across elements: the homepage's stat tile reads
+# `<div class="v">8<small>/12</small></div><div class="k">archetypes regenerate</div>`, so the
+# count and the noun that gives it meaning are separated by markup rather than by a space. The
+# gap is therefore whitespace OR tags; `[^<>]` stops one tag from swallowing the rest of the
+# line, and the repetition is bounded so the gap can never run from one sentence into the next.
+_GAP = r"(?:\s|<[^<>]{0,80}>){0,8}"
+_ARCH = r"(?:archetypes?|arquetipos?)"
+# a claimed count that is NOT the one being rewritten (the other half of a verdict pair)
+_ANYNUM = r"(?:\d+|" + _NUM_ALT + r")"
+# what separates `8 PASS` from `4 PARTIAL`: a comma, a middle dot, a slash, spaces, markup
+_VSEP = r"[^A-Za-z0-9<>]{0,8}" + _GAP
 
 
 def _unspell(token):
@@ -7586,17 +7657,57 @@ _CLAIM_PATTERNS = (
     # (fact key path, regex over one line, needs-context substring or None)
     ("version", r"v(\d+\.\d+\.\d+)", "kit"),
     ("version", r"uscha-kit\s+v?(\d+\.\d+\.\d+)", None),
-    ("subcommands.count", _COUNT + r"sub-?comm?ands", None),
-    ("subcommands.count", r"(\d+)\s+subcomandos", None),
+    # `_GAP` rather than a plain space since 2.2.0: the site's stat tiles put the count in one
+    # element and its noun in the next (`<div class="v">52</div><div class="k">engine
+    # subcommands</div>`), so a gate that demanded whitespace between them read the homepage's
+    # headline numbers as prose. It had `52 engine subcommands` and `9/12 archetypes` on one
+    # screen, both stale, both invisible to a green release.
+    ("subcommands.count", _NUM + _GAP + r"(?:engine\s+)?sub-?comm?ands", None),
+    ("subcommands.count", r"\b(\d+)" + _GAP + r"subcomandos", None),
     # "agent skills" is the kit's own noun phrase and the paper's; nothing wider is let in,
     # because a WRITER that guessed at "two other skills" would corrupt the sentence it fixed.
-    ("skills.count", _COUNT + r"(?:agent\s+)?skills", None),
+    ("skills.count", _NUM + _GAP + r"(?:agent\s+)?skills", None),
+    # The Diamond Bench headline (2.2.0). The homepage said 9/12 for nine releases after ADR-042
+    # moved `transformer` to PARTIAL, because no gate could see the claim: the number sat in one
+    # HTML element and its noun in the next.
+    #
+    # Two shapes only, and both are narrow BY MEASUREMENT -- each wider draft was tried against
+    # the gated set first and rejected by what it caught:
+    #
+    #   `<n>/12 archetypes`, `<n> of 12 archetypes`, `<n> de 12 arquetipos` -- the count must be
+    #   followed, across markup but never across prose, by the noun it counts, and the
+    #   denominator must be the DIGITS 12. That is what keeps the repo's own historical sentence
+    #   ("It was 9 of 12 until ADR-042 moved transformer") and the paper's "ten of twelve
+    #   archetypes" out of a writer that would have silently rewritten both.
+    #
+    #   `<n> PASS <sep> <n> PARTIAL` as ONE shape, verdicts case-sensitive (`(?-i:...)` against
+    #   the module-wide re.I). Reading the two numbers independently caught the paper's snapshot
+    #   of the July-August arm -- "nine archetypes PASS ... three PARTIAL", a sentence about a
+    #   different experiment -- and would have offered to rewrite it. The bench headline always
+    #   writes the pair together, so adjacency is both narrower and closer to the real claim.
+    #
+    # `<n> archetypes` alone is deliberately NOT a claim: across the gated set it names subsets
+    # far more often than the bench ("five archetypes", "two archetypes have no second run"), so
+    # the entries count stays a derived fact with no recognised published shape.
+    ("diamond.pass", _NUM + _GAP + r"(?:/|of|de)" + _GAP + r"12" + _GAP + _ARCH, None),
+    ("diamond.pass", _NUM + _GAP + r"(?-i:PASS)" + _VSEP + _ANYNUM + _GAP + r"(?-i:PARTIAL)",
+     None),
+    ("diamond.partial",
+     r"\b" + _ANYNUM + _GAP + r"(?-i:PASS)" + _VSEP + _NUM + _GAP + r"(?-i:PARTIAL)", None),
 )
 
 
 def _fact_value(facts, dotted):
+    """The derived fact behind a claim key, or None when THIS tree cannot derive it.
+
+    Not every fact exists everywhere: an installed kit has no `DIAMOND-BENCH.md`, so
+    `diamond.*` is null there. None is the honest answer and both consumers act on it --
+    `--write` leaves the claim alone (there is nothing to write it to) and `--check` reports it
+    as UNMEASURED. Neither treats an underivable fact as agreement."""
     cur = facts
     for part in dotted.split("."):
+        if not isinstance(cur, dict) or cur.get(part) is None:
+            return None
         cur = cur[part]
     return str(cur)
 
@@ -7687,7 +7798,10 @@ def _write_claims(facts, paths):
             # right to left: an earlier rewrite must not move the offsets of a later one
             for key, start, end, token in sorted(claims, key=lambda c: c[1], reverse=True):
                 actual = _fact_value(facts, key)
-                if _claim_norm(token) == actual:
+                if actual is None or _claim_norm(token) == actual:
+                    # None = this tree cannot derive the fact; there is nothing to rewrite the
+                    # claim TO, and inventing one would be the opposite of the gate. The --check
+                    # that follows reports it as UNMEASURED.
                     continue
                 line = line[:start] + _claim_rewrite(token, actual) + line[end:]
                 n += 1
@@ -7760,7 +7874,11 @@ def cmd_facts(args):
                 # comment spans -- a comment is not a published claim
                 for key, _s, _e, claimed in _iter_claims(line):
                     actual = _fact_value(facts, key)
-                    if _claim_norm(claimed) != actual:
+                    if actual is None:
+                        problems.append((path, n, key, claimed,
+                                         "UNMEASURED -- this tree derives no such fact "
+                                         "(see SYSTEM-FACTS _derivation)"))
+                    elif _claim_norm(claimed) != actual:
                         problems.append((path, n, key, claimed, actual))
                 # the parser-surface table (Subcommand/Subcomando header, one `<td class="t">`
                 # row per subcommand) is a claim too, just not a numeric one -- a row can go
@@ -7800,9 +7918,12 @@ def cmd_facts(args):
     body = json.dumps(facts, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(body)
-    print("FACTS -> %s: version %s · %d subcommands · %d skills"
+    dia = facts.get("diamond")
+    print("FACTS -> %s: version %s · %d subcommands · %d skills · diamond %s"
           % (args.out, facts["version"], facts["subcommands"]["count"],
-             facts["skills"]["count"]))
+             facts["skills"]["count"],
+             ("%d PASS · %d PARTIAL of %d" % (dia["pass"], dia["partial"], dia["entries"])
+              if dia else "UNMEASURED (no %s beside the kit)" % BENCH_DOC)))
 
 
 
@@ -12759,6 +12880,91 @@ def _doctor_hook_registered(settings_path):
     return next((n for n in HOOK_NAMES if n in blob), None)
 
 
+# --------------------------------------------------------------------------- #
+# installed-skill freshness (2.2.0)
+# --------------------------------------------------------------------------- #
+# The field case: skills sat under ~/.claude/skills/uscha-* dated before 1.54.0 while the kit
+# was 1.97.0. A whole discovery ran on the old prose and nothing said a word, because a SKILL.md
+# carried no version to compare. Since 2.2.0 the GENERATED orientation block opens with
+# `<!-- uscha kit: X.Y.Z ... -->` (tools/skill-blocks/, rendered by tools/gen-skill-blocks.py and
+# re-rendered by tools/release.py at every bump), so the comparison is mechanical.
+#
+# ADVISORY, always: this reports, it never gates. `doctor` already exits 1 only on errors, and an
+# outdated install is a WARN -- the operator may be pinning a version on purpose.
+SKILL_KIT_MARK = re.compile(r"uscha kit:\s*(\d+\.\d+\.\d+)")
+# Where install-uscha.py puts the skills: TARGETS = ("codex", "claude") + SKILL_ROOTS. Retyped
+# here rather than imported because install-uscha.py lives at the KIT ROOT and is not installed
+# alongside the engine -- an installed engine could not import it. Kept in one place so the
+# drift, if it ever happens, is one table against one table.
+SKILL_INSTALL_ROOTS = (
+    ("claude", (".claude", "skills")),
+    ("codex", ("plugins", "uscha", "skills")),
+    ("pi", (".agents", "skills")),
+    ("cursor", (".cursor", "skills")),
+    ("copilot", (".copilot", "skills")),
+    ("gemini", (".gemini", "skills")),
+    ("cline", (".cline", "skills")),
+)
+
+
+def _semver_tuple(text):
+    """(major, minor, patch) for comparison, or None when the string is not one."""
+    m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", (text or "").strip())
+    return tuple(int(g) for g in m.groups()) if m else None
+
+
+def _installed_skill_report(root, kit_version):
+    """One install root's uscha-* skills, each with the kit version its block was stamped with.
+
+    Returns None when the root holds no uscha skill at all -- "not installed" is a state, not a
+    fault, and reporting it as an error would make `doctor` red on every machine that installed
+    for one agent out of seven."""
+    if not os.path.isdir(root):
+        return None
+    want = _semver_tuple(kit_version)
+    found, oldest = [], None
+    for name in USCHA_SKILLS:
+        smd = os.path.join(root, name, "SKILL.md")
+        if not os.path.isfile(smd):
+            continue
+        try:
+            with open(smd, encoding="utf-8", errors="replace") as fh:
+                head = fh.read(8192)
+        except OSError:
+            head = ""
+        m = SKILL_KIT_MARK.search(head)
+        seen = m.group(1) if m else None
+        found.append({"skill": name, "installed": seen})
+        got = _semver_tuple(seen)
+        if got is not None and (oldest is None or got < oldest):
+            oldest = got
+    if not found:
+        return None
+    unmarked = [f["skill"] for f in found if f["installed"] is None]
+    if unmarked:
+        # no marker at all = a block rendered before 2.2.0. Older than anything that carries
+        # one, and said that way rather than as a version nobody wrote.
+        status = "outdated"
+        installed = None
+    elif want is None or oldest is None:
+        status = "unknown"
+        installed = ".".join(str(p) for p in oldest) if oldest else None
+    else:
+        installed = ".".join(str(p) for p in oldest)
+        status = "outdated" if oldest < want else "current"
+    return {"root": root, "status": status, "installed": installed, "kit": kit_version,
+            "skills": found, "unmarked": unmarked}
+
+
+def _installed_skill_roots(args):
+    """(target, root) pairs to inspect: the caller's `--installed` when given, else every root
+    the installer knows, under the user's home."""
+    if getattr(args, "installed", None):
+        return [("--installed", d) for d in args.installed]
+    home = os.path.expanduser("~")
+    return [(t, os.path.join(home, *parts)) for t, parts in SKILL_INSTALL_ROOTS]
+
+
 def cmd_doctor(args):
     checks = []   # (nivel 'ok'|'warn'|'error', titulo, detalle)
 
@@ -12827,6 +13033,48 @@ def cmd_doctor(args):
                 "or from your checkout of the uscha repo")
         if mismatched:
             err(f"SKILL.md con frontmatter name distinto al directorio: {', '.join(mismatched)}")
+
+    # --- installed skills vs the kit's VERSION (2.2.0) ----------------------
+    # A discovery once ran on prose from 1.54.0 while the kit was 1.97.0, and nothing said so.
+    # Advisory: reported as a warning, never an error, so it can never fail an installation
+    # someone pinned on purpose.
+    kit_dir = _kit_root()
+    kit_version = None
+    if kit_dir:
+        try:
+            with open(os.path.join(kit_dir, "VERSION"), encoding="utf-8") as fh:
+                kit_version = fh.read().strip().split()[-1]
+        except (OSError, IndexError):
+            kit_version = None
+    skills_installed = []
+    absent = []
+    for target, sroot in _installed_skill_roots(args):
+        rep = _installed_skill_report(sroot, kit_version)
+        if rep is None:
+            absent.append((target, sroot))
+            skills_installed.append({"target": target, "root": sroot,
+                                     "status": "not installed", "installed": None,
+                                     "kit": kit_version, "skills": [], "unmarked": []})
+            continue
+        rep["target"] = target
+        skills_installed.append(rep)
+        fix = (f"re-install: python install-uscha.py install --target {target} "
+               f"(or `uscha install`)")
+        if rep["status"] == "outdated":
+            shown = rep["installed"] or "no `kit:` marker (block rendered before 2.2.0)"
+            warn(f"SKILLS OUTDATED at {sroot}: installed {shown} < kit {kit_version}", fix)
+        elif rep["status"] == "current":
+            ok(f"skills {target}: current (kit {kit_version})", sroot)
+        else:
+            warn(f"skills {target}: version UNMEASURED at {sroot}",
+                 "the installed blocks carry a marker this engine cannot compare "
+                 f"(installed {rep['installed']!r}, kit {kit_version!r})")
+    if absent:
+        ok("skills not installed for: " + ", ".join(t for t, _ in absent),
+           "not an error -- the kit installs per agent, one target at a time")
+    if kit_version is None:
+        warn("kit VERSION not readable: installed-skill freshness is UNMEASURED",
+             "the comparison needs uscha-kit/VERSION beside the engine")
 
     # --- hook INV-GOLDEN-01 -------------------------------------------------
     kit_root = os.path.abspath(os.path.join(engine_dir, "..", "..", ".."))
@@ -13004,6 +13252,10 @@ def cmd_doctor(args):
                           # effective settings + origin per knob (2.0.0); null when there is
                           # no project config here to resolve them from
                           "risk_profile": risk_profile, "effective": effective,
+                          # installed-skill freshness (2.2.0): one row per install root the
+                          # installer knows, with BOTH versions -- advisory, never in the verdict
+                          "kit_version": kit_version,
+                          "skills_installed": skills_installed,
                           "checks": [{"level": lv, "title": t, "detail": d}
                                      for lv, t, d in checks]},
                          indent=2, ensure_ascii=True))
@@ -13032,6 +13284,11 @@ def build_parser():
              "python/git, skills, hook, project config, per-repo toolchains")
     pdoc.add_argument("--config", default=None,
                       help="project config to inspect (default: ./uscha.config.json)")
+    pdoc.add_argument("--installed", action="append", default=None, metavar="DIR",
+                      help="skill install root to compare against the kit's VERSION "
+                           "(repeatable; default: every root install-uscha.py writes to, "
+                           "under ~). Advisory -- an outdated install is a warning, never "
+                           "an error")
     pdoc.add_argument("--ledger", default=DEFAULT_LEDGER)
     pdoc.add_argument("--json", action="store_true")
     pdoc.set_defaults(func=cmd_doctor)

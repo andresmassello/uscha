@@ -829,11 +829,41 @@ spelled-out counts, which is how the paper's canonical `.tex` had sat outside ev
 claiming "nine agent skills and ... 53 subcommands" in one sentence. Measured by T153 through the
 `.fw-cases.json` sidecar, over throwaway fixtures -- never over the repo's own pages.
 
+Extended in 2.2.0 (`AC-FW-06..08`). The homepage said the Diamond Bench passes **9/12** archetypes
+for NINE releases after ADR-042 moved `transformer` to PARTIAL, and every one of those releases was
+green: the gate could not see the claim, because the number sat in one HTML element (`<div
+class="v">9<small>/12</small></div>`) and its noun in the next, and because no derived fact existed
+to compare it against. Both halves are closed -- the Diamond headline joined `SYSTEM-FACTS.json` as a
+fact counted out of the bench's own generated report, and the recogniser learned to cross markup. The
+same widening caught a second live drift on the same screen (`52 engine subcommands` against a derived
+53), which is the argument for the change in one line: the gate that cannot see a claim is not a gate.
+
 - [x] AC-FW-01 - `--write` rewrites a stale claim to the derived fact and the `--check` it implies then passes; the rewrite is in the AUTHOR's notation (a spelled-out claim stays spelled out, keeping its leading capital) and the file's CRLF line endings survive byte for byte, because normalising them would turn a one-token fix into an unreviewable whole-file diff.
 - [x] AC-FW-02 - `--write` over a file with no recognised claim leaves it **byte-identical** and does not report it: the writer only touches lines it recognises, and "no claims" is not a reason to rewrite a file.
 - [x] AC-FW-03 - a spelled-out count is a claim: a fixture reading "seven skills" is RED against a derived nine, naming `skills.count` and the word it read; the same fixture with the right word is green. The pattern is anchored on the kit's own noun phrases (`<n> skills`, `<n> agent skills`, `<n> subcommands`) and nothing wider, because a WRITER that guessed at "two other skills" would corrupt the sentence it fixed.
 - [x] AC-FW-04 - there is **one** gated file list (`tools/facts-gated-files.txt`, read by the deploy, the suite and the release), the written set IS the checked set, every path it names exists, the three paper paths are in it, and every `# deployed` path has its canonical twin in the `# canonical` section. That last clause is the load-bearing one: `site/docs/*` is build output that `site/sync-docs.sh` deletes with `rm -rf site/docs` and regenerates from `docs/`, so a rewrite that lands only in the copy is undone by the next deploy. Asserted by importing `tools/release.py`'s own `facts_gated_sections` - a second copy of the list here would be the very thing this change removed.
 - [x] AC-FW-05 - a gated file that is not valid UTF-8 is a **named skip**, never a traceback: `--write` names it, leaves its bytes untouched, still writes the rest of the list, and exits **2** so the release refuses (I3) instead of proceeding on a claim set it could not fully write. `--check` reads that same file with `errors="replace"` and still reports its claims, so nothing is hidden - but the writer must not read it that way, because writing a replaced byte back would destroy data to correct a version number.
+- [ ] AC-FW-06 - the Diamond Bench headline is a DERIVED fact (2.2.0). `facts` counts the verdict
+  rows of `DIAMOND-BENCH.md` -- the report `bench` generates over the committed fixture, banner-marked
+  "do not hand-edit" -- and publishes them as `diamond.pass` / `diamond.partial` / `diamond.entries`.
+  Measured differentially: over a throwaway kit whose copy of that report has ONE row changed from
+  `PASS` to `FAIL`, the derived fact MOVES with it, and over the live report it equals the rows counted
+  independently by the suite. A number that stayed 8 there would be a constant with a comment, which
+  is what this replaced. Re-running the bench inside `facts` is the more direct derivation and is not
+  affordable (~650 child processes, three callers per release); the counted report is the honest second
+  best, and an installed kit that has no report derives `null` rather than a zero.
+- [ ] AC-FW-07 - the `<n>/12 archetypes` claim grammar, and what it must NOT touch. A stale
+  `<div class="v">9<small>/12</small></div><div class="k">archetypes regenerate</div>` -- the homepage's
+  exact shape, number in one element and noun in the next -- is NAMED by `--check` (file:line,
+  `diamond.pass`, the token it read) and rewritten by `--write` to the derived value with the markup
+  byte-identical. On the same fixture, two sentences a wider draft did catch survive untouched: the
+  repo's own historical "It was 9 of 12 until ADR-042 moved transformer" and the paper's snapshot
+  "nine archetypes PASS ... three PARTIAL". `<n> archetypes` alone is deliberately not a claim -- across
+  the gated set it names subsets far more often than the bench.
+- [ ] AC-FW-08 - the RED PROBE. The `v2.1.0` engine, read out of git and given the same untouched
+  bench report and the same stale page, derives NO `diamond` fact at all and exits **0** on the 9/12
+  tile: it reads the claim as prose. That is precisely the nine releases of green this criterion exists
+  to make impossible. Without git or the tagged copy it reports `None` = UNMEASURED, never a silent pass.
 
 ## Narrated backlog, round 1 (1.98.0) - closes on green `AC-VC-nn` smoke assertions
 
@@ -1222,6 +1252,43 @@ code refuses on purpose.
   `init --add-repo` are rejected by the parser. Without git or the tagged copy it reports `None`
   = UNMEASURED, never a silent pass.
 
+## An installed skill says which kit it came from (ADR-045, 2.2.0) - closes on green `AC-SK-nn` smoke assertions
+
+THE FIELD CASE, not a hypothesis: skills sat under `~/.claude/skills/uscha-*` from kit **1.54.0**
+while the kit itself was at **1.97.0**. An entire discovery ran on prose three months stale, and
+nothing said a word -- a `SKILL.md` carried no version at all, so there was nothing to compare and
+no place to compare it. Since 2.2.0 the GENERATED orientation block (repo rule 11) opens with
+`<!-- uscha kit: X.Y.Z ... -->`, rendered from `uscha-kit/VERSION` by `tools/gen-skill-blocks.py`;
+`tools/release.py` re-renders all 18 regions in step 2, right after the six surfaces move and
+before the facts gate, so the marker can never lag the release that shipped it (`AC-RL-03` asserts
+that the pair lands in X); and `doctor` reads the marker out of every install root the installer
+writes to. ADVISORY throughout -- it reports, it never gates, and `doctor`'s exit code is
+unchanged. Measured by T162 through the `.sk-cases.json` sidecar.
+
+- [ ] AC-SK-01 - all **18** rendered regions (nine skills × two trees) carry `uscha kit: X.Y.Z`
+  equal to `uscha-kit/VERSION`, and the stamp is RENDERED: both templates under
+  `tools/skill-blocks/` carry the `{{version}}` placeholder. Eighteen hand-typed version strings
+  would be exactly the duplication 1.97.0 removed, wearing a new hat.
+- [ ] AC-SK-02 - a `VERSION` that moves and blocks that do not is a **red**: over a throwaway copy
+  of the generator's inputs, bumping only `uscha-kit/VERSION` makes `--check` exit **1** naming the
+  drifted regions, and it writes NOTHING while saying so; the plain run then re-stamps all 18 and
+  `--check` is green again. This is what makes the release wiring necessary rather than tidy.
+- [ ] AC-SK-03 - `doctor` reports `outdated` with **both** versions for a planted install root
+  stamped 1.54.0 (`installed`, `kit`, and a human-readable `SKILLS OUTDATED: installed 1.54.0 <
+  kit X.Y.Z` line carrying the fix command), and `current` for one stamped with the kit's own
+  version. **Exit 0 in both**: an install someone pinned on purpose is not a broken installation.
+- [ ] AC-SK-04 - a missing install root is `not installed`, never an error: absent and empty roots
+  both report `status: "not installed"` with `installed: null`, exit **0**, no traceback, and the
+  doctor verdict is not ERROR. The kit installs one agent at a time; six absent roots are the
+  normal shape of a healthy machine.
+- [ ] AC-SK-05 - an installed block with NO marker at all -- every install that predates 2.2.0 --
+  reads `outdated` with `installed: null` and the skills NAMED in `unmarked`. Reporting it as
+  `current` would be the silent green the field case already paid for; inventing a version for it
+  would be worse.
+- [ ] AC-SK-06 - the RED PROBE. The `v2.1.0` engine, read out of git, cannot answer the question at
+  all: it rejects `--installed` at the parser and its `doctor --json` carries no `skills_installed`
+  key. Without git or the tagged copy it reports `None` = UNMEASURED, never a silent pass.
+
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".
@@ -1249,6 +1316,7 @@ code refuses on purpose.
 - ADR-042 — The cross-vendor arm: a SECOND vendor compiles the whole bench, blind, under the same withheld oracles; `--write-mode return` because the machine's approval policy forbids exec writes, and 0 executed commands means the confound that mode would have introduced does not exist.
 - ADR-043 — The simplicity score ADVISES by default: only a declared budget plus `defaults.simplicity.gate` makes it exit 1, `max_nesting` is named as the indentation proxy it is, and `log-gate --verdict advisory` records a measured, non-gating run that never reads as `ok`.
 - ADR-044 — The agent asks for DECISIONS, never for INFORMATION: information the tree holds is READ, and every acceptance criterion, ADR decision item or `HANDOFF.md` rule the AGENT introduced carries `(origin: agent)` until a human confirms THAT item with `confirmed: YYYY-MM-DD` — reported by `spec-check` and `readiness` as ADVISORY.
+- ADR-045 — The generated orientation block carries the kit version, and the release script re-renders it: an installed skill can be dated, and `doctor` compares it against the kit — advisory, never a gate.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

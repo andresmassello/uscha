@@ -19,7 +19,47 @@ skill (**pull** — one screen when the human asks), and the **mirador** (bird's
 HTML). This skill exists because some surfaces never show a statusline; the answer
 is the same data, printed in chat when requested.
 
+## Before the readout: are the installed skills older than the kit? (2.2.0)
+
+A field report found `~/.claude/skills/uscha-*` still on 1.54.0 while the kit in the repo was
+1.97.0. An entire discovery ran on prose three months stale and NOTHING said so, because a
+SKILL.md carried no version to compare. Since 2.2.0 every generated orientation block opens with
+`<!-- uscha kit: X.Y.Z ... -->`, so the comparison is mechanical. Do it FIRST, before the
+breadcrumb:
+
+1. Run the engine's own check — it reads the marker out of every installed `SKILL.md` and
+   compares it against the kit's `VERSION`:
+
+   ```
+   python <kit>/.claude/skills/uscha-devloop/qa_ledger.py doctor --json
+   ```
+
+   Read `skills_installed`: one row per install root the installer writes to (Claude
+   `~/.claude/skills/`, Codex `~/plugins/uscha/skills/`, pi `~/.agents/skills/`, and the other
+   Agent-Skills roots), each with `status`, `installed` and `kit`. `doctor` exits 0 whether or
+   not anything is outdated — this reports, it never gates.
+2. If any row reads `outdated`, print exactly ONE line ABOVE the breadcrumb, then continue
+   normally:
+
+   ```
+   SKILLS OUTDATED: installed 1.54.0 < kit 2.2.0 -- run `python install-uscha.py install --target claude`
+   ```
+
+   Where the installed block predates 2.2.0 and carries no marker at all, `installed` is null:
+   say `installed <no kit: marker, pre-2.2.0>` rather than inventing a version.
+3. `not installed` is NOT a finding — the kit installs one agent at a time, and six absent roots
+   are the normal shape of a healthy machine. Say nothing about them.
+
+Advisory, always: the line never blocks the readout, never changes a number, and the block below
+prints exactly as it would have. What it removes is the silence.
+
+Honest limit: an installed skill that predates 2.2.0 does not carry these instructions, so on
+that surface the warning cannot come from the skill itself. The `doctor` seam is the instrument
+that still works there — it runs from any kit checkout and reads the installs from outside.
+
 <!-- uscha:orientation-block:begin -->
+<!-- uscha kit: 2.1.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+
 ## Orientation markers (non-negotiable)
 
 The operator must never have to ask "where am I?" or "what happens now?".

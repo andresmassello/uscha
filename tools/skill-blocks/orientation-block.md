@@ -1,3 +1,5 @@
+<!-- uscha kit: {{version}} -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+
 ## First contact (show ONCE, then never again)
 
 **Only when this project has no uscha artifacts yet** -- no `QA-LEDGER.json`, no `SPEC.md` or

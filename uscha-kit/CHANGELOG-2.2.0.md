@@ -251,4 +251,176 @@ rewrites a file without emitting rename headers is beyond what a diff can prove.
 --add-repo` adds ONE repo and never removes or renames one: removing a repo would orphan its
 evidence, which is a decision, not a flag.
 
+# Also in 2.2.0 — the homepage claim enters the facts gate
+
+## The finding
+
+The project's own homepage said the Diamond Bench passes **9/12** archetypes. The measured number
+has been **8/12** since 1.99.0, when ADR-042's cross-vendor arm moved `transformer` to PARTIAL —
+and `docs/`, `uscha-kit/README.md` and every other surface said 8. Nine releases went out green
+with that page in the gated set.
+
+Two things were wrong at once, and both are the same mistake in different clothes.
+
+**There was no fact to compare it against.** `SYSTEM-FACTS.json` derived the version, the
+subcommand count and the skill count. The bench headline — the project's single most-quoted
+number — was not derived at all, so `facts --check` had nothing to hold the page to.
+
+**The gate could not see the claim.** The stat tile reads
+`<div class="v">9<small>/12</small></div><div class="k">archetypes regenerate</div>`: the number
+lives in one element and the noun that gives it meaning in the next. Every recogniser pattern
+demanded whitespace between a count and its noun, so the homepage's headline numbers read as
+prose. That is not a near-miss — the same screen also said `52 engine subcommands` against a
+derived **53**, and the release was green on both.
+
+## The fix
+
+**A derived fact.** `facts` now counts the verdict rows of `DIAMOND-BENCH.md` — the report
+`qa_ledger.py bench` generates over the committed fixture, banner-marked *"do not hand-edit;
+every number is a measured run"* — and publishes `diamond.pass`, `diamond.partial`,
+`diamond.entries`, `diamond.fail`, `diamond.pending`. Counted per archetype, never read off the
+summary sentence beside them.
+
+Re-running the bench inside `facts` would be the more direct derivation, and it is not
+affordable: a full pass is ~650 child processes, and `facts` runs on every suite, every deploy
+and twice per release. The counted report is the honest second best, and it is stated as such in
+`_derivation`. An installed kit ships no report, so `diamond` derives `null` there — and a claim
+about a fact this tree cannot derive is reported **UNMEASURED** by `--check` and left alone by
+`--write`, never quietly agreed with.
+
+**A recogniser that crosses markup.** The gap between a claimed count and its noun may now be
+whitespace *or* HTML tags, for the diamond patterns and for the subcommand and skill counts that
+already existed. Two claim shapes were added, and both were narrowed **by measurement** — each
+wider draft was run against the whole gated set first and rejected by what it caught:
+
+- `<n>/12 archetypes`, `<n> of 12 archetypes`, `<n> de 12 arquetipos` — the count must be
+  followed, across markup but never across prose, by the noun it counts, and the denominator must
+  be the digits `12`. That is what keeps this repo's own historical sentence (*"It was 9 of 12
+  until ADR-042 moved transformer"*) and the paper's *"ten of twelve archetypes"* out of a writer
+  that would otherwise have silently rewritten both.
+- `<n> PASS <sep> <n> PARTIAL` as ONE shape, verdicts matched case-sensitively. Reading the two
+  numbers independently caught the paper's snapshot of the July–August arm — *"nine archetypes
+  PASS … three PARTIAL"*, a sentence about a different experiment — and would have offered to
+  rewrite it. The bench headline always writes the pair together.
+
+`<n> archetypes` alone is deliberately **not** a claim: across the gated set it names subsets far
+more often than the bench (*"five archetypes"*, *"two archetypes have no second run"*), so the
+entries count stays a derived fact with no recognised published shape. A gate that fires on prose
+is a gate people disable.
+
+The first run of the new writer rewrote four claims: 9/12 → 8/12 and 52 → 53 on both the English
+and the Spanish homepage. `site/index.html` and `site/es/index.html` were already in the
+`# canonical` section of `tools/facts-gated-files.txt` — the list was never the hole; the
+recogniser was.
+
+## What is measured
+
+`T153` grows `AC-FW-06..08`. `AC-FW-06` is differential: over a throwaway kit whose copy of
+`DIAMOND-BENCH.md` has one row changed from `PASS` to `FAIL`, the derived fact MOVES with it, and
+over the live report it equals the rows the suite counts independently. A number that stayed 8
+there would be a constant with a comment, which is what this replaced. `AC-FW-07` plants the
+homepage's exact markup shape and asserts `--check` names it and `--write` rewrites it — with the
+historical sentence and the paper's snapshot, both on the same fixture, byte-identical afterwards.
+
+`AC-FW-08` is the RED PROBE that ships: the `v2.1.0` engine, given the same untouched bench report
+and the same stale page, derives no `diamond` fact at all and exits **0** on the 9/12 tile. It
+reads the claim as prose — which is precisely the nine releases of green this criterion exists to
+make impossible. Without git or the tagged copy it reports `None` = UNMEASURED, never a silent
+pass.
+
+## Not in this release
+
+The site is **not deployed**: `site/sync-docs.sh` is a gate, not a publish, and the live site is
+nine releases behind on purpose. This change fixes the canonical sources and the gate that holds
+them; the deploy is the maintainer's, at release time.
+
+The homepage's `11 language stacks` and `100% Python stdlib` stay narrated — no mechanical source
+exists for either yet, and inventing one to make a page look measured is the failure mode this
+gate exists to catch (ADR-012's `omitted`, not `guessed`).
+
+# Also in 2.2.0 — an installed skill says which kit it came from (ADR-045)
+
+## The finding
+
+Skills sat under `~/.claude/skills/uscha-*` from kit **1.54.0** while the kit in the repo was at
+**1.97.0**. A whole discovery ran on prose three months stale, and nothing said a word — not the
+skill, not the engine, not the operator, who had no way to notice.
+
+The reason is small and complete: **a `SKILL.md` carried no version.** The kit's version lived in
+six surfaces, and none of them travels with an installed skill — `install-uscha.py` copies the
+nine skill directories verbatim, and whatever `SKILL.md` says is what the agent reads until
+someone re-installs. There was no fact to compare, and so no comparison to make. The same shape as
+the drift above, one layer out: prose being executed, with no derived fact behind it.
+
+## The fix
+
+**The generated block carries the version.** Since 1.97.0 the orientation block of every
+`SKILL.md` is a generated region rendered from `tools/skill-blocks/` into 18 runtime files. Both
+templates now open with `<!-- uscha kit: {{version}} -->`, rendered by `tools/gen-skill-blocks.py`
+from `uscha-kit/VERSION` — the same file the six surfaces move. A missing or empty `VERSION` is a
+configuration error (exit 2), never a default: a block stamped with a guessed version would be
+worse than one with no stamp, because `doctor` would then compare an installed skill against a
+number nobody wrote.
+
+**The release script re-renders them.** `tools/release.py` runs the generator in step 2,
+immediately after the six surfaces move and before the facts gate, and refuses (I3) if the
+generator is missing. The six surfaces are no longer the only place the version lives; 18 runtime
+files follow them, in the same commit X. `gen-skill-blocks.py --check` (smoke T152) is red
+whenever `VERSION` has moved and the regions have not, so this is not a convention anyone has to
+remember.
+
+**`doctor` compares, and only reports.** It reads the marker out of every installed `SKILL.md`
+under the roots the installer writes to (Claude `~/.claude/skills`, Codex `~/plugins/uscha/skills`,
+pi `~/.agents/skills`, and the other Agent-Skills roots) — or the roots named with `--installed
+DIR`, repeatable — and reports per root:
+
+```
+[ !] SKILLS OUTDATED at ~/.claude/skills: installed 1.54.0 < kit 2.2.0
+     re-install: python install-uscha.py install --target claude
+```
+
+`--json` carries `kit_version` and a `skills_installed` array with both versions per root:
+`current`, `outdated` (`installed: null` where the blocks predate 2.2.0 and carry no marker at
+all, with the skills named in `unmarked` rather than given a version nobody wrote) or `not
+installed` — which is not a fault, since the kit installs one agent at a time and six absent roots
+are the normal shape of a healthy machine.
+
+**Advisory, always.** An outdated install is a `warn`, never an `error`; `doctor` exits 0 whether
+the install is current or three months old. Someone may be pinning a version on purpose, and a
+diagnostic that fails a deliberate choice is a diagnostic people stop running. The `uscha-status`
+skill prints the same finding as ONE line above its breadcrumb and then renders the readout
+exactly as it would have.
+
+**No new subcommand**, on purpose: the subcommand count is a published fact appearing in the
+README, the site, the docs and the paper, and a `skills-check` command would have moved every one
+of those surfaces to ask a question `doctor` already exists to answer.
+
+## What is measured
+
+New family `AC-SK-01..06` in `T162`. All 18 rendered regions carry the kit's own version and the
+stamp comes from the template, not from 18 hand edits (`-01`); bumping only `VERSION` in a
+throwaway copy makes `--check` exit 1 naming the drifted regions and writing nothing, and the
+plain run re-stamps all 18 (`-02`); `doctor` reports `outdated` with both versions for a planted
+1.54.0 root and `current` for a fresh one, **exit 0 in both** (`-03`); an absent or empty root is
+`not installed` with `installed: null`, exit 0, no traceback (`-04`); a block with no marker at
+all is `outdated` with the skills NAMED, never `current` and never a made-up version (`-05`).
+
+`AC-SK-06` is the RED PROBE: the `v2.1.0` engine cannot answer the question at all — it rejects
+`--installed` at the parser and its `doctor --json` has no `skills_installed` key. `None` =
+UNMEASURED without git.
+
+The release wiring is measured where a real release runs: `AC-RL-03` (T151) now asserts that
+commit X carries the re-rendered `SKILL.md` pair alongside the six surfaces, stamped with the new
+version — its fixture ships the real generator and a two-line template.
+
+## Not in this release
+
+No auto-update and no install prompt: the installer stays a command a human runs. An outdated
+install gates nothing, anywhere. And a skill installed **before** 2.2.0 carries neither the marker
+nor these instructions, so on that surface the warning cannot come from the skill itself — the
+`doctor` seam is the instrument that still works there, because it runs from outside and reads the
+installs. A stated limit, not a gap that closes itself.
+
+Acceptance goes 283 → 292 criteria; nothing was dropped.
+
 Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.

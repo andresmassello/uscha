@@ -12,8 +12,17 @@ this generator writes it into the marked region of each SKILL.md, in both skill 
     tools/skill-blocks/orientation-block-short.md  the short variant (mirador, status)
     tools/skill-blocks/skills.json                 per-skill parameters
 
-Placeholders: `{{skill}}` (the breadcrumb name, e.g. `adr-refine`) and `{{here}}` (the
-per-skill `Here:` / `Output:` / `Next:` lines, verbatim, full variant only).
+Placeholders: `{{skill}}` (the breadcrumb name, e.g. `adr-refine`), `{{here}}` (the
+per-skill `Here:` / `Output:` / `Next:` lines, verbatim, full variant only) and
+`{{version}}` (the kit version, read from `uscha-kit/VERSION`).
+
+`{{version}}` is what makes an installed skill dateable. A field report (2.2.0) found skills
+installed under `~/.claude/skills/uscha-*` from kit 1.54.0 while the kit itself was at 1.97.0:
+the discovery ran on the old prose and NOTHING said so, because a SKILL.md carried no version at
+all. Every block now opens with `<!-- uscha kit: X.Y.Z ... -->`, `doctor` compares that marker
+against the kit's own VERSION, and `tools/release.py` re-renders these regions in step 2 -- right
+after the six version surfaces move, before the facts gate -- so the marker can never lag the
+release that shipped it.
 
 Usage
     python tools/gen-skill-blocks.py            rewrite every marked region in place
@@ -46,6 +55,7 @@ BLOCKS = os.path.join("tools", "skill-blocks")
 TREES = (os.path.join("uscha-kit", ".claude", "skills"),
          os.path.join("uscha-kit", "skills"))
 TEMPLATES = {"full": "orientation-block.md", "short": "orientation-block-short.md"}
+VERSION_FILE = os.path.join("uscha-kit", "VERSION")
 
 
 class ConfigError(Exception):
@@ -68,6 +78,21 @@ def load_templates(root):
     return out
 
 
+def load_version(root):
+    """The kit version the blocks are stamped with, from the SAME file the six surfaces move.
+
+    A ConfigError (exit 2) rather than a default when it is missing: a block stamped with a
+    guessed version would be worse than one with no stamp at all -- `doctor` would compare an
+    installed skill against a number nobody wrote."""
+    path = os.path.join(root, VERSION_FILE)
+    if not os.path.isfile(path):
+        raise ConfigError("missing file: %s" % path)
+    body = io.open(path, encoding="utf-8").read().strip()
+    if not body:
+        raise ConfigError("%s is empty -- there is no version to stamp" % path)
+    return body.split()[-1]
+
+
 def load_table(root):
     path = os.path.join(root, BLOCKS, "skills.json")
     if not os.path.isfile(path):
@@ -79,7 +104,7 @@ def load_table(root):
         fh.close()
 
 
-def render(skill, params, templates):
+def render(skill, params, templates, version):
     variant = params.get("variant")
     if variant not in templates:
         raise ConfigError("%s: unknown variant %r (expected one of %s)"
@@ -97,7 +122,7 @@ def render(skill, params, templates):
         if line.strip() == "{{here}}":
             out.extend(here)
         else:
-            out.append(line.replace("{{skill}}", name))
+            out.append(line.replace("{{skill}}", name).replace("{{version}}", version))
     for line in out:
         if "{{" in line:
             raise ConfigError("%s: unresolved placeholder in %r" % (skill, line))
@@ -118,9 +143,10 @@ def locate(path, lines):
 def process(check_only, root):
     templates = load_templates(root)
     table = load_table(root)
+    version = load_version(root)
     drifted, written = [], []
     for skill in sorted(table):
-        block = render(skill, table[skill], templates)
+        block = render(skill, table[skill], templates, version)
         for tree in TREES:
             path = os.path.join(root, tree, skill, "SKILL.md")
             rel = os.path.join(tree, skill, "SKILL.md").replace(os.sep, "/")
@@ -159,6 +185,9 @@ def main(argv):
                 sys.stderr.write("  %s\n" % rel)
             sys.stderr.write("  the block is generated: edit tools/skill-blocks/, not the"
                              " SKILL.md, then run: python tools/gen-skill-blocks.py\n")
+            sys.stderr.write("  (a bumped uscha-kit/VERSION drifts every region too -- the"
+                             " block carries `uscha kit: X.Y.Z`; tools/release.py re-renders"
+                             " them in step 2)\n")
             return 1
         sys.stdout.write("gen-skill-blocks: every orientation block matches the template\n")
         return 0

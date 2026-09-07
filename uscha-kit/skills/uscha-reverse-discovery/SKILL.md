@@ -24,6 +24,8 @@ evidence-classed, content-addressed, and promoted to the contract only by a per-
 human verdict (ADR-013).**
 
 <!-- uscha:orientation-block:begin -->
+<!-- uscha kit: 2.1.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+
 ## First contact (show ONCE, then never again)
 
 **Only when this project has no uscha artifacts yet** -- no `QA-LEDGER.json`, no `SPEC.md` or

@@ -188,7 +188,12 @@ under an oracle the compilers never saw — that is the closed loop working. It 
 1.99.0, when a fourth compiler from a second vendor read one genuinely ambiguous sentence in
 `transformer` the other way and lost a case the three Claude-family models had agreed on
 (ADR-042). The number went down because the bench got harder, and the whole point of the arm was
-to let it. 0.815 is the mean *recoverability* of the asset from compiled code counting only
+to let it. Since 2.2.0 that headline is a **derived fact**: `qa_ledger.py facts` counts the verdict
+rows of `DIAMOND-BENCH.md` — the report `bench` generates over the committed fixture — into
+`SYSTEM-FACTS.json`, and `facts --check` compares every published copy of it against that count.
+It was added because the project's own homepage said 9/12 for nine releases after the number
+moved, and every one of those releases was green: the claim sat in one HTML element and its noun
+in the next, where the gate could not see it. 0.815 is the mean *recoverability* of the asset from compiled code counting only
 static and behavioural footing. It read **0.062** until 1.90.0, with the behaviour dimension
 `UNMEASURED`, because no oracle case carried an AC tag — a named absence, not a zero. The 12
 bench oracles are now curated per case (`ORACLE-TAGS-CURATED.json`, human-authored; payloads and

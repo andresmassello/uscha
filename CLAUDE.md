@@ -104,6 +104,11 @@ itself.
    `skills.json`). Edit the TEMPLATE, run `python tools/gen-skill-blocks.py`, never the block by
    hand; `--check` is what smoke **T152** runs, and a hand-edited region is a named red naming the
    file. Everything OUTSIDE the two markers is still per-skill prose, edited normally.
+   Since 2.2.0 (ADR-045) the block also carries `<!-- uscha kit: X.Y.Z -->` rendered from
+   `uscha-kit/VERSION`, so an installed skill can be DATED (`doctor` compares it against the kit
+   and reports `current` / `outdated` / `not installed` -- advisory, exit code unchanged). A bump
+   therefore drifts all 18 regions: `tools/release.py` re-renders them in step 2, right after the
+   six surfaces move and before the facts gate, and `--check` stays red until it has.
 
 ## Known gotchas
 

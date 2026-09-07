@@ -441,11 +441,31 @@ python uscha-kit/install-uscha.py doctor --target both
 ```
 
 It checks: Python >=3.8 · git · the 9 skills alongside the engine (frontmatter
-verified) · the INV-GOLDEN-01 hook (present + registered in settings.json +
+verified) · **whether the INSTALLED skills are older than this kit** (2.2.0, ADR-045) · the
+INV-GOLDEN-01 hook (present + registered in settings.json +
 powershell/pwsh interpreter) · and if there is a `uscha.config.json` in the cwd:
 config parseable, ACCEPTANCE with AC-IDs, ledger integrity, the QA skills
 from `qa_tools_order` (the loop orchestrates them without bringing them in) and the
 primary toolchain of each repo by type (its absence is a WARNING — it may live only in CI).
+
+**Are the installed skills older than the kit?** (2.2.0, ADR-045.) Every generated `SKILL.md`
+orientation block now opens with `<!-- uscha kit: X.Y.Z -->`, rendered from `uscha-kit/VERSION`
+and re-rendered by the release script at every bump, so an installed skill can be dated. `doctor`
+reads that marker out of each install root the installer writes to — or the ones you name — and
+reports both versions:
+
+```bash
+python3 ~/.claude/skills/uscha-devloop/qa_ledger.py doctor --json
+# -> "kit_version" and "skills_installed": [{target, root, status, installed, kit}]
+python3 .../qa_ledger.py doctor --installed /some/other/skills   # repeatable
+```
+
+`status` is `current`, `outdated` (with **both** versions; `installed: null` when the blocks
+predate 2.2.0 and carry no marker at all) or `not installed` — which is not a fault, since the kit
+installs one agent at a time. This is **advisory**: an outdated install is a warning, never an
+error, and `doctor`'s exit code is unchanged. It exists because a discovery once ran on skills
+from 1.54.0 while the kit was at 1.97.0 and nothing said a word. `/uscha-status` prints the same
+finding as one line above its readout.
 
 ## Configure
 

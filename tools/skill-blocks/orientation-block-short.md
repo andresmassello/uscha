@@ -1,3 +1,5 @@
+<!-- uscha kit: {{version}} -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+
 ## Orientation markers (non-negotiable)
 
 The operator must never have to ask "where am I?" or "what happens now?".

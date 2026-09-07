@@ -18,6 +18,8 @@ Paints the REAL state of the project at a glance. It does not narrate or estimat
 wires the JSON the engine emits into the template. Read-only.
 
 <!-- uscha:orientation-block:begin -->
+<!-- uscha kit: 2.1.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+
 ## Orientation markers (non-negotiable)
 
 The operator must never have to ask "where am I?" or "what happens now?".
