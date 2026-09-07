@@ -1476,3 +1476,36 @@ the readiness text and the payload it had.
   fixtures, has neither `smoke-ingest`, nor `--kind smoke`, nor a `smoke` block in
   `readiness --json`, nor `acceptance.smoke_closed`. Without git or the tagged copy it reports
   `None` = UNMEASURED, never a silent pass.
+
+## The first-use walkthrough (2.2.0) - closes on green `AC-FU-nn` smoke assertions
+
+The entry experience asked a newcomer to learn the model before seeing one complete result.
+`docs/FIRST-USE-EN.md` and its Spanish twin `docs/FIRST-USE.md` are the short path instead: one
+verified runtime (Windows + git-bash + Python 3.13 + Claude Code, on a small Python repo), the
+install and the first skill invocation together, ONE bounded change with ONE criterion, the
+EXECUTED evidence that closes it, and the merge left to the human. Every transcript in the page
+is real output from that run; the two agent-driven steps are labelled *not exercised here*
+rather than dressed up as a transcript. These are DOC criteria: the smoke block measures the
+page, not the engine. Measured by T166 through the `.fu-cases.json` sidecar.
+
+- [ ] AC-FU-01 - the guide is reachable from all three entry points: `README.md` links
+  `docs/FIRST-USE-EN.md`, `site/index.html` links it, and `site/es/index.html` links the Spanish
+  twin `docs/FIRST-USE.md`. A walkthrough nobody can find is a walkthrough nobody reads.
+- [ ] AC-FU-02 - every fenced `bash` command in the guide that invokes the ENGINE (`qa_ledger.py`,
+  through the `QL` variable the guide itself defines) or the INSTALLER (`install-uscha.py`) exits
+  **0** when the block extracts them and runs them **in order** in a clean temp project. Two
+  substitutions are made and named in the sidecar: the leading `python` becomes the interpreter
+  running the suite, and `QL` is rebound to the engine under test instead of the reader's `$HOME`
+  install. Every other line -- `npx` (it reaches the npm registry), `cd`, `pytest`, and the
+  `/uscha-*` agent invocations -- is EXCLUDED and listed by name, never silently dropped.
+- [ ] AC-FU-03 - the three routes name skills that exist: every `/uscha-<name>` token in the
+  routes section resolves to `uscha-kit/skills/<name>/SKILL.md`. Navigation over existing
+  capabilities, never a new mode invented in prose.
+- [ ] AC-FU-04 - the twins agree AND render narrow: both files carry the same number of fenced
+  blocks, in the same languages, with byte-identical command lines inside the `bash` fences, and
+  no line inside any fence of either twin exceeds **120** columns -- so a phone-width layout
+  never has to scroll sideways. Repo rule 3 with an instrument.
+- [ ] AC-FU-05 - neither twin promises a completion time: no digit sits next to `minutes` /
+  `minutos` / `minute` / `minuto` in either direction. The kit measures evidence, not effort, and
+  the one runtime the page claims is the one that was exercised. (Client and project names are
+  AC-03's hash scan over every tracked file; this criterion pins the time promise only.)

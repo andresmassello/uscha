@@ -16166,6 +16166,187 @@ case "$T165" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T165";;
 esac
 
+echo "== T166 (2.2.0): the first-use walkthrough is linked, executable and twinned =="
+# DOC criteria, measured like any other. The entry experience used to hand a newcomer the whole
+# model before one complete result; docs/FIRST-USE-EN.md + its Spanish twin docs/FIRST-USE.md are
+# the short path instead. What this block measures is that the page cannot rot silently: the
+# links exist, the commands it prints still run, the routes name skills that are really there,
+# the twins agree, and nothing in it promises a completion time. It measures the PAGE, never the
+# engine -- and the engine commands it runs are the page's own, extracted rather than retyped.
+T166=$(pyin "$KIT" "$ROOT" <<'PY'
+import io, os, re, shlex, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+EN = os.path.join(root, "docs", "FIRST-USE-EN.md")
+ES = os.path.join(root, "docs", "FIRST-USE.md")
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py").replace(chr(92), "/")
+INST = os.path.join(kit, "install-uscha.py").replace(chr(92), "/")
+BT = chr(96) * 3
+SKILL_RE = re.compile(chr(96) + r"/uscha-([a-z-]+)" + chr(96))
+TIME_RE = re.compile(r"(\d[^\n]{0,24}(minutes|minutos|minute|minuto))"
+                     r"|((minutes|minutos|minute|minuto)[^\n]{0,24}\d)", re.I)
+res, why, TMPS = {}, {}, []
+
+
+def read(path):
+    with io.open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def fences(text):
+    """(language, [lines]) for every fenced block, in document order."""
+    out, lang, buf, inside = [], None, [], False
+    for line in text.split(chr(10)):
+        if line.startswith(BT):
+            if inside:
+                out.append((lang, buf))
+                buf, inside = [], False
+            else:
+                lang, inside = line[3:].strip(), True
+            continue
+        if inside:
+            buf.append(line)
+    return out
+
+
+def commands(text):
+    """Every non-blank, non-comment line inside a bash fence."""
+    out = []
+    for lang, buf in fences(text):
+        if lang != "bash":
+            continue
+        for line in buf:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                out.append(stripped)
+    return out
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-fu-")
+    TMPS.append(d)
+    return d
+
+
+def measure():
+    en, es = read(EN), read(ES)
+
+    # --- AC-FU-01: reachable from README and BOTH homepages ---------------------------------
+    surfaces = {
+        "README.md": "docs/FIRST-USE-EN.md",
+        os.path.join("site", "index.html"): "docs/FIRST-USE-EN.md",
+        os.path.join("site", "es", "index.html"): "docs/FIRST-USE.md",
+    }
+    missing = []
+    for rel, needle in surfaces.items():
+        try:
+            body = read(os.path.join(root, rel))
+        except OSError:
+            missing.append(rel + " (unreadable)")
+            continue
+        if needle not in body:
+            missing.append(rel + " -> " + needle)
+    res["AC-FU-01"] = not missing
+    why["AC-FU-01"] = "missing links: %r" % (missing,)
+
+    # --- AC-FU-02: the page's own engine/installer commands still exit 0 ---------------------
+    # In scope: the lines that drive the ENGINE (through the QL variable the guide defines) or
+    # the INSTALLER. Out of scope, and NAMED rather than dropped: npx (it reaches the npm
+    # registry), cd, pytest, and the /uscha-* agent invocations -- no agent runs in this suite.
+    cmds = commands(en)
+    binding = [c for c in cmds if c.startswith("QL=")]
+    in_scope, excluded = [], []
+    for c in cmds:
+        if c.startswith("QL="):
+            excluded.append(c + "   [variable binding; rebound to the kit under test]")
+        elif ('"$QL"' in c) or ("install-uscha.py" in c):
+            in_scope.append(c)
+        elif c.startswith("/uscha-"):
+            excluded.append(c + "   [agent-skill invocation; no agent is exercised here]")
+        elif c.startswith("npx "):
+            excluded.append(c + "   [reaches the npm registry]")
+        else:
+            excluded.append(c + "   [neither the engine nor the installer]")
+    proj = os.path.join(tmp(), "backend-api")
+    os.makedirs(proj)
+    with io.open(os.path.join(proj, "pyproject.toml"), "w", encoding="utf-8") as fh:
+        fh.write("[project]" + chr(10) + 'name = "backend-api"' + chr(10)
+                 + 'version = "0.1.0"' + chr(10))
+    # uscha init is the SETUP step -- the same installer code path the guide npx line routes
+    # to. It has to succeed for the extracted engine lines to have a config to read.
+    setup = subprocess.run([sys.executable, INST, "init", "--repo", proj],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           universal_newlines=True, cwd=proj)
+    ran, failed = [], []
+    if setup.returncode == 0 and binding and len(in_scope) >= 3:
+        for c in in_scope:
+            line = c.replace('"$QL"', ENG).replace("$QL", ENG)
+            argv = shlex.split(line, posix=True)
+            if argv and argv[0] in ("python", "python3"):
+                argv[0] = sys.executable
+            elif argv and argv[0].endswith("install-uscha.py"):
+                argv = [sys.executable] + argv
+            out = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 universal_newlines=True, cwd=proj)
+            ran.append((c, out.returncode))
+            if out.returncode != 0:
+                failed.append((c, out.returncode, out.stdout[-200:]))
+    res["AC-FU-02"] = bool(setup.returncode == 0 and binding and len(in_scope) >= 3 and not failed)
+    why["AC-FU-02"] = ("setup rc=%s binding=%s in_scope=%d failed=%r | excluded: %s"
+                       % (setup.returncode, bool(binding), len(in_scope), failed,
+                          " ; ".join(excluded)))
+
+    # --- AC-FU-03: the three routes name skills that exist -----------------------------------
+    named = sorted(set(SKILL_RE.findall(en)) | set(SKILL_RE.findall(es)))
+    absent = [n for n in named
+              if not os.path.isfile(os.path.join(kit, "skills", "uscha-" + n, "SKILL.md"))]
+    required = ("discovery", "adr-refine", "characterize", "devloop")
+    lacking = [n for n in required if n not in named]
+    res["AC-FU-03"] = not absent and not lacking
+    why["AC-FU-03"] = "named=%r absent=%r lacking=%r" % (named, absent, lacking)
+
+    # --- AC-FU-04: the twins agree, and every fence renders under 120 columns -----------------
+    fen_en, fen_es = fences(en), fences(es)
+    langs_ok = [l for l, _ in fen_en] == [l for l, _ in fen_es]
+    cmds_ok = commands(en) == commands(es)
+    wide = []
+    for label, blocks in (("EN", fen_en), ("ES", fen_es)):
+        for lang, buf in blocks:
+            for line in buf:
+                if len(line) > 120:
+                    wide.append((label, lang, len(line)))
+    res["AC-FU-04"] = bool(len(fen_en) == len(fen_es) and langs_ok and cmds_ok and not wide)
+    why["AC-FU-04"] = ("fences %d/%d langs=%s cmds=%s wide=%r"
+                       % (len(fen_en), len(fen_es), langs_ok, cmds_ok, wide))
+
+    # --- AC-FU-05: no completion-time promise in either twin ---------------------------------
+    hits = []
+    for label, body in (("EN", en), ("ES", es)):
+        for m in TIME_RE.finditer(body):
+            hits.append((label, m.group(0)))
+    res["AC-FU-05"] = not hits
+    why["AC-FU-05"] = "time promises: %r" % (hits,)
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".fu-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T166" in
+  OK*) PASS=$((PASS+1)); echo "  ok   first-use walkthrough (AC-FU-01..05): $T166";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T166";;
+esac
+
 # ---------------------------------------------------------------------------- #
 # ACCEPTANCE EMISSION (kit 1.44.0) — uscha applied to itself.
 # Runs the repo's own ACCEPTANCE.md criteria and writes the JUnit report the engine
@@ -16466,6 +16647,10 @@ FAMILIES = (
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".op-cases.json", "operability", "T165",                        # ADR-048
      _seq("AC-OP", 1, 8)),
+    # DOC criteria (2.2.0): the first-use walkthrough. T166 measures the PAGE -- its links, its
+    # own extracted commands, its routes, its twin and its silence about completion time.
+    (".fu-cases.json", "first-use-walkthrough", "T166",              # 2.2.0
+     _seq("AC-FU", 1, 5)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

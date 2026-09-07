@@ -10,6 +10,10 @@ never what was claimed.
 **[uscha.dev](https://uscha.dev)** — the method, the five rules, the skills, the library
 (the diamond thesis, how-it-works diagrams, essay, 2-day dev course, reference, paper).
 
+**New here? Start with [First use: from install to one measured result](docs/FIRST-USE-EN.md)**
+— one machine, one small repo, one criterion closed by a real test, and the merge left to you
+([en español](docs/FIRST-USE.md)).
+
 ```bash
 npx --yes @andresmassello/uscha@latest install --target claude   # Claude Code
 npx --yes @andresmassello/uscha@latest install --target codex    # Codex
