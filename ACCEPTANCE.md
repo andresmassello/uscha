@@ -1363,8 +1363,64 @@ in `defaults`, so the origin ladder now reads DOTTED knob names. Measured by T16
 - ADR-043 — The simplicity score ADVISES by default: only a declared budget plus `defaults.simplicity.gate` makes it exit 1, `max_nesting` is named as the indentation proxy it is, and `log-gate --verdict advisory` records a measured, non-gating run that never reads as `ok`.
 - ADR-044 — The agent asks for DECISIONS, never for INFORMATION: information the tree holds is READ, and every acceptance criterion, ADR decision item or `HANDOFF.md` rule the AGENT introduced carries `(origin: agent)` until a human confirms THAT item with `confirmed: YYYY-MM-DD` — reported by `spec-check` and `readiness` as ADVISORY.
 - ADR-045 — The generated orientation block carries the kit version, and the release script re-renders it: an installed skill can be dated, and `doctor` compares it against the kit — advisory, never a gate.
+- ADR-046 — Field truth for greenfield: a REAL-INPUT corpus is an evidence class (`corpus-run`), scored against a threshold the PROJECT declares — advisory with none declared, a FACT gate with one — and a green tagged run closes an acceptance criterion MEASURED; the `field` readiness dimension is deferred to its own ADR.
 - ADR-048 — Operability is a MEASURED dimension: `operability` reads CI, release, the RUNBOOK and the seed command as facts in the tree and persists `gate:operability` — advisory on risk profiles A/B, a BLOCKER on C/D/E through the profile-owned knob `defaults.operability.gate`.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change
 is accepted by a green smoke, which is how uscha verifies its own engine.
+
+## Field truth for greenfield: `corpus-run` (ADR-046) - closes on green `AC-CO-nn` smoke assertions
+
+A field report from a live greenfield build: the parser passed every test its author wrote and
+was wrong; the REAL corpus is what exposed it (96.96 % -> 99.645 % after the fix). In greenfield
+every test payload is invented by the agent that wrote the code, and `characterize`/`golden-diff`
+have no answer there - their doctrine is "the old code is the truth" and there is no old code.
+`corpus-run` is the missing evidence class: real inputs with their real expected outputs, run
+through the real command, scored as a percentage the ledger persists like any other FACT.
+
+The posture of 2.1.0 holds. With NO threshold declared anywhere (`--threshold`, else
+`repos[R].corpus_threshold`, else `defaults.corpus_threshold`) the run is ADVISORY - measured,
+persisted, gating nothing, and never inside the `N ok` count. With one declared, `gate:corpus`
+is a FACT gate: `fail` caps readiness <= 65 and blocks convergence through the same record shape
+`gate-check` writes. `log-gate --kind corpus` is the parity door for a run measured elsewhere,
+and it accepts `advisory` because the check's own default mode IS advisory - the closed
+vocabulary is otherwise untouched, and `--kind ci` still refuses it.
+
+The `field` DIMENSION and its weight are deliberately NOT in this release (ADR-046,
+Consequences): a weighted dimension moves every existing project's score on upgrade and is owed
+its own ADR. What ships is the instrument, the gate the project declares, the criterion closure,
+and one conditional readiness line.
+
+- [ ] AC-CO-01 - a 3-case corpus with 2 hits and `--threshold 90` exits 1 and persists a
+  `gate:corpus` record reading 66.7 % (2/3), gated, NOT advisory, with the missing case named;
+  `readiness` shows `--- field <repo>: corpus 66.7 % (2/3) < 90 % FAIL` and the same state in
+  `--json`.
+- [ ] AC-CO-02 - a ticked `AC-FIELD-01` with no run reports `narrated_only`; a GREEN run carrying
+  `--ac AC-FIELD-01` closes it MEASURED and attributes it in `acceptance.corpus_closed`; a later
+  FAILING run on the same tag REOPENS it. Red or unbudgeted evidence closes nothing.
+- [ ] AC-CO-03 - a corpus declared in `repos[R].corpus` and never run reads UNMEASURED on the
+  field line; a repo that declares none produces no field entry and no field line; a project with
+  no corpus anywhere is silent, so its readiness text and payload are what they were before.
+- [ ] AC-CO-04 - with no threshold declared anywhere the run is ADVISORY at exit 0, the record is
+  stamped `advisory` with zero gated findings, and the gates line reads `0 ok - 1 advisory`,
+  never inside the ok count. The precedence ladder is measured end to end:
+  `defaults.corpus_threshold` gates, `repos[R].corpus_threshold` overrides it, `--threshold`
+  overrides both.
+- [ ] AC-CO-05 - a corpus that is missing, empty, malformed (naming the LINE NUMBER) or missing an
+  `input`/`expected` key REFUSES at exit 2 and persists NO record. An unreadable corpus scored as
+  0 % would be an unmeasurable input reported as a measured catastrophe.
+- [ ] AC-CO-06 - a case that outruns `--timeout` is a miss named `timeout`, and a non-zero exit is
+  a miss named with its code. Determinism: file order is run order, so the same corpus reports the
+  same misses in the same places.
+- [ ] AC-CO-07 - the CONTROL PAIR: over one ledger, a PASSING corpus caps nothing (the score
+  stands above 65 with `cap_reason` null), and a FAILING corpus on a second repo caps the same
+  ledger at exactly 65 with `BLOCKER` named as the reason. Without the control the "caps nothing"
+  half would be an assertion, not a measurement.
+- [ ] AC-CO-08 - `log-gate --kind corpus` accepts `pass`, `fail`, `advisory` and `not-run`, and a
+  `fail` logged through it appears as blocking in the gates rollup; `--kind ci --verdict advisory`
+  is still refused at exit 2, so the closed vocabulary did not open.
+- [ ] AC-CO-09 - the RED PROBE. The `v2.1.0` engine, read out of git and run on these same
+  fixtures, has neither `corpus-run`, nor `--kind corpus`, nor a `field` block in
+  `readiness --json`. Without git or the tagged copy it reports `None` = UNMEASURED, never a
+  silent pass.

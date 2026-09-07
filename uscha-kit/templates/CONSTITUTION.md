@@ -161,6 +161,20 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
   `--verdict advisory` is REFUSED on it, as on every FACT gate. It is admitted to the closed
   `--kind` vocabulary (ADR-014, INV-ADVISORY-01) because a pipeline either went green on a
   commit or it did not: an LLM judgment does not become a gate by being important.
+- The **Field truth** invariant (greenfield) is measured by `qa_ledger.py corpus-run`: a JSONL
+  corpus of REAL inputs with their real expected outputs, run through the real command, scored
+  as hits/total. In greenfield every test payload was invented by the agent that wrote the code,
+  so a green suite proves nothing about the inputs the world produces — and `characterize` has
+  no answer there, because there is no old code to be the truth. **Advisory by default**: the
+  percentage is measured and gates nothing until the project declares a budget (`--threshold`,
+  else `repos[R].corpus_threshold`, else `defaults.corpus_threshold`). With one declared, a run
+  under it is a **BLOCKER** — readiness cap ≤ 65, convergence blocked — exactly like
+  `gate-check`, persisted as `gate:corpus`. A corpus that is missing, empty or malformed is
+  **exit 2** naming the line, never a scored 0 %. `log-gate --kind corpus` is the parity door
+  for a run measured elsewhere and it DOES accept `--verdict advisory` — the third and last kind
+  that may, because the check's own default mode is advisory; every other FACT kind still
+  refuses it. `--ac AC-nn` stamps criteria on the record: a criterion whose only evidence is a
+  corpus record closes MEASURED iff that record passed (ADR-046).
 - The **Operability** invariant is measured by `qa_ledger.py operability --repo R` (ADR-048): four
   FACTS read out of the tree — a `.github/workflows` step running the repo's **configured** test
   command, a workflow that publishes or attaches a release asset, a `RUNBOOK.md` naming

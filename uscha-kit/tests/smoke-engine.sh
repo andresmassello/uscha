@@ -15049,6 +15049,397 @@ if [ "${USCHA_P0_A_SKIP:-0}" != "1" ]; then
   PASS=$((PASS+1))
 fi
 
+echo "== T163 (2.2.0): field truth for greenfield -- a real corpus is evidence, and an unbudgeted run gates nothing =="
+# The field report this block comes from: a parser passed every test its author wrote and was
+# wrong; the REAL corpus moved it from 96.96 % to 99.645 %. In a greenfield project every test
+# payload was INVENTED by the agent that wrote the code, so a green suite can prove nothing
+# about the inputs the world actually produces -- and characterize/golden-diff have no answer
+# there, because there is no old code to be the truth.
+#
+# corpus-run is that missing evidence class, and it is measured like every other FACT gate:
+# hits/total against a DECLARED budget. Three controls carry the honesty: with no threshold
+# declared anywhere the run is ADVISORY and never joins the `N ok` count (ADR-043); a corpus
+# that cannot be read is exit 2 naming the line, never a scored 0 %; and AC-CO-09 is the RED
+# PROBE -- the v2.1.0 engine has neither the subcommand nor the --kind.
+T163=$(pyin "$KIT" "$ROOT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+# the release before corpus-run: its engine must show the absence (AC-CO-09).
+PREV_TAG = "v2.1.0"
+TMPS = []
+res, why = {}, {}
+
+ECHOER = "import sys\nsys.stdout.write(sys.stdin.read().strip())\n"
+SLOW = "import sys, time\nsys.stdin.read()\ntime.sleep(5)\n"
+ACCEPTANCE = "- [x] AC-FIELD-01 -- the parser is right on REAL input\n"
+# one per-repo dimension must carry weight (the config validator says so), and the point of
+# this shape is that the CAP is what moves, not the score: static_gate stays at 0 so a failing
+# corpus cannot lower the raw number, only cap it.
+WEIGHTS = {"acceptance": 90, "adr": 5, "coverage": 0,
+           "static_gate": 0, "convergence": 1, "integration": 5}
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-co-")
+    TMPS.append(d)
+    return d
+
+
+def run(args, cwd=None):
+    return subprocess.run([sys.executable] + list(args), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                          errors="replace")
+
+
+def eng(cwd, args, engine=None):
+    return run([engine or ENG] + list(args), cwd=cwd)
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def write(path, text):
+    d = os.path.dirname(path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
+def jsonl(path, rows):
+    write(path, "".join(json.dumps(r) + "\n" for r in rows))
+
+
+def project(repos, defaults=None, acceptance=True):
+    """A project with an initialized ledger, an echo command and the two corpora the field
+    story needs: one the subject answers right, one it does not."""
+    d = tmp()
+    cfg = {"project": {"name": "demo"}, "defaults": defaults or {},
+           "repos": [dict(r) for r in repos]}
+    write(os.path.join(d, "uscha.config.json"), json.dumps(cfg, indent=2) + "\n")
+    for r in repos:
+        write(os.path.join(d, r["path"], ".keep"), "")
+    write(os.path.join(d, "echoer.py"), ECHOER)
+    write(os.path.join(d, "slow.py"), SLOW)
+    if acceptance:
+        write(os.path.join(d, "ACCEPTANCE.md"), ACCEPTANCE)
+    # 2 of 3 -- the 66.7 % the field author reported, small enough to read in a failure message
+    jsonl(os.path.join(d, "two-of-three.jsonl"),
+          [{"id": "a", "input": "1", "expected": "1"},
+           {"id": "b", "input": "2", "expected": "2"},
+           {"id": "c", "input": "3", "expected": "WRONG"}])
+    jsonl(os.path.join(d, "all-green.jsonl"),
+          [{"id": "a", "input": "1", "expected": "1"},
+           {"id": "b", "input": {"k": 1}, "expected": {"k": 1}}])
+    r = eng(d, ["init", "--config", "uscha.config.json", "--out", "L.json"])
+    if r.returncode != 0:
+        raise RuntimeError("init failed: " + (r.stderr or r.stdout)[:200])
+    return d
+
+
+def cmd(name="echoer.py"):
+    return '"%s" %s' % (sys.executable, name)
+
+
+def corpus(d, args):
+    return eng(d, ["corpus-run", "--ledger", "L.json", "--command", cmd()] + list(args))
+
+
+def ready(d, extra=None):
+    r = eng(d, ["readiness", "--ledger", "L.json", "--acceptance", "ACCEPTANCE.md"]
+               + list(extra or []))
+    return r
+
+
+def ready_json(d):
+    r = ready(d, ["--json"])
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        raise RuntimeError("no JSON from readiness: " + (r.stderr or r.stdout)[:200])
+
+
+def latest(d, repo, tool="gate:corpus"):
+    with io.open(os.path.join(d, "L.json"), encoding="utf-8") as fh:
+        led = json.load(fh)
+    recs = [s for s in led["repos"][repo]["iterations"] if s.get("tool") == tool]
+    return recs[-1] if recs else None
+
+
+ONE = [{"name": "backend-api", "type": "python", "path": "backend-api"}]
+TWO = ONE + [{"name": "mobile-app", "type": "python", "path": "mobile-app"}]
+
+
+def measure():
+    # --- AC-CO-01: 3 cases, 2 hits, threshold 90 -> gate:corpus FAIL persisted at 66.7 % ----
+    d = project(ONE)
+    r = corpus(d, ["--repo", "backend-api", "--corpus", "two-of-three.jsonl",
+                   "--threshold", "90"])
+    rec = latest(d, "backend-api")
+    p = []
+    if r.returncode != 1:
+        p.append("exit is %d, expected 1 -- a corpus under its budget is a gate"
+                 % r.returncode)
+    if rec is None:
+        p.append("no gate:corpus record was persisted at all")
+    else:
+        c = rec.get("corpus") or {}
+        if c.get("percent") != 66.7 or (c.get("hits"), c.get("total")) != (2, 3):
+            p.append("record says %r %r/%r, expected 66.7 2/3"
+                     % (c.get("percent"), c.get("hits"), c.get("total")))
+        if not rec.get("gated_reported"):
+            p.append("the failing record gates nothing: gated_reported %r"
+                     % rec.get("gated_reported"))
+        if rec.get("advisory"):
+            p.append("a budgeted failure was recorded as advisory")
+        if [m.get("id") for m in c.get("misses") or []] != ["c"]:
+            p.append("the miss is not named: %r" % (c.get("misses"),))
+    j = ready_json(d)
+    f = (j.get("field") or {}).get("backend-api") or {}
+    if f.get("state") != "FAIL" or f.get("percent") != 66.7:
+        p.append("readiness field reads %r" % (f,))
+    if "--- field backend-api: corpus 66.7 % (2/3) < 90 % FAIL" not in ready(d).stdout:
+        p.append("the field line is missing or reworded")
+    res["AC-CO-01"] = not p
+    why["AC-CO-01"] = "; ".join(p[:3]) or ("2/3 against a declared 90 % is a persisted "
+                                           "gate:corpus fail at 66.7 %, on the record and "
+                                           "on the readiness field line")
+
+    # --- AC-CO-02: a ticked criterion is narrated_only until a GREEN run carries its tag -----
+    d = project(TWO, defaults={"readiness_weights": WEIGHTS})
+    before = ready_json(d)
+    p = []
+    if before["acceptance"]["narrated_only"] != ["AC-FIELD-1"]:
+        p.append("a ticked criterion with no evidence is not narrated_only: %r"
+                 % (before["acceptance"]["narrated_only"],))
+    corpus(d, ["--repo", "backend-api", "--corpus", "all-green.jsonl",
+               "--threshold", "90", "--ac", "AC-FIELD-01"])
+    after = ready_json(d)
+    if after["acceptance"]["narrated_only"]:
+        p.append("still narrated_only after a green tagged run: %r"
+                 % (after["acceptance"]["narrated_only"],))
+    if after["acceptance"]["measured_closed"] != ["AC-FIELD-1"]:
+        p.append("the criterion did not close measured: %r"
+                 % (after["acceptance"]["measured_closed"],))
+    if after["acceptance"]["corpus_closed"] != ["AC-FIELD-1"]:
+        p.append("the closure is not attributed to the corpus: %r"
+                 % (after["acceptance"]["corpus_closed"],))
+    # and it REOPENS: a red run on the same tag is evidence against, never a kept green
+    corpus(d, ["--repo", "backend-api", "--corpus", "two-of-three.jsonl",
+               "--threshold", "90", "--ac", "AC-FIELD-01"])
+    reopened = ready_json(d)
+    if reopened["acceptance"]["narrated_only"] != ["AC-FIELD-1"]:
+        p.append("a failing run left the criterion closed: %r"
+                 % (reopened["acceptance"]["narrated_only"],))
+    res["AC-CO-02"] = not p
+    why["AC-CO-02"] = "; ".join(p[:3]) or ("ticked reads narrated_only, a green tagged run "
+                                           "closes it measured, a red one reopens it")
+
+    # --- AC-CO-03: UNMEASURED when a corpus is declared and never run; SILENT when none is ---
+    d = project([{"name": "backend-api", "type": "python", "path": "backend-api",
+                  "corpus": "real/corpus.jsonl"},
+                 {"name": "mobile-app", "type": "python", "path": "mobile-app"}])
+    j = ready_json(d)
+    text = ready(d).stdout
+    p = []
+    f = (j.get("field") or {})
+    if (f.get("backend-api") or {}).get("state") != "UNMEASURED":
+        p.append("a declared, never-run corpus does not read UNMEASURED: %r" % (f,))
+    if "mobile-app" in f:
+        p.append("a repo that declares no corpus still produced a field entry: %r"
+                 % (f.get("mobile-app"),))
+    if "--- field backend-api: corpus UNMEASURED" not in text:
+        p.append("the UNMEASURED field line is missing")
+    if text.count("--- field ") != 1:
+        p.append("expected exactly one field line, got %d" % text.count("--- field "))
+    # and a project with NO corpus anywhere says nothing at all -- conditional, like lifecycle
+    d2 = project(ONE)
+    if "--- field" in ready(d2).stdout or "field" in ready_json(d2):
+        p.append("a project with no corpus is no longer silent about field truth")
+    res["AC-CO-03"] = not p
+    why["AC-CO-03"] = "; ".join(p[:3]) or ("declared-and-never-run reads UNMEASURED; a repo "
+                                           "that declares none prints and emits nothing")
+
+    # --- AC-CO-04: no threshold anywhere = ADVISORY, and never inside the 'N ok' count -------
+    d = project(ONE)
+    r = corpus(d, ["--repo", "backend-api", "--corpus", "two-of-three.jsonl"])
+    rec = latest(d, "backend-api")
+    p = []
+    if r.returncode != 0:
+        p.append("an unbudgeted run gated: exit %d" % r.returncode)
+    if not (rec or {}).get("advisory"):
+        p.append("the record is not stamped advisory: %r" % (rec,))
+    if (rec or {}).get("gated_reported"):
+        p.append("an advisory record carries gated findings: %r" % (rec.get("gated_reported"),))
+    line = [ln for ln in ready(d).stdout.splitlines() if ln.startswith("--- gates:")]
+    if not line or "0 ok" not in line[0] or "1 advisory" not in line[0]:
+        p.append("the advisory run is not held out of the ok count: %r" % (line,))
+    j = ready_json(d)
+    if (j.get("field") or {}).get("backend-api", {}).get("state") != "ADVISORY":
+        p.append("the field line does not read ADVISORY: %r" % (j.get("field"),))
+    # the precedence ladder: defaults, then the repo, then the flag -- each overriding the last
+    d = project(ONE, defaults={"corpus_threshold": 90})
+    if corpus(d, ["--repo", "backend-api", "--corpus", "two-of-three.jsonl"]).returncode != 1:
+        p.append("defaults.corpus_threshold did not gate")
+    d = project([{"name": "backend-api", "type": "python", "path": "backend-api",
+                  "corpus_threshold": 50}], defaults={"corpus_threshold": 90})
+    if corpus(d, ["--repo", "backend-api", "--corpus", "two-of-three.jsonl"]).returncode != 0:
+        p.append("repos[R].corpus_threshold did not override defaults.corpus_threshold")
+    if corpus(d, ["--repo", "backend-api", "--corpus", "two-of-three.jsonl",
+                  "--threshold", "100"]).returncode != 1:
+        p.append("--threshold did not override the config")
+    res["AC-CO-04"] = not p
+    why["AC-CO-04"] = "; ".join(p[:3]) or ("no declared budget records ADVISORY and stays out "
+                                           "of the ok count; flag beats repo beats defaults")
+
+    # --- AC-CO-05: an unreadable corpus is REFUSED (exit 2), naming what it could not read ---
+    d = project(ONE)
+    write(os.path.join(d, "broken.jsonl"),
+          '{"input": "1", "expected": "1"}\nnot json at all\n')
+    write(os.path.join(d, "nokey.jsonl"), '{"input": "1"}\n')
+    write(os.path.join(d, "empty.jsonl"), "\n\n")
+    p = []
+    for name, needle in (("missing.jsonl", "not found"), ("empty.jsonl", "0 cases"),
+                         ("broken.jsonl", "line 2"), ("nokey.jsonl", "line 1")):
+        r = corpus(d, ["--repo", "backend-api", "--corpus", name])
+        if r.returncode != 2:
+            p.append("%s exits %d, expected 2" % (name, r.returncode))
+        if needle not in r.stderr:
+            p.append("%s does not name %r: %r" % (name, needle, r.stderr[:120]))
+    if latest(d, "backend-api") is not None:
+        p.append("a refused corpus still wrote a record -- 0 %% would have been a lie")
+    res["AC-CO-05"] = not p
+    why["AC-CO-05"] = "; ".join(p[:3]) or ("missing, empty and malformed corpora refuse at "
+                                           "exit 2 naming the line, and persist nothing")
+
+    # --- AC-CO-06: a case that outruns the timeout is a miss NAMED timeout -------------------
+    d = project(ONE)
+    jsonl(os.path.join(d, "slow.jsonl"), [{"id": "slow", "input": "1", "expected": "1"}])
+    r = eng(d, ["corpus-run", "--ledger", "L.json", "--repo", "backend-api",
+                "--corpus", "slow.jsonl", "--command", cmd("slow.py"),
+                "--timeout", "1", "--threshold", "90"])
+    c = (latest(d, "backend-api") or {}).get("corpus") or {}
+    p = []
+    if r.returncode != 1:
+        p.append("a timed-out case did not miss: exit %d" % r.returncode)
+    if [m.get("reason") for m in c.get("misses") or []] != ["timeout"]:
+        p.append("the miss is not named timeout: %r" % (c.get("misses"),))
+    if c.get("percent") != 0.0:
+        p.append("percent is %r, expected 0.0" % (c.get("percent"),))
+    # a non-zero exit is a miss too, and it is named with the code
+    write(os.path.join(d, "boom.py"), "import sys\nsys.stdin.read()\nsys.exit(3)\n")
+    eng(d, ["corpus-run", "--ledger", "L.json", "--repo", "backend-api",
+            "--corpus", "slow.jsonl", "--command", cmd("boom.py"), "--threshold", "90"])
+    c2 = (latest(d, "backend-api") or {}).get("corpus") or {}
+    if [m.get("reason") for m in c2.get("misses") or []] != ["exit 3"]:
+        p.append("a non-zero exit is not a named miss: %r" % (c2.get("misses"),))
+    res["AC-CO-06"] = not p
+    why["AC-CO-06"] = "; ".join(p[:3]) or ("a case past --timeout is a miss named timeout and "
+                                           "a non-zero exit is a miss named with its code")
+
+    # --- AC-CO-07: the CONTROL PAIR -- pass caps nothing, fail caps <=65 ---------------------
+    d = project(TWO, defaults={"readiness_weights": WEIGHTS})
+    corpus(d, ["--repo", "backend-api", "--corpus", "all-green.jsonl",
+               "--threshold", "90", "--ac", "AC-FIELD-01"])
+    green = ready_json(d)
+    corpus(d, ["--repo", "mobile-app", "--corpus", "two-of-three.jsonl", "--threshold", "90"])
+    red = ready_json(d)
+    p = []
+    if green.get("cap_reason") is not None:
+        p.append("a PASSING corpus capped readiness: %r" % (green.get("cap_reason"),))
+    if green["score"] <= 65:
+        p.append("the control score is %r -- too low to prove a 65 cap fired"
+                 % (green["score"],))
+    if red["score"] != 65 or "BLOCKER" not in (red.get("cap_reason") or ""):
+        p.append("a FAILING corpus did not cap at 65: score %r cap %r"
+                 % (red["score"], red.get("cap_reason")))
+    res["AC-CO-07"] = not p
+    why["AC-CO-07"] = "; ".join(p[:3]) or ("pass caps nothing (score %s), fail caps at %s"
+                                           % (green["score"], red["score"]))
+
+    # --- AC-CO-08: log-gate --kind corpus is the PARITY door, and the vocabulary stays closed -
+    d = project(ONE)
+    p = []
+    for verdict in ("pass", "fail", "advisory", "not-run"):
+        r = eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api",
+                    "--iteration", "1", "--kind", "corpus", "--verdict", verdict])
+        if r.returncode != 0:
+            p.append("--kind corpus --verdict %s exits %d: %s"
+                     % (verdict, r.returncode, (r.stderr or "")[:80]))
+    eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+            "--kind", "corpus", "--verdict", "fail", "--count", "4"])
+    j = ready_json(d)
+    blocking = [g for g in j["gates"] if g.get("tool") == "gate:corpus" and g.get("blocking")]
+    if not blocking:
+        p.append("a corpus fail logged through log-gate does not block: %r" % (j["gates"],))
+    # the closed vocabulary did NOT open: a FACT gate still refuses advisory
+    r = eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+                "--kind", "ci", "--verdict", "advisory"])
+    if r.returncode != 2:
+        p.append("--kind ci now accepts advisory (exit %d) -- the vocabulary opened"
+                 % r.returncode)
+    res["AC-CO-08"] = not p
+    why["AC-CO-08"] = "; ".join(p[:3]) or ("corpus records pass/fail/advisory/not-run and a "
+                                           "fail blocks; ci still refuses advisory")
+
+    # --- AC-CO-09: the RED PROBE -- the PREV_TAG engine has neither door ---------------------
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-CO-09"] = None
+        why["AC-CO-09"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        w = tmp()
+        old = os.path.join(w, "prev_engine.py")
+        write(old, prev)
+        d = project(ONE)
+        p = []
+        o = eng(d, ["corpus-run", "--ledger", "L.json", "--repo", "backend-api",
+                    "--corpus", "two-of-three.jsonl", "--command", cmd(),
+                    "--threshold", "90"], engine=old)
+        if o.returncode == 0 or "corpus-run" not in (o.stderr + o.stdout):
+            p.append("the old engine already had corpus-run (exit %d)" % o.returncode)
+        o2 = eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api",
+                     "--iteration", "1", "--kind", "corpus", "--verdict", "pass"], engine=old)
+        if o2.returncode != 2:
+            p.append("the old engine already accepted --kind corpus (exit %d)" % o2.returncode)
+        o3 = eng(d, ["readiness", "--ledger", "L.json", "--json"], engine=old)
+        try:
+            if "field" in json.loads(o3.stdout):
+                p.append("the old readiness already emitted a field block")
+        except ValueError:
+            p.append("no JSON from the old readiness: %r" % (o3.stderr or "")[:120])
+        res["AC-CO-09"] = not p
+        why["AC-CO-09"] = "; ".join(p[:3]) or ("neither the subcommand nor the --kind nor the "
+                                               "field block exists on " + PREV_TAG)
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".co-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T163" in
+  OK*) PASS=$((PASS+1)); echo "  ok   corpus field truth (AC-CO-01..09): $T163";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T163";;
+esac
+
 echo "== T165 (2.2.0): operability is MEASURED -- CI, release, RUNBOOK and seed are FACTS in the tree (ADR-048) =="
 # THE FIELD FINDING, reproduced rather than described: release-by-CI, the reset/seed script and
 # the RUNBOOK arrived in the last week of two consecutive projects. The devloop NAMED them in
@@ -15683,6 +16074,10 @@ FAMILIES = (
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036
      _seq("AC-FA", 1, 6)),
+    # AC-CO-09 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
+    # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
+    (".co-cases.json", "corpus-field-truth", "T163",                 # ADR-046, 2.2.0
+     _seq("AC-CO", 1, 9)),
     # AC-OP-08 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".op-cases.json", "operability", "T165",                        # ADR-048

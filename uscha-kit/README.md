@@ -767,9 +767,53 @@ need a budget the project adopted, and nobody has declared one (the 2.1.0 postur
 carries the same object when there is anything to report. A tree with no marker anywhere prints
 exactly what it printed before.
 
+## Field truth for greenfield — `corpus-run` (ADR-046)
+
+From a live greenfield build: *the parser passed every test the agent wrote, and it was wrong.*
+Running the REAL corpus is what exposed it — 96.96 % before the fix, 99.645 % after. In greenfield
+every test payload is invented by the agent that writes the code, so a green suite can be silent
+about the inputs the world actually produces; and `characterize`/`golden-diff` have no answer
+there, because their doctrine is *the old code is the truth* and there is no old code.
+
+The corpus is **JSONL** — one object per line, `input` and `expected` required, `id` optional:
+
+```jsonl
+{"id": "inv-2019-03", "input": "...raw payload...", "expected": {"total": 1042, "currency": "EUR"}}
+```
+
+Each case runs the command once with its input on **stdin** (verbatim when it is a string,
+JSON-encoded otherwise); the trimmed **stdout** is compared to `expected` — string compare, then
+JSON-equal when both sides parse as JSON. A non-zero exit is a miss named with its code; a case
+past `--timeout` (default 30 s) is a miss named `timeout`. File order is run order, so two runs
+over one corpus report the same misses in the same places.
+
+```bash
+python3 $QL corpus-run --repo <REPO> --corpus corpus/real.jsonl --command "python -m myparser"   --threshold 99 --ac AC-FIELD-01
+#   [qa_ledger] backend-api/gate:corpus: FAIL 96.96 % (3195/3295) — threshold 99 % from --threshold
+python3 $QL readiness
+#   --- field backend-api: corpus 96.96 % (3195/3295) < 99 % FAIL
+```
+
+- **The threshold is yours**: `--threshold`, else `repos[R].corpus_threshold`, else
+  `defaults.corpus_threshold`. With **none declared the run is ADVISORY** — measured, persisted,
+  gating nothing, and never counted as an `ok` gate (the 2.1.0 posture, ADR-043). With one
+  declared, a run under it caps readiness ≤65 and blocks convergence like any fact gate.
+- **A corpus that cannot be read is exit 2, naming the line** — missing, empty, malformed, or
+  missing an `input`/`expected` key. An unreadable corpus scored as 0 % would be an unmeasurable
+  input reported as a measured catastrophe.
+- **`--ac AC-nn` closes a criterion MEASURED on a green run**, exactly as a green testcase does; a
+  ticked criterion whose only corpus evidence is red or advisory reports `narrated_only`.
+- **`log-gate --kind corpus`** records a run measured elsewhere (CI, a nightly) and is the third
+  and last kind that accepts `--verdict advisory`, because the check's own default mode is
+  advisory. Every other FACT kind still refuses it.
+- **No weight.** `readiness` prints one conditional `field` line per repo that declares a corpus
+  or ran one, and nothing else moves; the `field` *dimension* is deferred to its own ADR.
+- **Never author the corpus yourself.** A corpus the agent invented is the invented input this
+  instrument exists to expose.
+
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (54 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (54 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

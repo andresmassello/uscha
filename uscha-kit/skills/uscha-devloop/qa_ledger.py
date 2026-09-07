@@ -36,6 +36,8 @@ Usage (see `--help` on each subcommand):
                            [--ruff reports/ruff.json --mypy reports/mypy.txt]
   qa_ledger.py log-gate    --repo backend-api --iteration 1 --kind golden-diff \
                            --verdict pass|fail|not-run [--count N] [--note "..."]
+  qa_ledger.py corpus-run  --repo backend-api --corpus corpus.jsonl \
+                           --command "python -m parser" [--threshold 99] [--ac AC-FIELD-01]
   qa_ledger.py flag-blocker --repo backend-api --kind constitution --note "INV-XX breached" \
                            [--resolve]
   qa_ledger.py production-finding --repo backend-api --severity HIGH --title "..." --evidence "..."
@@ -2919,12 +2921,19 @@ def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, not
 # The only --kind values log-gate accepts with --verdict advisory (ADR-043): the checks whose
 # default mode IS advisory. Every other kind is a FACT gate and records pass/fail/not-run only.
 #
+# `corpus` (2.2.0, ADR-046) is admitted because `corpus-run` ITSELF runs advisory whenever no
+# threshold is declared -- the percentage is measured against no adopted budget, so it gates
+# nothing. Refusing the verdict on this door while the check emits it on the other would give
+# one fact two incompatible records: the parity door could only spell an unbudgeted run as
+# `pass`, which is the false clean ADR-043 exists to refuse. Admitting it costs nothing that
+# matters: with a threshold declared, `corpus` is a FACT gate like any other.
+#
 # `operability` (ADR-048) joins them because its posture is PROFILE-DEPENDENT: on A, B or no
 # profile the four checks are measured and recorded advisory, and only `defaults.operability.gate`
 # (which C, D and E own) turns the same measurement into a gate. It is a FACT either way -- a
 # workflow file exists or it does not -- so admitting it here widens WHEN it gates, never WHAT
 # counts as evidence, which is the line INV-ADVISORY-01 draws.
-ADVISORY_CAPABLE_KINDS = ("simplicity", "waste", "operability")
+ADVISORY_CAPABLE_KINDS = ("simplicity", "waste", "corpus", "operability")
 
 
 def cmd_log_gate(args):
@@ -2998,6 +3007,301 @@ def cmd_log_gate(args):
         state, effect = "PASS (clean)", "clears the gate for convergence"
     print(f"[qa_ledger] {args.repo}/{tool}: {state} logged — {effect}"
           + (f" [ref {rec['ref']}]" if rec.get("ref") else ""))
+
+
+# --------------------------------------------------------------------------- #
+# corpus-run (kit 2.2.0, ADR-046): FIELD TRUTH for greenfield work.
+#
+# `characterize`/`golden-diff` answer the brownfield question -- "does the new code still do
+# what the OLD code did?" -- and they have no answer at all for a system that never had an old
+# code. In a greenfield project every test payload was INVENTED by the agent that wrote the
+# code, so a suite can be green over inputs the world never produces. The field report this
+# subcommand comes from is exactly that shape: a parser passed every test its author wrote and
+# was wrong; running the REAL corpus moved it from 96.96 % to 99.645 %.
+#
+# So the corpus is the missing evidence class: real inputs with their real expected outputs,
+# run through the real command, scored as a percentage the ledger persists like any other FACT.
+# It is deterministic (stable case order, per-case timeout) and it refuses rather than guessing:
+# a corpus that is missing, empty or malformed is exit 2 naming the line, never a silent 0 %.
+#
+# The 2.1.0 posture holds (ADR-043): a gate needs an ADOPTED budget. With no threshold declared
+# anywhere the run is ADVISORY -- the percentage is measured and persisted, and it gates nothing.
+# The WEIGHT of field truth in the readiness score is deliberately NOT here: adding a `field`
+# dimension moves every existing project's number, and that is its own ADR.
+# --------------------------------------------------------------------------- #
+CORPUS_DEFAULT_TIMEOUT = 30
+CORPUS_DEFAULT_MAX_MISSES = 5
+
+
+def _corpus_refuse(msg):
+    """Every corpus refusal is exit 2 and NAMES what it could not read. The failure mode this
+    exists to prevent is a corpus the runner could not parse being scored as 0 % -- an
+    unmeasurable input reported as a measured catastrophe (or, with the arithmetic the other
+    way, as a clean 100 % over zero cases)."""
+    print("[qa_ledger] corpus-run: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def _corpus_cases(path):
+    """Read a JSONL corpus into an ORDERED list of cases: file order IS run order, so two runs
+    over the same file report the same misses in the same places. One JSON object per line,
+    `input` and `expected` required, `id` optional (a positional id is derived when absent)."""
+    if not os.path.isfile(path):
+        _corpus_refuse("corpus not found: %s -- a corpus that is not there is UNMEASURED, "
+                       "never a measured 0 %%" % path)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            raw = fh.read().splitlines()
+    except OSError as exc:
+        _corpus_refuse("corpus unreadable: %s" % exc)
+    cases = []
+    for n, line in enumerate(raw, 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError as exc:
+            _corpus_refuse("%s line %d is not valid JSON (%s) -- a malformed corpus is "
+                           "refused, never scored" % (path, n, exc))
+        if not isinstance(row, dict):
+            _corpus_refuse("%s line %d is a %s, not a JSON object with `input` and `expected`"
+                           % (path, n, type(row).__name__))
+        missing = [k for k in ("input", "expected") if k not in row]
+        if missing:
+            _corpus_refuse("%s line %d has no %s key" % (path, n, " and no ".join(missing)))
+        cases.append({"id": str(row["id"]) if row.get("id") is not None
+                      else "case-%03d" % (len(cases) + 1),
+                      "input": row["input"], "expected": row["expected"]})
+    if not cases:
+        _corpus_refuse("%s holds 0 cases -- an empty corpus is refused: 0/0 is not 100 %%, "
+                       "and it is not 0 %% either" % path)
+    return cases
+
+
+def _corpus_text(value):
+    """A JSON scalar string travels as itself; anything else travels as its JSON encoding.
+    sort_keys so an object payload is byte-stable across runs."""
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False,
+                                                           sort_keys=True)
+
+
+def _corpus_match(actual, expected):
+    """Trimmed string compare first, then JSON-equal when BOTH sides parse as JSON -- so a
+    command that reorders an object's keys or prints 1.0 for 1 is not a false miss, while a
+    command that prints prose is compared as prose."""
+    exp, act = _corpus_text(expected).strip(), actual.strip()
+    if act == exp:
+        return True
+    try:
+        return json.loads(act) == json.loads(exp)
+    except ValueError:
+        return False
+
+
+def _corpus_case(command, case, timeout):
+    """Run ONE case: the input on stdin, the trimmed stdout compared to `expected`.
+    Returns (hit, reason, actual). A non-zero exit is a miss (the command did not answer);
+    a case that outruns the timeout is a miss NAMED `timeout`, never an ambiguous hang."""
+    try:
+        p = subprocess.run(command, shell=True, input=_corpus_text(case["input"]),
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, "timeout", ""
+    except OSError as exc:
+        return False, "command failed to start: %s" % exc, ""
+    actual = (p.stdout or "").strip()
+    if p.returncode != 0:
+        return False, "exit %d" % p.returncode, actual
+    if _corpus_match(actual, case["expected"]):
+        return True, None, actual
+    return False, "mismatch", actual
+
+
+def _corpus_num(value):
+    """90.0 reads back as 90 and 99.5 as 99.5 -- the declared budget renders as the human
+    typed it, in the ledger and on every surface that reads the record."""
+    if value is None:
+        return None
+    return int(value) if float(value).is_integer() else float(value)
+
+
+def _corpus_clip(text, n=120):
+    text = str(text).replace("\n", "\\n")
+    return text if len(text) <= n else text[:n] + "..."
+
+
+def cmd_corpus_run(args):
+    """Run a REAL-INPUT corpus against a command and persist the result as `gate:corpus`.
+
+    The threshold is the project's, never the kit's: --threshold, else
+    repos[R].corpus_threshold, else defaults.corpus_threshold. With none of the three the run
+    is ADVISORY -- measured, persisted, and gating nothing (ADR-043: a gate needs an adopted
+    budget). With one, `pass` is a clean gate and `fail` is a BLOCKER through the SAME record
+    shape gate-check uses: readiness capped <=65, convergence blocked, and a later green run
+    clears it (latest-per-tool wins).
+
+    --ac stamps criterion ids on the record. A criterion whose only evidence is a corpus record
+    closes MEASURED iff that record passed -- the same rule a green JUnit testcase already
+    obeys, and for the same reason: red or unbudgeted evidence closes nothing."""
+    ledger = _load(args.ledger)
+    node = _repo_node(ledger, args.repo)
+    tool = "gate:corpus"
+    _validate_iteration(node, tool, args.iteration)
+    cfg = next((r for r in ledger["config"].get("repos", [])
+                if r.get("name") == args.repo), {})
+    defaults = ledger["config"].get("defaults", {})
+
+    corpus_path = args.corpus or cfg.get("corpus")
+    if not corpus_path:
+        _corpus_refuse("no corpus: pass --corpus PATH or declare repos[%s].corpus in the "
+                       "config. Where the real inputs live is the project's fact, not a "
+                       "default this engine may invent." % args.repo)
+    cases = _corpus_cases(corpus_path)
+
+    threshold, source = args.threshold, "--threshold"
+    if threshold is None:
+        threshold, source = cfg.get("corpus_threshold"), "repos[%s].corpus_threshold" % args.repo
+    if threshold is None:
+        threshold, source = defaults.get("corpus_threshold"), "defaults.corpus_threshold"
+    if threshold is None:
+        source = None
+    threshold = _corpus_num(threshold)
+
+    acs = []
+    for raw in (args.ac or []):
+        cid, _end = _ac_id_of(raw.strip())
+        if cid is None:
+            _corpus_refuse("--ac %r is not a criterion id ('AC-01' or 'AC-FIELD-01')" % raw)
+        if cid not in acs:
+            acs.append(cid)
+
+    hits, misses = 0, []
+    for case in cases:
+        ok, reason, actual = _corpus_case(args.command, case, args.timeout)
+        if ok:
+            hits += 1
+        else:
+            misses.append({"id": case["id"], "reason": reason,
+                           "expected": _corpus_clip(_corpus_text(case["expected"])),
+                           "actual": _corpus_clip(actual)})
+    total = len(cases)
+    pct = round(100.0 * hits / total, 1)
+
+    advisory = source is None
+    failing = (not advisory) and pct < threshold
+    if advisory:
+        note = "corpus %s: %d/%d (%s %%), no threshold declared" % (
+            os.path.basename(corpus_path), hits, total, pct)
+    else:
+        note = "corpus %s: %d/%d (%s %%) %s %s %%" % (
+            os.path.basename(corpus_path), hits, total, pct,
+            "<" if failing else ">=", threshold)
+    rec = _append_gate_record(ledger, node, args.repo, tool, args.iteration,
+                              failing, len(misses), note, advisory=advisory)
+    # the MEASUREMENT travels on the record, not only its verdict: readiness reads the
+    # percentage back for the field line, and a reader six months later can see WHAT was
+    # measured against WHICH budget instead of a bare pass.
+    rec["corpus"] = {"path": corpus_path.replace("\\", "/"), "hits": hits, "total": total,
+                     "percent": pct, "threshold": threshold, "threshold_source": source,
+                     "timeout_s": args.timeout,
+                     "misses": misses[:max(0, args.max_misses)]}
+    if acs:
+        rec["ac"] = acs
+    _save(args.ledger, ledger)
+
+    state = ("ADVISORY (measured, not gating)" if advisory
+             else "FAIL" if failing else "PASS")
+    out = {"repo": args.repo, "tool": tool, "verdict": state.split()[0].lower(),
+           "advisory": advisory, "corpus": rec["corpus"], "ac": acs, "note": note}
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        if advisory:
+            budget = ("no threshold declared — the percentage is recorded and nothing gates "
+                      "(a gate needs an adopted budget, ADR-043)")
+        else:
+            budget = "threshold %s %% from %s" % (threshold, source)
+        print("[qa_ledger] %s/%s: %s %s %% (%d/%d) — %s"
+              % (args.repo, tool, state, pct, hits, total, budget))
+        for m in rec["corpus"]["misses"]:
+            print("  miss %s (%s): expected %r, got %r"
+                  % (m["id"], m["reason"], m["expected"], m["actual"]))
+        if len(misses) > len(rec["corpus"]["misses"]):
+            print("  ... +%d more miss(es) not listed (--max-misses)"
+                  % (len(misses) - len(rec["corpus"]["misses"])))
+        if failing:
+            print("  caps readiness <=65 and blocks convergence until a green run")
+    sys.exit(1 if failing else 0)
+
+
+def _corpus_records(ledger):
+    """The LATEST corpus record per repo -- the same latest-per-tool rule the gate rollup and
+    convergence already use, so the three cannot disagree about which run is current."""
+    out = {}
+    for rname, rnode in ledger.get("repos", {}).items():
+        rec = _latest_static_by_tool(rnode).get("gate:corpus")
+        if rec is not None:
+            out[rname] = rec
+    return out
+
+
+def _corpus_ac_closed(ledger):
+    """Criterion ids closed MEASURED by a green corpus run (ADR-046). A corpus record closes an
+    AC iff it PASSED: an advisory run measured a percentage against no adopted budget (it is
+    not a green gate, and ADR-043 refuses to let it read as one), and a failing run is evidence
+    AGAINST. Same rule as the JUnit path, for the same reason."""
+    closed = set()
+    for rec in _corpus_records(ledger).values():
+        if rec.get("advisory") or (rec.get("gated_reported") or 0) > 0:
+            continue
+        closed.update(rec.get("ac") or [])
+    return closed
+
+
+def _corpus_field(ledger):
+    """Per-repo FIELD readout -- ONE derivation, read by both the readiness text and its JSON.
+    CONDITIONAL like lifecycle and agent-origin: a repo that neither declares a corpus nor ever
+    ran one is absent from it, so a project without field truth prints and emits exactly what
+    it printed and emitted before this existed. No weight, no cap, no gate of its own -- a
+    failing corpus already blocks through its `gate:corpus` record, and the `field` DIMENSION
+    (its own ADR) is deliberately not here."""
+    recs = _corpus_records(ledger)
+    out = {}
+    for rname in ledger.get("repos", {}):
+        cfg = next((r for r in ledger.get("config", {}).get("repos", [])
+                    if r.get("name") == rname), {})
+        rec, declared = recs.get(rname), cfg.get("corpus")
+        if rec is None and not declared:
+            continue
+        if rec is None:
+            out[rname] = {"state": "UNMEASURED", "corpus": declared, "percent": None,
+                          "hits": None, "total": None, "threshold": None,
+                          "reason": "a corpus is declared and was never run"}
+            continue
+        c = rec.get("corpus") or {}
+        out[rname] = {"state": ("ADVISORY" if rec.get("advisory")
+                                else "FAIL" if (rec.get("gated_reported") or 0) > 0
+                                else "PASS"),
+                      "corpus": c.get("path", declared),
+                      "percent": c.get("percent"), "hits": c.get("hits"),
+                      "total": c.get("total"), "threshold": c.get("threshold"),
+                      "threshold_source": c.get("threshold_source"),
+                      "ac": rec.get("ac") or []}
+    return out
+
+
+def _corpus_field_line(rname, f):
+    """The one-line rendering of a repo's field state. Text lives beside the derivation so the
+    JSON and the human readout can never drift apart."""
+    if f["state"] == "UNMEASURED":
+        return ("--- field %s: corpus UNMEASURED — %s (%s)"
+                % (rname, f["reason"], f["corpus"]))
+    head = "--- field %s: corpus %s %% (%s/%s)" % (rname, f["percent"], f["hits"], f["total"])
+    if f["state"] == "ADVISORY":
+        return head + " — no threshold declared, ADVISORY (measured, not gating)"
+    return "%s %s %s %% %s" % (head, "<" if f["state"] == "FAIL" else ">=",
+                               f["threshold"], f["state"])
 
 
 def cmd_flag_blocker(args):
@@ -10286,10 +10590,19 @@ def cmd_readiness(args):
     # ingeridos (y 0 rojos). El checkbox es RELATO; el testcase es HECHO.
     ac_ids = [i for i in acc_items if i["id"]]
     ac_tags, stale_reports = _sum_ac_tags(ledger)
+    # ADR-046: a green corpus run is the OTHER way a criterion closes measured. Greenfield has
+    # no old code to characterize, so for the criteria that are about real-world input the only
+    # field evidence there can be is a corpus run over real inputs -- and it closes exactly like
+    # a green testcase does, with the same fail-closed rule below.
+    corpus_closed = _corpus_ac_closed(ledger)
 
     def _ac_closed(cid):
         d = ac_tags.get(cid)
-        return bool(d and d["green"] >= 1 and d["red"] == 0)
+        if d and d["red"]:
+            return False          # red evidence vetoes, whatever else says (fail-closed)
+        if d and d["green"] >= 1:
+            return True
+        return cid in corpus_closed
 
     # IDs duplicados (ACCEPTANCE mal numerado) cuentan UNA sola vez — si no,
     # un solo test verde cierra "medido" tantos criterios como copias del ID.
@@ -10535,6 +10848,9 @@ def cmd_readiness(args):
                                         if (acc_traceable and total) else None),
                        "narrated_only": narrated_only,
                        "measured_unchecked": measured_unchecked,
+                       # ADR-046: WHICH ids a green corpus run closed, so a reader can tell
+                       # field evidence from suite evidence instead of inferring it.
+                       "corpus_closed": sorted(corpus_closed, key=_top_ac_key),
                        "stale_reports": stale_reports},
         "facts": {"coverage_pct": round(agg_cov_pct, 2), "coverage_threshold": threshold,
                   "gated_open": total_open, "severity": agg_sev,
@@ -10564,6 +10880,13 @@ def cmd_readiness(args):
     # agent-origin (ADR-044): advisory and CONDITIONAL for the same reason -- a project
     # that tags nothing keeps the exact prior payload and the exact prior text. It never
     # enters the gates line, never caps the score, never blocks convergence.
+    # field truth (ADR-046): advisory and CONDITIONAL for the same reason -- a project that
+    # declares no corpus and ran none keeps the exact prior payload and the exact prior text.
+    # The `field` DIMENSION and its weight are deliberately NOT here: adding one moves every
+    # existing project's score, and that is its own ADR.
+    _field = _corpus_field(ledger)
+    if _field:
+        out["field"] = _field
     _ao = _agent_origin_report(_ready_root,
                                acc_path if acc_found else None)
     if _ao["n_unconfirmed"] or _ao["confirmed"]:
@@ -10603,8 +10926,8 @@ def cmd_readiness(args):
               "or the explicit weight in config.defaults.readiness_weights")
     if narrated_only:
         print(f"  ! narrated-only: {', '.join(narrated_only)} — checkbox ticked "
-              f"WITHOUT a green 'AC-n' testcase in the reports (measured beats "
-              f"narrated: does NOT close)")
+              f"WITHOUT a green 'AC-n' testcase in the reports and without a green "
+              f"corpus run carrying it (measured beats narrated: does NOT close)")
     if measured_unchecked:
         print(f"  · measured but unticked: {', '.join(measured_unchecked)} — there is "
               f"a green testcase; tick the checkbox if the criterion is done")
@@ -10685,6 +11008,12 @@ def cmd_readiness(args):
             print(f"--- gates: {n_ok} ok{adv_str} · {len(blocking)} blocking ({names}){hint}")
         else:
             print(f"--- gates: {n_ok} ok{adv_str}, none blocking{hint}")
+    # ADR-046: the FIELD line, one per repo that declares a corpus or has run one. A failing
+    # corpus ALREADY appears in the gates rollup above (it is a gate:corpus record like any
+    # other); this line adds the number the rollup cannot carry -- what percentage of REAL
+    # inputs the system gets right, against which declared budget.
+    for _rname in sorted(_field):
+        print(_corpus_field_line(_rname, _field[_rname]))
     # ADR-044: its OWN line, deliberately outside the gates rollup. An unconfirmed
     # agent-origin item is a decision still owed to the human, not a gate that ran --
     # folding it into "N ok" or into "N blocking" would be the false clean ADR-043
@@ -14102,16 +14431,19 @@ def build_parser():
     plg.add_argument("--iteration", type=int, required=True)
     plg.add_argument("--kind", required=True,
                      choices=["golden-diff", "gate-check", "pit-check", "simplicity",
-                              "regression", "rubric", "waste", "ci", "operability"],
+                              "regression", "rubric", "waste", "ci", "corpus", "operability"],
                      help="ci (2.2.0) records a pipeline run as the FACT it is: a fail caps "
-                          "readiness <=65 and blocks convergence exactly like gate-check; "
+                          "readiness <=65 and blocks convergence exactly like gate-check. "
+                          "corpus (ADR-046) is the parity door for a field-truth run measured "
+                          "elsewhere; corpus-run writes the same record with the evidence on it. "
                           "operability (ADR-048) is accepted for parity with the "
                           "`operability` subcommand, which is what normally writes it")
     plg.add_argument("--verdict", required=True,
                      choices=["pass", "fail", "advisory", "not-run"],
                      help="advisory (ADR-043) records a measured, non-gating run: it never "
                           "caps readiness, never blocks convergence, and never reads as ok; "
-                          "accepted only for --kind simplicity|waste, a FACT gate refuses it")
+                          "accepted only for --kind simplicity|waste|corpus|operability, a FACT "
+                          "gate refuses it")
     plg.add_argument("--count", type=int, default=1,
                      help="failing finding count (fail only; default 1)")
     plg.add_argument("--note", default=None)
@@ -14119,6 +14451,35 @@ def build_parser():
                      help="where the verdict was measured (a CI run URL or id), stored on the "
                           "record so the evidence outlives the conversation")
     plg.set_defaults(func=cmd_log_gate)
+
+    pcr = sub.add_parser(
+        "corpus-run",
+        help="run a REAL-INPUT corpus against a command and persist gate:corpus (ADR-046): "
+             "field truth for greenfield, where every test payload was invented by the agent")
+    add_ledger(pcr)
+    pcr.add_argument("--repo", required=True)
+    pcr.add_argument("--corpus", default=None,
+                     help="JSONL corpus: one {\"input\": ..., \"expected\": ..., \"id\": ...} "
+                          "per line (default: repos[R].corpus from the config)")
+    pcr.add_argument("--command", required=True,
+                     help="the command under test; each case's input arrives on ITS stdin "
+                          "(JSON-encoded when it is not a string)")
+    pcr.add_argument("--threshold", type=float, default=None,
+                     help="hit percentage the run must reach to PASS (default: "
+                          "repos[R].corpus_threshold, else defaults.corpus_threshold; with "
+                          "NONE declared the run is advisory -- a gate needs an adopted budget)")
+    pcr.add_argument("--ac", action="append", default=None,
+                     help="criterion id this run is evidence for (repeatable); a criterion "
+                          "whose only evidence is a corpus record closes MEASURED iff it passed")
+    pcr.add_argument("--timeout", type=float, default=CORPUS_DEFAULT_TIMEOUT,
+                     help="per-case seconds before the case is a miss named `timeout` "
+                          "(default %d)" % CORPUS_DEFAULT_TIMEOUT)
+    pcr.add_argument("--max-misses", type=int, default=CORPUS_DEFAULT_MAX_MISSES,
+                     help="how many misses to report and persist (default %d)"
+                          % CORPUS_DEFAULT_MAX_MISSES)
+    pcr.add_argument("--iteration", type=int, default=1)
+    pcr.add_argument("--json", action="store_true")
+    pcr.set_defaults(func=cmd_corpus_run)
 
     pfb = sub.add_parser(
         "flag-blocker",

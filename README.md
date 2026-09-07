@@ -132,6 +132,10 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
   method is enforced by the engine, not by asking the agent to be disciplined.
 - **Model-agnostic.** The engine never reads tokens, model names or vendor telemetry. Any
   model-reported number enters through an adapter, never the engine.
+- **Field truth for greenfield.** In a new system every test payload was invented by the
+  agent that wrote the code, so `corpus-run` scores a corpus of REAL inputs against the
+  real command and persists the percentage as a fact — advisory until the project
+  declares a budget, a blocking gate once it does (ADR-046).
 
 ## The diamond — specs are the source code, end to end
 

@@ -154,6 +154,17 @@ answer.
 1. **Purpose / value / why now.** What job does this remove? Cost of not doing it?
 2. **Domain model.** Propose the core entities and their relationships. ("From the domain
    I deduce these core entities: … do they work for you, or is one missing?")
+   Then ask, MANDATORY, before the round closes (ADR-046): **"what input comes from the REAL
+   world, and where is the corpus?"** In greenfield every test payload is invented by the agent
+   that writes the code, so a green suite can be silent about the inputs the world actually
+   produces — one field build shipped a parser that passed every test its author wrote and was
+   96.96 % right on the real corpus. Name the real-input surfaces (files, payloads, messages,
+   documents), ask WHERE a sample with its expected outputs can be obtained, and record the path
+   as `repos[R].corpus` in `uscha.config.json` so `qa_ledger.py corpus-run` can score it.
+   **No corpus on day 1 is not a blocker — it is a HIGH risk in `RISKS.md` with an OWNER and a
+   date.** Do not invent one: a corpus the agent authored is the same invented input this
+   question exists to expose. The percentage gates nothing until the project declares a budget
+   (`corpus_threshold`), which is round 10's decision, not the kit's.
 3. **Operation / API surface.** Propose the endpoints/operations and their
    contracts (idempotency, status codes).
 4. **Stack and lifecycle (MANDATORY — before any stack/architecture decision is

@@ -440,6 +440,33 @@ python3 $QL log-gate --repo <REPO> --iteration <N> --kind golden-diff \
 but when a PIT report EXISTS and fails the gate, persist it the same way:
 `log-gate --kind pit-check --verdict fail`.)
 
+**Field truth — the greenfield evidence class (kit 2.2.0, ADR-046).** `characterize` and
+`golden-diff` answer "does it still do what the OLD code did?", which greenfield has no way to
+ask: there is no old code, and every test payload was invented by the agent that wrote the
+subject. `corpus-run` is the evidence class for that gap — REAL inputs with their real expected
+outputs, one JSON object per line (`input`, `expected`, optional `id`), each fed to the command
+on stdin and compared against its trimmed stdout. Run it when the repo declares a corpus
+(`repos[R].corpus`) or when the human hands you one; it is NOT part of the inner loop, since a
+real corpus can be large (schedule it like pit-check). It is **advisory** until the project
+declares a budget — with no `--threshold`, `repos[R].corpus_threshold` or
+`defaults.corpus_threshold`, the percentage is measured and gates nothing, and it never counts as
+an `ok` gate. With one declared, a run under it caps readiness ≤65 and blocks convergence like
+any fact gate. A missing, empty or malformed corpus is exit 2 naming the line — never a scored
+0 %. Never author a corpus yourself: an invented corpus is the invented input this instrument
+exists to expose.
+
+```bash
+python3 $QL corpus-run --repo <REPO> --corpus <path.jsonl> --command "<cmd>"   [--threshold <P>] [--ac AC-FIELD-01] [--timeout 30]   # exit 1 = under the declared budget
+# a corpus measured elsewhere (CI, a nightly) goes in through the parity door:
+python3 $QL log-gate --repo <REPO> --iteration <N> --kind corpus   --verdict <pass|fail|advisory|not-run>
+```
+
+`--ac` stamps criterion ids on the record: a criterion whose only evidence is a corpus record
+closes MEASURED iff that record PASSED, and a ticked criterion without one reports
+`narrated_only` — the same rule a green JUnit testcase has always obeyed. `readiness` prints one
+conditional `--- field <repo>: ...` line per repo that declares a corpus or ran one; it carries
+no weight in the score (that dimension is deferred to its own ADR).
+
 4. The **static analysis gate** (`java-qa-gate`: Checkstyle/PMD/SpotBugs/FindSecBugs)
    is NOT counted by hand. Run the gate so its XML reports are written, then ingest
    them — the ledger parses the reports, normalizes severities to the common gate
