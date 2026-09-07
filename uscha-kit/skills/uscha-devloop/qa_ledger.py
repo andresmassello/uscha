@@ -44,7 +44,8 @@ Usage (see `--help` on each subcommand):
   qa_ledger.py rebuild --mode baseline --config uscha.config.json [--out REBUILD-BASELINE.json]
   qa_ledger.py rebuild --mode compare  --baseline REBUILD-BASELINE.json [--json]
   qa_ledger.py simplicity-check --diff changes.diff [--config uscha.config.json] [--json]
-  qa_ledger.py simplicity-check --from-git --base main
+  qa_ledger.py simplicity-check --from-git --base main            (advisory: exit 0)
+  qa_ledger.py simplicity-check --from-git --base main --max-lines-added 400 --gate
   qa_ledger.py pit-check --report target/pit-reports/*/mutations.xml [--min-score 60] [--json]
   qa_ledger.py gate-check --from-git --base main [--strict] [--json]
   qa_ledger.py spec-check --spec SPEC.md [--spec ACCEPTANCE.md] [--strict] [--json]
@@ -2497,6 +2498,11 @@ def _gate_rollup(ledger):
         for tool, rec in _latest_static_by_tool(rnode).items():
             gates.append({"repo": rname, "tool": tool,
                           "blocking": rec.get("gated_reported", 0) > 0,
+                          # ADR-043: an advisory record is non-blocking BY CONSTRUCTION, which
+                          # is not the same fact as a gate that ran and came back clean. It
+                          # travels so no consumer has to guess which of the two it is looking
+                          # at -- the false-clean is the failure mode, not the absence.
+                          "advisory": bool(rec.get("advisory")),
                           "gated": rec.get("gated_reported", 0),
                           "note": rec.get("note")})
     return sorted(gates, key=lambda g: (g["repo"], g["tool"]))
@@ -2724,11 +2730,18 @@ def cmd_spec_change_request(args):
           (row["id"], args.repo, args.source, args.requested_change))
 
 
-def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, note):
+def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, note,
+                        advisory=False):
     """Append a static-gate-shaped record for a FACT gate so the EXISTING plumbing
     sees it: _gate_open_and_sev feeds the BLOCKER/CRITICAL readiness cap (<=65) and
     _converged refuses while the latest record for the tool is failing. A later
-    clean record for the same tool clears it (latest-per-tool wins)."""
+    clean record for the same tool clears it (latest-per-tool wins).
+
+    advisory=True (kit 2.1.0, ADR-043) records a MEASUREMENT that is not a gate: the record
+    carries zero gated findings, so it can neither cap readiness nor block convergence, and it
+    is stamped so no surface can render it as a clean gate either. That distinction is the whole
+    point -- a check running advisory is not the same fact as a check running green, and a
+    ledger that cannot tell them apart is the false-clean this flag exists to refuse."""
     ledger["step_counter"] += 1
     n = max(1, count) if failing else 0
     rec = {
@@ -2740,19 +2753,38 @@ def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, not
         "tests_passed": None, "files_changed": 0,
         "fingerprint": None, "finding_ids": None, "note": note,
     }
+    if advisory:
+        rec["advisory"] = True
     node["iterations"].append(rec)
     ledger["steps"].append({"n": rec["n"], "at": rec["at"], "kind": "static-gate",
                             "repo": repo, "tool": tool, "iteration": iteration})
     return rec
 
 
+# The only --kind values log-gate accepts with --verdict advisory (ADR-043): the checks whose
+# default mode IS advisory. Every other kind is a FACT gate and records pass/fail/not-run only.
+ADVISORY_CAPABLE_KINDS = ("simplicity", "waste")
+
+
 def cmd_log_gate(args):
     """Persist a FACT-gate verdict (golden-diff / gate-check / pit-check / simplicity / regression)
     into the ledger, so 'facts may block' is enforced by the engine, not by goodwill.
-      fail    -> BLOCKER record: trips the <=65 readiness cap AND blocks convergence.
-      pass    -> clean record for the same tool: credits the fix, convergence sees clean.
-      not-run -> a steps event ONLY, never an iterations record: absence is not
-                 evidence — it neither reads as clean nor fakes a red (last state stands).
+      fail     -> BLOCKER record: trips the <=65 readiness cap AND blocks convergence.
+      pass     -> clean record for the same tool: credits the fix, convergence sees clean.
+      advisory -> a MEASURED, non-gating record (kit 2.1.0, ADR-043): zero gated findings, so
+                  it can never cap readiness nor block convergence, and stamped `advisory` so
+                  no surface counts it as an `ok` gate. Use it for a check the project has not
+                  declared as a gate -- `simplicity-check` in its default advisory mode above
+                  all. The alternative (persisting an advisory as `pass`) is the false clean
+                  this verdict exists to refuse: a reader cannot tell "the gate was green"
+                  from "there was no gate", and the second is what actually happened.
+      not-run  -> a steps event ONLY, never an iterations record: absence is not
+                  evidence — it neither reads as clean nor fakes a red (last state stands).
+
+    The engine cannot observe which mode a SEPARATE `simplicity-check` process ran in, so this
+    is a named verdict rather than a refusal: refusing would only be enforceable on trust,
+    while a third verdict is enforceable on the ledger. The caller declares the mode; every
+    reader downstream then sees it as a fact instead of inferring it.
     """
     # INV-ADVISORY-01 note (ADR-014): --kind is a CLOSED vocabulary (argparse choices), so
     # an advisory-class dimension (e.g. "semantic") cannot be registered as a gate through
@@ -2774,12 +2806,27 @@ def cmd_log_gate(args):
               f"(no evidence — last logged state stands, absence is never green)")
         return
     failing = args.verdict == "fail"
+    advisory = args.verdict == "advisory"
+    if advisory and args.kind not in ADVISORY_CAPABLE_KINDS:
+        # ADR-043 widens --verdict for the checks that RUN advisory by default. A FACT gate
+        # (deleted tests, a lowered threshold, a golden drift) recorded as advisory would be
+        # a mandatory gate cleared by goodwill -- the exact thing this ledger exists to refuse.
+        print(f"[qa_ledger] log-gate: --verdict advisory is not accepted for --kind {args.kind}: "
+              f"only {', '.join(ADVISORY_CAPABLE_KINDS)} run in an advisory mode; a FACT gate "
+              f"records pass, fail or not-run", file=sys.stderr)
+        sys.exit(2)
     rec = _append_gate_record(ledger, node, args.repo, tool, args.iteration,
-                              failing, args.count, args.note)
+                              failing, args.count, args.note, advisory=advisory)
     _save(args.ledger, ledger)
-    state = f"FAIL (BLOCKER x{rec['gated_reported']})" if failing else "PASS (clean)"
-    print(f"[qa_ledger] {args.repo}/{tool}: {state} logged — "
-          f"{'caps readiness <=65 and blocks convergence' if failing else 'clears the gate for convergence'}")
+    if advisory:
+        state, effect = "ADVISORY (measured, not gating)", (
+            "reported everywhere as advisory, never as ok; caps nothing, blocks nothing")
+    elif failing:
+        state, effect = (f"FAIL (BLOCKER x{rec['gated_reported']})",
+                         "caps readiness <=65 and blocks convergence")
+    else:
+        state, effect = "PASS (clean)", "clears the gate for convergence"
+    print(f"[qa_ledger] {args.repo}/{tool}: {state} logged — {effect}")
 
 
 def cmd_flag_blocker(args):
@@ -8399,17 +8446,21 @@ def cmd_dashboard(args):
     subscores = [{"k": "coverage",
                   "val": round(covp) if isinstance(covp, (int, float)) else None,
                   "bd": (f"{round(covp)}%" if isinstance(covp, (int, float)) else None)}]
-    gate_block, gate_note = {}, {}
+    gate_block, gate_note, gate_adv = {}, {}, {}
     for g in rd.get("gates", []):
         kind = (g.get("tool") or "").replace("gate:", "")
         key = "golden" if kind.startswith("golden") else kind
         gate_block[key] = gate_block.get(key, False) or bool(g.get("blocking"))
+        gate_adv[key] = gate_adv.get(key, False) or bool(g.get("advisory"))
         if g.get("note") and key not in gate_note:
             gate_note[key] = g.get("note")
     for key in ("simplicity", "waste", "golden"):
         if key in gate_block:
+            # ADR-043: a non-blocking ADVISORY is not "OK" — OK means a declared gate ran clean.
+            _bd = ("FAIL" if gate_block[key]
+                   else "ADVISORY" if gate_adv.get(key) else "OK")
             subscores.append({"k": key, "val": None,
-                              "bd": gate_note.get(key) or ("FAIL" if gate_block[key] else "OK")})
+                              "bd": gate_note.get(key) or _bd})
 
     # loops: iters + estado por repo (escalated > converged > active). max sin fuente.
     # El estado se deriva ENTERO con _derive_phase (kit 1.48.1) — la MISMA funcion que
@@ -9033,6 +9084,10 @@ def _top_events(ledger, limit=TOP_EVENTS_TAIL):
                 gated = it.get("gated_reported")
                 if kind == "gate-not-run":
                     tail = "not run — nobody measured it"
+                elif kind == "static-gate" and it.get("advisory"):
+                    # ADR-043: measured but not gating. `info` (never green, never red) is the
+                    # honest level -- rendering it `pass`/`clean` is the false clean again.
+                    level, tail = "info", "advisory — measured, not gating"
                 elif kind == "static-gate" and isinstance(gated, int):
                     level = "fail" if gated >= 1 else "pass"
                     tail = "%d gated finding(s)" % gated if gated else "clean"
@@ -9957,13 +10012,21 @@ def cmd_readiness(args):
     gate_roll = out["gates"]
     if gate_roll:
         blocking = [g for g in gate_roll if g["blocking"]]
-        n_ok = len(gate_roll) - len(blocking)
+        # ADR-043: an advisory NEVER joins the ok count. "3 ok" must mean three gates ran and
+        # came back clean; folding a check the project never declared as a gate into that number
+        # is the false clean the advisory verdict exists to refuse. The segment is conditional,
+        # so a ledger with no advisory record prints exactly what it printed before.
+        advisory = [g for g in gate_roll if g.get("advisory") and not g["blocking"]]
+        n_ok = len(gate_roll) - len(blocking) - len(advisory)
+        adv_str = (f" · {len(advisory)} advisory ("
+                   + ", ".join(f"{g['repo']}/{g['tool']}" for g in advisory) + ")"
+                   if advisory else "")
         hint = "" if args.verbose else "   (readiness --verbose for the detail)"
         if blocking:
             names = ", ".join(f"{g['repo']}/{g['tool']}" for g in blocking)
-            print(f"--- gates: {n_ok} ok · {len(blocking)} blocking ({names}){hint}")
+            print(f"--- gates: {n_ok} ok{adv_str} · {len(blocking)} blocking ({names}){hint}")
         else:
-            print(f"--- gates: {n_ok} ok, none blocking{hint}")
+            print(f"--- gates: {n_ok} ok{adv_str}, none blocking{hint}")
     if not args.verbose:
         return
     print("--- dimensions (weight | raw | contribution) ---")
@@ -10023,6 +10086,14 @@ DEFAULT_COVERAGE_TOLERANCE = 5.0  # pct points the rebuilt coverage may drop
 # abstraction is INTENTIONALLY not weighted: the "new types" regex is a prose/AST proxy
 # that false-positives on Java records/DTOs, so it must not gate the band. It stays as an
 # advisory metric + flag only (distilled: hard caps gate, guessy proxies advise).
+#
+# ADVISORY BY DEFAULT (kit 2.1.0, ADR-043). Every budget below is the KIT'S OPINION, not the
+# project's requirement, and an opinion that exits 1 is a gate nobody declared. Until a project
+# declares at least one numeric budget AND `defaults.simplicity.gate: true`, the verdict is
+# reported and the exit code is 0. This is NOT INV-ADVISORY-01 (that invariant quarantines
+# LLM-class JUDGMENT; these proxies are deterministic and may gate the moment a human says so)
+# -- it is the provenance rule of 1.17.0 applied to an exit code: a default is an opinion, and
+# only a declaration is a requirement.
 SIMPLICITY_WEIGHTS = {
     "diff_size": 35, "nesting": 30, "net_growth": 20, "fan_out": 8, "blob": 7,
 }
@@ -10037,6 +10108,17 @@ SIMPLICITY_DEFAULTS = {
     "max_abstraction_density": 3.0,   # new *types* per 100 added LOC
     "indent_width": 4,
 }
+# Keys under defaults.simplicity that are NOT budgets, so declaring one never satisfies the
+# "a gate needs a budget" rule: `indent_width` is a PARSING parameter and `gate` is the switch
+# itself. `gate: true` with nothing but these declared is a refusal, not a gate (ADR-043).
+_SIMPLICITY_NON_BUDGET = ("indent_width", "gate")
+# What `max_nesting` actually measures, said once and reused by every surface that prints it.
+# It is INDENTATION DEPTH over added lines, not AST nesting: a wrapped call argument, JSX, a
+# multi-line Java string or any deep continuation raises it without any control flow existing.
+# The kit does NOT make it language-aware (that needs a parser per stack, which this stdlib
+# engine will not have) -- it names the proxy instead, so a reader can discount it.
+_NESTING_PROXY_NOTE = ("indentation depth over added lines, NOT AST nesting -- continuation "
+                       "lines, JSX and multi-line literals inflate it")
 # code files only — docs, config, resources and generated trees are noise for a
 # code-simplicity gate. Broader than SOURCE_EXT (which is repo-typed for rebuild).
 _SIMPLICITY_CODE_EXT = {
@@ -10449,8 +10531,9 @@ def _simplicity_score(m, b):
 def _simplicity_flags(m, b):
     f = []
     if m["max_nesting"] > b["max_nesting_depth"]:
-        f.append(f"nesting {m['max_nesting']} > {b['max_nesting_depth']} — "
-                 f"aplanar: guard clauses / extraer función (CWE-1124)")
+        f.append(f"max_nesting (indentation proxy) {m['max_nesting']} > "
+                 f"{b['max_nesting_depth']} — aplanar: guard clauses / extraer función "
+                 f"(CWE-1124). Proxy: {_NESTING_PROXY_NOTE}")
     if m["new_abstractions"] > b["max_new_abstractions"]:
         f.append(f"{m['new_abstractions']} tipos/capas nuevos > "
                  f"{b['max_new_abstractions']} — ¿todos pedidos? "
@@ -10476,10 +10559,12 @@ def _simplicity_flags(m, b):
 def cmd_simplicity_check(args):
     b = dict(SIMPLICITY_DEFAULTS)
     declared = set()   # presupuestos declarados por el humano (config o CLI)
+    gate = False       # ADR-043: solo lo enciende una DECLARACION, nunca un default
     if args.config and os.path.exists(args.config):
         cfg = _load(args.config).get("defaults", {}).get("simplicity", {})
         b.update({k: cfg[k] for k in b if k in cfg})
-        declared |= {k for k in b if k in cfg and k != "indent_width"}
+        declared |= {k for k in b if k in cfg and k not in _SIMPLICITY_NON_BUDGET}
+        gate = bool(cfg.get("gate"))
     for k in ("max_lines_added", "max_net_lines", "max_files_changed",
               "max_nesting_depth", "max_hunk_added", "max_new_abstractions",
               "indent_width"):
@@ -10491,34 +10576,55 @@ def cmd_simplicity_check(args):
     if args.max_abstraction_density is not None:
         b["max_abstraction_density"] = args.max_abstraction_density
         declared.add("max_abstraction_density")
+    if getattr(args, "gate", False):
+        gate = True
+    # A gate with no budget is not a gate: it is the kit's opinion wearing an exit code, which
+    # is exactly the defect ADR-043 exists to remove. Refuse BEFORE reading the diff -- a
+    # misconfigured gate must not produce a score anyone could quote.
+    if gate and not declared:
+        print("[qa_ledger] invalid config: defaults.simplicity.gate is true (or --gate was "
+              "passed) but no simplicity budget is declared — a gate with no budget is not a "
+              "gate, only the kit's opinion with an exit code. Declare at least one of "
+              "max_lines_added, max_net_lines, max_files_changed, max_nesting_depth, "
+              "max_hunk_added, max_new_abstractions, max_abstraction_density in "
+              "defaults.simplicity (or pass the matching --max-... flag), or set gate to false.",
+              file=sys.stderr)
+        sys.exit(2)
+    mode = "gate" if gate else "advisory"
 
     m = _simplicity_metrics(_read_diff(args), b["indent_width"])
     score, dims = _simplicity_score(m, b)
     verdict = _simplicity_band(score)
     flags = _simplicity_flags(m, b)
+    exit_code = 1 if (verdict == "OVERBUILT" and gate) else 0
 
-    out = {"score": score, "verdict": verdict, "weights": SIMPLICITY_WEIGHTS,
+    out = {"score": score, "verdict": verdict, "mode": mode, "gate": gate,
+           "weights": SIMPLICITY_WEIGHTS,
            "dimensions": {k: round(v, 3) for k, v in dims.items()},
-           "metrics": m, "budgets": b, "budgets_declared": sorted(declared),
+           "metrics": m, "metrics_notes": {"max_nesting": _NESTING_PROXY_NOTE},
+           "budgets": b, "budgets_declared": sorted(declared),
            "flags": flags}
     if args.json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
-        sys.exit(0 if verdict != "OVERBUILT" else 1)
+        sys.exit(exit_code)
 
-    print(f"SIMPLICITY: {score}/100 — {verdict}")
+    mode_str = ("declared gate" if gate else
+                "advisory (declare budgets + defaults.simplicity.gate to make it block)")
+    print(f"SIMPLICITY: {score}/100 — {verdict}  ({mode_str})")
     print("--- metrics (value / budget · * = declared by the human) ---")
     rows = [
         ("lines_added", m["lines_added"], b["max_lines_added"], "max_lines_added"),
         ("net_lines", m["net_lines"], b["max_net_lines"], "max_net_lines"),
         ("files_changed", m["files_changed"], b["max_files_changed"], "max_files_changed"),
-        ("max_nesting", m["max_nesting"], b["max_nesting_depth"], "max_nesting_depth"),
+        ("max_nesting (indentation proxy)", m["max_nesting"], b["max_nesting_depth"], "max_nesting_depth"),
         ("new_abstractions", m["new_abstractions"], b["max_new_abstractions"], "max_new_abstractions"),
         ("abstraction/100", m["abstraction_density"], b["max_abstraction_density"], "max_abstraction_density"),
         ("max_hunk_added", m["max_hunk_added"], b["max_hunk_added"], "max_hunk_added"),
     ]
     for name, val, bud, key in rows:
         mark = "*" if key in declared else ""
-        print(f"  {name:17s} {str(val):>7s} / {bud}{mark}")
+        print(f"  {name:31s} {str(val):>7s} / {bud}{mark}")
+    print(f"  (max_nesting is a PROXY: {_NESTING_PROXY_NOTE})")
     if not declared:
         print("  (every budget is a kit default — an opinion, not a "
               "requirement: declare yours in config.defaults.simplicity)")
@@ -10535,7 +10641,11 @@ def cmd_simplicity_check(args):
             print(f"  ! {fl}")
     else:
         print("  within budget — nothing to cut")
-    sys.exit(0 if verdict != "OVERBUILT" else 1)
+    if verdict == "OVERBUILT" and not gate:
+        print("--- advisory: OVERBUILT is REPORTED, not enforced (exit 0). Cut what is cheap, "
+              "say so in the PR body, and do not let it block the loop. To make it block, "
+              "declare your budgets AND defaults.simplicity.gate: true ---")
+    sys.exit(exit_code)
 
 
 # --------------------------------------------------------------------------- #
@@ -12876,7 +12986,11 @@ def build_parser():
     plg.add_argument("--kind", required=True,
                      choices=["golden-diff", "gate-check", "pit-check", "simplicity",
                               "regression", "rubric", "waste"])
-    plg.add_argument("--verdict", required=True, choices=["pass", "fail", "not-run"])
+    plg.add_argument("--verdict", required=True,
+                     choices=["pass", "fail", "advisory", "not-run"],
+                     help="advisory (ADR-043) records a measured, non-gating run: it never "
+                          "caps readiness, never blocks convergence, and never reads as ok; "
+                          "accepted only for --kind simplicity|waste, a FACT gate refuses it")
     plg.add_argument("--count", type=int, default=1,
                      help="failing finding count (fail only; default 1)")
     plg.add_argument("--note", default=None)
@@ -13057,7 +13171,9 @@ def build_parser():
 
     ps2 = sub.add_parser(
         "simplicity-check",
-        help="Reduce gate: score diff minimality/complexity over a unified diff")
+        help="Reduce gate: score diff minimality/complexity over a unified diff. Advisory "
+             "by default; gates only with --gate or defaults.simplicity.gate AND at least "
+             "one declared budget")
     ps2.add_argument("--diff", help="path to a unified diff (else --from-git or stdin)")
     ps2.add_argument("--from-git", action="store_true",
                      help="run `git diff --unified=0 <base>` for the diff")
@@ -13073,6 +13189,10 @@ def build_parser():
     ps2.add_argument("--max-abstraction-density", dest="max_abstraction_density",
                      type=float, default=None)
     ps2.add_argument("--indent-width", dest="indent_width", type=int)
+    ps2.add_argument("--gate", action="store_true",
+                     help="make an OVERBUILT verdict exit 1 (same switch as "
+                          "defaults.simplicity.gate). Requires at least one declared budget: "
+                          "without one the run REFUSES with exit 2 (ADR-043)")
     ps2.add_argument("--json", action="store_true")
     ps2.set_defaults(func=cmd_simplicity_check)
 

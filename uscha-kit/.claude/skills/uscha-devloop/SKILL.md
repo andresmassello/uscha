@@ -255,7 +255,7 @@ Implement per the PLAN. Commit per logical step with conventional commits
 - **Never edit the SPEC/ADR to make the implementation look correct.** If reality forces
   a change, amend the SPEC (version it) and return to Ready.
 
-## Phase 2b — Simplicity gate ("Reduce")
+## Phase 2b — Simplicity check ("Reduce") — ADVISORY by default (kit 2.1.0)
 
 Before the QA loop, check the change isn't overbuilt. This is the CONSTITUTION's
 **Simplicidad** invariant made deterministic — diff minimality, nesting depth and new
@@ -266,11 +266,25 @@ git diff --unified=0 <base> | python3 $QL simplicity-check --config uscha.config
 # or: python3 $QL simplicity-check --from-git --base <base>
 ```
 
-Reads `SIMPLICITY: NN/100 — SIMPLE | ACCEPTABLE | OVERBUILT`. **OVERBUILT (exit 1) is a
-BLOCKER**: reduce first (guard clauses, drop speculative types/layers, split giant hunks)
-and re-run — do not carry it into the QA loop or converge on it. The flags tell you exactly
-what to cut. Budgets live in `config.defaults.simplicity` (tighten per risk profile). For a
-2-space codebase pass `--indent-width 2`.
+Reads `SIMPLICITY: NN/100 — SIMPLE | ACCEPTABLE | OVERBUILT  (advisory | declared gate)`.
+
+**Advisory is the default and it exits 0** (ADR-043). Every budget is the KIT'S OPINION until
+the project declares its own; an opinion that stops a loop is a gate nobody asked for. In
+advisory mode an OVERBUILT verdict is **information for the human**: cut what is cheap to cut,
+**report it in the PR body** with the score and the flags, and **never block on it** — do not
+loop, do not refuse to converge, do not "fix" the diff to chase the number.
+
+**It gates only when the project says so**: at least one declared budget in
+`config.defaults.simplicity` **AND** `defaults.simplicity.gate: true` (or `--gate`). Then
+OVERBUILT is exit 1 and a BLOCKER again: reduce first (guard clauses, drop speculative
+types/layers, split giant hunks) and re-run. `gate: true` with **no** budget declared is a
+config error, exit 2 — a gate with no budget is not a gate.
+
+**`max_nesting` is an INDENTATION-DEPTH proxy, not AST nesting** — it counts leading
+indentation on added lines. A wrapped call argument, JSX, or a multi-line Java/Kotlin literal
+raises it with no control flow present at all, which is the single most common false OVERBUILT.
+Discount it accordingly; the kit does not try to make it language-aware. For a 2-space codebase
+pass `--indent-width 2`.
 
 **Tests are OUTSIDE the budget** (kit 1.11.0): test files (the 9 stack conventions) are
 counted and reported apart (`test_lines_added`) but never gate — writing tests must not
@@ -278,12 +292,21 @@ push a diff toward OVERBUILT (deleting them is already blocked by gate-check). A
 project can have MORE test code than production code.
 
 **Persist the verdict** so convergence and readiness see it (facts block through the
-ledger, not through your goodwill):
+ledger, not through your goodwill) — and persist it as what it WAS:
 
 ```bash
+# advisory mode (the default): the run is recorded, and it caps nothing and blocks nothing
+python3 $QL log-gate --repo <REPO> --iteration <N> --kind simplicity \
+  --verdict advisory [--note "OVERBUILT 58/100 — advisory, no budget declared"]
+
+# declared gate only (defaults.simplicity.gate: true + budgets)
 python3 $QL log-gate --repo <REPO> --iteration <N> --kind simplicity \
   --verdict <pass|fail> [--note "OVERBUILT: +612 lines vs 400 budget"]
 ```
+
+**Never log an advisory run as `pass`.** `pass` means a declared gate ran and came back clean;
+an advisory run means there was no gate. Readiness prints them apart (`N ok · 1 advisory`) and
+the mirador shows `ADVISORY` instead of `OK` — but only if you tell it the truth here.
 
 ### Phase 2c — REUSE-FIRST gate (kit 1.26.0)
 

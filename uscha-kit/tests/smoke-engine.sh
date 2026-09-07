@@ -478,7 +478,11 @@ chk "spec completa -> exit 0" 0 run spec-check --spec s2.md
 
 echo "== T10 simplicity: floor de dims pesadas (1.9x -> OVERBUILT) =="
 { printf -- "diff --git a/src/A.java b/src/A.java\n--- a/src/A.java\n+++ b/src/A.java\n@@ -1,0 +1,190 @@\n"; for i in $(seq 1 190); do printf -- "+int x%d = %d;\n" "$i" "$i"; done; } > big.diff
-chk "diff 1.9x budget -> OVERBUILT exit 1" 1 run simplicity-check --diff big.diff --max-lines-added 100 --max-net-lines 999 --max-files-changed 20 --max-hunk-added 999
+# 2.1.0 / ADR-043: the SCORE is unchanged (the heavy-dim floor still fires), but the EXIT is
+# now a declaration. --gate turns the same run back into the blocking gate this check pins;
+# without it the very same diff exits 0, which is the second half asserted right below.
+chk "diff 1.9x budget + --gate -> OVERBUILT exit 1" 1 run simplicity-check --diff big.diff --max-lines-added 100 --max-net-lines 999 --max-files-changed 20 --max-hunk-added 999 --gate
+chk "el mismo diff sin --gate -> advisory exit 0" 0 run simplicity-check --diff big.diff --max-lines-added 100 --max-net-lines 999 --max-files-changed 20 --max-hunk-added 999
 
 echo "== T11 oscillation Jaccard (a,b -> c -> a,b) =="
 run log-step --repo repo-b --tool code-review --iteration 1 --fingerprint "a,b" >/dev/null
@@ -12542,6 +12546,448 @@ case "$T158" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T158";;
 esac
 
+echo "== T159 (2.1.0): the simplicity score ADVISES; only a declared budget makes it gate =="
+# ADR-043. The kit shipped a complexity budget it invented and exited 1 on it, so a project
+# that had adopted no budget at all was stopped by an opinion -- reported, in the same JSON,
+# as budgets_declared: []. Worse, the dimension that fired most often is an INDENTATION
+# proxy: a wrapped call argument, JSX or a multi-line Java literal reads as deep nesting with
+# no control flow present. The field fixture below is that exact case, six added lines long.
+# What changes is the EXIT CODE and what the ledger is told, never the score: the measurement
+# was not the defect, the unearned authority was.
+T159=$(pyin "$KIT" "$ROOT" <<'PY'
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+INSTALLER = os.path.join(kit, "install-uscha.py")
+# the release before the change: the red probe runs its engine on the very case that motivated
+# ADR-043 and asserts it exits 1 there -- the behaviour this release removes.
+PREV_TAG = "v2.0.0"
+TMPS = []
+res, why = {}, {}
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-sg-")
+    TMPS.append(d)
+    return d
+
+
+def run(args, cwd=None):
+    return subprocess.run([sys.executable] + list(args), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                          errors="replace")
+
+
+def write(path, text):
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
+def write_json(path, data):
+    write(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def read_json(path):
+    with io.open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+# THE FIELD CASE (U-01), reproduced as a fixture rather than described. Six added lines, one
+# file, no new type, no deep block -- and a wrapped call argument indented 36 columns, which the
+# indentation proxy reads as depth 9 and the hard cap floors to 60 = OVERBUILT. On 2.0.0 that
+# exited 1 with budgets_declared empty: a project that adopted no budget was stopped by the
+# kit's opinion.
+FIELD_DIFF = "\n".join([
+    "diff --git a/src/app.py b/src/app.py",
+    "--- a/src/app.py",
+    "+++ b/src/app.py",
+    "@@ -0,0 +1,6 @@",
+    "+result = some_function(argument_one,",
+    "+" + " " * 36 + "argument_two,",
+    "+" + " " * 36 + "argument_three)",
+    "+def f():",
+    "+    return 1",
+    "+",
+]) + "\n"
+
+# a diff nothing can call overbuilt: one added line, one file, no nesting.
+TINY_DIFF = "\n".join([
+    "diff --git a/src/b.py b/src/b.py",
+    "--- a/src/b.py",
+    "+++ b/src/b.py",
+    "@@ -0,0 +1,1 @@",
+    "+x = 1",
+]) + "\n"
+
+
+def project(simplicity=None):
+    """A temp project with a diff on disk and a config whose defaults.simplicity is exactly
+    what the case declares (absent when None -- the state that motivated the ADR)."""
+    d = tmp()
+    write(os.path.join(d, "field.diff"), FIELD_DIFF)
+    write(os.path.join(d, "tiny.diff"), TINY_DIFF)
+    write(os.path.join(d, "ACCEPTANCE.md"), "# ACCEPTANCE\n\n- [ ] AC-01 one\n")
+    defaults = {"acceptance_file": "ACCEPTANCE.md"}
+    if simplicity is not None:
+        defaults["simplicity"] = simplicity
+    write_json(os.path.join(d, "uscha.config.json"),
+               {"project": "sg", "defaults": defaults,
+                "repos": [{"name": "app", "path": ".", "type": "python"}],
+                "integration": {"enabled": False}})
+    return d
+
+
+def check(d, diff, extra=None):
+    """(returncode, parsed json or None, stdout, stderr) for one simplicity-check run."""
+    args = [ENG, "simplicity-check", "--diff", diff, "--config", "uscha.config.json", "--json"]
+    out = run(args + list(extra or []), cwd=d)
+    try:
+        return out.returncode, json.loads(out.stdout), out.stdout, out.stderr
+    except ValueError:
+        return out.returncode, None, out.stdout, out.stderr
+
+
+def measure():
+    # --- AC-SG-01: advisory is the DEFAULT, and it exits 0 ---------------------------------
+    # A project with no defaults.simplicity at all. The score and the band are unchanged (the
+    # measurement was never the defect); only the exit code stops being a verdict nobody
+    # declared. mode says which of the two regimes produced it, in the JSON and on the line.
+    d = project()
+    rc, j, text, _ = check(d, "field.diff")
+    human = run([ENG, "simplicity-check", "--diff", "field.diff",
+                 "--config", "uscha.config.json"], cwd=d)
+    p = []
+    if j is None:
+        p.append("simplicity-check --json unreadable: %s" % text[:120])
+    else:
+        if rc != 0:
+            p.append("exit %d with no budget declared, expected 0" % rc)
+        if j.get("mode") != "advisory":
+            p.append("mode=%r, expected 'advisory'" % (j.get("mode"),))
+        if j.get("gate") is not False:
+            p.append("gate=%r, expected False" % (j.get("gate"),))
+        if j.get("budgets_declared") != []:
+            p.append("budgets_declared=%r, expected []" % (j.get("budgets_declared"),))
+        if j.get("verdict") != "OVERBUILT":
+            p.append("verdict=%r -- the fixture must still SCORE overbuilt, or this case "
+                     "is measuring a softened score instead of a softened exit"
+                     % (j.get("verdict"),))
+    if human.returncode != 0 or "advisory" not in human.stdout:
+        p.append("human line does not name the advisory mode (rc=%d)" % human.returncode)
+    res["AC-SG-01"] = not p
+    why["AC-SG-01"] = "; ".join(p[:3]) or "no budget declared -> advisory, exit 0, still OVERBUILT"
+
+    # --- AC-SG-02: a DECLARED gate behaves exactly as it did ------------------------------
+    # Budgets declared plus gate: true. OVERBUILT is exit 1 again, and a diff that is not
+    # overbuilt still exits 0 under the same config -- so the gate gates, it does not just fail.
+    d = project({"max_nesting_depth": 4, "gate": True})
+    rc_bad, j_bad, _, _ = check(d, "field.diff")
+    rc_ok, j_ok, _, _ = check(d, "tiny.diff")
+    p = []
+    if j_bad is None or j_ok is None:
+        p.append("simplicity-check --json unreadable under a declared gate")
+    else:
+        if rc_bad != 1:
+            p.append("declared gate + OVERBUILT exited %d, expected 1" % rc_bad)
+        if j_bad.get("mode") != "gate" or j_bad.get("gate") is not True:
+            p.append("mode=%r gate=%r, expected gate/True"
+                     % (j_bad.get("mode"), j_bad.get("gate")))
+        if j_bad.get("budgets_declared") != ["max_nesting_depth"]:
+            p.append("budgets_declared=%r" % (j_bad.get("budgets_declared"),))
+        if rc_ok != 0 or j_ok.get("verdict") == "OVERBUILT":
+            p.append("a NOT-overbuilt diff exited %d verdict %r under the same gate"
+                     % (rc_ok, j_ok.get("verdict")))
+    # and the CLI switch is the same switch: --gate on a project that declares budgets but not
+    # the flag reaches the identical exit.
+    d2 = project({"max_nesting_depth": 4})
+    rc_cli = check(d2, "field.diff", ["--gate"])[0]
+    if rc_cli != 1:
+        p.append("--gate with a declared budget exited %d, expected 1" % rc_cli)
+    if check(d2, "field.diff")[0] != 0:
+        p.append("the same project without --gate did not exit 0")
+    res["AC-SG-02"] = not p
+    why["AC-SG-02"] = "; ".join(p[:3]) or "declared gate: OVERBUILT exit 1, clean diff exit 0"
+
+    # --- AC-SG-03: a gate with no budget is REFUSED, by name ------------------------------
+    # gate: true and nothing else declared is a configuration error, not a gate: it is the kit's
+    # opinion wearing an exit code, which is the exact defect. Exit 2, the key is named, and no
+    # score is printed -- a refused run must not leave a number anyone can quote.
+    d = project({"gate": True, "indent_width": 4})
+    out = run([ENG, "simplicity-check", "--diff", "field.diff",
+               "--config", "uscha.config.json"], cwd=d)
+    p = []
+    if out.returncode != 2:
+        p.append("exit %d, expected 2" % out.returncode)
+    if "defaults.simplicity.gate" not in out.stderr:
+        p.append("the refusal does not name defaults.simplicity.gate: %r" % out.stderr[:120])
+    if "SIMPLICITY:" in out.stdout:
+        p.append("a refused run still printed a score")
+    # indent_width is a PARSING knob, so declaring it must not satisfy the budget requirement --
+    # that is why it is in the refusal above rather than passing as a declaration.
+    res["AC-SG-03"] = not p
+    why["AC-SG-03"] = "; ".join(p[:3]) or "gate without a budget -> exit 2, key named"
+
+    # --- AC-SG-04: an advisory in the LEDGER never reads as ok, and never blocks -----------
+    # The consumer half. log-gate --verdict advisory persists a MEASURED, non-gating run: the
+    # readiness gates line counts it apart from ok, the rollup carries advisory: true with
+    # blocking: false, and the score is not capped. The same ledger with --verdict fail is the
+    # control -- it caps and it blocks -- so the case measures a difference, not an absence.
+    d = project()
+    if run([ENG, "init", "--config", "uscha.config.json"], cwd=d).returncode != 0:
+        res["AC-SG-04"] = False
+        why["AC-SG-04"] = "engine init failed in the temp project"
+    else:
+        p = []
+        # a full clean agent cycle first, so convergence is otherwise SATISFIED: without it
+        # converged short-circuits on "0 agent steps" and the gate half of the comparison
+        # below would be measuring the fixture instead of the mechanism.
+        for _tool in ("code-review", "judgment-day", "improve"):
+            run([ENG, "log-step", "--repo", "app", "--tool", _tool, "--iteration", "1",
+                 "--tests-passed", "true"], cwd=d)
+        adv = run([ENG, "log-gate", "--repo", "app", "--iteration", "1",
+                   "--kind", "simplicity", "--verdict", "advisory",
+                   "--note", "OVERBUILT 60/100 - advisory, no budget declared"], cwd=d)
+        if adv.returncode != 0:
+            p.append("log-gate --verdict advisory rejected: %s" % (adv.stderr or "")[:120])
+        run([ENG, "log-gate", "--repo", "app", "--iteration", "1",
+             "--kind", "golden-diff", "--verdict", "pass"], cwd=d)
+        line = run([ENG, "readiness"], cwd=d).stdout
+        gates_line = [ln for ln in line.split("\n") if ln.startswith("--- gates:")]
+        if not gates_line:
+            p.append("readiness printed no gates line")
+        else:
+            g = gates_line[0]
+            if "1 advisory" not in g or "app/gate:simplicity" not in g:
+                p.append("the gates line does not name the advisory: %r" % g)
+            # two gate records exist (one advisory, one real pass) and exactly ONE of them is
+            # an ok gate. "2 ok" would be the false clean this whole criterion is about.
+            if not g.startswith("--- gates: 1 ok") or "none blocking" not in g:
+                p.append("the advisory was counted as an ok gate: %r" % g)
+        rd = run([ENG, "readiness", "--json"], cwd=d)
+        try:
+            doc = json.loads(rd.stdout)
+        except ValueError:
+            doc = None
+        if doc is None:
+            p.append("readiness --json unreadable")
+        else:
+            rows = {g.get("tool"): g for g in (doc.get("gates") or [])}
+            sim = rows.get("gate:simplicity") or {}
+            gold = rows.get("gate:golden-diff") or {}
+            if sim.get("advisory") is not True or sim.get("blocking") is not False:
+                p.append("rollup row %r is not advisory/non-blocking" % (sim,))
+            if gold.get("advisory") is not False:
+                p.append("a plain pass was stamped advisory: %r" % (gold,))
+            if doc.get("cap_reason"):
+                p.append("an advisory capped readiness: %r" % (doc.get("cap_reason"),))
+            # the mirador reads the SAME rollup and must say ADVISORY where a real clean gate
+            # says OK -- the control row beside it is what makes that a difference, not a label.
+            dash = run([ENG, "dashboard", "--json"], cwd=d)
+            try:
+                subs = {s.get("k"): s.get("bd")
+                        for s in (json.loads(dash.stdout).get("subscores") or [])}
+            except ValueError:
+                subs = {}
+            if subs.get("golden") != "OK":
+                p.append("the control subscore is not OK: %r" % (subs.get("golden"),))
+            # the CONTROL, and the half that makes this case an experiment rather than a
+            # description: the SAME gate logged as a real failure blocks convergence and turns
+            # the same line red. Readiness is not asserted to CAP here -- a fresh project scores
+            # far below 65, so the <=65 cap has nothing left to lower and asserting it would be
+            # asserting the fixture, not the mechanism.
+            conv_adv = run([ENG, "converged", "--repo", "app"], cwd=d)
+            if conv_adv.returncode != 0:
+                p.append("the advisory blocked convergence: %s"
+                         % (conv_adv.stdout or conv_adv.stderr or "")[:140])
+            run([ENG, "log-gate", "--repo", "app", "--iteration", "2",
+                 "--kind", "simplicity", "--verdict", "fail", "--count", "1"], cwd=d)
+            conv_fail = run([ENG, "converged", "--repo", "app"], cwd=d)
+            if conv_fail.returncode != 1:
+                p.append("the control fail did not block convergence (exit %d) -- so the "
+                         "advisory half above proves nothing" % conv_fail.returncode)
+            try:
+                doc2 = json.loads(run([ENG, "readiness", "--json"], cwd=d).stdout)
+            except ValueError:
+                doc2 = None
+            if doc2 is None:
+                p.append("readiness --json unreadable after the control fail")
+            else:
+                row2 = {g.get("tool"): g for g in (doc2.get("gates") or [])}
+                if (row2.get("gate:simplicity") or {}).get("blocking") is not True:
+                    p.append("the control fail did not become blocking")
+                line2 = run([ENG, "readiness"], cwd=d).stdout
+                if "1 blocking (app/gate:simplicity)" not in line2:
+                    p.append("the control fail is not named as blocking on the gates line")
+        res["AC-SG-04"] = not p
+        why["AC-SG-04"] = "; ".join(p[:3]) or "advisory: counted apart, never ok, never capping"
+
+    # --- AC-SG-05: max_nesting is REPORTED as the indentation proxy it is ------------------
+    # The field note ("el proxy se dispara con JSX y con literales multilinea en Java") is a
+    # property of the measurement, not a bug to be fixed by guessing a parser per language. The
+    # kit does not make it language-aware; it NAMES it, in the human report, in the flag and in
+    # the JSON, so a reader can discount the number instead of trusting it.
+    d = project()
+    rc, j, _, _ = check(d, "field.diff")
+    human = run([ENG, "simplicity-check", "--diff", "field.diff",
+                 "--config", "uscha.config.json"], cwd=d)
+    p = []
+    if j is None:
+        p.append("simplicity-check --json unreadable")
+    else:
+        note = (j.get("metrics_notes") or {}).get("max_nesting") or ""
+        if "indentation depth" not in note or "AST" not in note:
+            p.append("metrics_notes.max_nesting does not name the proxy: %r" % note[:90])
+        if "max_nesting" not in (j.get("metrics") or {}):
+            p.append("the metrics key max_nesting was renamed -- compatibility broken")
+        if (j.get("budgets") or {}).get("max_nesting_depth") is None:
+            p.append("the config key max_nesting_depth was renamed -- compatibility broken")
+        if (j.get("metrics") or {}).get("max_nesting", 0) < 5:
+            p.append("the fixture no longer trips the proxy (%r) -- it is measuring nothing"
+                     % ((j.get("metrics") or {}).get("max_nesting"),))
+    if "max_nesting (indentation proxy)" not in human.stdout:
+        p.append("the human report does not label max_nesting as an indentation proxy")
+    if "indentation depth" not in human.stdout:
+        p.append("the human report does not explain the proxy")
+    flags = " ".join((j or {}).get("flags") or [])
+    if "indentation proxy" not in flags:
+        p.append("the nesting FLAG -- the line a human acts on -- does not name the proxy")
+    if rc != 0:
+        p.append("the field case still exits %d" % rc)
+    res["AC-SG-05"] = not p
+    why["AC-SG-05"] = "; ".join(p[:3]) or "proxy named in report, flag and JSON; keys unchanged"
+
+    # --- AC-SG-06: no risk profile owns a simplicity budget, and init writes none ----------
+    # Read from the engine's OWN table, so a preset that starts owning one is caught the day it
+    # does. The gate stays a HUMAN declaration under every profile A-E: nothing the kit ships
+    # turns it on. The installer half complements AC-RP-06 from the other side -- that case
+    # asserts no profile-owned knob is generated, this one that no simplicity knob is either,
+    # because with advisory as the engine default there is no kit intent left to write.
+    spec = importlib.util.spec_from_file_location("qlsg", ENG)
+    QL = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(QL)
+    p = []
+    owned = sorted({k for v in QL.RISK_PROFILES.values() for k in v})
+    if "simplicity" in owned:
+        p.append("a risk profile now owns simplicity budgets: the gate switch must be decided "
+                 "with them, and this case pinned that it was not")
+    if QL.SIMPLICITY_DEFAULTS.get("gate") is not None:
+        p.append("gate leaked into SIMPLICITY_DEFAULTS, where it would count as a budget")
+    if "gate" not in QL._SIMPLICITY_NON_BUDGET or "indent_width" not in QL._SIMPLICITY_NON_BUDGET:
+        p.append("_SIMPLICITY_NON_BUDGET no longer excludes the non-budget keys")
+    repo = os.path.join(tmp(), "proj")
+    os.makedirs(repo)
+    write(os.path.join(repo, "pyproject.toml"), "[project]\nname = \"proj\"\n")
+    if run([INSTALLER, "init", "--repo", repo, "--json"]).returncode != 0:
+        p.append("installer init failed")
+    else:
+        gen = read_json(os.path.join(repo, "uscha.config.json"))
+        if "simplicity" in (gen.get("defaults") or {}):
+            p.append("init generated a simplicity block: advisory IS the engine default, so "
+                     "there is no kit intent to write")
+        write(os.path.join(repo, "ACCEPTANCE.md"), "# ACCEPTANCE\n\n- [ ] AC-01 one\n")
+        if run([ENG, "init", "--config", "uscha.config.json"], cwd=repo).returncode != 0:
+            p.append("the engine could not init the generated config")
+        else:
+            frozen = read_json(os.path.join(repo, "QA-LEDGER.json"))["config"].get("defaults") or {}
+            if "simplicity" in frozen:
+                p.append("init froze a simplicity block into the ledger")
+    res["AC-SG-06"] = not p
+    why["AC-SG-06"] = "; ".join(p[:3]) or ("no profile owns simplicity (owned: "
+                                           + ", ".join(owned) + "); init writes none")
+
+    # --- AC-SG-07: the RED PROBE -- the previous engine fails this exact case --------------
+    # A criterion that cannot go red proves nothing. The v2.0.0 engine is run on the AC-SG-01
+    # fixture and MUST exit 1 there: that is the behaviour this release removes. Without git or
+    # the tagged copy it reports None = UNMEASURED, never a silent pass.
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-SG-07"] = None
+        why["AC-SG-07"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        d = project()
+        old = os.path.join(d, "prev_engine.py")
+        write(old, prev)
+        p = []
+        before = run([old, "simplicity-check", "--diff", "field.diff",
+                      "--config", "uscha.config.json", "--json"], cwd=d)
+        if before.returncode != 1:
+            p.append("%s exited %d on the field case -- the probe cannot go red, so it is "
+                     "measuring nothing" % (PREV_TAG, before.returncode))
+        try:
+            oldj = json.loads(before.stdout)
+        except ValueError:
+            oldj = {}
+        if oldj.get("budgets_declared") != []:
+            p.append("the probe fixture declares a budget (%r) -- then the old exit 1 was "
+                     "legitimate and the probe is the wrong one"
+                     % (oldj.get("budgets_declared"),))
+        if "mode" in oldj:
+            p.append("%s already reported a mode -- the probe is not against the old engine"
+                     % PREV_TAG)
+        after = run([ENG, "simplicity-check", "--diff", "field.diff",
+                     "--config", "uscha.config.json", "--json"], cwd=d)
+        if after.returncode != 0:
+            p.append("this engine still exits %d on the field case" % after.returncode)
+        res["AC-SG-07"] = not p
+        why["AC-SG-07"] = "; ".join(p[:3]) or (PREV_TAG + " exits 1, this engine exits 0")
+
+    # --- AC-SG-08: a FACT gate cannot be recorded as advisory ------------------------------
+    # The verdict widened for the checks that RUN advisory by default. Accepted for gate-check
+    # (deleted tests, lowered thresholds) it would clear a mandatory gate by goodwill: the
+    # engine refuses it with exit 2, names the kind, and writes nothing to the ledger.
+    d = project()
+    if run([ENG, "init", "--config", "uscha.config.json"], cwd=d).returncode != 0:
+        res["AC-SG-08"] = False
+        why["AC-SG-08"] = "engine init failed in the temp project"
+    else:
+        p = []
+        before = read_json(os.path.join(d, "QA-LEDGER.json"))
+        for kind in ("gate-check", "golden-diff", "pit-check", "regression"):
+            r = run([ENG, "log-gate", "--repo", "app", "--iteration", "1", "--kind", kind,
+                     "--verdict", "advisory"], cwd=d)
+            if r.returncode != 2:
+                p.append("%s --verdict advisory exited %d, expected 2" % (kind, r.returncode))
+            if kind not in (r.stderr + r.stdout):
+                p.append("the refusal does not name the kind %s" % kind)
+        if read_json(os.path.join(d, "QA-LEDGER.json")) != before:
+            p.append("a refused advisory still changed the ledger")
+        ok = run([ENG, "log-gate", "--repo", "app", "--iteration", "1", "--kind", "waste",
+                  "--verdict", "advisory"], cwd=d)
+        if ok.returncode != 0:
+            p.append("waste --verdict advisory exited %d, expected 0" % ok.returncode)
+        res["AC-SG-08"] = not p
+        why["AC-SG-08"] = "; ".join(p[:3]) or "gate-check/golden-diff/pit-check/regression refuse advisory (exit 2); waste accepts it"
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".sg-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T159" in
+  OK*) PASS=$((PASS+1)); echo "  ok   simplicity advisory by default (AC-SG-01..08): $T159";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T159";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -13615,6 +14061,10 @@ FAMILIES = (
     # extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".rp-cases.json", "risk-presets", "T158",                      # ADR-001 amended, 2.0.0
      _seq("AC-RP", 1, 6)),
+    # AC-SG-07 is the RED PROBE: it runs the v2.0.0 engine out of git -- without it (no
+    # git, a shallow clone, an extracted kit) it reports None = UNMEASURED, never a pass.
+    (".sg-cases.json", "simplicity-advisory", "T159",                # ADR-043, 2.1.0
+     _seq("AC-SG", 1, 8)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

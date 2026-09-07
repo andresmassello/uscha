@@ -37,9 +37,11 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
 
 ## Simplicity — "Reduce" (non-negotiable)
 
-> Maeda's law 1 and Karpathy's "Simplicity First", made a deterministic gate.
+> Maeda's law 1 and Karpathy's "Simplicity First", made a deterministic check.
 > It is not CC by AST: they are measurable *proxies* over the diff. Measured by
-> `qa_ledger.py simplicity-check`; an **OVERBUILT** verdict is a **BLOCKER** finding.
+> `qa_ledger.py simplicity-check`, **advisory by default** (exit 0); with your own budgets
+> declared **and** `defaults.simplicity.gate: true`, an **OVERBUILT** verdict is a
+> **BLOCKER** finding.
 
 - [ ] Minimal code that solves what was asked — no unrequested features, layers or "flexibility" <!-- YAGNI / speculative generality -->
 - [ ] No speculative abstractions — every new type/layer is justified against the SPEC <!-- YAGNI -->
@@ -133,7 +135,12 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
   Detecting it is the agent/human's obligation; once recorded, enforcement is the engine's.
 - The **Simplicity** invariant is measured without human judgment: `qa_ledger.py simplicity-check`
   scores the diff (minimality, nesting, abstraction) and returns `SIMPLE / ACCEPTABLE /
-  OVERBUILT`. **OVERBUILT** = BLOCKER (exit 1): it is trimmed, not converged.
+  OVERBUILT`. **Advisory by default** (exit 0, kit 2.1.0): the shipped budgets are the kit's
+  opinion, and an opinion never blocks a loop. With your own budgets declared in
+  `defaults.simplicity` **and** `defaults.simplicity.gate: true` (or `--gate`), **OVERBUILT** =
+  BLOCKER (exit 1): it is trimmed, not converged. `gate: true` without a declared budget is
+  refused (exit 2). Note that `max_nesting` is an INDENTATION-DEPTH proxy, so JSX and
+  multi-line literals inflate it — read it as such before trimming.
 - The **Reuse (REUSE-FIRST)** invariant is measured by `qa_ledger.py waste-check`: Type-1/2 clones
   of the diff vs the repo (`dup_vs_repo` is the dominant signal). **Advisory by default** (advises
   with `file:line` to reuse, exit 0); with `defaults.waste.gate: true` or `--gate` a

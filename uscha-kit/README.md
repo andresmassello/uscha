@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.0.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.1.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -621,9 +621,9 @@ python3 $QL rebuild --mode compare --baseline REBUILD-BASELINE.json --json   # c
 - Verdicts: `COVERS ≥90` · `PARTIAL ≥70` · `DIVERGE <70`. The score lists the concrete
   **gaps** — feed them back into the SPEC and re-run. Divergence is a spec hole, not a code bug.
 
-## Simplicity gate — "Reduce" (minimality of the change)
+## Simplicity check — "Reduce" (minimality of the change) — ADVISORY by default
 
-The **Simplicity** invariant of the CONSTITUTION made a deterministic gate: it scores the *diff*
+The **Simplicity** invariant of the CONSTITUTION made deterministic: it scores the *diff*
 (not CC by AST — they are measurable proxies: minimality, nesting, new abstractions).
 
 ```bash
@@ -634,21 +634,35 @@ python3 $QL simplicity-check --diff changes.diff --json        # consumed by usc
 
 - Dimensions/weights: diff_size 35, nesting 30, net_growth 20, fan_out 8, blob 7
   (abstraction does NOT weigh in the score — it's a guessy proxy, kept as a metric + advisory flag).
-- Verdicts: `SIMPLE ≥85` · `ACCEPTABLE ≥65` · `OVERBUILT <65` (exit 1 = BLOCKER: trim and re-run).
+- Verdicts: `SIMPLE ≥85` · `ACCEPTABLE ≥65` · `OVERBUILT <65`.
   A gross excess (2× budget, or very deep nesting) caps the score at 60 no matter what.
+- **Advisory by default, exit 0** (kit 2.1.0, ADR-043): every budget above is the KIT's opinion
+  until you declare your own, and an opinion that exits 1 is a gate nobody asked for. It
+  **gates** — OVERBUILT = exit 1 = BLOCKER — only with at least one budget declared in
+  `defaults.simplicity` **AND** `defaults.simplicity.gate: true` (or `--gate`). `gate: true`
+  with no budget declared is a config error, exit 2: a gate with no budget is not a gate.
+  `log-gate --kind simplicity --verdict advisory` persists an advisory run as an advisory —
+  readiness prints `N ok · 1 advisory` and the mirador reads `ADVISORY`, never `OK`.
+- **`max_nesting` is an INDENTATION-DEPTH proxy**, not AST nesting: it reads leading
+  indentation on added lines, so a wrapped argument, JSX, or a multi-line Java literal inflates
+  it with no control flow present. It is named as a proxy in the report rather than made
+  language-aware. 2-space codebase → `--indent-width 2`.
 - **Tests OUT of the budget** (kit 1.11.0): the test files (conventions of the
   9 stacks) are counted and reported separately (`test_lines_added`) but do not gate — writing
   tests never pushes the diff to OVERBUILT (deleting them is already blocked by gate-check).
 - The flags tell you what to trim (guard clauses, speculative types/layers, giant hunks).
-- Budgets in `defaults.simplicity`; adjustable per risk profile. 2-space → `--indent-width 2`.
+- Budgets in `defaults.simplicity`. No risk profile owns them: the gate is a human declaration
+  under every profile A–E.
 
 ## Ledger subcommands
 
 `bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (53 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 The **fact gates** (golden-diff, gate-check, pit-check, simplicity) are PERSISTED with
-`log-gate`: a fail blocks convergence and caps readiness ≤65 via the ledger. A CONSTITUTION
-violation is recorded with `flag-blocker` (same effect, until `--resolve`).
+`log-gate`: a fail blocks convergence and caps readiness ≤65 via the ledger; `--verdict
+advisory` records a run that is measured but not gating (it caps nothing, blocks nothing, and
+never counts as an `ok` gate). A CONSTITUTION violation is recorded with `flag-blocker` (same
+effect, until `--resolve`).
 
 ## Notes
 

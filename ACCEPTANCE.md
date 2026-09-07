@@ -1000,6 +1000,81 @@ The behavioural red - the generated config carrying declarations that outrank th
   same case can hold both halves: what the preset must decide stays absent, what the kit already
   decided stays present.
 
+## The simplicity score advises by default (ADR-043) - closes on green `AC-SG-nn` smoke assertions
+
+`simplicity-check` scored a diff against seven budgets the KIT chose and exited 1 on `OVERBUILT`,
+while the same run printed - and the same JSON reported - that not one of those budgets had been
+declared by the project (`budgets_declared: []`). The kit's own provenance doctrine (1.17.0) says
+a default is an opinion and only a declaration is a requirement; the exit code contradicted the
+sentence printed above it. The dominant dimension makes it concrete: `max_nesting` is 30% of the
+score and it measures leading INDENTATION on added lines, not AST nesting, so a wrapped call
+argument, JSX or a multi-line Java literal reads as deep nesting with no control flow present.
+Reproduced on 1.99.0 and unchanged on 2.0.0: a six-line python diff whose only sin is a
+continuation indented 36 columns scores `OVERBUILT/60` and exits 1. The devloop skill then
+persisted that verdict with `log-gate --kind simplicity`, which caps readiness at 65 and blocks
+convergence - so the opinion did not merely print, it stopped the loop.
+
+2.1.0 makes the verdict ADVISORY by default (exit 0) and gates only where the project declares
+both a numeric budget and `defaults.simplicity.gate: true`; `gate: true` with no budget is
+refused by name (exit 2). The SCORE is untouched - weights, bands, hard cap and heavy-dimension
+floor are all the same, because the measurement was never the defect. `max_nesting` is NAMED as
+the indentation proxy it is (report, flag and JSON) rather than made language-aware, and the
+config and metric keys are unchanged. `log-gate --verdict advisory` records a measured,
+non-gating run so that an advisory can neither block nor read as a clean gate anywhere.
+
+`AC-SG-07` is the RED PROBE: it runs the `v2.0.0` engine on the AC-SG-01 fixture and requires it
+to exit 1 there. `AC-SG-04` is the one that would catch the NEW failure mode, which is worse than
+the old one: a gate that blocks wrongly is loud, a gate that passes wrongly is silent.
+
+- [ ] AC-SG-01 - a project with no `defaults.simplicity` at all runs the field fixture and exits
+  **0**, reporting `mode: "advisory"`, `gate: false` and `budgets_declared: []`, with the human
+  line naming the advisory mode. The verdict is STILL `OVERBUILT`: the criterion measures a
+  softened EXIT, never a softened score, and a case that let the band move would be pinning the
+  wrong thing.
+- [ ] AC-SG-02 - a declared budget plus `defaults.simplicity.gate: true` restores today's
+  behaviour exactly: `OVERBUILT` exits 1 with `mode: "gate"` and the declared budget listed, and
+  a diff that is NOT overbuilt exits 0 under the same config - so the gate gates rather than
+  merely failing. `--gate` on a project that declares budgets but not the flag reaches the
+  identical exit, and the same project without it exits 0.
+- [ ] AC-SG-03 - `gate: true` with only `indent_width` declared is a configuration error: exit
+  **2**, the message names `defaults.simplicity.gate`, and no score is printed. A gate with no
+  budget is not a gate, and `indent_width` is a parsing parameter rather than a budget - which
+  is exactly why declaring only it does not satisfy the requirement. A refused run must leave no
+  number anyone can quote.
+- [ ] AC-SG-04 - the consumer half, measured against a CONTROL rather than asserted as a label.
+  `log-gate --kind simplicity --verdict advisory` is accepted; the readiness gates line names it
+  (`1 ok . 1 advisory (app/gate:simplicity), none blocking`) and never folds it into the `ok`
+  count; `readiness --json` carries `advisory: true, blocking: false` on that row and `false` on
+  a plain `pass`; the mirador subscore reads `ADVISORY` where a real clean gate reads `OK`; no
+  readiness cap fires; and convergence is not blocked. The control is the SAME gate logged
+  `fail`: it blocks convergence and is named as blocking on the same line. Without that control
+  the advisory half would prove nothing.
+- [ ] AC-SG-05 - the field fixture (six added lines, one file, one 36-column continuation) exits
+  0, and `max_nesting` is named as a proxy in all three places a human reads: the report row
+  (`max_nesting (indentation proxy)`), the explanatory line under the table, and the FLAG itself
+  - the line someone would act on. `metrics_notes.max_nesting` carries the same sentence for
+  machines. The metric key `max_nesting` and the config key `max_nesting_depth` are unchanged, so
+  no existing config or consumer breaks, and the fixture still trips the proxy - a case whose
+  fixture stopped tripping it would be measuring nothing.
+- [ ] AC-SG-06 - no `RISK_PROFILES` entry owns a simplicity budget, read from the engine's own
+  table rather than retyped, so a preset that starts owning one goes red the day it does and the
+  gate decision gets made explicitly instead of by accident. `gate` never enters
+  `SIMPLICITY_DEFAULTS`, where it would count as a budget and defeat AC-SG-03, and
+  `_SIMPLICITY_NON_BUDGET` still excludes both non-budget keys. `uscha init` generates no
+  `simplicity` block into the config or into the ledger it freezes: with advisory as the ENGINE
+  default there is no kit intent that differs from it, which is the only reason the generator
+  writes a knob at all (ADR-001 as amended). This is the simplicity-side complement of AC-RP-06.
+- [ ] AC-SG-07 - the RED PROBE. The `v2.0.0` engine, read out of git and run on the AC-SG-01
+  fixture, MUST exit 1 there - the behaviour this release removes - while this engine exits 0 on
+  the same bytes. The case also asserts the probe fixture declares no budget (otherwise the old
+  exit 1 was legitimate and the probe is the wrong one) and that the old engine reports no
+  `mode`. Without git or the tagged copy it reports `None` = UNMEASURED, never a silent pass.
+- [ ] AC-SG-08 - `--verdict advisory` is accepted only for the kinds whose default mode IS
+  advisory (`simplicity`, `waste`). For `gate-check`, `golden-diff`, `pit-check` and `regression`
+  the engine refuses with exit 2, names the kind, and the ledger is byte-identical afterwards: a
+  FACT gate recorded as advisory would be a mandatory gate cleared by goodwill, which is the
+  boundary ADR-043 promises not to move. The control (`waste --verdict advisory`) exits 0.
+
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".
@@ -1025,6 +1100,7 @@ The behavioural red - the generated config carrying declarations that outrank th
 - ADR-039 — Evidence freshness is decided by CONTENT and COMMIT, not by the clock alone: a report is current when no source changed since the run that produced it, whatever the mtimes say; and the seal tolerates commits that touch no source (amends ADR-038).
 - ADR-041 — The dogfooding criterion is decided by git ANCESTRY, not by a wall clock — and the release ritual is a script that refuses (I1..I8), not prose a human re-reads.
 - ADR-042 — The cross-vendor arm: a SECOND vendor compiles the whole bench, blind, under the same withheld oracles; `--write-mode return` because the machine's approval policy forbids exec writes, and 0 executed commands means the confound that mode would have introduced does not exist.
+- ADR-043 — The simplicity score ADVISES by default: only a declared budget plus `defaults.simplicity.gate` makes it exit 1, `max_nesting` is named as the indentation proxy it is, and `log-gate --verdict advisory` records a measured, non-gating run that never reads as `ok`.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change
