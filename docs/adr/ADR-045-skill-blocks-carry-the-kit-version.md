@@ -113,7 +113,7 @@ for.
 - It does not compare anything but the nine `uscha-*` skills, and it makes no claim about skills
   installed by other means.
 
-## What is measured (`AC-SK-01..06`)
+## What is measured (`AC-SK-01..07`)
 
 T162, through the `.sk-cases.json` sidecar:
 
@@ -129,6 +129,12 @@ T162, through the `.sk-cases.json` sidecar:
   skills named in `unmarked`.
 - **AC-SK-06** — the RED PROBE: the `v2.1.0` engine rejects `--installed` at the parser and its
   `doctor --json` has no `skills_installed` key. `None` = UNMEASURED without git.
+- **AC-SK-07** — a REAL install: `install-uscha.py install --target claude --home <tmp>` and then
+  the INSTALLED engine's `doctor --json`, which must report `kit_version` and `current`. Removing
+  the copied `VERSION` must put the same engine back to `null` / `unknown` with the directories it
+  read named in the fix line. Amended in the same release: the planted fixtures above all passed
+  while a real install reported UNMEASURED, because nothing put `uscha-kit/VERSION` where an
+  installed engine could reach it (found by running the first-use guide end to end).
 
 The release wiring is measured where a real release runs: **AC-RL-03** (T151) asserts that commit X
 carries the re-rendered `SKILL.md` pair alongside the six surfaces, stamped with the new version.

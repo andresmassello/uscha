@@ -14012,6 +14012,7 @@ sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 GEN = os.path.join(root, "tools", "gen-skill-blocks.py")
+INSTALLER = os.path.join(kit, "install-uscha.py")
 PREV_TAG = "v2.1.0"
 MARK = re.compile(r"uscha kit:\s*(\d+\.\d+\.\d+)")
 BEGIN = "<!-- uscha:orientation-block:begin -->"
@@ -14223,6 +14224,61 @@ def measure():
         why["AC-SK-06"] = "flag rc=%s keys=%s out=%r" % (
             p_flag.returncode, sorted(bare), p_flag.stdout[-120:])
 
+    # --- AC-SK-07: a REAL install answers the question, and without the copy it does not -----
+    # Found by running the first-use guide end to end (U-05): every planted fixture above
+    # passes while the thing a reader actually does -- install, then doctor -- reported
+    # "kit VERSION not readable ... UNMEASURED". The installed skills carried their marker;
+    # the KIT side of the comparison was missing, because nothing put uscha-kit/VERSION where
+    # an installed engine could reach it. So this case installs for real and reads the
+    # INSTALLED engine, which is the only shape that could have caught it.
+    home = tmp()
+    inst = subprocess.run(
+        [sys.executable, INSTALLER, "install", "--target", "claude", "--home", home],
+        cwd=home, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        encoding="utf-8", errors="replace",
+        env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    sroot = os.path.join(home, ".claude", "skills")
+    ieng = os.path.join(sroot, "uscha-devloop", "qa_ledger.py")
+    if inst.returncode != 0 or not os.path.isfile(ieng):
+        res["AC-SK-07"] = None
+        why["AC-SK-07"] = "install did not complete (rc=%s): %s" % (
+            inst.returncode, inst.stdout[-160:])
+    else:
+        r_in = doctor(home, ["--installed", sroot, "--json"], engine=ieng)
+        try:
+            got = json.loads(r_in.stdout)
+        except ValueError:
+            got = {}
+        ri = (got.get("skills_installed") or [{}])[0]
+        vfile = os.path.join(sroot, "VERSION")
+        copied = os.path.isfile(vfile)
+        green = bool(r_in.returncode == 0 and copied
+                     and got.get("kit_version") == kit_version
+                     and ri.get("status") == "current")
+        # the RED PROBE for this case: delete the copy the installer made and the SAME engine
+        # over the SAME tree must go back to UNMEASURED, naming the directories it read. A
+        # green half alone would not prove the copy is what answers the question. Guarded on
+        # `copied`, so an installer that writes NO copy reports this case as a named red
+        # instead of dying on the remove -- which is exactly how the 2.1.0 installer behaves,
+        # and a crash there would report the failure as a broken block, not a broken install.
+        after, r_text, red = {}, None, False
+        if copied:
+            os.remove(vfile)
+            r_gone = doctor(home, ["--installed", sroot, "--json"], engine=ieng)
+            try:
+                after = json.loads(r_gone.stdout)
+            except ValueError:
+                after = {}
+            r_text = doctor(home, ["--installed", sroot], engine=ieng)
+            red = bool(after.get("kit_version") is None
+                       and (after.get("skills_installed") or [{}])[0].get("status") == "unknown"
+                       and "looked in:" in r_text.stdout
+                       and sroot.replace("/", os.sep) in r_text.stdout)
+        res["AC-SK-07"] = green and red
+        why["AC-SK-07"] = "copied=%s green=%s red=%s kit=%r->%r status=%r" % (
+            copied, green, red, got.get("kit_version"), after.get("kit_version"),
+            ri.get("status"))
+
 
 try:
     measure()
@@ -14238,7 +14294,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T162" in
-  OK*) PASS=$((PASS+1)); echo "  ok   installed-skill freshness (AC-SK-01..06): $T162";;
+  OK*) PASS=$((PASS+1)); echo "  ok   installed-skill freshness (AC-SK-01..07): $T162";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T162";;
 esac
 
@@ -16629,8 +16685,9 @@ FAMILIES = (
      _seq("AC-FF", 1, 10)),
     # AC-SK-06 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
+    # AC-SK-07 installs for real; an install that cannot complete reports None, never a pass.
     (".sk-cases.json", "installed-skill-freshness", "T162",           # 2.2.0
-     _seq("AC-SK", 1, 6)),
+     _seq("AC-SK", 1, 7)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

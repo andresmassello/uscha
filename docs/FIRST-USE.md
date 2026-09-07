@@ -116,20 +116,21 @@ USCHA DOCTOR - installation diagnosis
   [OK] engine: <home>/.claude/skills/uscha-devloop/qa_ledger.py
        instalacion global (~/.claude/skills)
   [OK] skills 9/9 next to the engine
-  [ !] kit VERSION not readable: installed-skill freshness is UNMEASURED
-       the comparison needs uscha-kit/VERSION beside the engine
+  [OK] skills claude: current (kit 2.1.0)
+       <home>/.claude/skills
   [OK] hook INV-GOLDEN-01: present, registered (PreToolUse) and interpretable
   [OK] project: uscha.config.json v2.1.0 (1 repo(s))
   [ !] acceptance_file declared but missing: ACCEPTANCE.md
   [OK] toolchain backend-api (python): pytest on PATH
   [OK] ledger QA-LEDGER.json: loads, integrity OK
-RESULT: 13 ok - 4 warning(s) - 0 error(s)  -> installation healthy
+RESULT: 15 ok - 2 warning(s) - 0 error(s)  -> installation healthy
 ```
 
-Lea las dos advertencias, porque son el método en miniatura. `acceptance_file declared but
-missing` es lo próximo a arreglar — la sección 4 lo arregla. Y `freshness is UNMEASURED` no es
-un aprobado: el motor no pudo comparar las skills instaladas contra una versión del kit, así
-que dice **UNMEASURED** en vez de informarlas como vigentes.
+Lea la advertencia, porque es el método en miniatura: `acceptance_file declared but missing` es
+lo próximo a arreglar — la sección 4 lo arregla. La fila verde de arriba es la misma idea por el
+otro lado: `skills claude: current` es una COMPARACIÓN, no una tranquilidad — el instalador copia
+el `VERSION` del kit junto a las skills instaladas, para que `doctor` pueda fecharlas. Antes de
+2.2.0 no había copia que leer y esa línea decía `freshness is UNMEASURED`: una ausencia nombrada.
 
 ## 4. La primera invocación de skill
 

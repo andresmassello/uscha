@@ -505,6 +505,14 @@ error, and `doctor`'s exit code is unchanged. It exists because a discovery once
 from 1.54.0 while the kit was at 1.97.0 and nothing said a word. `/uscha-status` prints the same
 finding as one line above its readout.
 
+The comparison needs BOTH halves, so the installer ships the second one: `install` copies
+`uscha-kit/VERSION` beside the installed skills (`~/.claude/skills/VERSION`, and the equivalent
+root for `pi`, `cursor`, `copilot`, `gemini` and `cline`; the Codex plugin already carried one at
+its plugin root), and `uninstall` removes it. Without that copy an INSTALLED engine has no kit
+version to compare against and `doctor` says so — `installed-skill freshness is UNMEASURED`,
+naming the directories it read, never a silent `current`. Found by running the first-use
+walkthrough end to end; pinned by `AC-SK-07`, which installs for real.
+
 ## Configure
 
 `uscha init` **generates** a minimal `uscha.config.json` for the project: its name, the repo it

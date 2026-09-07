@@ -406,7 +406,7 @@ of those surfaces to ask a question `doctor` already exists to answer.
 
 ## What is measured
 
-New family `AC-SK-01..06` in `T162`. All 18 rendered regions carry the kit's own version and the
+New family `AC-SK-01..07` in `T162`. All 18 rendered regions carry the kit's own version and the
 stamp comes from the template, not from 18 hand edits (`-01`); bumping only `VERSION` in a
 throwaway copy makes `--check` exit 1 naming the drifted regions and writing nothing, and the
 plain run re-stamps all 18 (`-02`); `doctor` reports `outdated` with both versions for a planted
@@ -417,6 +417,21 @@ all is `outdated` with the skills NAMED, never `current` and never a made-up ver
 `AC-SK-06` is the RED PROBE: the `v2.1.0` engine cannot answer the question at all — it rejects
 `--installed` at the parser and its `doctor --json` has no `skills_installed` key. `None` =
 UNMEASURED without git.
+
+`AC-SK-07` was added later in this same batch, and it is the reason the feature works at all.
+Every case above plants a fixture; running `docs/FIRST-USE-EN.md` end to end did the thing a
+reader does — install, then `doctor` — and got `kit VERSION not readable: installed-skill
+freshness is UNMEASURED`. The installed skills carried their marker; the KIT half of the
+comparison was missing, because nothing put `uscha-kit/VERSION` anywhere an installed engine
+could reach. `install-uscha.py` now copies it beside the installed skills for the `claude`
+target and for all five Agent-Skills targets — the Codex plugin already shipped one at its
+plugin root — and removes it on uninstall; `doctor` resolves the version by walking up from
+the engine for a VERSION file, and when there is none it NAMES the directories it read instead
+of only reporting failure. `_kit_root()`, which answers a different question — which KIT tree
+is this — now requires a skills tree beside the VERSION, so the new copy cannot make `facts`
+derive `0 skills` from an install root that never held any. `AC-SK-07` installs for real and
+reads the INSTALLED engine, which is the only shape that could have caught this; its own red
+probe deletes the copy and requires the same engine to go back to `null` / `unknown`.
 
 The release wiring is measured where a real release runs: `AC-RL-03` (T151) now asserts that
 commit X carries the re-rendered `SKILL.md` pair alongside the six surfaces, stamped with the new
@@ -430,7 +445,7 @@ nor these instructions, so on that surface the warning cannot come from the skil
 `doctor` seam is the instrument that still works there, because it runs from outside and reads the
 installs. A stated limit, not a gap that closes itself.
 
-Acceptance goes 283 → 292 criteria; nothing was dropped.
+Acceptance goes 283 → 293 criteria; nothing was dropped.
 
 # Also in 2.2.0 — field truth for greenfield: a REAL-INPUT corpus is an evidence class (ADR-046)
 
@@ -590,7 +605,7 @@ payload it saw before, plus one additive `acceptance.corpus_closed` key.
 - **Running the corpus automatically in the inner loop.** A real corpus can be large; when to run
   it is the project's scheduling decision, like `pit-check`.
 
-Acceptance goes 292 → 301 criteria; nothing was dropped.
+Acceptance goes 293 → 302 criteria; nothing was dropped.
 
 # Also in 2.2.0 — the smoke run as measured evidence: executed, never narrated (ADR-047)
 
@@ -733,7 +748,7 @@ it saw before, plus two additive `acceptance` keys. Subcommands 54 → 55.
 - **`evidence` as proof.** The string travels for a human reader; the engine gates on `ok` alone,
   because a free-text field is narration again.
 
-Acceptance goes 301 → 310 criteria; nothing was dropped.
+Acceptance goes 302 → 311 criteria; nothing was dropped.
 
 # Also in 2.2.0 — operability is a MEASURED dimension, not phase-8 prose (ADR-048)
 
@@ -849,7 +864,7 @@ ADR-014 refuses. Nothing is EXECUTED — not the tests, not the seed, not the pi
 system other than GitHub Actions is read, because a reader that guesses is worse than an honest
 `unknown`. And profiles A and B gate exactly as much as they did before: zero.
 
-Acceptance goes 310 → 318 criteria; nothing was dropped.
+Acceptance goes 311 → 319 criteria; nothing was dropped.
 
 # Also in 2.2.0 — one executable first-use path
 
@@ -887,6 +902,6 @@ completion time.
 No new engine behaviour and no new subcommand — the guide navigates capabilities that already
 ship. The runtime the page claims is the one that was exercised, and no second one is implied.
 
-Acceptance goes 318 → 323 criteria; nothing was dropped.
+Acceptance goes 319 → 324 criteria; nothing was dropped.
 
 Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.

@@ -8444,16 +8444,52 @@ def _kit_root():
     By MARKER, not by fixed depth: the canonical engine sits 4 levels deep
     (.claude/skills/uscha-devloop/) and the Codex twin 3 (skills/uscha-devloop/). A fixed
     dirname walk made the twin silently derive the OUTER repo root -- version None,
-    0 skills, no error (fresh-review HIGH, reproduced by running both copies)."""
+    0 skills, no error (fresh-review HIGH, reproduced by running both copies).
+
+    The marker is a VERSION file AND a skills tree beside it (2.2.0). VERSION alone stopped
+    being sufficient the moment `install-uscha.py` began dropping one beside the installed
+    skills so `doctor` could date them: that root carries a version and no kit, and answering
+    it here would make `facts` derive `0 skills` from a directory that never held any --
+    a manufactured fact, which is worse than the honest refusal this returns instead.
+    An engine that only needs the VERSION asks _engine_kit_version()."""
     cur = os.path.dirname(os.path.abspath(__file__))
     for _ in range(6):
-        if os.path.isfile(os.path.join(cur, "VERSION")):
+        if (os.path.isfile(os.path.join(cur, "VERSION"))
+                and (os.path.isdir(os.path.join(cur, ".claude", "skills"))
+                     or os.path.isdir(os.path.join(cur, "skills")))):
             return cur
         nxt = os.path.dirname(cur)
         if nxt == cur:
             break
         cur = nxt
     return None
+
+
+def _engine_kit_version():
+    """(version, where) for the kit THIS engine came from, or (None, [dirs it looked in]).
+
+    Which kit an installed skill came from is a different question from which kit tree this
+    engine sits in, and an INSTALLED engine has no kit tree at all: `install-uscha.py` copies
+    `uscha-kit/VERSION` beside the installed skills precisely so the question stays answerable
+    there. So this walk wants the VERSION file and nothing else -- from a checkout it lands on
+    the kit root like _kit_root() does, and from an install it lands on the install root.
+
+    Never guesses: with no VERSION anywhere it returns the directories it READ, so the report
+    can say where it looked instead of only that it failed."""
+    cur = os.path.dirname(os.path.abspath(__file__))
+    looked = []
+    for _ in range(6):
+        looked.append(cur)
+        try:
+            with open(os.path.join(cur, "VERSION"), encoding="utf-8") as fh:
+                return fh.read().strip().split()[-1], cur
+        except (OSError, IndexError):
+            pass
+        nxt = os.path.dirname(cur)
+        if nxt == cur:
+            break
+        cur = nxt
+    return None, looked
 
 
 BENCH_DOC = "DIAMOND-BENCH.md"
@@ -14039,14 +14075,7 @@ def cmd_doctor(args):
     # A discovery once ran on prose from 1.54.0 while the kit was 1.97.0, and nothing said so.
     # Advisory: reported as a warning, never an error, so it can never fail an installation
     # someone pinned on purpose.
-    kit_dir = _kit_root()
-    kit_version = None
-    if kit_dir:
-        try:
-            with open(os.path.join(kit_dir, "VERSION"), encoding="utf-8") as fh:
-                kit_version = fh.read().strip().split()[-1]
-        except (OSError, IndexError):
-            kit_version = None
+    kit_version, version_src = _engine_kit_version()
     skills_installed = []
     absent = []
     for target, sroot in _installed_skill_roots(args):
@@ -14075,7 +14104,10 @@ def cmd_doctor(args):
            "not an error -- the kit installs per agent, one target at a time")
     if kit_version is None:
         warn("kit VERSION not readable: installed-skill freshness is UNMEASURED",
-             "the comparison needs uscha-kit/VERSION beside the engine")
+             "the comparison needs a VERSION file at or above the engine; looked in: "
+             + ", ".join(version_src or []) + " -- re-install with "
+             "`python install-uscha.py install` (2.2.0 and later copy it beside the "
+             "installed skills)")
 
     # --- hook INV-GOLDEN-01 -------------------------------------------------
     kit_root = os.path.abspath(os.path.join(engine_dir, "..", "..", ".."))

@@ -1288,6 +1288,14 @@ unchanged. Measured by T162 through the `.sk-cases.json` sidecar.
 - [ ] AC-SK-06 - the RED PROBE. The `v2.1.0` engine, read out of git, cannot answer the question at
   all: it rejects `--installed` at the parser and its `doctor --json` carries no `skills_installed`
   key. Without git or the tagged copy it reports `None` = UNMEASURED, never a silent pass.
+- [ ] AC-SK-07 - a REAL install answers the question. `install-uscha.py install --target claude
+  --home <tmp>` puts `uscha-kit/VERSION` beside the installed skills, and the INSTALLED engine's
+  `doctor --json` over that root reports `kit_version` equal to the kit's and the row `current`.
+  Its own RED PROBE is the copy: delete it and the same engine over the same tree reports
+  `kit_version: null`, status `unknown`, and a fix line NAMING the directories it read. Every
+  planted fixture above passed while the thing a reader actually does reported UNMEASURED
+  (found by running `docs/FIRST-USE-EN.md` end to end), so this case installs for real. An
+  install that cannot complete reports `None` = UNMEASURED, never a silent pass.
 
 ## Operability is measured, not phase-8 prose (ADR-048, 2.2.0) - closes on green `AC-OP-nn` smoke assertions
 
