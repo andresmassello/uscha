@@ -38,6 +38,7 @@ Usage (see `--help` on each subcommand):
                            --verdict pass|fail|not-run [--count N] [--note "..."]
   qa_ledger.py corpus-run  --repo backend-api --corpus corpus.jsonl \
                            --command "python -m parser" [--threshold 99] [--ac AC-FIELD-01]
+  qa_ledger.py smoke-ingest --repo backend-api --report reports/smoke.json [--json]
   qa_ledger.py flag-blocker --repo backend-api --kind constitution --note "INV-XX breached" \
                            [--resolve]
   qa_ledger.py production-finding --repo backend-api --severity HIGH --title "..." --evidence "..."
@@ -2938,7 +2939,7 @@ ADVISORY_CAPABLE_KINDS = ("simplicity", "waste", "corpus", "operability")
 
 def cmd_log_gate(args):
     """Persist a FACT-gate verdict (golden-diff / gate-check / pit-check / simplicity /
-    regression / ci) into the ledger, so 'facts may block' is enforced by the engine, not by
+    regression / ci / smoke) into the ledger, so 'facts may block' is enforced by the engine, not by
     goodwill.
       fail     -> BLOCKER record: trips the <=65 readiness cap AND blocks convergence.
       pass     -> clean record for the same tool: credits the fix, convergence sees clean.
@@ -2962,12 +2963,13 @@ def cmd_log_gate(args):
     # this door at all -- the refusal is structural. The smoke suite measures that the
     # vocabulary stays closed; widening it to admit an advisory kind is a red build.
     #
-    # `ci` (2.2.0) is the one addition since ADR-014, and it is a FACT: a pipeline either went
-    # green on a commit or it did not, and the engine can be TOLD that fact with the run id or
-    # URL beside it (--ref). It is admitted here because it is measurable, not because it is
-    # useful -- an LLM judgment does not become a gate by being important. Adding a FACT kind
-    # is DECLARED in the CONSTITUTION template, which is where the closed vocabulary is stated
-    # to the project rather than only to this parser.
+    # `ci` and `smoke` (2.2.0) are the additions since ADR-014, and both are FACTS: a pipeline
+    # either went green on a commit or it did not, and the engine can be TOLD that fact with
+    # the run id or URL beside it (--ref); a smoke check either answered or it did not
+    # (ADR-047), which is why neither may run advisory. They are admitted here because they
+    # are measurable, not because they are useful -- an LLM judgment does not become a gate by
+    # being important. Adding a FACT kind is DECLARED in the CONSTITUTION template, which is
+    # where the closed vocabulary is stated to the project rather than only to this parser.
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
     tool = f"gate:{args.kind}"
@@ -3302,6 +3304,243 @@ def _corpus_field_line(rname, f):
         return head + " — no threshold declared, ADVISORY (measured, not gating)"
     return "%s %s %s %% %s" % (head, "<" if f["state"] == "FAIL" else ">=",
                                f["threshold"], f["state"])
+
+
+# --------------------------------------------------------------------------- #
+# smoke-ingest (kit 2.2.0, ADR-047): the SMOKE RUN as measured evidence.
+#
+# The ledger already ingests the evidence a machine produces on its own -- JUnit, coverage,
+# linters, a static gate's XML, a CI verdict. The smoke list was the hole: "the jar served
+# /admin", "the simulator answered 200 in 6 ms" arrived as a sub-agent's NARRATION, believed
+# because it was written confidently. The field report this subcommand comes from is exactly
+# that shape: every simulator run returned an empty list because the database had no rows, and
+# a smoke narrated as "verified" would have hidden it behind a sentence.
+#
+# So the smoke run stops being prose and becomes a REPORT the project's own tool writes --
+# {"checks": [{"name", "ok", "status"?, "latency_ms"?, "evidence"?}, ...]} -- and the engine
+# ingests it like any other fact. `smoke` is a FACT kind and is never advisory: a smoke check is
+# binary. It either answered or it did not; there is no "measured against no adopted budget"
+# reading of `ok`, which is why `corpus` may run advisory and this may not.
+#
+# Evidence is EXECUTED, not narrated -- and a report the engine cannot read is refused (exit 2)
+# rather than scored, for the same reason a malformed corpus is: an unreadable smoke reported as
+# "0 checks ok" would be an unmeasurable run rendered as a measured catastrophe, and an EMPTY
+# `checks` list read as a clean gate would be the false clean in the other direction.
+# --------------------------------------------------------------------------- #
+# How many checks (and failed names) travel on the record. A receipt cites evidence, it is not
+# a dump -- the same cap `_ac_tags` puts on its testcase receipts, for the same reason.
+SMOKE_MAX_PERSISTED = 20
+
+
+def _smoke_refuse(msg):
+    """Every smoke-ingest refusal is exit 2 and NAMES the offending check or field. The report
+    is written by the PROJECT's own tool, so what this guards against is a contract the project
+    got subtly wrong -- and a wrong contract that scored anyway would be worse than one that
+    refused, because the number would look like a measurement."""
+    print("[qa_ledger] smoke-ingest: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def _smoke_checks(path):
+    """Read a smoke report into an ORDERED list of checks. The contract is deliberately the
+    smallest thing a shell script can emit:
+
+        {"checks": [{"name": "...", "ok": true|false,
+                     "status": <int|string, optional>,
+                     "latency_ms": <number, optional>,
+                     "evidence": "<string, optional>"}]}
+
+    `name` and a BOOLEAN `ok` are the whole mandatory surface. `ok: "true"` and `ok: 1` are
+    refused: a string and a number are not verdicts, and a contract that coerces is a contract
+    that cannot say what it measured. The optional fields are validated when PRESENT and never
+    invented when absent -- a check with no `latency_ms` measured no latency, which is a
+    different fact from a latency of 0."""
+    if not os.path.isfile(path):
+        _smoke_refuse("report not found: %s -- a smoke run that left no report is UNMEASURED, "
+                      "never a clean gate" % path)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except OSError as exc:
+        _smoke_refuse("report unreadable: %s" % exc)
+    except ValueError as exc:
+        _smoke_refuse("%s is not valid JSON (%s) -- a malformed report is refused, never "
+                      "scored" % (path, exc))
+    if not isinstance(doc, dict):
+        _smoke_refuse("%s is a %s, not a JSON object carrying a `checks` list"
+                      % (path, type(doc).__name__))
+    if "checks" not in doc:
+        _smoke_refuse('%s has no `checks` key -- the contract is {"checks": [{"name": ..., '
+                      '"ok": true|false}, ...]}' % path)
+    raw = doc["checks"]
+    if not isinstance(raw, list):
+        _smoke_refuse("%s: `checks` is a %s, not a list" % (path, type(raw).__name__))
+    if not raw:
+        _smoke_refuse("%s holds 0 checks -- an EMPTY smoke is not evidence: it is a run that "
+                      "verified nothing, and it does not read as a clean gate" % path)
+    checks = []
+    for i, row in enumerate(raw):
+        where = "check %d" % (i + 1)
+        if not isinstance(row, dict):
+            _smoke_refuse("%s: %s is a %s, not an object" % (path, where, type(row).__name__))
+        name = row.get("name")
+        if not isinstance(name, str) or not name.strip():
+            _smoke_refuse("%s: %s has no `name` -- a check nobody can name is a check nobody "
+                          "can act on" % (path, where))
+        where = "%s (%s)" % (where, name.strip())
+        if not isinstance(row.get("ok"), bool):
+            _smoke_refuse("%s: %s has no boolean `ok` (got %r) -- a smoke check is a binary "
+                          "fact, and a string, a number or a missing key is not a verdict"
+                          % (path, where, row.get("ok")))
+        status = row.get("status")
+        if status is not None and (isinstance(status, bool)
+                                   or not isinstance(status, (int, str))):
+            _smoke_refuse("%s: %s has a `status` that is neither an integer nor a string (%r)"
+                          % (path, where, status))
+        lat = row.get("latency_ms")
+        if lat is not None and (isinstance(lat, bool) or not isinstance(lat, (int, float))):
+            _smoke_refuse("%s: %s has a `latency_ms` that is not a number (%r)"
+                          % (path, where, lat))
+        ev = row.get("evidence")
+        if ev is not None and not isinstance(ev, str):
+            _smoke_refuse("%s: %s has an `evidence` that is not a string (%r)"
+                          % (path, where, ev))
+        checks.append({"name": name.strip(), "ok": row["ok"], "status": status,
+                       "latency_ms": lat, "evidence": ev})
+    return checks
+
+
+def _smoke_ac_of(checks, want_ok):
+    """Criterion ids tagged on check NAMES, in the SAME grammar a JUnit testcase name uses
+    (`_ac_tag_ids`, ADR-036): a check named "AC-28 the admin page serves" tags AC-28. One
+    extractor, so a name cannot close a criterion in the suite and fail to close it here."""
+    ids = []
+    for c in checks:
+        if bool(c["ok"]) != want_ok:
+            continue
+        for cid in _ac_tag_ids(c["name"]):
+            if cid not in ids:
+                ids.append(cid)
+    return sorted(ids, key=_top_ac_key)
+
+
+def cmd_smoke_ingest(args):
+    """Ingest a smoke report as `gate:smoke` -- the smoke run MEASURED instead of narrated.
+
+    A failed check is a BLOCKER through the SAME record shape `gate-check` and `corpus-run`
+    write: readiness capped <=65, convergence blocked, and a later clean report clears it
+    (latest-per-tool wins). `smoke` is a FACT kind and is NOT advisory-capable: `ok` is binary,
+    so there is no budget it could be measured against and no honest advisory reading of it.
+
+    A check whose NAME carries an AC tag closes that criterion MEASURED iff the check is `ok`
+    AND the report as a whole passed -- and a FAILED tagged check is red evidence that vetoes,
+    exactly like a red JUnit testcase. Fail-closed in both directions: a green check inside a
+    failing smoke closes nothing, because the run it belongs to did not hold."""
+    ledger = _load(args.ledger)
+    node = _repo_node(ledger, args.repo)
+    tool = "gate:smoke"
+    _validate_iteration(node, tool, args.iteration)
+    checks = _smoke_checks(args.report)
+
+    n_ok = sum(1 for c in checks if c["ok"])
+    failed = [c for c in checks if not c["ok"]]
+    failing = bool(failed)
+    failed_names = [c["name"] for c in failed]
+    note = "smoke %s: %d/%d checks ok%s" % (
+        os.path.basename(args.report), n_ok, len(checks),
+        (", %d failed (%s)" % (len(failed), ", ".join(failed_names[:SMOKE_MAX_PERSISTED])))
+        if failed else "")
+    rec = _append_gate_record(ledger, node, args.repo, tool, args.iteration,
+                              failing, len(failed), note)
+    # the MEASUREMENT travels on the record, not only its verdict: a reader six months later
+    # sees WHICH checks ran, what each answered and how long it took -- the facts the narration
+    # used to carry and lose.
+    rec["smoke"] = {
+        "report": args.report.replace("\\", "/"), "ok": n_ok, "failed": len(failed),
+        "checks": [{"name": c["name"], "ok": c["ok"], "status": c["status"],
+                    "latency_ms": c["latency_ms"]} for c in checks[:SMOKE_MAX_PERSISTED]],
+        "failed_names": failed_names[:SMOKE_MAX_PERSISTED],
+        # computed over EVERY check, never over the truncated receipt above: the cap is a
+        # display budget, and a criterion's fate must not depend on where the list was cut.
+        "ac": _smoke_ac_of(checks, True),
+        "ac_red": _smoke_ac_of(checks, False),
+    }
+    _save(args.ledger, ledger)
+
+    out = {"repo": args.repo, "tool": tool, "verdict": "fail" if failing else "pass",
+           "smoke": rec["smoke"], "note": note}
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print("[qa_ledger] %s/%s: %s — %d/%d checks ok"
+              % (args.repo, tool, "FAIL" if failing else "PASS", n_ok, len(checks)))
+        for c in checks[:SMOKE_MAX_PERSISTED]:
+            bits = [b for b in ("status %s" % c["status"] if c["status"] is not None else None,
+                                "%s ms" % c["latency_ms"] if c["latency_ms"] is not None
+                                else None) if b]
+            print("  %s %s%s" % ("ok  " if c["ok"] else "FAIL", c["name"],
+                                 (" (%s)" % ", ".join(bits)) if bits else ""))
+        if len(checks) > SMOKE_MAX_PERSISTED:
+            print("  ... +%d more check(s) not listed or persisted"
+                  % (len(checks) - SMOKE_MAX_PERSISTED))
+        if failing:
+            print("  caps readiness <=65 and blocks convergence until a clean smoke")
+    sys.exit(1 if failing else 0)
+
+
+def _smoke_records(ledger):
+    """The LATEST smoke record per repo -- the same latest-per-tool rule the gate rollup and
+    convergence already use, so the three cannot disagree about which run is current. A record
+    logged through the `log-gate` parity door carries no `smoke` block and is deliberately not
+    here: it gates (it is a gate record like any other), but it has no checks to read back."""
+    out = {}
+    for rname, rnode in ledger.get("repos", {}).items():
+        rec = _latest_static_by_tool(rnode).get("gate:smoke")
+        if rec is not None and rec.get("smoke"):
+            out[rname] = rec
+    return out
+
+
+def _smoke_ac_verdicts(ledger):
+    """(closed, vetoed) criterion ids from the latest smoke record of every repo (ADR-047).
+
+    A tagged check closes MEASURED iff it is `ok` AND its report's gate PASSED: a green check
+    inside a failing smoke is a green light on a run that did not hold, and the ledger refuses
+    to read it as one. A FAILED tagged check is red evidence and vetoes wherever it appears --
+    the same rule as a red JUnit testcase, and it outranks every green."""
+    closed, vetoed = set(), set()
+    for rec in _smoke_records(ledger).values():
+        s = rec.get("smoke") or {}
+        vetoed.update(s.get("ac_red") or [])
+        if not (rec.get("gated_reported") or 0):
+            closed.update(s.get("ac") or [])
+    return closed - vetoed, vetoed
+
+
+def _smoke_report(ledger):
+    """Per-repo SMOKE readout -- ONE derivation, read by both the readiness text and its JSON.
+    CONDITIONAL like lifecycle, agent-origin and field: a repo that never ingested a smoke
+    report is absent from it, so a project that never ran one prints and emits exactly what it
+    printed and emitted before this existed."""
+    out = {}
+    for rname, rec in _smoke_records(ledger).items():
+        s = rec["smoke"]
+        out[rname] = {"state": "FAIL" if (rec.get("gated_reported") or 0) else "PASS",
+                      "report": s.get("report"), "ok": s.get("ok"),
+                      "failed": s.get("failed"),
+                      "total": (s.get("ok") or 0) + (s.get("failed") or 0),
+                      "failed_names": s.get("failed_names") or [],
+                      "ac": s.get("ac") or [], "ac_red": s.get("ac_red") or []}
+    return out
+
+
+def _smoke_line(rname, s):
+    """The one-line rendering of a repo's smoke state. Text lives beside the derivation so the
+    JSON and the human readout can never drift apart."""
+    head = "--- smoke %s: %d/%d checks ok" % (rname, s["ok"], s["total"])
+    if s["failed"]:
+        head += ", %d failed (%s)" % (s["failed"], ", ".join(s["failed_names"]))
+    return "%s %s" % (head, s["state"])
 
 
 def cmd_flag_blocker(args):
@@ -10595,14 +10834,24 @@ def cmd_readiness(args):
     # field evidence there can be is a corpus run over real inputs -- and it closes exactly like
     # a green testcase does, with the same fail-closed rule below.
     corpus_closed = _corpus_ac_closed(ledger)
+    # ADR-047: and a green SMOKE check is the third way. "the jar served /admin" used to
+    # arrive as a sub-agent's sentence; now it arrives as a check in a report the engine
+    # READ, and a check named "AC-28 ..." closes AC-28 exactly as a green testcase named
+    # "AC-28 ..." does. `smoke_red` is a FAILED tagged check -- red evidence, and it vetoes
+    # like a red testcase.
+    smoke_closed, smoke_red = _smoke_ac_verdicts(ledger)
 
     def _ac_closed(cid):
         d = ac_tags.get(cid)
+        # fail-closed FIRST, always: red evidence of ANY kind outranks every green one,
+        # because the cheapest way to fake a closed criterion is to add a green beside a red.
         if d and d["red"]:
             return False          # red evidence vetoes, whatever else says (fail-closed)
+        if cid in smoke_red:
+            return False          # a FAILED tagged smoke check is red evidence too
         if d and d["green"] >= 1:
             return True
-        return cid in corpus_closed
+        return cid in corpus_closed or cid in smoke_closed
 
     # IDs duplicados (ACCEPTANCE mal numerado) cuentan UNA sola vez — si no,
     # un solo test verde cierra "medido" tantos criterios como copias del ID.
@@ -10851,6 +11100,11 @@ def cmd_readiness(args):
                        # ADR-046: WHICH ids a green corpus run closed, so a reader can tell
                        # field evidence from suite evidence instead of inferring it.
                        "corpus_closed": sorted(corpus_closed, key=_top_ac_key),
+                       # ADR-047: the same for the ids a green smoke check closed -- and
+                       # `smoke_vetoed` for the ids a FAILED one holds open, which is the
+                       # half a reader cannot infer from the closed list.
+                       "smoke_closed": sorted(smoke_closed, key=_top_ac_key),
+                       "smoke_vetoed": sorted(smoke_red, key=_top_ac_key),
                        "stale_reports": stale_reports},
         "facts": {"coverage_pct": round(agg_cov_pct, 2), "coverage_threshold": threshold,
                   "gated_open": total_open, "severity": agg_sev,
@@ -10887,6 +11141,12 @@ def cmd_readiness(args):
     _field = _corpus_field(ledger)
     if _field:
         out["field"] = _field
+    # smoke (ADR-047): conditional for the same reason. A failing smoke ALREADY blocks
+    # through its `gate:smoke` record; this block adds what the rollup cannot carry --
+    # which checks ran, and which of them answered wrong.
+    _smoke = _smoke_report(ledger)
+    if _smoke:
+        out["smoke"] = _smoke
     _ao = _agent_origin_report(_ready_root,
                                acc_path if acc_found else None)
     if _ao["n_unconfirmed"] or _ao["confirmed"]:
@@ -10926,8 +11186,9 @@ def cmd_readiness(args):
               "or the explicit weight in config.defaults.readiness_weights")
     if narrated_only:
         print(f"  ! narrated-only: {', '.join(narrated_only)} — checkbox ticked "
-              f"WITHOUT a green 'AC-n' testcase in the reports and without a green "
-              f"corpus run carrying it (measured beats narrated: does NOT close)")
+              f"WITHOUT a green 'AC-n' testcase in the reports, without a green "
+              f"corpus run carrying it and without a green 'AC-n' smoke check "
+              f"(measured beats narrated: does NOT close)")
     if measured_unchecked:
         print(f"  · measured but unticked: {', '.join(measured_unchecked)} — there is "
               f"a green testcase; tick the checkbox if the criterion is done")
@@ -11014,6 +11275,11 @@ def cmd_readiness(args):
     # inputs the system gets right, against which declared budget.
     for _rname in sorted(_field):
         print(_corpus_field_line(_rname, _field[_rname]))
+    # ADR-047: the SMOKE line, one per repo that ingested a report. Like the field line it
+    # adds the numbers the gates rollup cannot carry -- how many checks ran, how many
+    # answered wrong, and WHICH ones, so the failure is named instead of counted.
+    for _rname in sorted(_smoke):
+        print(_smoke_line(_rname, _smoke[_rname]))
     # ADR-044: its OWN line, deliberately outside the gates rollup. An unconfirmed
     # agent-origin item is a decision still owed to the human, not a gate that ran --
     # folding it into "N ok" or into "N blocking" would be the false clean ADR-043
@@ -14431,11 +14697,14 @@ def build_parser():
     plg.add_argument("--iteration", type=int, required=True)
     plg.add_argument("--kind", required=True,
                      choices=["golden-diff", "gate-check", "pit-check", "simplicity",
-                              "regression", "rubric", "waste", "ci", "corpus", "operability"],
+                              "regression", "rubric", "waste", "ci", "corpus", "smoke",
+                              "operability"],
                      help="ci (2.2.0) records a pipeline run as the FACT it is: a fail caps "
                           "readiness <=65 and blocks convergence exactly like gate-check. "
                           "corpus (ADR-046) is the parity door for a field-truth run measured "
-                          "elsewhere; corpus-run writes the same record with the evidence on it. "
+                          "elsewhere; corpus-run writes the same record with the evidence on "
+                          "it. smoke (ADR-047) is the same door for a smoke run measured "
+                          "elsewhere -- a FACT kind, so advisory is refused on it. "
                           "operability (ADR-048) is accepted for parity with the "
                           "`operability` subcommand, which is what normally writes it")
     plg.add_argument("--verdict", required=True,
@@ -14480,6 +14749,22 @@ def build_parser():
     pcr.add_argument("--iteration", type=int, default=1)
     pcr.add_argument("--json", action="store_true")
     pcr.set_defaults(func=cmd_corpus_run)
+
+    psi = sub.add_parser(
+        "smoke-ingest",
+        help="ingest a smoke report as gate:smoke (ADR-047): the smoke run MEASURED "
+             "instead of narrated -- evidence is executed, not written down")
+    add_ledger(psi)
+    psi.add_argument("--repo", required=True)
+    psi.add_argument("--report", required=True,
+                     help='JSON the PROJECT writes with its own smoke tool: '
+                          '{"checks": [{"name": ..., "ok": true|false, "status": ..., '
+                          '"latency_ms": ..., "evidence": ...}, ...]}. A missing `checks`, '
+                          'an empty list, or a check without a name or a boolean `ok` is '
+                          'exit 2 naming it -- never a scored run')
+    psi.add_argument("--iteration", type=int, default=1)
+    psi.add_argument("--json", action="store_true")
+    psi.set_defaults(func=cmd_smoke_ingest)
 
     pfb = sub.add_parser(
         "flag-blocker",

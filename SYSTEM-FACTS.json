@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 54,
+    "count": 55,
     "list": [
       "bench",
       "bench-curate",
@@ -77,6 +77,7 @@
       "roundtrip",
       "rubric-ingest",
       "simplicity-check",
+      "smoke-ingest",
       "snapshot",
       "spec-change-request",
       "spec-check",

@@ -811,9 +811,52 @@ python3 $QL readiness
 - **Never author the corpus yourself.** A corpus the agent invented is the invented input this
   instrument exists to expose.
 
+## The smoke run as measured evidence — `smoke-ingest` (ADR-047)
+
+From the field: *every simulator run returned an empty list, because the database had no rows —
+and the smoke was reported as verified.* An empty list is a 200. Phase 7 used to end in a
+paragraph — "the jar served /admin", "the simulator answered 200 in 6 ms" — and a paragraph
+cannot tell "the endpoint answered correctly" from "the endpoint answered". **Evidence is
+executed, not narrated.**
+
+The contract is the smallest thing a shell script can emit — `name` and a **boolean** `ok` are the
+whole mandatory surface:
+
+```json
+{"checks": [{"name": "AC-28 the jar serves /admin", "ok": true, "status": 200,
+             "latency_ms": 6, "evidence": "curl -sS localhost:8080/admin | head -1"}]}
+```
+
+```bash
+python3 $QL smoke-ingest --repo <REPO> --report reports/smoke.json
+#   [qa_ledger] backend-api/gate:smoke: FAIL — 7/8 checks ok
+#     FAIL healthz (status 503)
+#     caps readiness <=65 and blocks convergence until a clean smoke
+python3 $QL readiness
+#   --- smoke backend-api: 7/8 checks ok, 1 failed (healthz) FAIL
+```
+
+- **A failed check is a BLOCKER**, through the same record `gate-check` writes: readiness ≤65,
+  convergence blocked, cleared by a later clean report.
+- **A report the engine cannot read is exit 2, naming the check or the field** — missing,
+  malformed, no `checks` key, a check with no `name` or no boolean `ok`. An **EMPTY** `checks`
+  list is refused too: a run that verified nothing is not a clean gate.
+- **`smoke` is a FACT kind and never runs advisory.** `corpus` may (a percentage needs an adopted
+  budget); `ok` is binary, so an advisory smoke would be a mandatory gate cleared by goodwill.
+  `log-gate --kind smoke --verdict pass|fail|not-run` is the parity door.
+- **A check named `AC-nn ...` closes that criterion MEASURED** when it is `ok` and its report
+  passed — the same tag grammar a JUnit testcase name uses. A **failed** tagged check VETOES,
+  exactly like a red test, and `readiness --json` reports both halves
+  (`acceptance.smoke_closed`, `acceptance.smoke_vetoed`).
+- **No weight.** One conditional `smoke` line per repo that ingested a report, and nothing else
+  moves.
+- **`templates/scripts/smoke-report-example.json`** is the reference report (three checks, one
+  tagged `AC-01`). Never narrate the report: a checklist a human ticked is evidence, a checklist
+  an agent wrote is not.
+
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (54 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (55 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

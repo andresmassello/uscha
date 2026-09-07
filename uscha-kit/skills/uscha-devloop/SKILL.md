@@ -581,10 +581,41 @@ python3 $QL check-terminado          # 0 = sealed · 1 = broken · 2 = UNMEASURE
 - Open the PR(s). Confirm CI is green.
 - **STOP.** Present the PR link(s) and wait for the human to merge.
 
-## Phase 7 — Smoke list
+## Phase 7 — Smoke run (measured, kit 2.2.0, ADR-047)
 
-Produce a concrete manual smoke-test checklist (real user paths / endpoints / device
-flows for this change), so the human can verify the system behaves as intended.
+**Evidence is executed, not narrated.** This phase used to end in a prose checklist, and
+prose is exactly where a smoke run goes to die: "the jar served /admin", "the simulator
+answered 200 in 6 ms" are an agent's sentences, believed because they are written
+confidently. A real one cost a field team a release — every simulator run returned an
+empty list because the database had no rows, and a smoke narrated as "verified" would
+have hidden it behind a paragraph. So RUN the smoke paths (real endpoints, real user
+flows, real device paths for this change) with the project's own tool, have that tool
+write `reports/smoke.json`, and INGEST it:
+
+```json
+{"checks": [{"name": "AC-28 the jar serves /admin", "ok": true, "status": 200,
+             "latency_ms": 6, "evidence": "curl -sS localhost:8080/admin | head -1"}]}
+```
+
+```bash
+python3 $QL smoke-ingest --repo <REPO> --report reports/smoke.json   # exit 1 = a check failed
+```
+
+`name` and a boolean `ok` are the whole mandatory contract; `status`, `latency_ms` and
+`evidence` are optional and never invented. A missing `checks`, an EMPTY list, or a check
+without a name or a boolean `ok` is exit 2 naming it — a run that verified nothing is not
+a clean gate. A failed check is a BLOCKER like any other fact gate: readiness ≤65,
+convergence blocked, cleared by a later clean report. `smoke` is a FACT kind and never
+runs advisory — a check either answered or it did not. Name a check `AC-nn ...` (the same
+tag grammar a JUnit testcase name uses) and a green check inside a passing report closes
+that criterion MEASURED; a failed one vetoes it, exactly like a red test.
+`log-gate --kind smoke --verdict pass|fail|not-run` is the parity door for a smoke
+measured elsewhere. `uscha-kit/templates/scripts/smoke-report-example.json` is the
+reference report. If the human runs the smoke by hand, they still write the report: a
+checklist a human ticked is evidence, a checklist an agent narrated is not.
+
+**The PR body cites the gate** (phase 6): paste the `smoke-ingest` verdict line —
+`<repo>/gate:smoke: PASS — 8/8 checks ok` — not a prose claim that the smoke passed.
 
 ## Phase 8 — Hand off to docs + retrospective
 

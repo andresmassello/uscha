@@ -1,0 +1,24 @@
+{
+  "checks": [
+    {
+      "name": "AC-01 the API serves /health under the real database",
+      "ok": true,
+      "status": 200,
+      "latency_ms": 6,
+      "evidence": "curl -sS http://localhost:8080/health -> {\"status\":\"UP\",\"db\":\"UP\"}"
+    },
+    {
+      "name": "the catalogue endpoint returns the seeded rows",
+      "ok": true,
+      "status": 200,
+      "latency_ms": 41,
+      "evidence": "GET /catalogue -> 128 items (the seed loads 128; an EMPTY list is the failure this check exists to catch)"
+    },
+    {
+      "name": "an unauthenticated write is rejected",
+      "ok": true,
+      "status": 401,
+      "evidence": "POST /catalogue with no token -> 401"
+    }
+  ]
+}

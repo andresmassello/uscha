@@ -1364,6 +1364,7 @@ in `defaults`, so the origin ladder now reads DOTTED knob names. Measured by T16
 - ADR-044 — The agent asks for DECISIONS, never for INFORMATION: information the tree holds is READ, and every acceptance criterion, ADR decision item or `HANDOFF.md` rule the AGENT introduced carries `(origin: agent)` until a human confirms THAT item with `confirmed: YYYY-MM-DD` — reported by `spec-check` and `readiness` as ADVISORY.
 - ADR-045 — The generated orientation block carries the kit version, and the release script re-renders it: an installed skill can be dated, and `doctor` compares it against the kit — advisory, never a gate.
 - ADR-046 — Field truth for greenfield: a REAL-INPUT corpus is an evidence class (`corpus-run`), scored against a threshold the PROJECT declares — advisory with none declared, a FACT gate with one — and a green tagged run closes an acceptance criterion MEASURED; the `field` readiness dimension is deferred to its own ADR.
+- ADR-047 — The smoke run is MEASURED evidence: phase 7 produces `reports/smoke.json` (`checks` with a `name` and a boolean `ok`) and `smoke-ingest` persists `gate:smoke` — a failed check blocks like any FACT gate, an empty or malformed report is exit 2 naming it, `smoke` refuses `--verdict advisory`, and a check named `AC-nn ...` closes that criterion MEASURED while a failed one VETOES it.
 - ADR-048 — Operability is a MEASURED dimension: `operability` reads CI, release, the RUNBOOK and the seed command as facts in the tree and persists `gate:operability` — advisory on risk profiles A/B, a BLOCKER on C/D/E through the profile-owned knob `defaults.operability.gate`.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
@@ -1424,3 +1425,54 @@ and one conditional readiness line.
   fixtures, has neither `corpus-run`, nor `--kind corpus`, nor a `field` block in
   `readiness --json`. Without git or the tagged copy it reports `None` = UNMEASURED, never a
   silent pass.
+
+## The smoke run as measured evidence: `smoke-ingest` (ADR-047) - closes on green `AC-SK-nn` smoke assertions
+
+The ledger ingests JUnit, coverage, linters, a static gate's XML and a CI verdict. Phase 7 was
+still prose: "the jar served /admin", "the simulator answered 200 in 6 ms" arrived as a sub-agent
+NARRATING, believed because it was written confidently. A field report made the cost concrete -
+every simulator run returned an empty list because the database had no rows, and the smoke was
+reported as verified. An empty list is a 200. **Evidence is executed, not narrated.**
+
+The contract is the smallest thing a shell script can emit: `{"checks": [{"name": ..., "ok":
+true|false, "status": ..., "latency_ms": ..., "evidence": ...}]}` - `name` and a BOOLEAN `ok`
+mandatory, the rest optional, validated when present and never invented when absent.
+`smoke-ingest --repo R --report reports/smoke.json` persists `gate:smoke` through the same
+static-gate record `gate-check` writes: a failed check caps readiness <= 65 and blocks
+convergence, and a later clean report clears it.
+
+`smoke` joins the closed `--kind` vocabulary as a FACT and is NOT advisory-capable. The asymmetry
+with `corpus` is the decision: a percentage needs an adopted budget, so an unbudgeted corpus run
+is honestly advisory; `ok` is binary, so an advisory smoke would be a mandatory gate cleared by
+goodwill. No new weight, no new cap, no config key - a project that never ingests a report keeps
+the readiness text and the payload it had.
+
+- [ ] AC-SK-01 - a report with one `ok: false` check exits 1 and persists a GATED, non-advisory
+  `gate:smoke` record naming the failed check; it is blocking in the gates rollup, and a later
+  clean report clears it (latest-per-tool, like every other fact gate).
+- [ ] AC-SK-02 - a ticked `AC-28` with no evidence reports `narrated_only`; a check named
+  `AC-28 ...` inside a PASSING report closes it MEASURED and attributes it in
+  `acceptance.smoke_closed`, and the `narrated-only` line names the smoke path.
+- [ ] AC-SK-03 - a FAILED tagged check VETOES: it holds `AC-28` open even though a green check in
+  another repo closed it, and it is reported in `acceptance.smoke_vetoed`. A green check inside a
+  FAILING report closes nothing at all - the run it belongs to did not hold.
+- [ ] AC-SK-04 - an EMPTY `checks` list REFUSES at exit 2 naming what was empty and persists no
+  record. A run that verified nothing is not a clean gate; scoring it `0 failed -> PASS` would
+  manufacture a green out of an absence.
+- [ ] AC-SK-05 - a check without a boolean `ok` (`"true"`, `1`) refuses at exit 2 NAMING the
+  check; so do a check with no `name`, a report with no `checks` key, malformed JSON and a
+  missing file. Nothing is persisted in any of the six cases.
+- [ ] AC-SK-06 - the record carries the MEASUREMENT: the report path, the ok/failed counts and the
+  per-check receipts with their status. The readiness line NAMES the failed check, exactly one
+  line is printed, and a repo that ingested nothing produces no entry, no line and no `smoke` key.
+- [ ] AC-SK-07 - the CONTROL PAIR: over one ledger, a PASSING smoke caps nothing (the score stands
+  above 65 with `cap_reason` null) and a FAILING smoke on a second repo caps the same ledger at
+  exactly 65 with `BLOCKER` named. Without the control the "caps nothing" half would be an
+  assertion, not a measurement.
+- [ ] AC-SK-08 - `log-gate --kind smoke` accepts `pass`, `fail` and `not-run`, and a `fail`
+  logged through it appears as blocking in the gates rollup; `--verdict advisory` is REFUSED at
+  exit 2 saying why - a smoke check is a binary fact.
+- [ ] AC-SK-09 - the RED PROBE. The `v2.1.0` engine, read out of git and run on these same
+  fixtures, has neither `smoke-ingest`, nor `--kind smoke`, nor a `smoke` block in
+  `readiness --json`, nor `acceptance.smoke_closed`. Without git or the tagged copy it reports
+  `None` = UNMEASURED, never a silent pass.

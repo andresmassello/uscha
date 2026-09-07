@@ -76,7 +76,7 @@ and see which file, which test, and when.
 | `/uscha-mirador` | Bird's-eye HTML dashboard: readiness, trail, acceptance, loops |
 | `/uscha-status` | One-line progress readout, in chat |
 
-**A measurement engine** (`qa_ledger.py`, 54 subcommands, Python stdlib) that ingests
+**A measurement engine** (`qa_ledger.py`, 55 subcommands, Python stdlib) that ingests
 evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
 cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
 
@@ -136,6 +136,10 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
   agent that wrote the code, so `corpus-run` scores a corpus of REAL inputs against the
   real command and persists the percentage as a fact — advisory until the project
   declares a budget, a blocking gate once it does (ADR-046).
+- **Evidence is executed, not narrated.** The smoke run is a report the project's tool
+  writes, not a paragraph an agent types: `smoke-ingest` reads `{"checks": [{"name",
+  "ok", ...}]}`, a failed check blocks like any fact gate, and an empty or malformed
+  report is refused rather than scored (ADR-047).
 
 ## The diamond — specs are the source code, end to end
 
@@ -176,7 +180,7 @@ automatic tool can perform: a human verdict.
    from the compiled code: 0.815 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (kit 1.96.0, 54 subcommands, all measured):**
+**What each arrow is, in the engine (kit 1.96.0, 55 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|

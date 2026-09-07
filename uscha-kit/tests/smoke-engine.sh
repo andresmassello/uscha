@@ -15440,6 +15440,386 @@ case "$T163" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T163";;
 esac
 
+echo "== T164 (2.2.0): the smoke run as MEASURED evidence -- executed, never narrated =="
+# The field report this block comes from: every simulator run returned an empty list because the
+# database had no rows. The smoke was reported as "verified" in prose, and prose cannot carry
+# that failure -- "the jar served /admin", "the simulator answered 200 in 6 ms" were a sub-agent
+# narrating, believed because it was written confidently.
+#
+# smoke-ingest turns the smoke list into a REPORT the project writes and the engine READS:
+# checks with a name and a boolean ok. Three controls carry the honesty: a failed check is a
+# BLOCKER like any other fact gate (never advisory -- ok is binary); a report the engine cannot
+# read is exit 2 naming the offending check or field, never a scored run, and an EMPTY checks
+# list is refused because a run that verified nothing is not a clean gate; and AC-SK-09 is the
+# RED PROBE -- the v2.1.0 engine has neither the subcommand, nor the --kind, nor the block.
+T164=$(pyin "$KIT" "$ROOT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+# the release before smoke-ingest: its engine must show the absence (AC-SK-09).
+PREV_TAG = "v2.1.0"
+TMPS = []
+res, why = {}, {}
+
+ACCEPTANCE = "- [x] AC-28 -- the admin page serves under the real database\n"
+# one per-repo dimension must carry weight (the config validator says so), and the point of
+# this shape is that the CAP is what moves, not the score: static_gate stays at 0 so a failing
+# smoke cannot lower the raw number, only cap it.
+WEIGHTS = {"acceptance": 90, "adr": 5, "coverage": 0,
+           "static_gate": 0, "convergence": 1, "integration": 5}
+
+# the two reports the field story needs: one where every check answered, one where the check
+# that mattered did not. The tagged name is the SAME grammar a JUnit testcase name uses.
+GREEN = {"checks": [
+    {"name": "AC-28 the jar serves /admin", "ok": True, "status": 200, "latency_ms": 6},
+    {"name": "healthz", "ok": True, "status": 200, "latency_ms": 2}]}
+RED = {"checks": [
+    {"name": "AC-28 the jar serves /admin", "ok": True, "status": 200},
+    {"name": "healthz", "ok": False, "status": 503,
+     "evidence": "the simulator returned an empty list: the database had no rows"}]}
+VETO = {"checks": [
+    {"name": "AC-28 the jar serves /admin", "ok": False, "status": 500},
+    {"name": "healthz", "ok": True, "status": 200}]}
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-sk-")
+    TMPS.append(d)
+    return d
+
+
+def run(args, cwd=None):
+    return subprocess.run([sys.executable] + list(args), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                          errors="replace")
+
+
+def eng(cwd, args, engine=None):
+    return run([engine or ENG] + list(args), cwd=cwd)
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def write(path, text):
+    d = os.path.dirname(path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
+def project(repos, defaults=None):
+    """A project with an initialized ledger and the three reports the story needs."""
+    d = tmp()
+    cfg = {"project": {"name": "demo"}, "defaults": defaults or {},
+           "repos": [dict(r) for r in repos]}
+    write(os.path.join(d, "uscha.config.json"), json.dumps(cfg, indent=2) + "\n")
+    for r in repos:
+        write(os.path.join(d, r["path"], ".keep"), "")
+    write(os.path.join(d, "ACCEPTANCE.md"), ACCEPTANCE)
+    for name, doc in (("green.json", GREEN), ("red.json", RED), ("veto.json", VETO)):
+        write(os.path.join(d, name), json.dumps(doc, indent=2) + "\n")
+    r = eng(d, ["init", "--config", "uscha.config.json", "--out", "L.json"])
+    if r.returncode != 0:
+        raise RuntimeError("init failed: " + (r.stderr or r.stdout)[:200])
+    return d
+
+
+def ingest(d, repo, report, engine=None):
+    return eng(d, ["smoke-ingest", "--ledger", "L.json", "--repo", repo,
+                   "--report", report], engine=engine)
+
+
+def ready(d, extra=None):
+    return eng(d, ["readiness", "--ledger", "L.json", "--acceptance", "ACCEPTANCE.md"]
+                  + list(extra or []))
+
+
+def ready_json(d):
+    r = ready(d, ["--json"])
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        raise RuntimeError("no JSON from readiness: " + (r.stderr or r.stdout)[:200])
+
+
+def latest(d, repo, tool="gate:smoke"):
+    with io.open(os.path.join(d, "L.json"), encoding="utf-8") as fh:
+        led = json.load(fh)
+    recs = [s for s in led["repos"][repo]["iterations"] if s.get("tool") == tool]
+    return recs[-1] if recs else None
+
+
+ONE = [{"name": "backend-api", "type": "python", "path": "backend-api"}]
+TWO = ONE + [{"name": "mobile-app", "type": "python", "path": "mobile-app"}]
+
+
+def measure():
+    # --- AC-SK-01: one ok=false check -> gate:smoke FAIL, gated, blocking convergence --------
+    d = project(ONE)
+    r = ingest(d, "backend-api", "red.json")
+    rec = latest(d, "backend-api")
+    p = []
+    if r.returncode != 1:
+        p.append("exit is %d, expected 1 -- a failed smoke check is a gate" % r.returncode)
+    if rec is None:
+        p.append("no gate:smoke record was persisted at all")
+    else:
+        s = rec.get("smoke") or {}
+        if (s.get("ok"), s.get("failed")) != (1, 1):
+            p.append("record counts are %r ok / %r failed, expected 1/1"
+                     % (s.get("ok"), s.get("failed")))
+        if not rec.get("gated_reported"):
+            p.append("the failing record gates nothing: gated_reported %r"
+                     % rec.get("gated_reported"))
+        if rec.get("advisory"):
+            p.append("a smoke fail was recorded as advisory -- ok is binary, never advisory")
+        if s.get("failed_names") != ["healthz"]:
+            p.append("the failed check is not named: %r" % (s.get("failed_names"),))
+    j = ready_json(d)
+    if not [g for g in j["gates"] if g.get("tool") == "gate:smoke" and g.get("blocking")]:
+        p.append("the failing smoke is not blocking in the gates rollup: %r" % (j["gates"],))
+    # and a later CLEAN report clears it -- latest-per-tool, like every other fact gate
+    if ingest(d, "backend-api", "green.json").returncode != 0:
+        p.append("a clean report did not exit 0")
+    j2 = ready_json(d)
+    if [g for g in j2["gates"] if g.get("tool") == "gate:smoke" and g.get("blocking")]:
+        p.append("a later clean smoke did not clear the block: %r" % (j2["gates"],))
+    res["AC-SK-01"] = not p
+    why["AC-SK-01"] = "; ".join(p[:3]) or ("a check with ok=false persists a gated gate:smoke "
+                                           "fail at exit 1 and blocks; a clean report clears it")
+
+    # --- AC-SK-02: a check named "AC-28 ..." closes AC-28 MEASURED ---------------------------
+    d = project(TWO, defaults={"readiness_weights": WEIGHTS})
+    before = ready_json(d)
+    p = []
+    if before["acceptance"]["narrated_only"] != ["AC-28"]:
+        p.append("a ticked criterion with no evidence is not narrated_only: %r"
+                 % (before["acceptance"]["narrated_only"],))
+    ingest(d, "backend-api", "green.json")
+    after = ready_json(d)
+    if after["acceptance"]["narrated_only"]:
+        p.append("still narrated_only after a green tagged check: %r"
+                 % (after["acceptance"]["narrated_only"],))
+    if after["acceptance"]["measured_closed"] != ["AC-28"]:
+        p.append("the criterion did not close measured: %r"
+                 % (after["acceptance"]["measured_closed"],))
+    if after["acceptance"]["smoke_closed"] != ["AC-28"]:
+        p.append("the closure is not attributed to the smoke: %r"
+                 % (after["acceptance"]["smoke_closed"],))
+    txt = ready(d).stdout
+    if "narrated-only" in txt or "smoke check" not in ready(project(TWO)).stdout:
+        p.append("the narrated-only clause no longer names the smoke path")
+    res["AC-SK-02"] = not p
+    why["AC-SK-02"] = "; ".join(p[:3]) or ("a check named 'AC-28 ...' closes AC-28 measured "
+                                           "and is attributed in acceptance.smoke_closed")
+
+    # --- AC-SK-03: a FAILED tagged check VETOES, even beside green evidence ------------------
+    d = project(TWO, defaults={"readiness_weights": WEIGHTS})
+    ingest(d, "backend-api", "green.json")
+    p = []
+    if ready_json(d)["acceptance"]["measured_closed"] != ["AC-28"]:
+        p.append("the control (green closes) did not hold")
+    ingest(d, "mobile-app", "veto.json")
+    j = ready_json(d)
+    if j["acceptance"]["measured_closed"]:
+        p.append("a failed tagged check left the criterion closed: %r"
+                 % (j["acceptance"]["measured_closed"],))
+    if j["acceptance"]["smoke_vetoed"] != ["AC-28"]:
+        p.append("the veto is not reported: %r" % (j["acceptance"]["smoke_vetoed"],))
+    if j["acceptance"]["narrated_only"] != ["AC-28"]:
+        p.append("the vetoed criterion is not narrated_only: %r"
+                 % (j["acceptance"]["narrated_only"],))
+    # and a green check inside a FAILING report closes nothing either: the run did not hold
+    d2 = project(ONE, defaults={"readiness_weights": WEIGHTS})
+    ingest(d2, "backend-api", "red.json")
+    j2 = ready_json(d2)
+    if j2["acceptance"]["smoke_closed"] or j2["acceptance"]["measured_closed"]:
+        p.append("a green check inside a failing report closed a criterion: %r"
+                 % (j2["acceptance"]["measured_closed"],))
+    res["AC-SK-03"] = not p
+    why["AC-SK-03"] = "; ".join(p[:3]) or ("a failed tagged check vetoes like a red testcase, "
+                                           "and a failing report closes nothing at all")
+
+    # --- AC-SK-04: an EMPTY checks list is refused (exit 2) and persists nothing -------------
+    d = project(ONE)
+    write(os.path.join(d, "empty.json"), json.dumps({"checks": []}) + "\n")
+    r = ingest(d, "backend-api", "empty.json")
+    p = []
+    if r.returncode != 2:
+        p.append("an empty smoke exits %d, expected 2" % r.returncode)
+    if "0 checks" not in r.stderr:
+        p.append("the refusal does not say what was empty: %r" % r.stderr[:120])
+    if latest(d, "backend-api") is not None:
+        p.append("an empty smoke still wrote a record -- it would have read as a clean gate")
+    res["AC-SK-04"] = not p
+    why["AC-SK-04"] = "; ".join(p[:3]) or ("an empty checks list refuses at exit 2 and "
+                                           "persists nothing: a run that verified nothing "
+                                           "is not evidence")
+
+    # --- AC-SK-05: a check without a boolean ok is refused, NAMING it ------------------------
+    d = project(ONE)
+    write(os.path.join(d, "strok.json"), json.dumps({"checks": [
+        {"name": "healthz", "ok": True},
+        {"name": "the admin page", "ok": "true"}]}) + "\n")
+    write(os.path.join(d, "intok.json"), json.dumps({"checks": [
+        {"name": "the admin page", "ok": 1}]}) + "\n")
+    write(os.path.join(d, "noname.json"), json.dumps({"checks": [{"ok": True}]}) + "\n")
+    write(os.path.join(d, "nokey.json"), json.dumps({"suite": "smoke"}) + "\n")
+    write(os.path.join(d, "broken.json"), "{not json at all\n")
+    p = []
+    for name, needles in (("strok.json", ("check 2", "the admin page", "ok")),
+                          ("intok.json", ("check 1", "ok")),
+                          ("noname.json", ("check 1", "name")),
+                          ("nokey.json", ("checks",)),
+                          ("broken.json", ("not valid JSON",)),
+                          ("missing.json", ("not found",))):
+        r = ingest(d, "backend-api", name)
+        if r.returncode != 2:
+            p.append("%s exits %d, expected 2" % (name, r.returncode))
+        for needle in needles:
+            if needle not in r.stderr:
+                p.append("%s does not name %r: %r" % (name, needle, r.stderr[:140]))
+    if latest(d, "backend-api") is not None:
+        p.append("a refused report still wrote a record")
+    res["AC-SK-05"] = not p
+    why["AC-SK-05"] = "; ".join(p[:3]) or ("a check without a boolean ok refuses at exit 2 "
+                                           "naming the check; so do a missing name, a missing "
+                                           "checks key, malformed JSON and a missing file")
+
+    # --- AC-SK-06: the record carries the MEASUREMENT, and silence stays silent --------------
+    d = project(TWO, defaults={"readiness_weights": WEIGHTS})
+    ingest(d, "mobile-app", "red.json")
+    j = ready_json(d)
+    text = ready(d).stdout
+    p = []
+    s = (j.get("smoke") or {}).get("mobile-app") or {}
+    if s.get("state") != "FAIL" or (s.get("ok"), s.get("total")) != (1, 2):
+        p.append("the smoke block reads %r" % (s,))
+    if "backend-api" in (j.get("smoke") or {}):
+        p.append("a repo that ingested nothing produced a smoke entry")
+    if "--- smoke mobile-app: 1/2 checks ok, 1 failed (healthz) FAIL" not in text:
+        p.append("the smoke line is missing or reworded")
+    if text.count("--- smoke ") != 1:
+        p.append("expected exactly one smoke line, got %d" % text.count("--- smoke "))
+    rec = latest(d, "mobile-app") or {}
+    checks = (rec.get("smoke") or {}).get("checks") or []
+    if [(c.get("name"), c.get("ok"), c.get("status")) for c in checks] != [
+            ("AC-28 the jar serves /admin", True, 200), ("healthz", False, 503)]:
+        p.append("the per-check receipt is not on the record: %r" % (checks,))
+    if (rec.get("smoke") or {}).get("report") != "red.json":
+        p.append("the record does not cite WHICH report: %r" % (rec.get("smoke"),))
+    # a project that never ingested one says nothing at all -- conditional, like the field line
+    d2 = project(ONE)
+    if "--- smoke" in ready(d2).stdout or "smoke" in ready_json(d2):
+        p.append("a project with no smoke report is no longer silent about it")
+    res["AC-SK-06"] = not p
+    why["AC-SK-06"] = "; ".join(p[:3]) or ("the record carries report, counts and per-check "
+                                           "receipts; a repo that ingested none is silent")
+
+    # --- AC-SK-07: the CONTROL PAIR -- pass caps nothing, fail caps <=65 ---------------------
+    d = project(TWO, defaults={"readiness_weights": WEIGHTS})
+    ingest(d, "backend-api", "green.json")
+    green = ready_json(d)
+    ingest(d, "mobile-app", "red.json")
+    red = ready_json(d)
+    p = []
+    if green.get("cap_reason") is not None:
+        p.append("a PASSING smoke capped readiness: %r" % (green.get("cap_reason"),))
+    if green["score"] <= 65:
+        p.append("the control score is %r -- too low to prove a 65 cap fired"
+                 % (green["score"],))
+    if red["score"] != 65 or "BLOCKER" not in (red.get("cap_reason") or ""):
+        p.append("a FAILING smoke did not cap at 65: score %r cap %r"
+                 % (red["score"], red.get("cap_reason")))
+    res["AC-SK-07"] = not p
+    why["AC-SK-07"] = "; ".join(p[:3]) or ("pass caps nothing (score %s), fail caps at %s"
+                                           % (green["score"], red["score"]))
+
+    # --- AC-SK-08: log-gate --kind smoke is the PARITY door, and it REFUSES advisory ---------
+    d = project(ONE)
+    p = []
+    for verdict in ("pass", "fail", "not-run"):
+        r = eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api",
+                    "--iteration", "1", "--kind", "smoke", "--verdict", verdict])
+        if r.returncode != 0:
+            p.append("--kind smoke --verdict %s exits %d: %s"
+                     % (verdict, r.returncode, (r.stderr or "")[:80]))
+    r = eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+                "--kind", "smoke", "--verdict", "advisory"])
+    if r.returncode != 2:
+        p.append("--kind smoke accepted advisory (exit %d) -- a smoke check is a binary fact"
+                 % r.returncode)
+    if "advisory" not in (r.stderr or ""):
+        p.append("the refusal does not say why: %r" % (r.stderr or "")[:120])
+    eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+            "--kind", "smoke", "--verdict", "fail", "--count", "3"])
+    j = ready_json(d)
+    if not [g for g in j["gates"] if g.get("tool") == "gate:smoke" and g.get("blocking")]:
+        p.append("a smoke fail logged through log-gate does not block: %r" % (j["gates"],))
+    res["AC-SK-08"] = not p
+    why["AC-SK-08"] = "; ".join(p[:3]) or ("smoke records pass/fail/not-run and a fail blocks; "
+                                           "advisory is refused at exit 2")
+
+    # --- AC-SK-09: the RED PROBE -- the PREV_TAG engine has none of the three ----------------
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-SK-09"] = None
+        why["AC-SK-09"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        w = tmp()
+        old = os.path.join(w, "prev_engine.py")
+        write(old, prev)
+        d = project(ONE)
+        p = []
+        o = ingest(d, "backend-api", "green.json", engine=old)
+        if o.returncode == 0 or "smoke-ingest" not in (o.stderr + o.stdout):
+            p.append("the old engine already had smoke-ingest (exit %d)" % o.returncode)
+        o2 = eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api",
+                     "--iteration", "1", "--kind", "smoke", "--verdict", "pass"], engine=old)
+        if o2.returncode != 2:
+            p.append("the old engine already accepted --kind smoke (exit %d)" % o2.returncode)
+        o3 = eng(d, ["readiness", "--ledger", "L.json", "--json"], engine=old)
+        try:
+            old_json = json.loads(o3.stdout)
+            if "smoke" in old_json:
+                p.append("the old readiness already emitted a smoke block")
+            if "smoke_closed" in (old_json.get("acceptance") or {}):
+                p.append("the old readiness already reported smoke_closed")
+        except ValueError:
+            p.append("no JSON from the old readiness: %r" % (o3.stderr or "")[:120])
+        res["AC-SK-09"] = not p
+        why["AC-SK-09"] = "; ".join(p[:3]) or ("neither the subcommand nor the --kind nor the "
+                                               "smoke block exists on " + PREV_TAG)
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".sk-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T164" in
+  OK*) PASS=$((PASS+1)); echo "  ok   smoke as measured evidence (AC-SK-01..09): $T164";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T164";;
+esac
+
 echo "== T165 (2.2.0): operability is MEASURED -- CI, release, RUNBOOK and seed are FACTS in the tree (ADR-048) =="
 # THE FIELD FINDING, reproduced rather than described: release-by-CI, the reset/seed script and
 # the RUNBOOK arrived in the last week of two consecutive projects. The devloop NAMED them in
@@ -16078,6 +16458,10 @@ FAMILIES = (
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".co-cases.json", "corpus-field-truth", "T163",                 # ADR-046, 2.2.0
      _seq("AC-CO", 1, 9)),
+    # AC-SK-09 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git,
+    # a shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
+    (".sk-cases.json", "smoke-measured", "T164",                     # ADR-047, 2.2.0
+     _seq("AC-SK", 1, 9)),
     # AC-OP-08 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".op-cases.json", "operability", "T165",                        # ADR-048

@@ -175,6 +175,20 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
   that may, because the check's own default mode is advisory; every other FACT kind still
   refuses it. `--ac AC-nn` stamps criteria on the record: a criterion whose only evidence is a
   corpus record closes MEASURED iff that record passed (ADR-046).
+- The **Smoke** invariant is measured by `qa_ledger.py smoke-ingest`: the smoke run is a
+  REPORT the project's own tool writes — `{"checks": [{"name": ..., "ok": true|false,
+  "status": ..., "latency_ms": ..., "evidence": ...}]}` — and never a sentence an agent
+  wrote. **Evidence is executed, not narrated**: "the endpoint answered 200" believed on an
+  agent's word is the failure mode this exists to remove, and it has already cost a release
+  (every run returned an empty list because the database had no rows). A failed check is a
+  **BLOCKER** — readiness cap ≤ 65, convergence blocked — persisted as `gate:smoke`, cleared
+  by a later clean report. A report that is missing, malformed, has no `checks`, holds an
+  EMPTY list, or carries a check without a `name` or a boolean `ok` is **exit 2** naming it:
+  a run that verified nothing is not a clean gate. `smoke` joins the closed `--kind`
+  vocabulary (ADR-014, INV-ADVISORY-01) as a FACT, and `--verdict advisory` is REFUSED on it
+  — a smoke check is binary, so there is no budget it could be measured against. A check
+  named `AC-nn ...` closes that criterion MEASURED when it is `ok` and its report passed; a
+  failed one vetoes it (ADR-047).
 - The **Operability** invariant is measured by `qa_ledger.py operability --repo R` (ADR-048): four
   FACTS read out of the tree — a `.github/workflows` step running the repo's **configured** test
   command, a workflow that publishes or attaches a release asset, a `RUNBOOK.md` naming
