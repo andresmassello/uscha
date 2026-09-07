@@ -6,7 +6,7 @@ governs:
 ---
 # ADR-001: The risk profile modulates the flow (kit-shipped, overridable presets)
 
-## Status: Accepted
+## Status: Accepted — **amended 2.0.0: `init` generates a minimal config so the profile is not pre-empted by copied defaults**
 
 ## Context
 `risk_profile` is declared in `uscha.config.json` but read by **nobody** in `qa_ledger.py`
@@ -59,6 +59,54 @@ Default expansion table (all overridable per-knob):
 - The token-saving half ("profile A actually SKIPS judgment-day at run time") is NOT delivered
   here — that is orchestrator behavior in the `uscha-devloop` skill, not deterministic engine
   logic, and is out of scope (see below). This release makes the profile *weigh in the ledger*.
+
+### Amendment (2.0.0): the delivery path had pre-empted the decision
+
+The expansion above was implemented correctly and, in a repo initialised with `uscha init`,
+had never taken effect. `init` copied the kit's own `uscha.config.json` — the COMPREHENSIVE
+REFERENCE, every knob at the kit's value — into the project, so every kit default arrived as
+an **explicit project declaration**, and by this ADR's own per-key rule an explicit declaration
+outranks the profile. Measured on 1.99.0: `{}` plus `risk_profile: "A"` resolved
+`qa_tools_order` to `[code-review]` (correct); the shipped defaults plus `"A"` resolved it to
+the three tools with `_risk_profile_keys` empty — the preset supplied nothing — and the shipped
+defaults plus `"E"` measured coverage against 60 instead of 80. What the copy did NOT declare
+is what survived: `golden_required` was absent from the reference, so profile E did supply that
+one (`_risk_profile_keys = ['golden_required']`, value `True`). A preset whose reach is decided
+by which keys the installer happened to omit is not a preset modulating the flow. It was inert
+wherever the kit itself had put it, on every knob the kit itself had an opinion about.
+
+Nothing about the precedence changes — it is still explicit override > selected profile >
+engine default, and that ordering is why the copy was fatal. What changes is the delivery:
+`init` now **generates** a minimal config (identity, the detected repo and its test command,
+and only the knobs whose engine default is absent or differs from the kit's intent — which
+includes the `fast_path` block, copied whole, and the `integration` switch, because the engine defaults
+both to OFF and dropping them would have turned two shipped features off in silence). The
+reference config stays in the kit, documented as a reference and no longer copied. `doctor`
+prints the effective value of each profile-owned knob with its origin (`override` /
+`profile <X>` / `default`), reading `ENGINE_DEFAULTS` for the bottom rung, and reports an
+override that supersedes a profile as INFORMATION: declaring a knob by hand is the documented
+way to bend a preset, never an error.
+
+The fix is to stop COPYING, and deliberately not to start INJECTING. An earlier draft of this
+change materialized `ENGINE_DEFAULTS` into `defaults` at config load so a minimal config would
+carry the kit's values explicitly. The golden captured for `AC-FP-08` — the engine's entry
+behavior frozen before fast-path existed — refused it, and it was right to: with
+`coverage_threshold: 60` written in, `thresholds_declared.coverage_threshold` flipped from
+`false` to `true`, and the kit's own default started reporting as a human requirement. That is
+exactly what the provenance machinery (1.17.0) exists to keep apart, and exactly the confusion
+that made the copied config outrank the profile — the same mistake pointed the other way.
+`ENGINE_DEFAULTS` is therefore a REPORTING table: `doctor` reads it, `init` never writes it,
+and a knob nobody declared stays absent everywhere the engine reads it. `qa_tools_order`'s
+entry is `None` for the same reason: with no list declared, convergence falls back to a window
+of `--tools-per-cycle` agent steps, so there is no default list to name.
+
+Existing projects are untouched. A config that already carries the full copy keeps every value
+it has — `readiness --json` over such a fixture is byte-identical to the 1.99.0 engine and
+`init` freezes the same `defaults`, key for key (`AC-RP-04`) — because a value equal to a
+former default is indistinguishable from a value a
+human chose, and authorship cannot be recovered from equality. Those projects adopt the presets
+by DELETING the keys they never meant to declare; `doctor`'s origin column names them, and the
+kit README's config section carries the migration.
 
 ## Out of scope (this release)
 - The `uscha-devloop` skill actually skipping sub-agents by profile (the token saving). Follow-up.

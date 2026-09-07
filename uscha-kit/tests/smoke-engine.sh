@@ -1170,6 +1170,32 @@ ok = (d['errors'] == 0 and d['global_install'] is False
 sys.exit(0 if ok else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   doctor: full skill roster, per-project install, config and ACCEPTANCE read"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL doctor json"; }
+# 2.0.0: doctor resolves the risk profile to report the effective settings, and an UNKNOWN
+# profile makes _apply_risk_profile raise SystemExit (INV-RISK-01). Caught locally, so it costs
+# ONE named line -- not the toolchain/ledger checks that come after it, and not the verdict:
+# 1.99.0 said WARN/exit 0 for this config, and adding a REPORT may not raise an exit code.
+"$PY" -c "
+import io, json
+cfg = json.load(io.open('uscha.config.json', encoding='utf-8'))
+cfg['defaults']['risk_profile'] = 'Z'
+io.open('cfg-badprofile.json', 'w', encoding='utf-8', newline='\n').write(
+    json.dumps(cfg, indent=2) + '\n')"
+chk "doctor con risk_profile desconocido -> exit 0 (aviso, no error)" 0 \
+  run doctor --config cfg-badprofile.json
+run doctor --config cfg-badprofile.json --json 2>/dev/null | "$PY" -c "
+import json, sys
+d = json.load(sys.stdin)
+titles = [c['title'] for c in d['checks']]
+named = [c for c in d['checks'] if c['title'].startswith('unknown risk profile')]
+ok = (d['errors'] == 0
+      and len(named) == 1 and named[0]['level'] == 'warn'
+      and \"'Z'\" in named[0]['title']
+      and d['effective'] is None and d['risk_profile'] == 'Z'
+      and any(t.startswith('toolchain ') for t in titles)
+      and any(t.startswith('ledger ') for t in titles))
+sys.exit(0 if ok else 1)" \
+  && { PASS=$((PASS+1)); echo "  ok   doctor: perfil desconocido = una linea nombrada, el resto de los checks igual corre"; } \
+  || { FAIL=$((FAIL+1)); echo "  FAIL un risk_profile invalido ciega el bloque de config del doctor"; }
 # ledger corrupto = ERROR (no aviso): el doctor debe salir 1
 "$PY" -c "open('QA-LEDGER.json','a',encoding='utf-8').write('{trunc')"
 chk "doctor con ledger corrupto -> exit 1" 1 run doctor
@@ -12197,6 +12223,325 @@ case "$T157" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T157";;
 esac
 
+echo "== T158 (2.0.0): the risk preset decides, because init no longer copies the answer =="
+T158=$(pyin "$KIT" "$ROOT" <<'PY'
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+INSTALLER = os.path.join(kit, "install-uscha.py")
+# the release before the change: every case here is red against it, and AC-RP-04 runs its engine
+PREV_TAG = "v1.99.0"
+TMPS = []
+res, why = {}, {}
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-rp-")
+    TMPS.append(d)
+    return d
+
+
+def run(args, cwd=None):
+    return subprocess.run([sys.executable] + list(args), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8")
+
+
+def read_json(path):
+    with io.open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def write_json(path, data):
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def git_show(ref_path):
+    p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    return p.stdout if p.returncode == 0 else None
+
+
+# the profile-owned surface is READ from the engine's own table, never retyped here: a knob
+# added to a preset later is covered by AC-RP-06 the day it is added.
+spec = importlib.util.spec_from_file_location("qlrp", ENG)
+QL = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(QL)
+PROFILE_OWNED = sorted({k for v in QL.RISK_PROFILES.values() for k in v})
+
+
+def fresh_project(defaults_patch=None):
+    """A temp repo through the REAL installer, then the edit a human would make by hand.
+    Returns (repo path, generated config as a dict)."""
+    repo = os.path.join(tmp(), "proj")
+    os.makedirs(repo)
+    with io.open(os.path.join(repo, "pyproject.toml"), "w", encoding="utf-8") as fh:
+        fh.write("[project]\nname = \"proj\"\n")
+    out = run([INSTALLER, "init", "--repo", repo, "--json"])
+    if out.returncode != 0:
+        return repo, None
+    cfg_path = os.path.join(repo, "uscha.config.json")
+    cfg = read_json(cfg_path)
+    if defaults_patch:
+        cfg["defaults"].update(defaults_patch)
+        write_json(cfg_path, cfg)
+    return repo, cfg
+
+
+def effective(repo):
+    """What the ENGINE says is in force here, and where each value came from."""
+    out = run([ENG, "doctor", "--json"], cwd=repo)
+    try:
+        return json.loads(out.stdout)
+    except ValueError:
+        return None
+
+
+def measure():
+    # --- AC-RP-01: a fresh init + profile A resolves to code-review ONLY -----------------------
+    # The whole finding in one case. On 1.99.0 `init` copied the kit's reference config, so
+    # qa_tools_order arrived as an EXPLICIT declaration of the three tools and outranked the
+    # profile by ADR-001's own per-key rule -- the preset was inert in exactly the repos the kit
+    # had set up. Asserted through the engine, not by reading the file: what matters is the
+    # value in force.
+    repo, cfg = fresh_project({"risk_profile": "A"})
+    p1 = []
+    if cfg is None:
+        p1.append("installer init failed")
+    else:
+        doc = effective(repo)
+        if not doc:
+            p1.append("doctor --json unreadable")
+        else:
+            eff = (doc.get("effective") or {}).get("qa_tools_order") or {}
+            if eff.get("value") != ["code-review"]:
+                p1.append("qa_tools_order=%r, expected [code-review]" % (eff.get("value"),))
+            if eff.get("origin") != "profile A":
+                p1.append("origin=%r, expected 'profile A'" % (eff.get("origin"),))
+            if doc.get("risk_profile") != "A":
+                p1.append("doctor reports profile %r" % (doc.get("risk_profile"),))
+    res["AC-RP-01"] = not p1
+    why["AC-RP-01"] = "; ".join(p1[:3]) or "profile A -> [code-review], origin profile A"
+
+    # --- AC-RP-02: a fresh init + profile E raises coverage and requires the golden ------------
+    repo, cfg = fresh_project({"risk_profile": "E"})
+    p2 = []
+    if cfg is None:
+        p2.append("installer init failed")
+    else:
+        doc = effective(repo) or {}
+        eff = doc.get("effective") or {}
+        cov = eff.get("coverage_threshold") or {}
+        gold = eff.get("golden_required") or {}
+        if cov.get("value") != 80 or cov.get("origin") != "profile E":
+            p2.append("coverage_threshold=%r/%r, expected 80/profile E"
+                      % (cov.get("value"), cov.get("origin")))
+        if gold.get("value") is not True or gold.get("origin") != "profile E":
+            p2.append("golden_required=%r/%r, expected True/profile E"
+                      % (gold.get("value"), gold.get("origin")))
+    res["AC-RP-02"] = not p2
+    why["AC-RP-02"] = "; ".join(p2[:3]) or "profile E -> coverage 80, golden required"
+
+    # --- AC-RP-03: an explicit value still wins, and says so -----------------------------------
+    # The precedence is unchanged in BOTH directions. A human who declares a knob keeps it, and
+    # the report names the profile it supersedes as information: bending a preset by declaring a
+    # knob is the documented way, never an error condition.
+    repo, cfg = fresh_project({"risk_profile": "E", "coverage_threshold": 60})
+    p3 = []
+    if cfg is None:
+        p3.append("installer init failed")
+    else:
+        doc = effective(repo) or {}
+        cov = (doc.get("effective") or {}).get("coverage_threshold") or {}
+        if cov.get("value") != 60 or cov.get("origin") != "override":
+            p3.append("coverage_threshold=%r/%r, expected 60/override"
+                      % (cov.get("value"), cov.get("origin")))
+        detail = " ".join(c.get("detail") or "" for c in (doc.get("checks") or [])
+                          if (c.get("title") or "").startswith("effective coverage_threshold"))
+        if "supersedes profile E" not in detail:
+            p3.append("doctor does not report the override superseding the profile")
+        if any(c.get("level") != "ok" for c in (doc.get("checks") or [])
+               if (c.get("title") or "").startswith("effective ")):
+            p3.append("an effective-setting line is reported as a problem, not information")
+        # and the profile still supplies what the human did NOT declare
+        gold = (doc.get("effective") or {}).get("golden_required") or {}
+        if gold.get("origin") != "profile E":
+            p3.append("golden_required origin=%r, the profile stopped supplying it"
+                      % (gold.get("origin"),))
+    res["AC-RP-03"] = not p3
+    why["AC-RP-03"] = "; ".join(p3[:3]) or "override kept at 60, reported over profile E"
+
+    # --- AC-RP-04: an existing full-copy config is untouched ------------------------------------
+    # Nothing is deleted and nothing silently moves: a value equal to a former default cannot be
+    # told apart from a value a human chose. Measured against the PREV_TAG engine, not against a
+    # literal. Two halves, both timing-free: the same ledger read by both engines (readiness is
+    # unchanged), and the same config initialised by both (init injects nothing new).
+    prev_engine = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    prev_cfg = git_show(PREV_TAG + ":uscha-kit/uscha.config.json")
+    if prev_engine is None or prev_cfg is None:
+        res["AC-RP-04"] = None
+        why["AC-RP-04"] = PREV_TAG + " engine/config not reachable (no git, or a shallow clone)"
+    else:
+        w = tmp()
+        os.makedirs(os.path.join(w, "repo"))
+        old = os.path.join(w, "prev_engine.py")
+        with io.open(old, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(prev_engine)
+        cfg = json.loads(prev_cfg)
+        cfg["repos"] = [{"name": "p", "path": "repo", "type": "python"}]
+        write_json(os.path.join(w, "uscha.config.json"), cfg)
+        with io.open(os.path.join(w, "ACCEPTANCE.md"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("# ACCEPTANCE\n\n- [x] AC-01 one\n- [ ] AC-02 two\n")
+        p4 = []
+        init_old = run([old, "init", "--config", "uscha.config.json", "--out", "L.json"], cwd=w)
+        if init_old.returncode != 0:
+            p4.append("prev engine could not init: %s" % (init_old.stderr or "")[:120])
+        else:
+            a = run([old, "readiness", "--ledger", "L.json", "--json"], cwd=w).stdout
+            b = run([ENG, "readiness", "--ledger", "L.json", "--json"], cwd=w).stdout
+            if a != b or not a.strip():
+                p4.append("readiness --json over the same ledger is not byte-identical")
+            # and init freezes the SAME defaults: not one key added, not one moved. This is
+            # the half that keeps ENGINE_DEFAULTS a reporting table. Materializing it into
+            # `defaults` would make the kit's own value indistinguishable from a human
+            # declaration -- `thresholds_declared` flips to true, and the golden AC-FP-08
+            # captured before this feature existed stops matching.
+            run([old, "init", "--config", "uscha.config.json", "--out", "Lo.json"], cwd=w)
+            run([ENG, "init", "--config", "uscha.config.json", "--out", "Ln.json"], cwd=w)
+            do = read_json(os.path.join(w, "Lo.json"))["config"].get("defaults") or {}
+            dn = read_json(os.path.join(w, "Ln.json"))["config"].get("defaults") or {}
+            if json.dumps(do, sort_keys=True) != json.dumps(dn, sort_keys=True):
+                p4.append("init froze different defaults than %s: added %r, dropped %r, moved %r"
+                          % (PREV_TAG, sorted(set(dn) - set(do)), sorted(set(do) - set(dn)),
+                             sorted(k for k in do if k in dn and dn[k] != do[k])))
+        res["AC-RP-04"] = not p4
+        why["AC-RP-04"] = "; ".join(p4[:3]) or ("full-copy config identical to " + PREV_TAG)
+
+    # --- AC-RP-05: idempotence and the user's file survive generation ---------------------------
+    # Generating instead of copying must not cost the T85 guarantees: a second run on an
+    # untouched project reports `unchanged` (so the generated bytes are deterministic), and a
+    # run over a config the user edited reports the conflict and writes nothing.
+    repo, cfg = fresh_project()
+    p5 = []
+    if cfg is None:
+        p5.append("installer init failed")
+    else:
+        again = run([INSTALLER, "init", "--repo", repo, "--json"])
+        try:
+            ops = json.loads(again.stdout).get("operations") or []
+        except ValueError:
+            ops = []
+        cfg_ops = [o for o in ops if str(o.get("path", "")).endswith("uscha.config.json")]
+        if again.returncode != 0 or not cfg_ops or cfg_ops[0].get("action") != "unchanged":
+            p5.append("re-init on an untouched project is not `unchanged` (rc=%s, %r)"
+                      % (again.returncode, cfg_ops[:1]))
+        cfg_path = os.path.join(repo, "uscha.config.json")
+        mine = json.dumps({"defaults": {"risk_profile": "C"}, "repos": []}, indent=2) + "\n"
+        with io.open(cfg_path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(mine)
+        third = run([INSTALLER, "init", "--repo", repo, "--json"])
+        try:
+            payload = json.loads(third.stdout)
+        except ValueError:
+            payload = {}
+        conflicted = [c for c in (payload.get("conflicts") or [])
+                      if str(c.get("path", "")).endswith("uscha.config.json")]
+        with io.open(cfg_path, encoding="utf-8", newline="") as fh:
+            after = fh.read()
+        if third.returncode == 0 or not conflicted:
+            p5.append("an edited config was not reported as a conflict (rc=%s)" % third.returncode)
+        if after != mine:
+            p5.append("the user's config was overwritten")
+    res["AC-RP-05"] = not p5
+    why["AC-RP-05"] = "; ".join(p5[:3]) or "re-init is `unchanged`; an edited config conflicts"
+
+    # --- AC-RP-06: the generated config has no opinion the preset must fight --------------------
+    # The criterion that would have caught the defect. It is NOT about the values being right:
+    # it is about the file declaring nothing a profile owns, whatever the value would have been.
+    repo, cfg = fresh_project()
+    p6 = []
+    if cfg is None:
+        p6.append("installer init failed")
+    else:
+        declared = [k for k in PROFILE_OWNED if k in (cfg.get("defaults") or {})]
+        if declared:
+            p6.append("generated config declares profile-owned knob(s): " + ", ".join(declared))
+        if not PROFILE_OWNED:
+            p6.append("no profile-owned knobs read from the engine -- the check would be vacuous")
+        # a working setup all the same: the detected repo, its test command, and a config the
+        # engine accepts (a minimal file that cannot init a ledger is not a fix)
+        if [r.get("type") for r in (cfg.get("repos") or [])] != ["python"]:
+            p6.append("init did not detect the repo: %r" % (cfg.get("repos"),))
+        if "test_command_python" not in (cfg.get("defaults") or {}):
+            p6.append("no test command for the detected repo type")
+        # ...and "minimal" is bounded from BELOW as well. fast_path and integration are the two
+        # blocks whose kit intent differs from the engine default (absent = OFF for both), so
+        # dropping them in the move from copy to generate would have turned two shipped
+        # features off in silence: fastpath-eval would answer DENY `configured: false` on every
+        # fresh project, and readiness would measure 5 dimensions instead of 6. No profile owns
+        # either, so asserting them here does not weaken the "no opinion" half above.
+        if (cfg.get("defaults") or {}).get("fast_path", {}).get("enabled") is not True:
+            p6.append("generated config does not enable fast_path")
+        if (cfg.get("integration") or {}).get("enabled") is not True:
+            p6.append("generated config does not enable integration")
+        if run([ENG, "init", "--config", "uscha.config.json", "--out", "QA-LEDGER.json"],
+               cwd=repo).returncode != 0:
+            p6.append("the engine cannot init a ledger from the generated config")
+        else:
+            # measured, not inferred from the file: the engine must not report the fast path as
+            # unconfigured here. (The verdict itself stays DENY -- a temp dir is not a git repo,
+            # so `base_ref` cannot resolve -- and that is a DIFFERENT signal, fail-closed as
+            # ADR-003 requires. What is asserted is the absence of `configured: false`.)
+            fp_repo = (cfg.get("repos") or [{}])[0].get("name") or "-"
+            fp = run([ENG, "fastpath-eval", "--repo", fp_repo,
+                      "--ledger", "QA-LEDGER.json", "--json"], cwd=repo)
+            try:
+                fp_signals = json.loads(fp.stdout).get("signals") or []
+            except ValueError:
+                fp_signals = None
+            if fp_signals is None:
+                p6.append("fastpath-eval --json unreadable on the generated config")
+            elif [s for s in fp_signals if s.get("name") == "configured"]:
+                p6.append("fastpath-eval reports the fast path as not configured")
+            # and the integration DIMENSION is measured, not dropped
+            rd = run([ENG, "readiness", "--ledger", "QA-LEDGER.json", "--json"], cwd=repo)
+            try:
+                dims = sorted(json.loads(rd.stdout).get("dimensions") or {})
+            except ValueError:
+                dims = []
+            if "integration" not in dims:
+                p6.append("readiness drops the integration dimension: %r" % (dims,))
+            # and the LEDGER it freezes carries none either: an engine default written into
+            # `defaults` would read as a human declaration downstream (provenance, 1.17.0),
+            # which is the same confusion pointed the other way.
+            frozen = read_json(os.path.join(repo, "QA-LEDGER.json"))["config"].get("defaults") or {}
+            leaked = [k for k in PROFILE_OWNED if k in frozen]
+            if leaked:
+                p6.append("init froze profile-owned knob(s) nobody declared: " + ", ".join(leaked))
+    res["AC-RP-06"] = not p6
+    why["AC-RP-06"] = "; ".join(p6[:3]) or ("no profile-owned knob declared ("
+                                            + ", ".join(PROFILE_OWNED) + ")")
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".rp-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T158" in
+  OK*) PASS=$((PASS+1)); echo "  ok   risk presets take effect (AC-RP-01..06): $T158";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T158";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -13266,6 +13611,10 @@ FAMILIES = (
     # never a silent pass.
     (".xv-cases.json", "cross-vendor-arm", "T157",                  # ADR-042
      _seq("AC-XV", 1, 7)),
+    # AC-RP-04 runs the v1.99.0 engine out of git -- without it (no git, a shallow clone, an
+    # extracted kit) it reports None = UNMEASURED, never a silent pass.
+    (".rp-cases.json", "risk-presets", "T158",                      # ADR-001 amended, 2.0.0
+     _seq("AC-RP", 1, 6)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

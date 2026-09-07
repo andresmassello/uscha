@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v1.99.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.0.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -444,7 +444,60 @@ primary toolchain of each repo by type (its absence is a WARNING — it may live
 
 ## Configure
 
-Edit `uscha.config.json`:
+`uscha init` **generates** a minimal `uscha.config.json` for the project: its name, the repo it
+detected (path, type, test command), `acceptance_file`, `id_granularity`, `max_iterations`, and
+the `fast_path` block and the `integration` switch (no contract command: that names a build
+system and is yours to add). Those last two are there because the engine defaults
+both to OFF and the kit means them ON — without them `fastpath-eval` would answer
+`DENY configured: false` on a fresh project and readiness would measure five dimensions instead
+of six. Every other knob is absent on purpose and resolves to the engine default. The kit's own
+`uscha-kit/uscha.config.json` is the **comprehensive reference** — every knob at the kit's
+value, to read and copy from — and is no longer copied into projects.
+
+That matters because of one rule: **a knob you declare > the preset named by
+`defaults.risk_profile` > the engine default**. A copied default is an explicit declaration, so
+a project holding the whole reference leaves its risk profile nothing to decide.
+
+- `defaults.risk_profile`: `A`..`E` (ADR-001) — a named preset that expands into
+  `qa_tools_order`, `coverage_threshold` and `golden_required`. `A` (trivial) runs
+  `[code-review]` only; `E` (migration/legacy) requires the three tools, coverage 80 and an
+  approved golden. Absent = the kit defaults.
+- Check what is actually in force, and where each value came from:
+
+```bash
+python3 ~/.claude/skills/uscha-devloop/qa_ledger.py doctor --json
+# -> "risk_profile" and "effective": {knob: {value, origin}}
+```
+
+  `origin` is `override` (you declared it), `profile <X>` (the preset supplied it), or
+  `default` (the engine's own value). An override that supersedes a profile is reported as
+  information, not an error — declaring a knob by hand is how a preset is bent. Nothing is
+  written back into your config: a knob nobody declared stays absent, which is what lets the
+  engine keep telling a requirement apart from a default. With no profile and no
+  `qa_tools_order`, that knob reads `not declared` and convergence uses a window of
+  `--tools-per-cycle` agent steps.
+
+**Migrating a project initialised before 2.0.0.** Its config is the full copy, so
+`coverage_threshold` and `qa_tools_order` read `origin: override` and no profile can move them.
+(`golden_required` is the one the reference never declared, which is why a profile could still
+supply it — that is the whole shape of the defect: the preset reached only the keys the copy
+happened to omit.) Delete the ones you never meant to declare, then add the profile:
+
+```diff
+ {
+   "defaults": {
+-    "coverage_threshold": 60,
+-    "qa_tools_order": ["code-review", "judgment-day", "improve"],
++    "risk_profile": "A",
+     "acceptance_file": "ACCEPTANCE.md"
+   }
+ }
+```
+
+Nothing is deleted for you: a value equal to a former default cannot be told apart from a value
+you chose, so existing configs keep behaving exactly as they did.
+
+The full set of knobs, all optional:
 
 - `repos[]`: name, `path` (relative to the primary repo), `type` (`maven`|`flutter`|`python`|`node`|`go`|`rust`|`dotnet`|`cpp`|`gradle`|`swift`).
 - `defaults.coverage_threshold`: triggers the characterization phase if below it.

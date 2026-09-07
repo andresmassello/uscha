@@ -235,7 +235,8 @@ The Linux discovery run also scoped two larger threads, out of this document's o
   **CLOSED in 1.96.0**: the field is removed rather than re-synchronised. It was a SEVENTH
   version surface that nothing gated and exactly one cosmetic `doctor` line read, so
   keeping it in step by hand with six files it has nothing to do with bought nothing.
-  `uscha-kit/uscha.config.json` -- the template a consumer copies -- stays one of the six.
+  `uscha-kit/uscha.config.json` -- the comprehensive reference; since 2.0.0 `init` generates
+  the project config instead of copying it -- stays one of the six.
 - **A third install target, `pi`** (Earendil, Agent Skills standard): the 9 skills load
   unmodified; INV-GOLDEN-01 is portable to pi's blocking `tool_call` event as a small
   extension. This is a FEATURE, with ten design decisions (D-01…D-10 in the field handoff) the

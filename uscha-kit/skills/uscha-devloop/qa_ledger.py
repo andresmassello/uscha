@@ -1911,6 +1911,53 @@ def _apply_risk_profile(defaults):
     return defaults
 
 
+# The engine's OWN value for each knob a risk profile owns (kit 2.0.0): the bottom rung of
+# the precedence ladder -- explicit override > selected profile > engine default -- as `doctor`
+# reports it, so the origin of every effective value is visible without reading the source.
+#
+# It is a REPORTING table and is deliberately NEVER materialized into `defaults`. Writing an
+# engine default into the config would make the kit's own value indistinguishable from a human
+# declaration, which is precisely what `thresholds_declared` / `declared_caps` exist to keep
+# apart (provenance, kit 1.17.0) -- and precisely the confusion that let a COPIED config
+# outrank the profile until 2.0.0. The fix for that was to stop copying, not to start
+# injecting: `uscha init` now generates a minimal config (install-uscha.py), and a knob it
+# leaves out keeps meaning "not declared" everywhere the engine reads it.
+#
+# qa_tools_order is None on purpose: with no list declared, convergence falls back to a window
+# of --tools-per-cycle agent steps, so there is no default list to name and saying otherwise
+# would be a narrated claim.
+ENGINE_DEFAULTS = {
+    "qa_tools_order": None,
+    "coverage_threshold": 60,
+    "golden_required": False,
+}
+ENGINE_DEFAULT_NOTES = {
+    "qa_tools_order": "not declared - convergence uses a window of --tools-per-cycle "
+                      "agent steps",
+}
+
+
+def _resolved_defaults(cfg):
+    """(resolved defaults, origin per profile-owned key) for a RAW config -- the effective
+    settings `doctor` reports. Origin is `override` (declared in defaults), `profile <X>`, or
+    `default`. Read-only: never mutates cfg and never writes anything back."""
+    raw = cfg.get("defaults") if isinstance(cfg, dict) else None
+    raw = dict(raw) if isinstance(raw, dict) else {}
+    declared = set(raw)
+    profile = raw.get("risk_profile")
+    expanded = _apply_risk_profile(dict(raw))
+    resolved, origin = {}, {}
+    for key, fallback in ENGINE_DEFAULTS.items():
+        resolved[key] = expanded[key] if key in expanded else fallback
+        if key in declared:
+            origin[key] = "override"
+        elif profile and key in RISK_PROFILES.get(profile, {}):
+            origin[key] = "profile %s" % profile
+        else:
+            origin[key] = "default"
+    return resolved, origin
+
+
 def _validate_init_config(cfg):
     """Validate only the engine's core init contract before creating a ledger."""
     if not isinstance(cfg, dict):
@@ -1921,6 +1968,9 @@ def _validate_init_config(cfg):
     # expand a named risk profile into concrete knobs BEFORE validating them, so the merged
     # values (qa_tools_order, coverage_threshold, golden_required) flow through the checks
     # below. Explicit config wins per key; an unknown profile fails loud (INV-RISK-01).
+    # Nothing else is written into `defaults`: a key the human did not declare and the profile
+    # did not supply stays ABSENT, so provenance can still tell the kit's default apart from a
+    # declaration (1.17.0). ENGINE_DEFAULTS is what `doctor` reports, never what init freezes.
     _apply_risk_profile(defaults)
     if "golden_required" in defaults and not isinstance(defaults["golden_required"], bool):
         raise SystemExit("[qa_ledger] invalid config: golden_required must be a boolean")
@@ -12273,6 +12323,7 @@ def cmd_doctor(args):
 
     # --- proyecto (si hay config aca) ---------------------------------------
     qa_order = ["code-review", "judgment-day", "improve"]   # default del kit
+    effective, risk_profile = None, None
     cfg_path = args.config or "uscha.config.json"
     if os.path.isfile(cfg_path):
         try:
@@ -12296,7 +12347,50 @@ def cmd_doctor(args):
                     warn(f"ACCEPTANCE {acc} has no criteria (zero checkboxes)")
             elif acc:
                 warn(f"acceptance_file declared but missing: {acc}")
-            qa_order = defaults.get("qa_tools_order", qa_order)
+            # effective settings, with the ORIGIN of each (2.0.0): the three-rung ladder --
+            # explicit override > selected profile > engine default. Reported, never written
+            # back. An override that supersedes the profile is reported as INFORMATION:
+            # declaring a knob by hand is the documented way to bend a preset, never an error.
+            #
+            # An UNKNOWN profile is caught HERE rather than by the config-wide handler below.
+            # `_apply_risk_profile` raises SystemExit on it (INV-RISK-01: a declared risk level
+            # is never inert, and `init` refuses such a config) -- letting that escape would
+            # abandon the toolchain, rubric and ledger checks that follow, so the diagnostic
+            # would go blind on the first bad key instead of naming it. It is a WARN because
+            # that is the verdict doctor gave this config before 2.0.0: resolving the profile
+            # is a new REPORT, and a new report may not silently raise an existing exit code.
+            risk_profile = defaults.get("risk_profile")
+            try:
+                resolved, origin = _resolved_defaults(cfg)
+            except SystemExit:
+                resolved, origin = None, None
+                warn("unknown risk profile %s - no preset applied" % ascii(risk_profile),
+                     "valid: " + ", ".join(sorted(RISK_PROFILES))
+                     + " - `init` refuses this config (INV-RISK-01); fix it before the loop "
+                       "runs. Every other check below still ran.")
+            if origin is not None:
+                effective = {k: {"value": resolved.get(k), "origin": origin[k]}
+                             for k in ENGINE_DEFAULTS}
+                ok("risk profile: %s" % (risk_profile or "none declared"),
+                   "effective settings below - precedence: override > profile > default")
+                for key in ENGINE_DEFAULTS:
+                    value = resolved.get(key)
+                    if isinstance(value, list):
+                        shown = ", ".join(value)
+                    elif value is None:
+                        shown = ENGINE_DEFAULT_NOTES.get(key, "not declared")
+                    else:
+                        shown = value
+                    detail = "origin: " + origin[key]
+                    if (origin[key] == "override" and risk_profile
+                            and key in RISK_PROFILES.get(risk_profile, {})):
+                        detail += (" - this override supersedes profile %s (information: an "
+                                   "explicit declaration is how a preset is bent)"
+                                   % risk_profile)
+                    ok("effective %s = %s" % (key, shown), detail)
+                # the QA-skills check below asks for the tools actually in force; with no list
+                # declared it keeps looking for the kit's three, as it always has
+                qa_order = resolved.get("qa_tools_order") or qa_order
             for r in repos:
                 tool = DOCTOR_TOOLS.get(r.get("type", ""))
                 if not tool:
@@ -12336,8 +12430,11 @@ def cmd_doctor(args):
             err(f"{cfg_path} invalid", str(exc))
     else:
         warn(f"no {cfg_path} in this directory",
-             "install: copy the kit uscha.config.json to the repo root and declare "
-             "your repos/types and your quality bar - only needed to RUN the loop here")
+             "install: run `uscha init` here (or `python install-uscha.py init --repo .`) - it "
+             "GENERATES a minimal one and detects the repo; then declare your quality bar. Do "
+             "NOT copy the kit's uscha.config.json: it is a REFERENCE, and every knob in it "
+             "would arrive as an explicit declaration outranking your risk_profile (ADR-001, "
+             "as amended) - only needed to RUN the loop here")
 
     # --- skills de QA del loop (externas al kit, se orquestan sin traerlas) --
     # sin ellas la fase 3 (QA loop) no corre; chequeables con o sin config.
@@ -12361,6 +12458,9 @@ def cmd_doctor(args):
         print(json.dumps({"verdict": "ERROR" if n_err else ("WARN" if n_warn else "OK"),
                           "ok": n_ok, "warnings": n_warn, "errors": n_err,
                           "global_install": is_global, "plugin_install": is_plugin,
+                          # effective settings + origin per knob (2.0.0); null when there is
+                          # no project config here to resolve them from
+                          "risk_profile": risk_profile, "effective": effective,
                           "checks": [{"level": lv, "title": t, "detail": d}
                                      for lv, t, d in checks]},
                          indent=2, ensure_ascii=True))

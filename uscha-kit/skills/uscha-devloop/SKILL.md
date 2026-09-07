@@ -314,7 +314,16 @@ profile A (trivial change) skip it. It **collapses into `readiness`** as a `gate
 ## Phase 3 — QA loop (per repo)
 
 Run the tools in `config.defaults.qa_tools_order` (default: code-review → judgment-day
-→ improve). One pass of all tools = one cycle. After **each** tool pass:
+→ improve). One pass of all tools = one cycle.
+
+Read the EFFECTIVE order, not the config file: since 2.0.0 `uscha init` generates a minimal
+config, so `qa_tools_order` is often absent there and resolves from `defaults.risk_profile`
+(ADR-001) or from the engine default. `qa_ledger.py doctor --json` prints it as
+`effective.qa_tools_order` with its `origin`; the ledger froze the same value at `init`. A
+project on **profile A runs `code-review` only** — do NOT invoke judgment-day or improve there,
+and convergence must not wait for them.
+
+After **each** tool pass:
 
 1. Apply only fixes at/above the severity gate. Send the rest to `ISSUES-DEFERRED.md`.
 2. Run the repo test command. If red and the fix isn't obvious → escalate.

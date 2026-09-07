@@ -18,7 +18,7 @@ The decisions a consumer of the kit needs. These govern the engine and the loop:
 
 | ADR | What it decides | Status |
 |---|---|---|
-| [**ADR-001**](ADR-001-risk-profile-modulates-flow.md) — The risk profile modulates the flow (kit-shipped, overridable presets) | `risk_profile` is a **named preset**, not a new gating mechanism: at config load the selected profile expands into knobs the config already understands. | Accepted |
+| [**ADR-001**](ADR-001-risk-profile-modulates-flow.md) — The risk profile modulates the flow (kit-shipped, overridable presets) | `risk_profile` is a **named preset**, not a new gating mechanism: at config load the selected profile expands into knobs the config already understands. | Accepted — **amended 2.0.0: `init` generates a minimal config so the profile is not pre-empted by copied defaults** |
 | [**ADR-002**](ADR-002-golden-required-cap.md) — `golden_required` — a declarable cap for "an approved golden must exist" | Adds `golden_required` as a declarable readiness knob; when it is active and no approved `golden-diff` gate is recorded, that repo's readiness is capped at 49 (NOT READY). | Accepted |
 | [**ADR-003**](ADR-003-fast-path-measured-entry.md) — Fast-path entry is granted by measured signals, never by opinion | `/uscha-devloop` gains a fast-path mode, entered only when `fastpath-eval` returns `ALLOW` from measured signals — files changed and LOC delta read from `git diff --numstat`, never self-reported. | Accepted |
 | [**ADR-004**](ADR-004-defer-golden-touched-veto.md) — The golden-touched veto is deferred until a golden↔source mapping exists | Phase 1 ships **without** `forbid_when_golden_touched`; the fine-grained case waits until characterize records a coverage mapping at capture time. | Accepted |
