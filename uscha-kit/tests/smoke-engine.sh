@@ -15450,7 +15450,7 @@ echo "== T164 (2.2.0): the smoke run as MEASURED evidence -- executed, never nar
 # checks with a name and a boolean ok. Three controls carry the honesty: a failed check is a
 # BLOCKER like any other fact gate (never advisory -- ok is binary); a report the engine cannot
 # read is exit 2 naming the offending check or field, never a scored run, and an EMPTY checks
-# list is refused because a run that verified nothing is not a clean gate; and AC-SK-09 is the
+# list is refused because a run that verified nothing is not a clean gate; and AC-SI-09 is the
 # RED PROBE -- the v2.1.0 engine has neither the subcommand, nor the --kind, nor the block.
 T164=$(pyin "$KIT" "$ROOT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
@@ -15458,7 +15458,7 @@ kit, root = sys.argv[1], sys.argv[2]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
-# the release before smoke-ingest: its engine must show the absence (AC-SK-09).
+# the release before smoke-ingest: its engine must show the absence (AC-SI-09).
 PREV_TAG = "v2.1.0"
 TMPS = []
 res, why = {}, {}
@@ -15565,7 +15565,7 @@ TWO = ONE + [{"name": "mobile-app", "type": "python", "path": "mobile-app"}]
 
 
 def measure():
-    # --- AC-SK-01: one ok=false check -> gate:smoke FAIL, gated, blocking convergence --------
+    # --- AC-SI-01: one ok=false check -> gate:smoke FAIL, gated, blocking convergence --------
     d = project(ONE)
     r = ingest(d, "backend-api", "red.json")
     rec = latest(d, "backend-api")
@@ -15595,11 +15595,11 @@ def measure():
     j2 = ready_json(d)
     if [g for g in j2["gates"] if g.get("tool") == "gate:smoke" and g.get("blocking")]:
         p.append("a later clean smoke did not clear the block: %r" % (j2["gates"],))
-    res["AC-SK-01"] = not p
-    why["AC-SK-01"] = "; ".join(p[:3]) or ("a check with ok=false persists a gated gate:smoke "
+    res["AC-SI-01"] = not p
+    why["AC-SI-01"] = "; ".join(p[:3]) or ("a check with ok=false persists a gated gate:smoke "
                                            "fail at exit 1 and blocks; a clean report clears it")
 
-    # --- AC-SK-02: a check named "AC-28 ..." closes AC-28 MEASURED ---------------------------
+    # --- AC-SI-02: a check named "AC-28 ..." closes AC-28 MEASURED ---------------------------
     d = project(TWO, defaults={"readiness_weights": WEIGHTS})
     before = ready_json(d)
     p = []
@@ -15620,11 +15620,11 @@ def measure():
     txt = ready(d).stdout
     if "narrated-only" in txt or "smoke check" not in ready(project(TWO)).stdout:
         p.append("the narrated-only clause no longer names the smoke path")
-    res["AC-SK-02"] = not p
-    why["AC-SK-02"] = "; ".join(p[:3]) or ("a check named 'AC-28 ...' closes AC-28 measured "
+    res["AC-SI-02"] = not p
+    why["AC-SI-02"] = "; ".join(p[:3]) or ("a check named 'AC-28 ...' closes AC-28 measured "
                                            "and is attributed in acceptance.smoke_closed")
 
-    # --- AC-SK-03: a FAILED tagged check VETOES, even beside green evidence ------------------
+    # --- AC-SI-03: a FAILED tagged check VETOES, even beside green evidence ------------------
     d = project(TWO, defaults={"readiness_weights": WEIGHTS})
     ingest(d, "backend-api", "green.json")
     p = []
@@ -15647,11 +15647,11 @@ def measure():
     if j2["acceptance"]["smoke_closed"] or j2["acceptance"]["measured_closed"]:
         p.append("a green check inside a failing report closed a criterion: %r"
                  % (j2["acceptance"]["measured_closed"],))
-    res["AC-SK-03"] = not p
-    why["AC-SK-03"] = "; ".join(p[:3]) or ("a failed tagged check vetoes like a red testcase, "
+    res["AC-SI-03"] = not p
+    why["AC-SI-03"] = "; ".join(p[:3]) or ("a failed tagged check vetoes like a red testcase, "
                                            "and a failing report closes nothing at all")
 
-    # --- AC-SK-04: an EMPTY checks list is refused (exit 2) and persists nothing -------------
+    # --- AC-SI-04: an EMPTY checks list is refused (exit 2) and persists nothing -------------
     d = project(ONE)
     write(os.path.join(d, "empty.json"), json.dumps({"checks": []}) + "\n")
     r = ingest(d, "backend-api", "empty.json")
@@ -15662,12 +15662,12 @@ def measure():
         p.append("the refusal does not say what was empty: %r" % r.stderr[:120])
     if latest(d, "backend-api") is not None:
         p.append("an empty smoke still wrote a record -- it would have read as a clean gate")
-    res["AC-SK-04"] = not p
-    why["AC-SK-04"] = "; ".join(p[:3]) or ("an empty checks list refuses at exit 2 and "
+    res["AC-SI-04"] = not p
+    why["AC-SI-04"] = "; ".join(p[:3]) or ("an empty checks list refuses at exit 2 and "
                                            "persists nothing: a run that verified nothing "
                                            "is not evidence")
 
-    # --- AC-SK-05: a check without a boolean ok is refused, NAMING it ------------------------
+    # --- AC-SI-05: a check without a boolean ok is refused, NAMING it ------------------------
     d = project(ONE)
     write(os.path.join(d, "strok.json"), json.dumps({"checks": [
         {"name": "healthz", "ok": True},
@@ -15692,12 +15692,12 @@ def measure():
                 p.append("%s does not name %r: %r" % (name, needle, r.stderr[:140]))
     if latest(d, "backend-api") is not None:
         p.append("a refused report still wrote a record")
-    res["AC-SK-05"] = not p
-    why["AC-SK-05"] = "; ".join(p[:3]) or ("a check without a boolean ok refuses at exit 2 "
+    res["AC-SI-05"] = not p
+    why["AC-SI-05"] = "; ".join(p[:3]) or ("a check without a boolean ok refuses at exit 2 "
                                            "naming the check; so do a missing name, a missing "
                                            "checks key, malformed JSON and a missing file")
 
-    # --- AC-SK-06: the record carries the MEASUREMENT, and silence stays silent --------------
+    # --- AC-SI-06: the record carries the MEASUREMENT, and silence stays silent --------------
     d = project(TWO, defaults={"readiness_weights": WEIGHTS})
     ingest(d, "mobile-app", "red.json")
     j = ready_json(d)
@@ -15723,11 +15723,11 @@ def measure():
     d2 = project(ONE)
     if "--- smoke" in ready(d2).stdout or "smoke" in ready_json(d2):
         p.append("a project with no smoke report is no longer silent about it")
-    res["AC-SK-06"] = not p
-    why["AC-SK-06"] = "; ".join(p[:3]) or ("the record carries report, counts and per-check "
+    res["AC-SI-06"] = not p
+    why["AC-SI-06"] = "; ".join(p[:3]) or ("the record carries report, counts and per-check "
                                            "receipts; a repo that ingested none is silent")
 
-    # --- AC-SK-07: the CONTROL PAIR -- pass caps nothing, fail caps <=65 ---------------------
+    # --- AC-SI-07: the CONTROL PAIR -- pass caps nothing, fail caps <=65 ---------------------
     d = project(TWO, defaults={"readiness_weights": WEIGHTS})
     ingest(d, "backend-api", "green.json")
     green = ready_json(d)
@@ -15742,11 +15742,11 @@ def measure():
     if red["score"] != 65 or "BLOCKER" not in (red.get("cap_reason") or ""):
         p.append("a FAILING smoke did not cap at 65: score %r cap %r"
                  % (red["score"], red.get("cap_reason")))
-    res["AC-SK-07"] = not p
-    why["AC-SK-07"] = "; ".join(p[:3]) or ("pass caps nothing (score %s), fail caps at %s"
+    res["AC-SI-07"] = not p
+    why["AC-SI-07"] = "; ".join(p[:3]) or ("pass caps nothing (score %s), fail caps at %s"
                                            % (green["score"], red["score"]))
 
-    # --- AC-SK-08: log-gate --kind smoke is the PARITY door, and it REFUSES advisory ---------
+    # --- AC-SI-08: log-gate --kind smoke is the PARITY door, and it REFUSES advisory ---------
     d = project(ONE)
     p = []
     for verdict in ("pass", "fail", "not-run"):
@@ -15767,15 +15767,15 @@ def measure():
     j = ready_json(d)
     if not [g for g in j["gates"] if g.get("tool") == "gate:smoke" and g.get("blocking")]:
         p.append("a smoke fail logged through log-gate does not block: %r" % (j["gates"],))
-    res["AC-SK-08"] = not p
-    why["AC-SK-08"] = "; ".join(p[:3]) or ("smoke records pass/fail/not-run and a fail blocks; "
+    res["AC-SI-08"] = not p
+    why["AC-SI-08"] = "; ".join(p[:3]) or ("smoke records pass/fail/not-run and a fail blocks; "
                                            "advisory is refused at exit 2")
 
-    # --- AC-SK-09: the RED PROBE -- the PREV_TAG engine has none of the three ----------------
+    # --- AC-SI-09: the RED PROBE -- the PREV_TAG engine has none of the three ----------------
     prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
     if prev is None:
-        res["AC-SK-09"] = None
-        why["AC-SK-09"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+        res["AC-SI-09"] = None
+        why["AC-SI-09"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
     else:
         w = tmp()
         old = os.path.join(w, "prev_engine.py")
@@ -15798,8 +15798,8 @@ def measure():
                 p.append("the old readiness already reported smoke_closed")
         except ValueError:
             p.append("no JSON from the old readiness: %r" % (o3.stderr or "")[:120])
-        res["AC-SK-09"] = not p
-        why["AC-SK-09"] = "; ".join(p[:3]) or ("neither the subcommand nor the --kind nor the "
+        res["AC-SI-09"] = not p
+        why["AC-SI-09"] = "; ".join(p[:3]) or ("neither the subcommand nor the --kind nor the "
                                                "smoke block exists on " + PREV_TAG)
 
 
@@ -15808,7 +15808,7 @@ try:
 finally:
     for _t in TMPS:
         shutil.rmtree(_t, ignore_errors=True)
-sidecar(kit, ".sk-cases.json", res)
+sidecar(kit, ".si-cases.json", res)
 bad = [k for k, v in res.items() if v is False]
 print(("OK %d cases" % len(res)) if not bad
       else "BAD " + ",".join(sorted(bad)) + " | "
@@ -15816,7 +15816,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T164" in
-  OK*) PASS=$((PASS+1)); echo "  ok   smoke as measured evidence (AC-SK-01..09): $T164";;
+  OK*) PASS=$((PASS+1)); echo "  ok   smoke as measured evidence (AC-SI-01..09): $T164";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T164";;
 esac
 
@@ -16639,10 +16639,10 @@ FAMILIES = (
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".co-cases.json", "corpus-field-truth", "T163",                 # ADR-046, 2.2.0
      _seq("AC-CO", 1, 9)),
-    # AC-SK-09 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git,
+    # AC-SI-09 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git,
     # a shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
-    (".sk-cases.json", "smoke-measured", "T164",                     # ADR-047, 2.2.0
-     _seq("AC-SK", 1, 9)),
+    (".si-cases.json", "smoke-measured", "T164",                     # ADR-047, 2.2.0
+     _seq("AC-SI", 1, 9)),
     # AC-OP-08 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".op-cases.json", "operability", "T165",                        # ADR-048

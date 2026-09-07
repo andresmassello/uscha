@@ -104,7 +104,7 @@ verdict line in the PR body instead of a claim that the smoke passed.
 one tagged `AC-01`. If a human runs the paths by hand, they still write the report: a checklist a
 human ticked is evidence, a checklist an agent narrated is not.
 
-## What is measured — `AC-SK-01..09`, smoke **T164**
+## What is measured — `AC-SI-01..09`, smoke **T164**
 
 Nine criteria over real temp projects and the real engine: the gated fail and its clearing by a
 later clean report (`-01`); `narrated_only` → MEASURED through a tagged check, attributed in
@@ -119,7 +119,7 @@ smoke caps nothing at score 99.0, a failing one on a second repo caps the same l
 nor the `smoke` block, nor `acceptance.smoke_closed` (`-09`).
 
 A second probe was run during development and not shipped: forcing every check to read `ok` turns
-`AC-SK-01`, `-03`, `-06` and `-07` red. The block measures the verdict, not its own scaffolding.
+`AC-SI-01`, `-03`, `-06` and `-07` red. The block measures the verdict, not its own scaffolding.
 
 ## Not a breaking change
 

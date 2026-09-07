@@ -183,37 +183,37 @@ human ticked is evidence, a checklist an agent narrated is not.
 - It does not touch `corpus-run`, `gate-check` or `golden-diff`. This is the phase-7 evidence
   class, not a replacement for any of them.
 
-## What is measured (`AC-SK-01..09`)
+## What is measured (`AC-SI-01..09`)
 
 Smoke **T164**, nine criteria, over real temp projects and the real engine:
 
-1. `AC-SK-01` — a report with one `ok: false` check exits 1 and persists a gated, non-advisory
+1. `AC-SI-01` — a report with one `ok: false` check exits 1 and persists a gated, non-advisory
    `gate:smoke` record naming the failed check; it is blocking in the gates rollup, and a later
    clean report clears it.
-2. `AC-SK-02` — a ticked `AC-28` with no evidence reports `narrated_only`; a check named
+2. `AC-SI-02` — a ticked `AC-28` with no evidence reports `narrated_only`; a check named
    `AC-28 ...` in a passing report closes it MEASURED and attributes it in
    `acceptance.smoke_closed`.
-3. `AC-SK-03` — a FAILED tagged check VETOES: it holds `AC-28` open even though a green check in
+3. `AC-SI-03` — a FAILED tagged check VETOES: it holds `AC-28` open even though a green check in
    another repo closed it, and it is reported in `acceptance.smoke_vetoed`. A green check inside a
    FAILING report closes nothing at all.
-4. `AC-SK-04` — an EMPTY `checks` list refuses at exit 2 naming what was empty, and persists no
+4. `AC-SI-04` — an EMPTY `checks` list refuses at exit 2 naming what was empty, and persists no
    record.
-5. `AC-SK-05` — a check without a boolean `ok` (`"true"`, `1`) refuses at exit 2 NAMING the check;
+5. `AC-SI-05` — a check without a boolean `ok` (`"true"`, `1`) refuses at exit 2 NAMING the check;
    so do a check with no `name`, a report with no `checks` key, malformed JSON, and a missing file.
    Nothing is persisted.
-6. `AC-SK-06` — the record carries the measurement (report path, counts, per-check receipts with
+6. `AC-SI-06` — the record carries the measurement (report path, counts, per-check receipts with
    status), the readiness line NAMES the failed check, exactly one line is printed, and a repo that
    ingested nothing produces no entry, no line and no `smoke` key.
-7. `AC-SK-07` — the CONTROL PAIR: a passing smoke caps nothing (score 99.0, `cap_reason` null) and
+7. `AC-SI-07` — the CONTROL PAIR: a passing smoke caps nothing (score 99.0, `cap_reason` null) and
    a failing one on another repo caps the same ledger at exactly 65 with `BLOCKER` named.
-8. `AC-SK-08` — `log-gate --kind smoke` accepts pass/fail/not-run and a fail blocks;
+8. `AC-SI-08` — `log-gate --kind smoke` accepts pass/fail/not-run and a fail blocks;
    `--verdict advisory` is REFUSED at exit 2 saying why.
-9. `AC-SK-09` — the **red probe**: the `v2.1.0` engine has neither `smoke-ingest`, nor
+9. `AC-SI-09` — the **red probe**: the `v2.1.0` engine has neither `smoke-ingest`, nor
    `--kind smoke`, nor a `smoke` block, nor `acceptance.smoke_closed`. Without git or the tagged
    copy it reports `None` = UNMEASURED, never a silent pass.
 
 A second, unshipped probe was run during development: forcing every check to read `ok` turns
-`AC-SK-01`, `-03`, `-06` and `-07` red. The block measures the verdict, not its own scaffolding.
+`AC-SI-01`, `-03`, `-06` and `-07` red. The block measures the verdict, not its own scaffolding.
 
 ## Alternatives considered
 

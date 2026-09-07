@@ -1426,7 +1426,7 @@ and one conditional readiness line.
   `readiness --json`. Without git or the tagged copy it reports `None` = UNMEASURED, never a
   silent pass.
 
-## The smoke run as measured evidence: `smoke-ingest` (ADR-047) - closes on green `AC-SK-nn` smoke assertions
+## The smoke run as measured evidence: `smoke-ingest` (ADR-047) - closes on green `AC-SI-nn` smoke assertions
 
 The ledger ingests JUnit, coverage, linters, a static gate's XML and a CI verdict. Phase 7 was
 still prose: "the jar served /admin", "the simulator answered 200 in 6 ms" arrived as a sub-agent
@@ -1447,32 +1447,32 @@ is honestly advisory; `ok` is binary, so an advisory smoke would be a mandatory 
 goodwill. No new weight, no new cap, no config key - a project that never ingests a report keeps
 the readiness text and the payload it had.
 
-- [ ] AC-SK-01 - a report with one `ok: false` check exits 1 and persists a GATED, non-advisory
+- [ ] AC-SI-01 - a report with one `ok: false` check exits 1 and persists a GATED, non-advisory
   `gate:smoke` record naming the failed check; it is blocking in the gates rollup, and a later
   clean report clears it (latest-per-tool, like every other fact gate).
-- [ ] AC-SK-02 - a ticked `AC-28` with no evidence reports `narrated_only`; a check named
+- [ ] AC-SI-02 - a ticked `AC-28` with no evidence reports `narrated_only`; a check named
   `AC-28 ...` inside a PASSING report closes it MEASURED and attributes it in
   `acceptance.smoke_closed`, and the `narrated-only` line names the smoke path.
-- [ ] AC-SK-03 - a FAILED tagged check VETOES: it holds `AC-28` open even though a green check in
+- [ ] AC-SI-03 - a FAILED tagged check VETOES: it holds `AC-28` open even though a green check in
   another repo closed it, and it is reported in `acceptance.smoke_vetoed`. A green check inside a
   FAILING report closes nothing at all - the run it belongs to did not hold.
-- [ ] AC-SK-04 - an EMPTY `checks` list REFUSES at exit 2 naming what was empty and persists no
+- [ ] AC-SI-04 - an EMPTY `checks` list REFUSES at exit 2 naming what was empty and persists no
   record. A run that verified nothing is not a clean gate; scoring it `0 failed -> PASS` would
   manufacture a green out of an absence.
-- [ ] AC-SK-05 - a check without a boolean `ok` (`"true"`, `1`) refuses at exit 2 NAMING the
+- [ ] AC-SI-05 - a check without a boolean `ok` (`"true"`, `1`) refuses at exit 2 NAMING the
   check; so do a check with no `name`, a report with no `checks` key, malformed JSON and a
   missing file. Nothing is persisted in any of the six cases.
-- [ ] AC-SK-06 - the record carries the MEASUREMENT: the report path, the ok/failed counts and the
+- [ ] AC-SI-06 - the record carries the MEASUREMENT: the report path, the ok/failed counts and the
   per-check receipts with their status. The readiness line NAMES the failed check, exactly one
   line is printed, and a repo that ingested nothing produces no entry, no line and no `smoke` key.
-- [ ] AC-SK-07 - the CONTROL PAIR: over one ledger, a PASSING smoke caps nothing (the score stands
+- [ ] AC-SI-07 - the CONTROL PAIR: over one ledger, a PASSING smoke caps nothing (the score stands
   above 65 with `cap_reason` null) and a FAILING smoke on a second repo caps the same ledger at
   exactly 65 with `BLOCKER` named. Without the control the "caps nothing" half would be an
   assertion, not a measurement.
-- [ ] AC-SK-08 - `log-gate --kind smoke` accepts `pass`, `fail` and `not-run`, and a `fail`
+- [ ] AC-SI-08 - `log-gate --kind smoke` accepts `pass`, `fail` and `not-run`, and a `fail`
   logged through it appears as blocking in the gates rollup; `--verdict advisory` is REFUSED at
   exit 2 saying why - a smoke check is a binary fact.
-- [ ] AC-SK-09 - the RED PROBE. The `v2.1.0` engine, read out of git and run on these same
+- [ ] AC-SI-09 - the RED PROBE. The `v2.1.0` engine, read out of git and run on these same
   fixtures, has neither `smoke-ingest`, nor `--kind smoke`, nor a `smoke` block in
   `readiness --json`, nor `acceptance.smoke_closed`. Without git or the tagged copy it reports
   `None` = UNMEASURED, never a silent pass.
