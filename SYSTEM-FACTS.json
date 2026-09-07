@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 55,
+    "count": 56,
     "list": [
       "bench",
       "bench-curate",
