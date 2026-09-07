@@ -15049,6 +15049,352 @@ if [ "${USCHA_P0_A_SKIP:-0}" != "1" ]; then
   PASS=$((PASS+1))
 fi
 
+echo "== T165 (2.2.0): operability is MEASURED -- CI, release, RUNBOOK and seed are FACTS in the tree (ADR-048) =="
+# THE FIELD FINDING, reproduced rather than described: release-by-CI, the reset/seed script and
+# the RUNBOOK arrived in the last week of two consecutive projects. The devloop NAMED them in
+# phase 8 prose and nothing measured them, so "we do that at the end" survived every gate this
+# kit has. Since 2.2.0 the four are read out of the TREE -- a workflow that runs the repo's own
+# test command, a workflow that publishes an asset, a RUNBOOK whose four headings exist, a seed
+# command the config declares whose script is on disk -- and the posture is the PROFILE's:
+# advisory on A/B, a gate on C/D/E. The command's own exit code is 0 either way.
+T165=$(pyin "$KIT" "$ROOT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+INSTALLER = os.path.join(kit, "install-uscha.py")
+PREV_TAG = "v2.1.0"
+NL = chr(10)
+TMPS = []
+res, why = {}, {}
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-op-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    dd = os.path.dirname(path)
+    if dd and not os.path.isdir(dd):
+        os.makedirs(dd)
+    with io.open(path, "w", encoding="utf-8", newline=NL) as fh:
+        fh.write(body)
+
+
+def read_json(path):
+    with io.open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def eng(argv, cwd, engine=None):
+    return subprocess.run([sys.executable, engine or ENG] + list(argv), cwd=cwd,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          encoding="utf-8", errors="replace",
+                          env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+WF = ("name: ci" + NL + "jobs:" + NL + "  t:" + NL + "    steps:" + NL
+      + "      - run: pytest -q" + NL)
+PUBLISH = "      - uses: softprops/action-gh-release@v2" + NL
+RB_FULL = ("# RUNBOOK" + NL + NL + "## Arranque" + NL + "## Config" + NL
+           + "## Rollback" + NL + "## Smoke" + NL)
+RB_HALF = "# RUNBOOK" + NL + NL + "## Arranque" + NL + "## Config" + NL
+
+
+def project(profile, ci=True, release=True, runbook="full", seed="present",
+            other_ci=False):
+    """A throwaway project holding exactly the artifacts the case is about, initialised
+    through the REAL engine so the ledger carries the frozen config the command reads."""
+    d = tmp()
+    defaults = {"test_command_python": "pytest -q", "acceptance_file": "ACCEPTANCE.md"}
+    if profile:
+        defaults["risk_profile"] = profile
+    if seed:
+        defaults["operability"] = {"seed_command": "python scripts/seed.py"}
+    cfg = {"version": "1.0", "defaults": defaults,
+           "repos": [{"name": "app", "path": "repo", "type": "python"}]}
+    write(os.path.join(d, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    write(os.path.join(d, "ACCEPTANCE.md"),
+          "# ACCEPTANCE" + NL + NL + "- [ ] AC-01 - one" + NL)
+    write(os.path.join(d, "repo", ".keep"), "")
+    if ci:
+        write(os.path.join(d, ".github", "workflows", "ci.yml"),
+              WF + (PUBLISH if release else ""))
+    if other_ci:
+        write(os.path.join(d, ".gitlab-ci.yml"), "stages: [test]" + NL)
+    if runbook == "full":
+        write(os.path.join(d, "docs", "RUNBOOK.md"), RB_FULL)
+    elif runbook == "half":
+        write(os.path.join(d, "docs", "RUNBOOK.md"), RB_HALF)
+    if seed == "present":
+        write(os.path.join(d, "scripts", "seed.py"), "# seed" + NL)
+    init = eng(["init", "--config", "uscha.config.json", "--out", "QA-LEDGER.json"], d)
+    return d, init
+
+
+def report(d, iteration=1, ledger="QA-LEDGER.json"):
+    r = eng(["operability", "--repo", "app", "--ledger", ledger,
+             "--iteration", str(iteration), "--json"], d)
+    try:
+        return r, json.loads(r.stdout)
+    except ValueError:
+        return r, {}
+
+
+def op_gate(d, ledger="QA-LEDGER.json"):
+    """The gate:operability row of the readiness rollup -- the only place a consumer learns
+    whether the record caps and blocks, or merely measured."""
+    r = eng(["readiness", "--ledger", ledger, "--acceptance", "ACCEPTANCE.md", "--json"], d)
+    try:
+        rows = json.loads(r.stdout).get("gates") or []
+    except ValueError:
+        return None
+    for g in rows:
+        if g.get("tool") == "gate:operability":
+            return g
+    return None
+
+
+def measure():
+    # --- AC-OP-01: no CI workflow -> `ci: missing`, and under B it does not gate ------------
+    # Half the field case in one criterion: the fact is REPORTED on every profile, and on a
+    # profile that never declared operability a gate it is recorded advisory -- caps nothing,
+    # blocks nothing, and never joins the `N ok` count either.
+    d, init = project("B", ci=False, release=False)
+    r, rep = report(d)
+    g = op_gate(d)
+    p1 = []
+    if init.returncode != 0:
+        p1.append("init failed: " + (init.stderr or "")[:120])
+    if r.returncode != 0:
+        p1.append("operability exited %s, it must always exit 0" % r.returncode)
+    if (rep.get("checks") or {}).get("ci", {}).get("status") != "missing":
+        p1.append("ci=%r, expected missing" % ((rep.get("checks") or {}).get("ci"),))
+    if rep.get("verdict") != "advisory" or rep.get("gate") is not False:
+        p1.append("verdict=%r gate=%r, expected advisory/False"
+                  % (rep.get("verdict"), rep.get("gate")))
+    if not g or g.get("advisory") is not True or g.get("blocking") is not False:
+        p1.append("rollup row=%r, expected advisory and non-blocking" % (g,))
+    res["AC-OP-01"] = not p1
+    why["AC-OP-01"] = "; ".join(p1[:3]) or "ci missing, recorded advisory under profile B"
+
+    # --- AC-OP-02: under E an absent RUNBOOK blocks pr-ready, and NAMES itself ---------------
+    # The record is a BLOCKER through the same plumbing every other FACT gate uses, so nothing
+    # new gates here. What is asserted on top is that `phase --require pr-ready` says WHICH of
+    # the four is missing: "static-gate gated=1" sends a human to read the engine source.
+    d, _ = project("E", runbook=None)
+    r, rep = report(d)
+    g = op_gate(d)
+    ph = eng(["phase", "--repo", "app", "--ledger", "QA-LEDGER.json",
+              "--require", "pr-ready"], d)
+    p2 = []
+    if r.returncode != 0:
+        p2.append("operability exited %s" % r.returncode)
+    if rep.get("verdict") != "fail" or rep.get("missing") != ["runbook"]:
+        p2.append("verdict=%r missing=%r, expected fail/[runbook]"
+                  % (rep.get("verdict"), rep.get("missing")))
+    if rep.get("gate") is not True or rep.get("gate_origin") != "profile E":
+        p2.append("gate=%r origin=%r, expected True/profile E"
+                  % (rep.get("gate"), rep.get("gate_origin")))
+    if not g or g.get("blocking") is not True or g.get("advisory") is not False:
+        p2.append("rollup row=%r, expected blocking and not advisory" % (g,))
+    if ph.returncode == 0:
+        p2.append("phase --require pr-ready was satisfied with the RUNBOOK missing")
+    if "operability" not in ph.stdout or "runbook missing" not in ph.stdout:
+        p2.append("pr-ready refusal does not name the missing check: %r" % ph.stdout[-160:])
+    res["AC-OP-02"] = not p2
+    why["AC-OP-02"] = "; ".join(p2[:3]) or "absent RUNBOOK blocks pr-ready, named"
+
+    # --- AC-OP-03: the CONTROL PAIR -- same tree, E passes, B advises -----------------------
+    # Everything present. The only difference between the two runs is the declared profile, so
+    # what is measured here is the POSTURE, isolated from the facts: identical evidence must
+    # produce `pass` under a declared gate and `advisory` without one. A kit that gated release
+    # + reset + RUNBOOK everywhere would be its own opinion wearing an exit code (ADR-043).
+    d, _ = project("E")
+    r_e, rep_e = report(d)
+    cfg_path = os.path.join(d, "uscha.config.json")
+    cfg = read_json(cfg_path)
+    cfg["defaults"]["risk_profile"] = "B"
+    write(cfg_path, json.dumps(cfg, indent=2) + NL)
+    eng(["init", "--config", "uscha.config.json", "--out", "LB.json"], d)
+    r_b, rep_b = report(d, iteration=1, ledger="LB.json")
+    txt = eng(["readiness", "--ledger", "LB.json", "--acceptance", "ACCEPTANCE.md"], d)
+    p3 = []
+    all_ok = all(v.get("status") == "ok"
+                 for v in (rep_e.get("checks") or {}).values())
+    if not all_ok or len(rep_e.get("checks") or {}) != 4:
+        p3.append("not every check reads ok on a complete tree: %r" % (rep_e.get("checks"),))
+    if rep_e.get("verdict") != "pass":
+        p3.append("profile E verdict=%r, expected pass" % (rep_e.get("verdict"),))
+    if rep_b.get("verdict") != "advisory" or rep_b.get("gate") is not False:
+        p3.append("profile B verdict=%r gate=%r, expected advisory/False"
+                  % (rep_b.get("verdict"), rep_b.get("gate")))
+    if rep_e.get("note") != rep_b.get("note"):
+        p3.append("the same tree produced different notes: %r vs %r"
+                  % (rep_e.get("note"), rep_b.get("note")))
+    # and readiness prints the ONE line, conditional on a record existing
+    if "--- operability: " not in txt.stdout or "(advisory)" not in txt.stdout:
+        p3.append("readiness does not print the operability line: %r" % txt.stdout[-160:])
+    empty, _ = project("E", ci=False, release=False, runbook=None, seed=None)
+    silent = eng(["readiness", "--ledger", "QA-LEDGER.json",
+                  "--acceptance", "ACCEPTANCE.md"], empty)
+    if "--- operability" in silent.stdout:
+        p3.append("readiness prints the operability line with NO record (conditional silence)")
+    res["AC-OP-03"] = not p3
+    why["AC-OP-03"] = "; ".join(p3[:3]) or "same tree: pass under E, advisory under B"
+
+    # --- AC-OP-04: a RUNBOOK that exists but skips a section NAMES the section ---------------
+    # "runbook: ok" over a file with no rollback heading is the narrated green this whole
+    # command exists to replace. The engine can see that rollback was THOUGHT ABOUT; whether
+    # the procedure is correct is the human's, and it is not pretended here.
+    d, _ = project("E", runbook="half")
+    r, rep = report(d)
+    detail = ((rep.get("checks") or {}).get("runbook") or {}).get("detail") or ""
+    p4 = []
+    if ((rep.get("checks") or {}).get("runbook") or {}).get("status") != "missing":
+        p4.append("runbook=%r, expected missing" % ((rep.get("checks") or {}).get("runbook"),))
+    if "missing sections (rollback, smoke)" not in detail:
+        p4.append("the missing sections are not named exactly: %r" % detail)
+    if "RUNBOOK.md" not in detail:
+        p4.append("the file that was read is not named: %r" % detail)
+    res["AC-OP-04"] = not p4
+    why["AC-OP-04"] = "; ".join(p4[:3]) or "missing sections named: " + detail[:60]
+
+    # --- AC-OP-05: a declared seed command whose script is not there ------------------------
+    # The declaration is not the artifact. A `seed_command` pointing at a script nobody wrote
+    # is exactly the phase-8 promise this replaces, and it must not read as ok.
+    d, _ = project("E", seed="orphan")
+    r, rep = report(d)
+    seed = (rep.get("checks") or {}).get("seed") or {}
+    p5 = []
+    if seed.get("status") != "missing":
+        p5.append("seed=%r, expected missing" % (seed,))
+    if "script not found" not in (seed.get("detail") or ""):
+        p5.append("the reason is not named: %r" % seed.get("detail"))
+    if "scripts/seed.py" not in (seed.get("detail") or ""):
+        p5.append("the script that is absent is not named: %r" % seed.get("detail"))
+    res["AC-OP-05"] = not p5
+    why["AC-OP-05"] = "; ".join(p5[:3]) or "orphan seed script named"
+
+    # --- AC-OP-06: the knob is the PROFILE's -- init writes none, doctor reports the origin --
+    # The complement of AC-RP-06 for the knob this ADR adds. A generated config that declared
+    # `operability.gate` would outrank the preset by ADR-001's own per-key rule, which is the
+    # defect 2.0.0 was cut for.
+    repo = os.path.join(tmp(), "proj")
+    os.makedirs(repo)
+    q = chr(34)
+    write(os.path.join(repo, "pyproject.toml"),
+          "[project]" + NL + "name = " + q + "proj" + q + NL)
+    inst = subprocess.run(
+        [sys.executable, INSTALLER, "init", "--repo", repo, "--json"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
+        errors="replace")
+    p6 = []
+    if inst.returncode != 0:
+        p6.append("installer init failed: " + (inst.stderr or "")[:120])
+    else:
+        cfg_path = os.path.join(repo, "uscha.config.json")
+        gen = read_json(cfg_path)
+        if "operability" in (gen.get("defaults") or {}):
+            p6.append("the generated config declares an operability knob")
+        gen["defaults"]["risk_profile"] = "E"
+        write(cfg_path, json.dumps(gen, indent=2) + NL)
+        doc = eng(["doctor", "--json"], repo)
+        try:
+            payload = json.loads(doc.stdout)
+        except ValueError:
+            payload = {}
+        eff = (payload.get("effective") or {}).get("operability.gate") or {}
+        if eff.get("value") is not True or eff.get("origin") != "profile E":
+            p6.append("doctor effective operability.gate=%r, expected True/profile E" % (eff,))
+        titles = [c.get("title") or "" for c in (payload.get("checks") or [])]
+        if not any(t.startswith("effective operability.gate") for t in titles):
+            p6.append("doctor does not report the knob as an effective setting")
+        if doc.returncode != 0:
+            p6.append("doctor exited %s -- a new report may not raise an exit code"
+                      % doc.returncode)
+    res["AC-OP-06"] = not p6
+    why["AC-OP-06"] = "; ".join(p6[:3]) or "init writes none; doctor reports origin profile E"
+
+    # --- AC-OP-07: a CI this engine cannot read is UNKNOWN, never a green --------------------
+    # GitHub Actions is the only pipeline this reads. Failing a GitLab project would be a red
+    # nobody measured; passing it would be a green nobody measured, and under a DECLARED gate
+    # that second one is the false clean ADR-043 exists to refuse. So: named, and the record
+    # stays advisory even on E.
+    d, _ = project("E", ci=False, release=False, other_ci=True)
+    r, rep = report(d)
+    g = op_gate(d)
+    checks = rep.get("checks") or {}
+    p7 = []
+    if checks.get("ci", {}).get("status") != "unknown":
+        p7.append("ci=%r, expected unknown" % (checks.get("ci"),))
+    if ".gitlab-ci.yml" not in (checks.get("ci", {}).get("detail") or ""):
+        p7.append("the foreign CI is not named: %r" % checks.get("ci", {}).get("detail"))
+    if rep.get("verdict") != "advisory" or rep.get("gate") is not True:
+        p7.append("verdict=%r gate=%r, expected advisory under a declared gate"
+                  % (rep.get("verdict"), rep.get("gate")))
+    if not g or g.get("blocking") is not False or g.get("advisory") is not True:
+        p7.append("rollup row=%r, expected advisory and non-blocking" % (g,))
+    res["AC-OP-07"] = not p7
+    why["AC-OP-07"] = "; ".join(p7[:3]) or "foreign CI named unknown, record stays advisory"
+
+    # --- AC-OP-08: the RED PROBE -- the PREV_TAG engine cannot answer any of this ------------
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-OP-08"] = None
+        why["AC-OP-08"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        old = os.path.join(tmp(), "prev_engine.py")
+        write(old, prev)
+        d, _ = project("E", runbook=None)
+        p_sub = eng(["operability", "--repo", "app", "--ledger", "QA-LEDGER.json"], d,
+                    engine=old)
+        p_kind = eng(["log-gate", "--repo", "app", "--ledger", "QA-LEDGER.json",
+                      "--iteration", "1", "--kind", "operability", "--verdict", "fail"], d,
+                     engine=old)
+        p_doc = eng(["doctor", "--json"], d, engine=old)
+        try:
+            old_eff = json.loads(p_doc.stdout).get("effective") or {}
+        except ValueError:
+            old_eff = {}
+        res["AC-OP-08"] = bool(
+            p_sub.returncode != 0 and p_kind.returncode != 0
+            and "operability.gate" not in old_eff)
+        why["AC-OP-08"] = "sub rc=%s kind rc=%s knobs=%s" % (
+            p_sub.returncode, p_kind.returncode, sorted(old_eff))
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".op-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T165" in
+  OK*) PASS=$((PASS+1)); echo "  ok   operability measured (AC-OP-01..08): $T165";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T165";;
+esac
+
 # ---------------------------------------------------------------------------- #
 # ACCEPTANCE EMISSION (kit 1.44.0) — uscha applied to itself.
 # Runs the repo's own ACCEPTANCE.md criteria and writes the JUnit report the engine
@@ -15337,6 +15683,10 @@ FAMILIES = (
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036
      _seq("AC-FA", 1, 6)),
+    # AC-OP-08 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
+    # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
+    (".op-cases.json", "operability", "T165",                        # ADR-048
+     _seq("AC-OP", 1, 8)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

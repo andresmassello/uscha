@@ -161,6 +161,16 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
   `--verdict advisory` is REFUSED on it, as on every FACT gate. It is admitted to the closed
   `--kind` vocabulary (ADR-014, INV-ADVISORY-01) because a pipeline either went green on a
   commit or it did not: an LLM judgment does not become a gate by being important.
+- The **Operability** invariant is measured by `qa_ledger.py operability --repo R` (ADR-048): four
+  FACTS read out of the tree — a `.github/workflows` step running the repo's **configured** test
+  command, a workflow that publishes or attaches a release asset, a `RUNBOOK.md` naming
+  start/config/rollback/smoke, and a declared `seed_command` whose script is on disk. Its own exit
+  code is always 0; the verdict is persisted as `gate:operability` and the POSTURE is the risk
+  profile's — **advisory** on A/B (caps nothing, blocks nothing, never counted as `ok`) and a
+  **BLOCKER** on C/D/E, where `defaults.operability.gate` is `true`: readiness cap ≤ 65,
+  convergence blocked, and `phase --require pr-ready` refuses naming the missing check. A CI
+  system this engine does not read is reported `unknown`, never green and never red. Release,
+  reset and the RUNBOOK are part of done, not of the last week.
 - The **Golden (INV-GOLDEN-01)** invariant is measured by `qa_ledger.py golden-diff`: any `.received`
   that does not match its `.approved` (or is unapproved) = **DIVERGE**, cutting the chain before judgment-day.
   The agent does not touch `.approved` (ideally a `PreToolUse` hook makes it impossible).

@@ -204,6 +204,18 @@ answer.
     `spike/*` branch and its ONLY legitimate output is an **ADR with lessons**
     (facts that feed the SPEC) — never mergeable code. The contract is executable:
     `phase --require pr-ready` refuses any `spike/*` branch, INV-GOLDEN-01 style.
+12. **Operability — who owns the RUNBOOK and the seed? (kit 2.2.0, ADR-048).** Ask it on
+    DAY 1, with your recommended answer, because the cheapest moment to decide it is before
+    anything is built and the most expensive is the week before go-live: who writes and owns
+    the **RUNBOOK** (start/boot, config, rollback, smoke), who owns the **seed/reset**
+    command that puts a fresh environment into a known state, and who owns the **release
+    workflow** that publishes the artifact. Record the answers as they crystallize:
+    `defaults.operability.seed_command` (or `repos[R].operability.seed_command`) in
+    `uscha.config.json`, and the RUNBOOK at `docs/RUNBOOK.md`. This is MEASURED, not
+    narrated — `qa_ledger.py operability --repo <REPO>` reads the four facts out of the tree,
+    and on risk profiles C/D/E a missing one is a BLOCKER, so a project that defers them
+    cannot reach `pr-ready`. Two field projects discovered all four in their last week; the
+    question costs one minute here.
 
 ## Files to write (lazily, inline)
 

@@ -423,4 +423,120 @@ installs. A stated limit, not a gap that closes itself.
 
 Acceptance goes 283 → 292 criteria; nothing was dropped.
 
+# Also in 2.2.0 — operability is a MEASURED dimension, not phase-8 prose (ADR-048)
+
+## The finding
+
+Release by CI, the reset/seed script and the RUNBOOK arrived in the **last week** of two
+consecutive projects. Not because anybody decided to defer them — because nothing ever asked.
+The devloop NAMES all four, in phase 8, in prose, and prose is the one thing this kit has spent
+its whole life replacing.
+
+A narrated dimension is not a weak gate. It is an **absent** one: it produces exactly the same
+output whether the work was done or forgotten, and by the time anybody looks, the answer is "next
+week". Coverage, gate integrity, the golden suite, the stack's expiry date, the simplicity budget
+— every one of them stopped being a checklist line the day the engine started READING
+something. Operability never did, in projects running risk profile E.
+
+## The fix
+
+**A new subcommand `operability --repo R [--json]`** that verifies FACTS IN THE TREE. Four
+checks, each `ok` / `missing` / `unknown`, each with a detail that SAYS what it matched so a human
+can disagree with the match instead of with a boolean:
+
+- **`ci`** — a workflow under `.github/workflows/*.yml` whose steps run the repo's
+  **configured** test command (`repos[R].test_command`, else `defaults.test_command_<type>`),
+  matched verbatim or by its first token beside a test-ish subcommand on the same line:
+  `ci: ok (ci.yml runs "pytest -q")`.
+- **`release`** — a workflow that publishes or attaches an asset, by a short DOCUMENTED
+  recogniser list: `softprops/action-gh-release`, `actions/upload-release-asset`,
+  `gh release create`, `gh release upload`, `gh release`, `npm publish`, `twine upload`. A regex
+  over the word "release" would match a branch name, a job title and a comment — a gate that
+  matches prose is a gate that certifies prose.
+- **`runbook`** — `docs/RUNBOOK.md` (or `RUNBOOK.md`, or `defaults.operability.runbook`)
+  exists AND names the four headings an operator needs at 3am: start/boot, config, rollback,
+  smoke, matched case-insensitively in EN and ES (`arranque|start|boot`, `config`,
+  `rollback|reversi`, `smoke|humo`), NAMING the ones that are absent:
+  `runbook: missing sections (rollback, smoke)`.
+- **`seed`** — a seed/reset command declared in `repos[R].operability.seed_command` or
+  `defaults.operability.seed_command`, whose script exists on disk when the command names a path:
+  `seed: missing (script not found: scripts/seed.py)`. The declaration is not the artifact.
+
+Both trees are searched — repo path first, **config root** second, `realpath` on both sides
+— and the answer NAMES which it read: the monorepo lesson `spec-drift` paid for earlier in
+this release, plus the Windows 8.3 lesson of 2026-08-02, in one helper. The command **never
+executes anything** (ADR-008: it reads the test command, it does not run it) and **its own exit
+code is always 0**.
+
+**GitHub Actions is the only pipeline read.** A `.gitlab-ci.yml`, `Jenkinsfile` or
+`azure-pipelines.yml` is NAMED `unknown ci system`, never failed. Failing it would be a red nobody
+measured; passing it would be a green nobody measured, and under a declared gate that second one
+is the false clean ADR-043 exists to refuse.
+
+## The posture is the profile's, not the kit's
+
+`gate:operability` is persisted through the existing FACT-gate plumbing — no parallel
+mechanism — and a new knob `defaults.operability.gate` decides what the record means. It is
+`false` by the engine's own default and `true` on presets **C, D and E**, which makes it a
+profile-OWNED knob: `init` must not write it (AC-RP-06 asserts that from the engine's own table),
+and `doctor` reports it with its origin on the three-rung ladder like every other owned knob. It
+is the first owned knob that lives one level DOWN in `defaults`, so `_apply_risk_profile` and the
+origin ladder now read DOTTED knob names.
+
+- **`gate: false`** (A, B, or no profile) → the record is **advisory**: never in the `N ok`
+  count, caps nothing, blocks nothing. `operability` therefore joins `ADVISORY_CAPABLE_KINDS` —
+  which widens WHEN it gates, never WHAT counts as evidence, the line INV-ADVISORY-01 draws.
+- **`gate: true`**, a check `missing` → **fail**: readiness capped ≤ 65, convergence
+  blocked, and `phase --require pr-ready` refuses **naming the missing check**. `static-gate
+  gated=1 (gate:operability:1)` tells a human the gate is red without telling them whether to
+  write a workflow or a RUNBOOK.
+- **`gate: true`**, nothing missing, something `unknown` → **advisory**, not `pass`.
+
+`readiness` prints one conditional line — `--- operability: ci ok · release missing ·
+runbook ok · seed missing (advisory)` — and prints nothing at all when no record exists.
+`log-gate --kind operability` joins the closed vocabulary for parity, for a project whose CI
+computes the four facts elsewhere.
+
+Because `init` freezes the expanded profile into the ledger's config, `_resolved_defaults` now
+reads `_risk_profile_keys` — written by `_apply_risk_profile` for exactly this purpose, and
+already read this way by the golden cap — so a profile-supplied knob is reported as
+`profile <X>` on the frozen copy instead of masquerading as a human `override`.
+
+**The skills say so.** The devloop's phase 8 RUNS `operability` before `readiness` and the PR body
+cites the line; discovery's grilling agenda gains a day-1 item — *who owns the RUNBOOK and the
+seed?* — because the cheapest moment to decide that is before anything is built, and the most
+expensive is the week before go-live.
+
+## What is measured
+
+T165, `AC-OP-01..08`, over real temp projects: `ci: missing` with no workflow, exit 0, advisory
+under B (`-01`); an absent RUNBOOK under E persists `fail`, the rollup row blocks, and
+`phase --require pr-ready` exits 1 naming `runbook missing` (`-02`); the CONTROL PAIR — the
+same complete tree reads `pass` under E and `advisory` under B with a byte-identical note, and
+readiness prints the line, and prints nothing with no record (`-03`); a RUNBOOK missing headings
+names them (`-04`); an orphan seed script is named (`-05`); the generated config declares no
+`operability` knob while `doctor` reports `effective operability.gate = True` with origin
+`profile E`, exit code unchanged (`-06`); a foreign CI is `unknown` and keeps the record advisory
+even under a declared gate (`-07`).
+
+`AC-OP-08` is the RED PROBE: the `v2.1.0` engine has no `operability` subcommand, rejects
+`log-gate --kind operability` at the parser, and knows no `operability.gate`. `None` = UNMEASURED
+without git.
+
+One twin gap fell out of the count moving 53 → 54: the EN doc carried a **Exact current parser
+surface: N subcommands** line and the ES doc did not, so the facts writer rewrote one page and
+not the other and `AC-VC-02` went red — repo rule 3, caught mechanically. The ES page now carries
+the same claim (**Superficie exacta del parser actual: 54 subcomandos**), so it is inside the
+facts gate too and the twins moved together again.
+
+## Not in this release
+
+Nothing is GRADED. The engine can see that a `## Rollback` heading exists; whether the procedure
+under it is correct is the human's, and pretending otherwise would be the invented judgment
+ADR-014 refuses. Nothing is EXECUTED — not the tests, not the seed, not the pipeline. No CI
+system other than GitHub Actions is read, because a reader that guesses is worse than an honest
+`unknown`. And profiles A and B gate exactly as much as they did before: zero.
+
+Acceptance goes 292 → 300 criteria; nothing was dropped.
+
 Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.

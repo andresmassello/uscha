@@ -133,6 +133,44 @@ decision that governs no source (negative ADRs) — a declaration, not an omissi
 mirador can surface it. No readiness impact, no exit-code gate: a stale spec is a prompt for
 a human conversation, not a blocked pipeline.
 
+## Operability (ADR-048) — release, reset and the RUNBOOK are part of done
+
+A field finding, twice: release by CI, the reset/seed script and the RUNBOOK arrived in the
+**last week** of two projects. The devloop named all four in phase 8 prose, and a narrated
+dimension is not a weak gate — it is an absent one. `operability` reads them as FACTS in the tree:
+
+```bash
+python qa_ledger.py operability --repo <name> [--json]   # exit 0 always
+```
+
+| check | `ok` when |
+|---|---|
+| `ci` | a `.github/workflows/*.yml` step runs the repo's **configured** test command (`repos[R].test_command`, else `defaults.test_command_<type>`) — verbatim, or its first token beside a test-ish subcommand |
+| `release` | a workflow publishes or attaches an asset: `softprops/action-gh-release`, `actions/upload-release-asset`, `gh release create`, `gh release upload`, `gh release`, `npm publish`, `twine upload` |
+| `runbook` | `docs/RUNBOOK.md` (or `RUNBOOK.md`, or `defaults.operability.runbook`) exists AND names start/boot, config, rollback and smoke — EN or ES, case-insensitive; the absent ones are NAMED |
+| `seed` | `repos[R].operability.seed_command` or `defaults.operability.seed_command` is declared, and its script is on disk when the command names a path |
+
+Repo path first, **config root** second (`realpath` on both sides), and the output NAMES which it
+read. It never executes anything. A CI system it does not read — GitLab, Jenkins, Azure — is
+reported `unknown`, never green and never red.
+
+The POSTURE is your risk profile's, not the kit's. `defaults.operability.gate` is `false` by the
+engine's default and `true` on presets **C, D and E**:
+
+- **advisory** (A, B, or no profile): the record caps nothing, blocks nothing, and never joins the
+  `N ok` count in `readiness`;
+- **gate** (C, D, E): a `missing` check is a BLOCKER — readiness capped ≤ 65, convergence blocked,
+  and `phase --require pr-ready` refuses **naming** the missing check.
+
+`readiness` prints one conditional line and stays silent with no record:
+
+```
+--- operability: ci ok · release missing · runbook ok · seed missing (advisory)
+```
+
+Nothing is graded. The engine can see that a `## Rollback` heading exists; whether the procedure
+under it is correct is yours.
+
 ## Evidence origin (ADR-007) - green, but green at *what*?
 
 Freshness compares file mtimes, so the ledger could say "tests green" without being able to
@@ -731,7 +769,7 @@ exactly what it printed before.
 
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (53 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (54 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

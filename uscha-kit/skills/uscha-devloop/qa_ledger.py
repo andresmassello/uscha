@@ -50,6 +50,7 @@ Usage (see `--help` on each subcommand):
   qa_ledger.py gate-check --from-git --base main [--strict] [--json]
   qa_ledger.py spec-check --spec SPEC.md [--spec ACCEPTANCE.md] [--strict] [--json]
   qa_ledger.py golden-diff [--dir .] [--labels golden-labels.json] [--json]
+  qa_ledger.py operability --repo backend-api [--json]   (ADR-048: exit 0 always)
 """
 
 import argparse
@@ -1884,12 +1885,53 @@ GOLDEN_REQUIRED_CEILING = 49  # ADR-002: no approved golden -> NOT READY (does n
 RISK_PROFILES = {
     "A": {"qa_tools_order": ["code-review"]},
     "B": {"qa_tools_order": ["code-review", "improve"]},
-    "C": {"qa_tools_order": ["code-review", "judgment-day", "improve"]},
+    "C": {"qa_tools_order": ["code-review", "judgment-day", "improve"],
+          "operability.gate": True},
     "D": {"qa_tools_order": ["code-review", "judgment-day", "improve"],
-          "coverage_threshold": 70, "golden_required": True},
+          "coverage_threshold": 70, "golden_required": True,
+          "operability.gate": True},
     "E": {"qa_tools_order": ["code-review", "judgment-day", "improve"],
-          "coverage_threshold": 80, "golden_required": True},
+          "coverage_threshold": 80, "golden_required": True,
+          "operability.gate": True},
 }
+
+
+def _knob_get(mapping, key):
+    """Read a knob out of a defaults-shaped mapping by its (possibly DOTTED) name ->
+    (found, value). Dotted since 2.2.0 (ADR-048): the first profile-owned knob that lives one
+    level down is `defaults.operability.gate`, in the same block shape the config already uses
+    for `simplicity.gate` and `waste.gate`. A non-dict on the way down is NOT a hit --
+    `operability: true` declares nothing this ladder can read, and guessing what it meant is
+    exactly how a preset goes silently inert (the defect ADR-001 was amended for)."""
+    cur = mapping
+    for part in key.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return False, None
+        cur = cur[part]
+    return True, cur
+
+
+def _knob_set(mapping, key, value):
+    """Write a (possibly dotted) knob, creating the intermediate objects. Intermediates are
+    COPIED on the way down: callers hand this shallow copies of `defaults`, and mutating a
+    nested dict in place would reach back into the config the caller promised not to touch.
+    Returns False -- writing nothing -- when something that is not an object already sits on
+    the path: an explicit declaration always wins, even a malformed one, and naming a
+    malformed one is `_validate_init_config`'s job, not this function's."""
+    parts = key.split(".")
+    cur = mapping
+    for part in parts[:-1]:
+        nxt = cur.get(part)
+        if nxt is None:
+            nxt = {}
+        elif isinstance(nxt, dict):
+            nxt = dict(nxt)
+        else:
+            return False
+        cur[part] = nxt
+        cur = nxt
+    cur[parts[-1]] = value
+    return True
 
 
 def _apply_risk_profile(defaults):
@@ -1905,8 +1947,9 @@ def _apply_risk_profile(defaults):
                          + ", ".join(sorted(RISK_PROFILES)))
     provided = []
     for key, value in RISK_PROFILES[profile].items():
-        if key not in defaults:  # an explicit declaration always wins
-            defaults[key] = list(value) if isinstance(value, list) else value
+        if _knob_get(defaults, key)[0]:  # an explicit declaration always wins
+            continue
+        if _knob_set(defaults, key, list(value) if isinstance(value, list) else value):
             provided.append(key)
     defaults["_risk_profile_keys"] = provided
     return defaults
@@ -1931,6 +1974,11 @@ ENGINE_DEFAULTS = {
     "qa_tools_order": None,
     "coverage_threshold": 60,
     "golden_required": False,
+    # ADR-048. The engine's own posture on operability is ADVISORY: `operability` measures and
+    # records on every profile, but only C/D/E turn the record into a gate. A kit that gated
+    # release + reset + RUNBOOK on every project would be the kit's opinion wearing an exit
+    # code -- the same thing ADR-043 refused for the simplicity budget.
+    "operability.gate": False,
 }
 ENGINE_DEFAULT_NOTES = {
     "qa_tools_order": "not declared - convergence uses a window of --tools-per-cycle "
@@ -1941,16 +1989,25 @@ ENGINE_DEFAULT_NOTES = {
 def _resolved_defaults(cfg):
     """(resolved defaults, origin per profile-owned key) for a RAW config -- the effective
     settings `doctor` reports. Origin is `override` (declared in defaults), `profile <X>`, or
-    `default`. Read-only: never mutates cfg and never writes anything back."""
+    `default`. Read-only: never mutates cfg and never writes anything back.
+
+    Works over a RAW config (what `doctor` reads) and over the FROZEN one inside a ledger
+    alike: `init` expands the profile before freezing, so on the frozen copy a profile-supplied
+    knob is already sitting in `defaults` and would otherwise read as a human `override`.
+    `_risk_profile_keys` -- written by `_apply_risk_profile` for exactly this reason, and
+    already read this way by the golden cap -- is what tells the two apart (ADR-048)."""
     raw = cfg.get("defaults") if isinstance(cfg, dict) else None
     raw = dict(raw) if isinstance(raw, dict) else {}
-    declared = set(raw)
     profile = raw.get("risk_profile")
+    from_profile = set(raw.get("_risk_profile_keys") or [])
     expanded = _apply_risk_profile(dict(raw))
     resolved, origin = {}, {}
     for key, fallback in ENGINE_DEFAULTS.items():
-        resolved[key] = expanded[key] if key in expanded else fallback
-        if key in declared:
+        found, value = _knob_get(expanded, key)
+        resolved[key] = value if found else fallback
+        if key in from_profile and profile:
+            origin[key] = "profile %s" % profile
+        elif _knob_get(raw, key)[0]:
             origin[key] = "override"
         elif profile and key in RISK_PROFILES.get(profile, {}):
             origin[key] = "profile %s" % profile
@@ -2861,7 +2918,13 @@ def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, not
 
 # The only --kind values log-gate accepts with --verdict advisory (ADR-043): the checks whose
 # default mode IS advisory. Every other kind is a FACT gate and records pass/fail/not-run only.
-ADVISORY_CAPABLE_KINDS = ("simplicity", "waste")
+#
+# `operability` (ADR-048) joins them because its posture is PROFILE-DEPENDENT: on A, B or no
+# profile the four checks are measured and recorded advisory, and only `defaults.operability.gate`
+# (which C, D and E own) turns the same measurement into a gate. It is a FACT either way -- a
+# workflow file exists or it does not -- so admitting it here widens WHEN it gates, never WHAT
+# counts as evidence, which is the line INV-ADVISORY-01 draws.
+ADVISORY_CAPABLE_KINDS = ("simplicity", "waste", "operability")
 
 
 def cmd_log_gate(args):
@@ -3121,6 +3184,16 @@ def _derive_phase(ledger, name, node, k, qa_order):
                               if len(_dl["uncurated"]) > 3 else "")
                            + " -- INV-CURATION-01: sin juicio no hay promocion")
             conv = False
+    # operability gate (ADR-048). NAMING only: a failing record is already a BLOCKER through
+    # _gate_open_and_sev and already vetoes convergence through _converged, so nothing new is
+    # gated here. What is added is WHICH check is missing -- "static-gate gated=1
+    # (gate:operability:1)" tells a human the gate is red without telling them whether to write
+    # a workflow or a RUNBOOK, and phase --require pr-ready is where that answer is needed.
+    _op = _latest_static_by_tool(node).get("gate:operability")
+    if _op and (_op.get("gated_reported") or 0) > 0:
+        reasons.append("operability: %s -- release, reset and the RUNBOOK are part of done, "
+                       "not of the last week (ADR-048)"
+                       % (_op.get("note") or "checks missing"))
     _cr = _cr_cfg(ledger)
     if _cr and _cr.get("mode") == "final":
         _head = None
@@ -3743,6 +3816,326 @@ def cmd_spec_drift(args):
             print(line)
     sys.exit(0)
 
+
+# --------------------------------------------------------------------------- #
+# operability  (ADR-048: release, reset and the RUNBOOK are MEASURED, not narrated)
+# --------------------------------------------------------------------------- #
+# The field finding, twice in a row: release-by-CI, the reset/seed script and the RUNBOOK
+# arrived in the last week of two projects. The devloop NAMED them in phase 8 prose and
+# nothing measured them, so "we'll do it at the end" survived every gate the kit has -- the
+# same shape as every other narrated dimension this engine has replaced with a fact.
+#
+# What this command reads is FILES IN THE TREE, never prose and never a claim: a workflow that
+# runs the repo's own test command, a workflow that publishes something, a RUNBOOK with the
+# four headings an operator needs at 3am, and a seed/reset command the config declares whose
+# script is actually on disk. It cannot read whether the RUNBOOK is GOOD -- that is a human
+# judgment and it is not pretended here. It can read that the file exists and that the
+# sections are named, which is the difference between a project that thought about rollback
+# and one that has not yet.
+#
+# It never executes anything (ADR-008: the engine is not an executor of config-supplied
+# shell) and its own exit code is always 0. Whether the verdict GATES is the project's
+# declaration -- `defaults.operability.gate`, owned by risk profiles C, D and E.
+OPERABILITY_CHECKS = ("ci", "release", "runbook", "seed")
+
+# GitHub Actions is the only CI this reads. Another system is NAMED as unknown rather than
+# failed: the engine cannot open a pipeline it does not understand, and a red invented for a
+# pipeline nobody read would be exactly the manufactured verdict the kit refuses elsewhere.
+OPERABILITY_CI_DIR = (".github", "workflows")
+OPERABILITY_OTHER_CI = (
+    ".gitlab-ci.yml", ".travis.yml", "azure-pipelines.yml", "bitbucket-pipelines.yml",
+    "Jenkinsfile", ".circleci", ".drone.yml", ".teamcity",
+)
+# The publish recognisers, listed rather than guessed: a workflow step that creates or
+# attaches a release asset. Short and documented on purpose -- a regex over "release" would
+# match a branch name, a job title and a comment, and a gate that matches prose is a gate that
+# certifies prose.
+OPERABILITY_RELEASE_MARKERS = (
+    "softprops/action-gh-release",
+    "actions/upload-release-asset",
+    "gh release create",
+    "gh release upload",
+    "gh release",
+    "npm publish",
+    "twine upload",
+)
+# A test-ish subcommand, for the case where the workflow does not repeat the configured
+# command verbatim (a Makefile target, an extra flag, a matrix variable in the middle).
+OPERABILITY_TEST_WORDS = ("test", "tests", "pytest", "nextest", "jest", "check", "verify")
+# The four headings an operator needs, matched case-insensitively in EN and ES. What is
+# matched is the HEADING, not the body: the engine can see that rollback was thought about,
+# never that the procedure is correct.
+OPERABILITY_RUNBOOK_SECTIONS = (
+    ("start", r"arranque|start|boot"),
+    ("config", r"config"),
+    ("rollback", r"rollback|reversi"),
+    ("smoke", r"smoke|humo"),
+)
+OPERABILITY_RUNBOOK_PATHS = ("docs/RUNBOOK.md", "RUNBOOK.md")
+OPERABILITY_SCRIPT_EXT = (".sh", ".py", ".ps1", ".bat", ".sql", ".js", ".ts", ".rb")
+
+
+def _op_bases(ledger, repo, ledger_path):
+    """(repo path, config root) with realpath on BOTH sides -- the Windows 8.3 lesson, and the
+    monorepo lesson spec-drift paid for in 2.2.0: the workflows and the RUNBOOK of a monorepo
+    live at the config root while repos[R].path points at a subdirectory. The repo's own tree
+    WINS when it has the artifact; the root is the fallback, and the answer NAMES which one it
+    read, because "no CI" and "read the wrong tree" produced the same silence."""
+    repo_path = _scope_path(ledger, repo)
+    root_path = os.path.dirname(os.path.abspath(ledger_path)) or "."
+    bases = [(repo_path, "repo")]
+    if os.path.realpath(root_path) != os.path.realpath(repo_path):
+        bases.append((root_path, "root"))
+    return bases
+
+
+def _op_workflows(bases):
+    """(list of (relative name, text), base, where) for the first base that HAS a GitHub
+    Actions directory, else ([], None, None)."""
+    for base, where in bases:
+        wdir = os.path.join(base, *OPERABILITY_CI_DIR)
+        if not os.path.isdir(wdir):
+            continue
+        files = []
+        for name in sorted(os.listdir(wdir)):
+            if not name.lower().endswith((".yml", ".yaml")):
+                continue
+            try:
+                with open(os.path.join(wdir, name), encoding="utf-8",
+                          errors="replace") as fh:
+                    files.append((name, fh.read()))
+            except OSError:
+                continue
+        if files:
+            return files, base, where
+    return [], None, None
+
+
+def _op_other_ci(bases):
+    """The first non-Actions CI marker found, as `name (where)`, or None."""
+    for base, where in bases:
+        for name in OPERABILITY_OTHER_CI:
+            if os.path.exists(os.path.join(base, name)):
+                return "%s (%s)" % (name, where)
+    return None
+
+
+def _op_test_command(ledger, repo):
+    """The repo's CONFIGURED test command: repos[R].test_command, else the per-type
+    defaults.test_command_<type>. Read, never run."""
+    cfg = ledger.get("config") or {}
+    defaults = cfg.get("defaults") or {}
+    entry = {}
+    for r in cfg.get("repos", []):
+        if r.get("name") == repo:
+            entry = r
+            break
+    if _has_text(entry.get("test_command")):
+        return entry["test_command"].strip()
+    rtype = entry.get("type") or (ledger.get("repos", {}).get(repo) or {}).get("type")
+    value = defaults.get("test_command_%s" % rtype) if rtype else None
+    return value.strip() if _has_text(value) else None
+
+
+def _op_ci(workflows, command):
+    """(status, detail). `ok` when a workflow step runs the configured command -- verbatim, or
+    its first token beside a test-ish subcommand on the same line. The detail SAYS what
+    matched, so the human can disagree with the match instead of with a boolean."""
+    if not command:
+        return "missing", "no test command configured for this repo (nothing to look for)"
+    head = command.split()[0]
+    tail = os.path.basename(head)
+    for name, body in workflows:
+        for line in body.splitlines():
+            stripped = line.strip()
+            if command in line:
+                return "ok", '%s runs "%s"' % (name, command)
+            if head not in line and tail not in line:
+                continue
+            words = re.split(r"[^A-Za-z0-9_.-]+", stripped.lower())
+            if any(w in OPERABILITY_TEST_WORDS for w in words):
+                shown = re.sub(r"^-\s*", "", stripped)
+                shown = re.sub(r"^run:\s*", "", shown)
+                return "ok", '%s runs "%s"' % (name, shown[:70])
+    return "missing", ("no workflow step runs the configured test command (%s)"
+                       % command)
+
+
+def _op_release(workflows):
+    for name, body in workflows:
+        for marker in OPERABILITY_RELEASE_MARKERS:
+            if marker in body:
+                return "ok", '%s runs "%s"' % (name, marker)
+    return "missing", ("no workflow publishes or attaches a release asset (looked for: %s)"
+                       % ", ".join(OPERABILITY_RELEASE_MARKERS))
+
+
+def _op_runbook(bases, declared):
+    """(status, detail, path). `declared` is defaults.operability.runbook when the project set
+    one; otherwise docs/RUNBOOK.md then RUNBOOK.md, repo tree before config root."""
+    candidates = [declared] if _has_text(declared) else list(OPERABILITY_RUNBOOK_PATHS)
+    for base, where in bases:
+        for rel in candidates:
+            path = os.path.join(base, rel.replace("/", os.sep))
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    body = fh.read()
+            except OSError as exc:
+                return "missing", "%s unreadable: %s" % (rel, exc), rel
+            heads = [row.lstrip("#").strip().lower()
+                     for row in body.splitlines() if row.lstrip().startswith("#")]
+            blob = "\n".join(heads)
+            absent = [label for label, pattern in OPERABILITY_RUNBOOK_SECTIONS
+                      if not re.search(pattern, blob, re.I)]
+            if absent:
+                return ("missing", "missing sections (%s) in %s [%s]"
+                        % (", ".join(absent), rel, where), rel)
+            return "ok", "%s [%s], all four sections named" % (rel, where), rel
+    return ("missing", "no RUNBOOK found (looked for %s)" % ", ".join(candidates), None)
+
+
+def _op_seed(ledger, repo, bases, defaults_op):
+    """(status, detail). The seed/reset command is DECLARED, never sniffed: an engine that
+    guessed which script resets the database would be guessing about the most destructive
+    command in the project."""
+    entry = {}
+    for r in (ledger.get("config") or {}).get("repos", []):
+        if r.get("name") == repo:
+            entry = r
+            break
+    repo_op = entry.get("operability") if isinstance(entry.get("operability"), dict) else {}
+    command = repo_op.get("seed_command")
+    if not _has_text(command):
+        command = defaults_op.get("seed_command")
+    if not _has_text(command):
+        return "missing", ("no seed/reset command declared "
+                           "(repos[R].operability.seed_command or "
+                           "defaults.operability.seed_command)")
+    command = command.strip()
+    script = None
+    for token in re.split(r"\s+", command):
+        bare = token.strip("\"'")
+        if "/" in bare or "\\" in bare or bare.lower().endswith(OPERABILITY_SCRIPT_EXT):
+            script = bare
+            break
+    if script is None:
+        # A command with no path in it (`make seed`, `npm run reset`) names a target this
+        # engine cannot resolve without running something. Declared is what is measurable.
+        return "ok", 'declared: "%s" (no script path to verify)' % command
+    for base, _where in bases:
+        if os.path.exists(os.path.join(base, script.replace("/", os.sep))):
+            return "ok", 'declared: "%s"' % command
+    return "missing", "script not found: %s" % script
+
+
+def _operability_report(ledger, repo, ledger_path):
+    """The four FACTS, with the base each was read from. Pure measurement: no persistence,
+    no exit code, no gate decision -- the caller owns all three."""
+    defaults = (ledger.get("config") or {}).get("defaults") or {}
+    op_cfg = defaults.get("operability") if isinstance(defaults.get("operability"), dict) else {}
+    bases = _op_bases(ledger, repo, ledger_path)
+    workflows, wf_base, wf_where = _op_workflows(bases)
+    checks = {}
+    if workflows:
+        ci_status, ci_detail = _op_ci(workflows, _op_test_command(ledger, repo))
+        rel_status, rel_detail = _op_release(workflows)
+        ci_source = "%s [%s]" % ("/".join(OPERABILITY_CI_DIR), wf_where)
+    else:
+        other = _op_other_ci(bases)
+        ci_source = None
+        if other:
+            ci_status = rel_status = "unknown"
+            ci_detail = rel_detail = ("unknown ci system: %s -- this reads GitHub Actions "
+                                      "only, so it neither certifies nor condemns it" % other)
+        else:
+            ci_status = rel_status = "missing"
+            ci_detail = rel_detail = ("no %s in the repo tree nor at the config root"
+                                      % "/".join(OPERABILITY_CI_DIR))
+    checks["ci"] = {"status": ci_status, "detail": ci_detail}
+    checks["release"] = {"status": rel_status, "detail": rel_detail}
+    rb_status, rb_detail, rb_path = _op_runbook(bases, op_cfg.get("runbook"))
+    checks["runbook"] = {"status": rb_status, "detail": rb_detail, "path": rb_path}
+    sd_status, sd_detail = _op_seed(ledger, repo, bases, op_cfg)
+    checks["seed"] = {"status": sd_status, "detail": sd_detail}
+    return {"repo": repo, "checks": checks, "ci_source": ci_source,
+            "bases": [{"path": b, "where": w} for b, w in bases]}
+
+
+def _operability_verdict(report, gate):
+    """(verdict, summary note). Three states, because there are three facts:
+      - every check `ok`                     -> pass (a gate that ran clean)
+      - any check `missing`                  -> fail under a declared gate, advisory without
+      - none missing, some `unknown`         -> advisory even under a declared gate
+    The third is the one worth spelling out: a pipeline this engine cannot read is UNMEASURED,
+    and recording UNMEASURED as `pass` would hand a declared gate a green nobody measured --
+    the false clean ADR-043 exists to refuse, arriving through a different door."""
+    statuses = [report["checks"][k]["status"] for k in OPERABILITY_CHECKS]
+    note = " · ".join("%s %s" % (k, report["checks"][k]["status"])
+                      for k in OPERABILITY_CHECKS)
+    if not gate:
+        return "advisory", note
+    if "missing" in statuses:
+        return "fail", note
+    if "unknown" in statuses:
+        return "advisory", note
+    return "pass", note
+
+
+def cmd_operability(args):
+    """Measure the operability of a repo: CI, release, RUNBOOK, seed (ADR-048).
+
+    Exit code is ALWAYS 0 for the check itself -- the gate decision belongs to the profile,
+    and it is enforced where every other FACT gate is enforced: the persisted record caps
+    readiness <=65 and blocks convergence when it is a `fail`."""
+    ledger = _load(args.ledger)
+    node = _repo_node(ledger, args.repo)
+    resolved, origin = _resolved_defaults(ledger.get("config") or {})
+    gate = bool(resolved.get("operability.gate"))
+    report = _operability_report(ledger, args.repo, args.ledger)
+    verdict, note = _operability_verdict(report, gate)
+    missing = [k for k in OPERABILITY_CHECKS
+               if report["checks"][k]["status"] == "missing"]
+    report.update({"gate": gate, "gate_origin": origin.get("operability.gate"),
+                   "verdict": verdict, "note": note, "missing": missing})
+
+    rec = _append_gate_record(ledger, node, args.repo, "gate:operability", args.iteration,
+                              verdict == "fail", len(missing) or 1, note,
+                              advisory=(verdict == "advisory"))
+    _save(args.ledger, ledger)
+    report["step"] = rec["n"]
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        sys.exit(0)
+    print("OPERABILITY %s (gate: %s, origin %s)"
+          % (args.repo, "declared" if gate else "not declared",
+             origin.get("operability.gate")))
+    if report["ci_source"]:
+        print("  read: %s" % report["ci_source"])
+    for key in OPERABILITY_CHECKS:
+        c = report["checks"][key]
+        mark = {"ok": "ok", "missing": "!!", "unknown": "--"}.get(c["status"], "??")
+        detail = c["detail"]
+        print("  %s %s: %s%s" % (mark, key, c["status"],
+                                 (" (%s)" % detail) if detail else ""))
+    present = sum(1 for k in OPERABILITY_CHECKS
+                  if report["checks"][k]["status"] == "ok")
+    if verdict == "fail":
+        print("  -- %d of %d present -- FAIL: caps readiness <=65 and blocks convergence "
+              "until %s exist(s)" % (present, len(OPERABILITY_CHECKS), ", ".join(missing)))
+    elif verdict == "pass":
+        print("  -- %d of %d present -- PASS: the declared operability gate ran clean"
+              % (present, len(OPERABILITY_CHECKS)))
+    else:
+        print("  -- %d of %d present -- ADVISORY (measured, not gating): caps nothing, "
+              "blocks nothing%s" % (present, len(OPERABILITY_CHECKS),
+                                    ("; declare defaults.operability.gate: true (or a risk "
+                                     "profile C/D/E) to make it a gate" if not gate else
+                                     "; a check this engine cannot read is UNMEASURED, "
+                                     "never a green")))
+    sys.exit(0)
 
 
 # --------------------------------------------------------------------------- #
@@ -10299,6 +10692,19 @@ def cmd_readiness(args):
     if _ao["n_unconfirmed"]:
         print(f"--- origin: {_ao['n_unconfirmed']} agent-origin item(s) unconfirmed"
               f"   (spec-check names them)")
+    # ADR-048: operability gets its own line, CONDITIONAL on a record existing -- a ledger that
+    # never ran the check prints exactly what it printed before. The gates rollup above already
+    # counts the record correctly (ok / blocking / advisory); what it cannot say is WHICH of the
+    # four is the one to go and build, and "1 blocking (backend-api/gate:operability)" is
+    # precisely the message that sends a human to read the source.
+    _ops = [(rname, _latest_static_by_tool(rnode).get("gate:operability"))
+            for rname, rnode in ledger["repos"].items()]
+    _ops = [(rname, rec) for rname, rec in _ops if rec and rec.get("note")]
+    for _rname, _op in _ops:
+        _label = "operability" if len(_ops) == 1 else "operability %s" % _rname
+        _state = (" (advisory)" if _op.get("advisory")
+                  else " (gate: FAIL)" if (_op.get("gated_reported") or 0) else " (gate)")
+        print(f"--- {_label}: {_op['note']}{_state}")
     if not args.verbose:
         return
     print("--- dimensions (weight | raw | contribution) ---")
@@ -13670,6 +14076,15 @@ def build_parser():
                      help="override defaults.spec_drift.max_lag_days (default 30)")
     psd.add_argument("--json", action="store_true")
     psd.set_defaults(func=cmd_spec_drift)
+
+    pop = sub.add_parser("operability",
+                         help="measure CI / release / RUNBOOK / seed as FACTS in the tree "
+                              "(ADR-048); exit 0 always -- the gate is the profile's")
+    add_ledger(pop)
+    pop.add_argument("--repo", required=True)
+    pop.add_argument("--iteration", type=int, default=1)
+    pop.add_argument("--json", action="store_true")
+    pop.set_defaults(func=cmd_operability)
     pre = sub.add_parser("resolve-escalation",
                          help="close open escalations for a repo (recorded event; "
                               "lifts the readiness cap)")
@@ -13687,9 +14102,11 @@ def build_parser():
     plg.add_argument("--iteration", type=int, required=True)
     plg.add_argument("--kind", required=True,
                      choices=["golden-diff", "gate-check", "pit-check", "simplicity",
-                              "regression", "rubric", "waste", "ci"],
+                              "regression", "rubric", "waste", "ci", "operability"],
                      help="ci (2.2.0) records a pipeline run as the FACT it is: a fail caps "
-                          "readiness <=65 and blocks convergence exactly like gate-check")
+                          "readiness <=65 and blocks convergence exactly like gate-check; "
+                          "operability (ADR-048) is accepted for parity with the "
+                          "`operability` subcommand, which is what normally writes it")
     plg.add_argument("--verdict", required=True,
                      choices=["pass", "fail", "advisory", "not-run"],
                      help="advisory (ADR-043) records a measured, non-gating run: it never "

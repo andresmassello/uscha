@@ -574,7 +574,7 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
 <section class="slide" data-section="qa_ledger.py — comandos">
   <div class="kicker"><span class="n">09</span> el motor de medición <span class="callout-status real">en el kit</span></div>
   <h2><code class="in" style="font-size:.7em">qa_ledger.py</code> <span class="accent">— referencia de comandos.</span></h2>
-  <p>Stdlib pura, Python 3.8+, sin dependencias. Es dueño de todo lo que <strong>debe ser exacto y reproducible</strong>. Los fact gates (golden-diff, gate-check, simplicity-check, pit-check) salen 0/1 y sus veredictos se persisten con <code class="in">log-gate</code>; los juicios (¿oscila? ¿hay que escalar?) los hace el skill leyendo estos datos, con helpers advisory deterministas.</p>
+  <p>Stdlib pura, Python 3.8+, sin dependencias. Es dueño de todo lo que <strong>debe ser exacto y reproducible</strong>. Los fact gates (golden-diff, gate-check, simplicity-check, pit-check) salen 0/1 y sus veredictos se persisten con <code class="in">log-gate</code>; los juicios (¿oscila? ¿hay que escalar?) los hace el skill leyendo estos datos, con helpers advisory deterministas.</p>  <p class="small"><strong>Superficie exacta del parser actual:</strong> 54 subcomandos; la lista de abajo espeja <code class="in">build_parser()</code>, incluidos <code class="in">dashboard</code>, <code class="in">waste-check</code> y <code class="in">spec-change-request</code>.</p>
   <table>
     <thead><tr><th>Subcomando</th><th>Qué hace</th></tr></thead>
     <tbody>
@@ -631,7 +631,8 @@ LOC       ← conteo propio (prod vs test), stdlib pura</pre>
       <tr><td class="t">pit-check</td><td>Eval?a efectividad de tests.</td></tr>
       <tr><td class="t">gate-check</td><td>Detecta debilitamiento de gates o secretos.</td></tr>
       <tr><td class="t">spec-check</td><td>Valida SPEC/ACCEPTANCE; dimension <em>lifecycle</em> (ADR-040): compara el fin de soporte citado en los bloques <code class="in">lifecycle:</code> de los ADR contra el <code class="in">go_live</code> del SPEC. Advisory: nunca gatea.</td></tr>
-      <tr><td class="t">golden-diff</td><td>Compara bytes received/approved.</td></tr>    </tbody>
+      <tr><td class="t">golden-diff</td><td>Compara bytes received/approved.</td></tr>
+      <tr><td class="t">operability</td><td>Mide la operabilidad del repo como HECHOS del árbol (ADR-048, 2.2.0): un workflow que corre el test command configurado, un workflow que publica un asset de release, un <code class="in">RUNBOOK.md</code> con arranque/config/rollback/smoke, y un <code class="in">seed_command</code> declarado cuyo script existe. Exit 0 siempre; persiste <code class="in">gate:operability</code> — advisory en los perfiles A/B, BLOCKER en C/D/E vía <code class="in">defaults.operability.gate</code>.</td></tr>    </tbody>
   </table>
   <pre><span class="c"># un pase típico del loop</span>
 QL=./.claude/skills/uscha-devloop/qa_ledger.py

@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 53,
+    "count": 54,
     "list": [
       "bench",
       "bench-curate",
@@ -63,6 +63,7 @@
       "lang-compare",
       "log-gate",
       "log-step",
+      "operability",
       "oscillation",
       "phase",
       "pit-check",

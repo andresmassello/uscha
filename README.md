@@ -76,7 +76,7 @@ and see which file, which test, and when.
 | `/uscha-mirador` | Bird's-eye HTML dashboard: readiness, trail, acceptance, loops |
 | `/uscha-status` | One-line progress readout, in chat |
 
-**A measurement engine** (`qa_ledger.py`, 53 subcommands, Python stdlib) that ingests
+**A measurement engine** (`qa_ledger.py`, 54 subcommands, Python stdlib) that ingests
 evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
 cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
 
@@ -172,7 +172,7 @@ automatic tool can perform: a human verdict.
    from the compiled code: 0.815 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (kit 1.96.0, 53 subcommands, all measured):**
+**What each arrow is, in the engine (kit 1.96.0, 54 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|

@@ -1289,6 +1289,52 @@ unchanged. Measured by T162 through the `.sk-cases.json` sidecar.
   all: it rejects `--installed` at the parser and its `doctor --json` carries no `skills_installed`
   key. Without git or the tagged copy it reports `None` = UNMEASURED, never a silent pass.
 
+## Operability is measured, not phase-8 prose (ADR-048, 2.2.0) - closes on green `AC-OP-nn` smoke assertions
+
+THE FIELD FINDING, twice in a row: release by CI, the reset/seed script and the RUNBOOK arrived in
+the LAST WEEK of two projects. Not because anyone decided to defer them -- because nothing ever
+asked. The devloop NAMED the four in phase 8 prose, and a narrated dimension is not a weak gate,
+it is an absent one: it produces the same output whether the work was done or forgotten. Since
+2.2.0 `operability --repo R` reads the four FACTS out of the tree (a workflow step running the
+repo's CONFIGURED test command, a workflow that publishes or attaches a release asset, a
+`RUNBOOK.md` naming start/config/rollback/smoke in EN or ES, a declared `seed_command` whose
+script is on disk), never executes anything, and always exits 0. The POSTURE is the risk
+profile's: `defaults.operability.gate` is `false` by the engine's own default and `true` on
+presets C, D and E, which makes it a profile-OWNED knob -- the first one that lives a level down
+in `defaults`, so the origin ladder now reads DOTTED knob names. Measured by T165 through the
+`.op-cases.json` sidecar.
+
+- [ ] AC-OP-01 - with no CI workflow in the tree, `operability` reports `ci: missing`, exits **0**,
+  and under profile B the persisted `gate:operability` record is ADVISORY: non-blocking in the
+  readiness rollup and never folded into the `N ok` count. The fact is reported on every profile;
+  only the profile decides whether it gates.
+- [ ] AC-OP-02 - under profile E an absent RUNBOOK persists `fail` with `missing: [runbook]`, the
+  rollup row is blocking (cap <=65, convergence blocked), and `phase --require pr-ready` exits 1
+  NAMING `runbook missing`. "static-gate gated=1 (gate:operability:1)" tells a human the gate is
+  red without telling them whether to write a workflow or a RUNBOOK.
+- [ ] AC-OP-03 - the CONTROL PAIR, same tree: with all four artifacts present the verdict is
+  `pass` under profile E and `advisory` under profile B, with a byte-identical note -- the posture
+  is isolated from the facts. `readiness` prints the one line
+  (`--- operability: ci ok - release ok - runbook ok - seed ok`) and prints NOTHING at all when no
+  record exists (conditional silence, house rule).
+- [ ] AC-OP-04 - a RUNBOOK that exists but skips headings reports `missing sections (rollback,
+  smoke)` and names the file it read. Reading the file and reporting `ok` would be the narrated
+  green this command exists to replace.
+- [ ] AC-OP-05 - a declared `seed_command` whose script is not on disk reads
+  `seed: missing (script not found: scripts/seed.py)`. The declaration is not the artifact.
+- [ ] AC-OP-06 - the knob is the PROFILE's: the config `init` generates declares no `operability`
+  key at all, and with `risk_profile: E` declared by hand `doctor` reports
+  `effective operability.gate = True` with origin `profile E`, exit code unchanged. The
+  complement of AC-RP-06 for the knob this ADR adds.
+- [ ] AC-OP-07 - a CI system this engine does not read (`.gitlab-ci.yml`) is NAMED `unknown`, and
+  with nothing `missing` the record stays ADVISORY even under a declared gate. Failing it would be
+  a red nobody measured; passing it would be a green nobody measured, and under a gate the second
+  is the false clean ADR-043 exists to refuse.
+- [ ] AC-OP-08 - the RED PROBE. The `v2.1.0` engine, read out of git, cannot answer any of this: no
+  `operability` subcommand, `log-gate --kind operability` rejected at the parser, and no
+  `operability.gate` in `doctor --json`'s effective settings. Without git or the tagged copy it
+  reports `None` = UNMEASURED, never a silent pass.
+
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".
@@ -1317,6 +1363,7 @@ unchanged. Measured by T162 through the `.sk-cases.json` sidecar.
 - ADR-043 — The simplicity score ADVISES by default: only a declared budget plus `defaults.simplicity.gate` makes it exit 1, `max_nesting` is named as the indentation proxy it is, and `log-gate --verdict advisory` records a measured, non-gating run that never reads as `ok`.
 - ADR-044 — The agent asks for DECISIONS, never for INFORMATION: information the tree holds is READ, and every acceptance criterion, ADR decision item or `HANDOFF.md` rule the AGENT introduced carries `(origin: agent)` until a human confirms THAT item with `confirmed: YYYY-MM-DD` — reported by `spec-check` and `readiness` as ADVISORY.
 - ADR-045 — The generated orientation block carries the kit version, and the release script re-renders it: an installed skill can be dated, and `doctor` compares it against the kit — advisory, never a gate.
+- ADR-048 — Operability is a MEASURED dimension: `operability` reads CI, release, the RUNBOOK and the seed command as facts in the tree and persists `gate:operability` — advisory on risk profiles A/B, a BLOCKER on C/D/E through the profile-owned knob `defaults.operability.gate`.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

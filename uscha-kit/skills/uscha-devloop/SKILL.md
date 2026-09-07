@@ -546,6 +546,11 @@ python3 $QL check-terminado          # 0 = sealed · 1 = broken · 2 = UNMEASURE
   **Agent-origin, unconfirmed** (principle 6). `spec-check` names them with file:line;
   copy that list. An empty list is written as "none" — silence and "none" are not the
   same fact.
+- **Cite the operability line** in the PR body, under **Operability** (kit 2.2.0, ADR-048):
+  copy `readiness`'s `--- operability: ...` line verbatim, whichever four verdicts it
+  carries. A reviewer should not have to ask whether this change ships with a release
+  path, a reset and a RUNBOOK — and a red line in the PR body is a conversation, which is
+  exactly the conversation two projects never had until their last week.
 - Open the PR(s). Confirm CI is green.
 - **STOP.** Present the PR link(s) and wait for the human to merge.
 
@@ -560,6 +565,33 @@ flows for this change), so the human can verify the system behaves as intended.
 python3 $QL summary           # human-readable
 python3 $QL summary --json    # machine-readable, includes post_merge_calibration
 ```
+
+**Operability is MEASURED here, not promised (kit 2.2.0, ADR-048).** Release by CI, the
+reset/seed script and the RUNBOOK used to live in this phase as PROSE, and prose is what
+lets "we do that at the end" survive every gate the kit has. Run it, per repo, BEFORE
+readiness so the record is in the ledger when the KPI renders:
+
+```bash
+python3 $QL operability --repo <REPO>          # exit 0 always; the gate is the profile's
+```
+
+It reads four FACTS out of the tree and never runs anything: a `.github/workflows` step
+that runs the repo's **configured** test command, a workflow that publishes or attaches a
+release asset, a `RUNBOOK.md` (`docs/` first) naming start/config/rollback/smoke in EN or
+ES, and a `seed_command` the config declares whose script is on disk. Repo path first,
+CONFIG ROOT second, and it NAMES which it read. A CI system it does not read (GitLab,
+Jenkins, Azure) is reported `unknown` — never green, never red.
+
+The POSTURE is the risk profile's, not the kit's: on **A/B** the record is `advisory`
+(caps nothing, blocks nothing, never counted as `ok`); on **C/D/E** — where
+`defaults.operability.gate` is `true` — a missing check is a BLOCKER that caps readiness
+≤65, blocks convergence, and makes `phase --require pr-ready` refuse NAMING the missing
+one. Do NOT hand-wave a missing check: write the workflow, write the RUNBOOK section,
+declare the seed command. If the project genuinely does not want the gate, that is a
+declaration (`defaults.operability.gate: false`), not a silence.
+
+`readiness` then prints one conditional line — `--- operability: ci ok · release missing ·
+runbook ok · seed missing (advisory)` — and that is the line you cite in the PR body.
 
 **Readiness KPI — show this after finishing ANY task, not only full runs.** It measures
 the STATE of the result (not effort spent), as a weighted score 0..100 with hard caps:

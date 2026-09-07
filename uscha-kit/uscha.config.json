@@ -84,6 +84,11 @@
       "allow_paths": [],
       "gate": false
     },
+    "operability": {
+      "runbook": "docs/RUNBOOK.md",
+      "seed_command": "make seed",
+      "gate": false
+    },
     "execution_policy": {
       "default": {
         "tier": "standard",

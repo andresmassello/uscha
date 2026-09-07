@@ -571,7 +571,7 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
   <div class="kicker"><span class="n">09</span> the measurement engine <span class="callout-status real">in the kit</span></div>
   <h2><code class="in" style="font-size:.7em">qa_ledger.py</code> <span class="accent">— command reference.</span></h2>
   <p>Pure stdlib, Python 3.8+, no dependencies. It owns everything that <strong>must be exact and reproducible</strong>. The judgments (did it converge? is it oscillating? do we escalate?) are made by the skill reading this data; the script only exposes deterministic advisory helpers.</p>
-  <p class="small"><strong>Exact current parser surface:</strong> 53 subcommands; the list below mirrors <code class="in">build_parser()</code>, including <code class="in">dashboard</code>, <code class="in">waste-check</code>, and <code class="in">spec-change-request</code>.</p>
+  <p class="small"><strong>Exact current parser surface:</strong> 54 subcommands; the list below mirrors <code class="in">build_parser()</code>, including <code class="in">dashboard</code>, <code class="in">waste-check</code>, and <code class="in">spec-change-request</code>.</p>
   <table>
     <thead><tr><th>Subcommand</th><th>What it does</th></tr></thead>
     <tbody>
@@ -628,7 +628,8 @@ LOC       ← its own count (prod vs test), pure stdlib</pre>
       <tr><td class="t">pit-check</td><td>Scores test effectiveness.</td></tr>
       <tr><td class="t">gate-check</td><td>Detects weakened gates or secrets.</td></tr>
       <tr><td class="t">spec-check</td><td>Validates SPEC/ACCEPTANCE; <em>lifecycle</em> dimension (ADR-040): compares the end-of-support dates cited in the ADRs' <code class="in">lifecycle:</code> blocks against the SPEC's <code class="in">go_live</code>. Advisory: never gates.</td></tr>
-      <tr><td class="t">golden-diff</td><td>Byte-compares received/approved.</td></tr>    </tbody>
+      <tr><td class="t">golden-diff</td><td>Byte-compares received/approved.</td></tr>
+      <tr><td class="t">operability</td><td>Measures the repo’s operability as FACTS in the tree (ADR-048, 2.2.0): a workflow step running the configured test command, a workflow that publishes a release asset, a <code class="in">RUNBOOK.md</code> naming start/config/rollback/smoke, and a declared <code class="in">seed_command</code> whose script exists. Exit 0 always; persists <code class="in">gate:operability</code> — advisory on risk profiles A/B, a BLOCKER on C/D/E via <code class="in">defaults.operability.gate</code>.</td></tr>    </tbody>
   </table>
   <pre><span class="c"># a typical pass of the loop</span>
 QL=./.claude/skills/uscha-devloop/qa_ledger.py

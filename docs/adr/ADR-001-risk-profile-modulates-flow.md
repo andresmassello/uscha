@@ -38,13 +38,18 @@ the power a human already has by declaring those knobs — nothing more.
 
 Default expansion table (all overridable per-knob):
 
-| Profile | Meaning | `qa_tools_order` (required to converge) | `golden_required` | caps |
-|---|---|---|---|---|
-| A | trivial change | `[code-review]` | no | kit defaults |
-| B | standard | `[code-review, improve]` | no | kit defaults |
-| C | sensitive | `[code-review, judgment-day, improve]` | no | kit defaults |
-| D | high | `[code-review, judgment-day, improve]` | **yes** | stricter coverage_threshold |
-| E | migration / legacy / fiscal | `[code-review, judgment-day, improve]` | **yes** | strictest |
+| Profile | Meaning | `qa_tools_order` (required to converge) | `golden_required` | `operability.gate` | caps |
+|---|---|---|---|---|---|
+| A | trivial change | `[code-review]` | no | no | kit defaults |
+| B | standard | `[code-review, improve]` | no | no | kit defaults |
+| C | sensitive | `[code-review, judgment-day, improve]` | no | **yes** | kit defaults |
+| D | high | `[code-review, judgment-day, improve]` | **yes** | **yes** | stricter coverage_threshold |
+| E | migration / legacy / fiscal | `[code-review, judgment-day, improve]` | **yes** | **yes** | strictest |
+
+`operability.gate` joined the table in 2.2.0 (ADR-048): on C, D and E a missing CI workflow,
+release step, RUNBOOK or seed command is a BLOCKER; on A and B the same four facts are measured
+and recorded advisory. It is the first profile-owned knob that lives one level down in
+`defaults`, so `_apply_risk_profile` and the origin ladder read DOTTED knob names.
 
 ## Reasons
 - Kills the "inert" defect: a declared profile now measurably changes the ledger and readiness.
