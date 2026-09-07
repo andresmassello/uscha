@@ -1,5 +1,14 @@
 # uscha-kit 2.2.0 — the agent asks for decisions, never for information (2026-09-07)
 
+This release is a BATCH: eight items that arrived together from two field retrospectives
+on live projects, carrying five ADRs (ADR-044 through ADR-048). They are one release because
+they were measured as one -- a single suite run over a single tree -- and each keeps its own
+section below, in the order the work landed: the origin markers (ADR-044), four field fixes
+from a live monorepo, the homepage claim entering the facts gate with the installed-skill
+version marker (ADR-045), field truth for greenfield (ADR-046), the smoke run as measured
+evidence (ADR-047), operability as a measured dimension (ADR-048), and the first-use
+walkthrough. Every section states its own scope and what it deliberately left out.
+
 ## The finding
 
 Two field reports, arriving from opposite ends, that turned out to be one rule.
@@ -423,6 +432,309 @@ installs. A stated limit, not a gap that closes itself.
 
 Acceptance goes 283 → 292 criteria; nothing was dropped.
 
+# Also in 2.2.0 — field truth for greenfield: a REAL-INPUT corpus is an evidence class (ADR-046)
+
+## The finding
+
+From a live greenfield build, in the field author's own words:
+
+> The parser passed every test the agent wrote, and it was wrong. Running it over the REAL corpus
+> is what exposed it: **96.96 %** before the fix, **99.645 %** after.
+
+That number is the finding. No invented suite ever produces a 96.96 % — it produces green, or it
+produces a bug the author already suspected. Only real inputs produce a percentage.
+
+And the condition that made it possible is not a lapse of discipline; it is the ordinary state of
+greenfield work. There is no production traffic to sample, no legacy system to characterize, and
+the same mind that decided what the code should do also decided what the tests would feed it. A
+suite built that way can be green across the whole input space its author imagined, and silent
+about the one the world produces.
+
+The kit had an instrument for the other half of this problem and only the other half.
+`characterize` and `golden-diff` implement one clear doctrine — *the old code is the truth* — and
+they are exactly right whenever there is old code. `uscha-characterize` says so in its own
+description: it is the brownfield front. `uscha-discovery`, the greenfield front, had no notion of
+field truth at all. The method could measure whether the agent kept its own promises. It could not
+measure whether those promises were about the real world.
+
+## `corpus-run` — the subcommand
+
+```bash
+python3 $QL corpus-run --repo <REPO> --corpus corpus/real.jsonl --command "python -m myparser" \
+  --threshold 99 --ac AC-FIELD-01
+#   [qa_ledger] backend-api/gate:corpus: FAIL 96.96 % (3195/3295) — threshold 99 % from --threshold
+#     miss inv-2019-03 (mismatch): expected '{"total": 1042}', got '{"total": 104200}'
+#     caps readiness <=65 and blocks convergence until a green run
+```
+
+The corpus is **JSONL**: one JSON object per line, `input` and `expected` required, `id` optional
+(a positional `case-NNN` is derived when absent). Each case runs the command once with its input
+on **stdin** — verbatim when it is a string, JSON-encoded (`sort_keys`) otherwise — and the
+trimmed **stdout** is compared to `expected`: string compare first, then JSON-equal when BOTH
+sides parse as JSON. So a command that reorders an object's keys is not a false miss, while a
+command that prints prose is compared as prose. A non-zero exit is a miss named with its code.
+
+**Determinism is part of the contract.** File order IS run order, so the same corpus reports the
+same misses in the same places; `--timeout` (default 30 s) turns a hang into a miss named
+`timeout` rather than an unbounded wait.
+
+**Refusal beats a guess.** A corpus that is missing, empty, or carries a malformed line is
+**exit 2**, naming the file and the LINE NUMBER, and it persists nothing. The failure this closes
+is the obvious one: an unreadable corpus scored as 0 % is an unmeasurable input reported as a
+measured catastrophe — and 0 cases scored as 100 % is the same lie with the sign flipped.
+
+## The threshold is the project's — and with none, the run is ADVISORY
+
+`--threshold`, else `repos[R].corpus_threshold`, else `defaults.corpus_threshold`. With **none of
+the three declared**, the run is ADVISORY: the percentage is measured and persisted, it gates
+nothing, it caps nothing, and it never joins the `N ok` count in the gates line.
+
+This is ADR-043's posture applied on the day the instrument ships. A gate needs a budget the
+project ADOPTED; a percentage the kit picked for you is an opinion wearing an exit code, and
+nobody outside the project knows whether 99.6 % is excellent or unacceptable for its domain.
+
+With a threshold declared, `gate:corpus` is a FACT gate like every other: `fail` is a BLOCKER —
+readiness capped ≤ 65, convergence blocked — and a later green run clears it (latest-per-tool
+wins). Nothing parallel was built: the record is the same static-gate shape `gate-check` writes,
+so every reader downstream already understood it before this release existed.
+
+`log-gate --kind corpus --verdict pass|fail|advisory|not-run` is the parity door for a corpus
+measured elsewhere. `corpus` becomes the **third** member of `ADVISORY_CAPABLE_KINDS`, after
+`simplicity` and `waste`, and the reason is specific to it: `corpus-run` itself runs advisory
+whenever no threshold is declared. Refusing the verdict on the parity door while the check emits
+it on the other would leave one fact with two incompatible records, and the parity door could only
+spell an unbudgeted run as `pass` — the exact false clean ADR-043 exists to refuse. The closed
+vocabulary is otherwise untouched: `ci`, `gate-check` and every other FACT kind still refuse
+`advisory`, which `AC-CO-08` measures.
+
+## A green corpus run closes a criterion MEASURED
+
+`--ac AC-FIELD-01` stamps criterion ids on the persisted record, and `readiness` closes a
+criterion whose only evidence is a corpus record **iff that record passed**:
+
+- an **advisory** run measured a percentage against no adopted budget — not a green gate, and
+  letting it read as one is the ADR-043 defect again;
+- a **failing** run is evidence AGAINST, not absence of evidence;
+- **red JUnit evidence still vetoes**, whatever the corpus says. Fail-closed did not move.
+
+A ticked `AC-FIELD-01` with no green corpus record reports `narrated_only`, exactly as a ticked
+criterion with no green testcase always has. The checkbox is narration; the run is the fact.
+
+The closure is FULL, not stamp-only: `_ac_closed` — the seam the JUnit path already went through —
+took one extra branch. Had it taken more, the honest half (the stamp plus the `narrated_only`
+report) would have shipped alone with the closure deferred, which is what the plan called for.
+
+## Readiness gets a `field` line — and no weight
+
+```
+--- field backend-api: corpus 66.7 % (2/3) < 90 % FAIL
+--- field backend-api: corpus 99.6 % (996/1000) >= 90 % PASS
+--- field backend-api: corpus 66.7 % (2/3) — no threshold declared, ADVISORY (measured, not gating)
+--- field backend-api: corpus UNMEASURED — a corpus is declared and was never run (real/corpus.jsonl)
+```
+
+One line per repo that declares a corpus (`repos[R].corpus`) or has ever run one, plus a
+conditional `field` object in `--json`. **A repo that declares no corpus and ran none prints
+nothing and emits nothing** — the same conditional-silence rule `lifecycle` (ADR-040) and
+`agent_origin` (ADR-044) follow, so every existing project's readiness output is what it was.
+
+The `field` **dimension** and its weight are **deliberately not in this release** and are deferred
+to their own ADR. A weighted dimension moves every existing project's score the moment they
+upgrade, and it has to be argued and measured on its own rather than smuggled in beside the
+instrument that would feed it. The line reports; a failing corpus already blocks through its
+`gate:corpus` record.
+
+## Discovery asks the question on day one
+
+The discovery skill's domain round gains a MANDATORY question: **what input comes from the real
+world, and where is the corpus?** Name the real-input surfaces, ask where a sample with its
+expected outputs can be obtained, record the path as `repos[R].corpus`. No corpus on day 1 is not
+a blocker — it is a **HIGH** risk in `RISKS.md` with an owner and a date.
+
+The finding that produced this ADR was not "we ran the corpus late". It was "nobody asked whether
+one existed", and a question nobody asks is a gap nobody sees. The skill also says the thing that
+has to be said out loud: **never author the corpus yourself** — a corpus the agent invented is the
+invented input this whole instrument exists to expose.
+
+## What is measured
+
+Smoke **T163**, nine criteria (`AC-CO-01..09`), over real temp projects and the real engine:
+the 66.7 % gate persisted and rendered (`-01`); `narrated_only` → measured → reopened as the tag's
+evidence changes (`-02`); UNMEASURED for a declared-and-never-run corpus and total silence for a
+repo that declares none (`-03`); ADVISORY with no budget, held out of the `ok` count, plus the
+full precedence ladder — flag beats repo beats defaults (`-04`); four refusals at exit 2 naming
+the line, persisting nothing (`-05`); `timeout` and non-zero-exit misses named (`-06`); the
+**control pair** — a passing corpus caps nothing at score 99.0, a failing one on a second repo
+caps the same ledger at exactly 65 with `BLOCKER` as the reason (`-07`); the `log-gate` parity
+door and the still-closed vocabulary (`-08`); and the **red probe** — the `v2.1.0` engine has
+neither the subcommand, nor the `--kind`, nor the `field` block (`-09`).
+
+A second probe was run during development and not shipped: breaking the comparison so every case
+hits turns `AC-CO-01`, `-02`, `-04` and `-07` red. The block measures the comparison, not its own
+scaffolding.
+
+## Not a breaking change
+
+No new weight, no new cap, no new default threshold, no change to any existing subcommand's
+behaviour. A project that declares no corpus sees the same readiness text and the same JSON
+payload it saw before, plus one additive `acceptance.corpus_closed` key.
+
+## Not in this release
+
+- **The `field` readiness dimension and its 10 points.** Deferred to its own ADR, on purpose.
+- **A default threshold.** A budget is declared, never defaulted.
+- **Corpus generation or sampling.** The engine RUNS real inputs; where they come from is the
+  project's problem, and a synthesized corpus would recreate the exact failure this catches.
+- **Partial or fuzzy matching.** A similarity score is a judgment, and judgments do not gate
+  (INV-ADVISORY-01). A case hits or it misses.
+- **Running the corpus automatically in the inner loop.** A real corpus can be large; when to run
+  it is the project's scheduling decision, like `pit-check`.
+
+Acceptance goes 292 → 301 criteria; nothing was dropped.
+
+# Also in 2.2.0 — the smoke run as measured evidence: executed, never narrated (ADR-047)
+
+## The finding
+
+The ledger ingests everything a machine produces on its own: JUnit, coverage, linters, the static
+gate's XML, and since this release a CI verdict. One phase of the loop was still prose. Phase 7 —
+the smoke list — asked the agent to *produce a concrete manual smoke-test checklist*, and what
+came back was a paragraph:
+
+> the jar served /admin · the simulator answered 200 in 6 ms · the catalogue endpoint worked
+
+None of that is evidence. It is a sub-agent narrating, and it is believed because it is written
+confidently. From the field, the cost:
+
+> **Every simulator run returned an empty list, because the database had no rows. The smoke was
+> reported as verified.**
+
+An empty list is a 200. A narrated smoke cannot tell "the endpoint answered correctly" from "the
+endpoint answered", and the difference was the release. Worse, the ledger held no record of the
+run at all — so readiness, convergence and the PR gate had nothing to disagree with the sentence.
+
+The gap was never that smoke runs are hard to measure. It is that nobody asked the project's own
+tool for a machine-readable answer, and prose was accepted in its place.
+
+## `smoke-ingest` — the subcommand
+
+```bash
+python3 $QL smoke-ingest --repo <REPO> --report reports/smoke.json
+#   [qa_ledger] backend-api/gate:smoke: FAIL — 7/8 checks ok
+#     ok   AC-28 the jar serves /admin (status 200, 6 ms)
+#     FAIL healthz (status 503)
+#     caps readiness <=65 and blocks convergence until a clean smoke
+python3 $QL readiness
+#   --- smoke backend-api: 7/8 checks ok, 1 failed (healthz) FAIL
+```
+
+The contract is the smallest thing a shell script can emit:
+
+```json
+{"checks": [{"name": "AC-28 the jar serves /admin", "ok": true, "status": 200,
+             "latency_ms": 6, "evidence": "curl -sS localhost:8080/admin | head -1"}]}
+```
+
+`name` (a non-empty string) and `ok` (a **boolean**) are the whole mandatory surface. `status`
+(integer or string), `latency_ms` (a number) and `evidence` (a string) are optional, validated
+when present, and never invented when absent — a check with no `latency_ms` measured no latency,
+which is a different fact from a latency of 0. `ok: "true"` and `ok: 1` are refused: a contract
+that coerces is a contract that cannot say what it measured.
+
+The record carries the MEASUREMENT, not only the verdict — the report path, the ok/failed counts,
+the per-check receipts (name, ok, status, latency) and the failed names, capped at 20 because a
+receipt cites evidence and is not a dump. The counts and the AC verdicts are computed over EVERY
+check, so a criterion's fate never depends on where the display list was cut.
+
+## Refusal beats a guess
+
+Exit 2, naming the first offending check or field: a report that is missing, unreadable, not valid
+JSON, not an object, has no `checks` key, has a `checks` that is not a list, holds an **empty**
+list, or carries a check that is not an object, has no `name`, has no boolean `ok`, or has a
+wrong-typed `status` / `latency_ms` / `evidence`.
+
+```
+[qa_ledger] smoke-ingest: reports/smoke.json: check 2 (the admin page) has no boolean `ok`
+            (got 'true') -- a smoke check is a binary fact, and a string, a number or a
+            missing key is not a verdict
+```
+
+The empty list is the one worth naming twice. `{"checks": []}` is a run that verified nothing, and
+scoring it `0 failed → PASS` would manufacture a clean gate out of an absence — the false clean
+this kit refuses everywhere else.
+
+## A FACT kind — and it may NOT run advisory
+
+`log-gate --kind smoke --verdict pass|fail|not-run` is the parity door for a smoke measured
+elsewhere (a CI job, a nightly, a human running the paths by hand). `smoke` joins the closed
+`--kind` vocabulary as the second FACT addition after `ci`, and it is **not** admitted to
+`ADVISORY_CAPABLE_KINDS`.
+
+The asymmetry with `corpus` (ADR-046, in this same release) is deliberate and is the interesting
+half. `corpus` may run advisory because a percentage is only a verdict once a budget is ADOPTED,
+and with no threshold declared there genuinely is no gate. A smoke check has no budget: `ok` is
+binary. It answered or it did not. An advisory smoke would be a mandatory gate cleared by
+goodwill, so `--verdict advisory --kind smoke` is exit 2.
+
+## A green check closes a criterion — and a failed one VETOES it
+
+A check whose `name` carries an AC tag — `AC-28 the jar serves /admin`, in the **same tag grammar
+JUnit testcase names use** — closes that criterion MEASURED **iff** the check is `ok` **and** the
+ingested report's gate is `pass`. Both halves matter: a green check inside a failing report is a
+green light on a run that did not hold.
+
+And a **failed tagged check vetoes**, exactly like a red JUnit testcase. The veto is evaluated
+before any green, because the cheapest way to fake a closed criterion is to put a green beside a
+red. `readiness --json` reports both halves — `acceptance.smoke_closed` and
+`acceptance.smoke_vetoed` — and the `narrated-only` line gains its smoke clause: a ticked
+criterion with no green testcase, no green corpus run and no green smoke check is narration.
+
+## Phase 7 produces the report
+
+The devloop skill's phase 7 no longer asks for a prose list. It RUNS the smoke paths with the
+project's own tool, has that tool write `reports/smoke.json`, ingests it, and cites the resulting
+verdict line in the PR body instead of a claim that the smoke passed.
+`uscha-kit/templates/scripts/smoke-report-example.json` is the reference report — three checks,
+one tagged `AC-01`. If a human runs the paths by hand, they still write the report: a checklist a
+human ticked is evidence, a checklist an agent narrated is not.
+
+## What is measured — `AC-SI-01..09`, smoke **T164**
+
+Nine criteria over real temp projects and the real engine: the gated fail and its clearing by a
+later clean report (`-01`); `narrated_only` → MEASURED through a tagged check, attributed in
+`acceptance.smoke_closed` (`-02`); the **veto** — a failed tagged check holds the criterion open
+even beside a green one elsewhere, and a green check inside a failing report closes nothing
+(`-03`); the empty list refused at exit 2, persisting nothing (`-04`); six refusals naming the
+offending check or field (`-05`); the record's receipts, the named failure on the readiness line
+and total silence for a repo that ingested nothing (`-06`); the **control pair** — a passing
+smoke caps nothing at score 99.0, a failing one on a second repo caps the same ledger at exactly
+65 with `BLOCKER` as the reason (`-07`); the `log-gate` parity door and the advisory refusal
+(`-08`); and the **red probe** — the `v2.1.0` engine has neither the subcommand, nor the `--kind`,
+nor the `smoke` block, nor `acceptance.smoke_closed` (`-09`).
+
+A second probe was run during development and not shipped: forcing every check to read `ok` turns
+`AC-SI-01`, `-03`, `-06` and `-07` red. The block measures the verdict, not its own scaffolding.
+
+## Not a breaking change
+
+No new weight, no new cap, no config key, no change to any existing subcommand's behaviour. A
+project that never ingests a smoke report sees the same readiness text and the same JSON payload
+it saw before, plus two additive `acceptance` keys. Subcommands 54 → 55.
+
+## Not in this release
+
+- **A `smoke` readiness dimension.** A failing smoke caps through its gate record; a weighted
+  dimension would move every existing project's score and is owed its own argument.
+- **Running the smoke.** The engine ingests a report; how the paths are exercised is the project's
+  problem, and an engine that invented HTTP calls would be inventing the evidence.
+- **A check taxonomy** (endpoint / flow / device). A `name` and an `ok` are the contract.
+- **Flake handling, retries or averaging.** A flaky check reported as `ok` is a lie the ledger
+  cannot detect, and averaging it would be the kit manufacturing one.
+- **`evidence` as proof.** The string travels for a human reader; the engine gates on `ok` alone,
+  because a free-text field is narration again.
+
+Acceptance goes 301 → 310 criteria; nothing was dropped.
+
 # Also in 2.2.0 — operability is a MEASURED dimension, not phase-8 prose (ADR-048)
 
 ## The finding
@@ -523,7 +835,7 @@ even under a declared gate (`-07`).
 `log-gate --kind operability` at the parser, and knows no `operability.gate`. `None` = UNMEASURED
 without git.
 
-One twin gap fell out of the count moving 53 → 54: the EN doc carried a **Exact current parser
+One twin gap fell out of the subcommand count moving: the EN doc carried a **Exact current parser
 surface: N subcommands** line and the ES doc did not, so the facts writer rewrote one page and
 not the other and `AC-VC-02` went red — repo rule 3, caught mechanically. The ES page now carries
 the same claim (**Superficie exacta del parser actual: 54 subcomandos**), so it is inside the
@@ -537,6 +849,44 @@ ADR-014 refuses. Nothing is EXECUTED — not the tests, not the seed, not the pi
 system other than GitHub Actions is read, because a reader that guesses is worse than an honest
 `unknown`. And profiles A and B gate exactly as much as they did before: zero.
 
-Acceptance goes 292 → 300 criteria; nothing was dropped.
+Acceptance goes 310 → 318 criteria; nothing was dropped.
+
+# Also in 2.2.0 — one executable first-use path
+
+## The finding
+
+The entry experience asked a newcomer to learn the model before it showed them one complete
+result. The README opens on doctrine, the field manual opens on doctrine, and the reader who
+wanted to know what the kit DOES on their own repo had to assemble that answer from five pages.
+A method that measures evidence was asking to be believed first.
+
+## The fix
+
+`docs/FIRST-USE-EN.md` and its Spanish twin `docs/FIRST-USE.md` are the short path: ONE verified
+runtime, the install and the first skill invocation together, ONE bounded change carrying ONE
+acceptance criterion, the executed evidence that closes it, and the merge left to the human. The
+guide is reachable from the README and from both homepages, one link each.
+
+Every transcript on the page is real output from the run that wrote it. The two agent-driven
+steps are labelled *not exercised here* rather than dressed up as a transcript — the same rule
+ADR-047 applies to a smoke list, applied to a walkthrough.
+
+## What is measured — `AC-FU-01..05`, smoke **T166**
+
+These are DOC criteria: the block measures the PAGE, not the engine. `T166` extracts every fenced
+`bash` command in the guide that invokes the engine or the installer and RUNS them in order in a
+clean temp project, so a command that rots is a red suite rather than a reader's dead end; the
+lines it cannot run (`npx`, `cd`, `pytest`, the `/uscha-*` agent invocations) are excluded BY NAME
+in the sidecar, never silently dropped. It also asserts the three entry links resolve, that every
+route names a skill that exists on disk, that the twins carry the same fences with byte-identical
+command lines and no fenced line wider than 120 columns, and that neither twin promises a
+completion time.
+
+## Not in this release
+
+No new engine behaviour and no new subcommand — the guide navigates capabilities that already
+ship. The runtime the page claims is the one that was exercised, and no second one is implied.
+
+Acceptance goes 318 → 323 criteria; nothing was dropped.
 
 Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
