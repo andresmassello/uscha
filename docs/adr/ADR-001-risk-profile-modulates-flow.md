@@ -106,7 +106,9 @@ entry is `None` for the same reason: with no list declared, convergence falls ba
 of `--tools-per-cycle` agent steps, so there is no default list to name.
 
 Existing projects are untouched. A config that already carries the full copy keeps every value
-it has — `readiness --json` over such a fixture is byte-identical to the 1.99.0 engine and
+it has — `readiness --json` over such a fixture differs from the 1.99.0 engine only by the
+`acceptance` keys a later release DECLARED (2.2.0: `corpus_closed`, `smoke_closed`,
+`smoke_vetoed`, each named in the block and empty without evidence) and
 `init` freezes the same `defaults`, key for key (`AC-RP-04`) — because a value equal to a
 former default is indistinguishable from a value a
 human chose, and authorship cannot be recovered from equality. Those projects adopt the presets

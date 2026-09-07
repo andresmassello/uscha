@@ -12520,8 +12520,9 @@ def measure():
     # --- AC-RP-04: an existing full-copy config is untouched ------------------------------------
     # Nothing is deleted and nothing silently moves: a value equal to a former default cannot be
     # told apart from a value a human chose. Measured against the PREV_TAG engine, not against a
-    # literal. Two halves, both timing-free: the same ledger read by both engines (readiness is
-    # unchanged), and the same config initialised by both (init injects nothing new).
+    # literal. Two halves, both timing-free: the same ledger read by both engines (readiness
+    # moves only by the additive keys 2.2.0 DECLARED, listed below), and the same config
+    # initialised by both (init injects nothing new).
     prev_engine = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
     prev_cfg = git_show(PREV_TAG + ":uscha-kit/uscha.config.json")
     if prev_engine is None or prev_cfg is None:
@@ -12545,8 +12546,35 @@ def measure():
         else:
             a = run([old, "readiness", "--ledger", "L.json", "--json"], cwd=w).stdout
             b = run([ENG, "readiness", "--ledger", "L.json", "--json"], cwd=w).stdout
-            if a != b or not a.strip():
-                p4.append("readiness --json over the same ledger is not byte-identical")
+            # Byte identity was the assertion until 2.2.0, and it stopped being the right one:
+            # ADR-046 and ADR-047 each DECLARED an additive `acceptance` key, so a payload
+            # identical to v1.99.0 would now mean the declared feature is missing. The
+            # invariant it was protecting is unchanged -- nothing MOVES and nothing is dropped
+            # -- so it is measured that way: the keys below are named here, must be ABSENT in
+            # the old payload and present-and-empty in the new one over a ledger with no such
+            # evidence, and with them removed the two payloads must still be equal. A key
+            # added without a line in this tuple is still the drift this case refuses.
+            ADDITIVE_2_2_0 = ("corpus_closed", "smoke_closed", "smoke_vetoed")
+            try:
+                ja, jb = json.loads(a), json.loads(b)
+            except ValueError:
+                ja, jb = None, None
+            if ja is None or jb is None or not a.strip():
+                p4.append("readiness --json is not readable from both engines")
+            else:
+                acc_a = ja.get("acceptance") or {}
+                acc_b = jb.get("acceptance") or {}
+                surprise = [k for k in ADDITIVE_2_2_0 if k in acc_a]
+                absent = [k for k in ADDITIVE_2_2_0 if k not in acc_b]
+                loud = [k for k in ADDITIVE_2_2_0 if acc_b.get(k)]
+                for k in ADDITIVE_2_2_0:
+                    acc_b.pop(k, None)
+                if surprise or absent or loud:
+                    p4.append("the declared 2.2.0 acceptance keys are wrong: already in %s=%r, "
+                              "missing now=%r, non-empty with no evidence=%r"
+                              % (PREV_TAG, surprise, absent, loud))
+                if json.dumps(ja, sort_keys=True) != json.dumps(jb, sort_keys=True):
+                    p4.append("readiness --json moved beyond the declared additive keys")
             # and init freezes the SAME defaults: not one key added, not one moved. This is
             # the half that keeps ENGINE_DEFAULTS a reporting table. Materializing it into
             # `defaults` would make the kit's own value indistinguishable from a human

@@ -1001,8 +1001,14 @@ The behavioural red - the generated config carrying declarations that outrank th
   not declare. Red against 1.99.0 for the reporting reason only: the value was already 60 there,
   and no surface said where it came from - which is the diagnostic gap this case closes.
 - [x] AC-RP-04 - an existing full-copy config with no profile is untouched: `readiness --json`
-  over the same ledger is BYTE-identical between the `v1.99.0` engine and this one, and `init`
-  freezes exactly the same `defaults` - not one key added, not one moved. A value equal to a
+  over the same ledger moves only by the `acceptance` keys 2.2.0 DECLARED - `corpus_closed`
+  (ADR-046), `smoke_closed` and `smoke_vetoed` (ADR-047), each absent in the `v1.99.0` payload
+  and present-and-EMPTY here over a ledger with no such evidence - and with those removed the
+  two payloads are equal; `init` freezes exactly the same `defaults` - not one key added, not
+  one moved. Amended in 2.2.0: the assertion was byte identity until the release that
+  deliberately added keys, and a payload still identical to `v1.99.0` would now prove the
+  declared feature MISSING. Each addition is named in the block, so an undeclared one is still
+  the drift this criterion refuses. A value equal to a
   former default is indistinguishable from a value a human chose, so nothing is deleted and
   nothing silently moves. The second half is what keeps `ENGINE_DEFAULTS` a REPORTING table:
   materializing it into `defaults` would make the kit's own value read as a human declaration
