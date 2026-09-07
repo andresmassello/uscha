@@ -157,4 +157,4 @@ a blocker, which is the same failure this release removes with a different trigg
 it AST-aware needs nine parsers a stdlib-only engine will not have, and a correct nesting number
 gated against a budget nobody declared would still be an opinion with an exit code.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 450 checks · 0 fail; acceptance 265/266.
