@@ -108,6 +108,11 @@ older spec still covers newer code is a relevance judgment, and a guess advises.
 python qa_ledger.py spec-drift --repo <name> --json   # advisory report; exit 0 always
 ```
 
+It searches `repos[<name>].path` first and the **config root** (where `uscha.config.json` and the
+ledger live) second, and the report NAMES which of the two it read (`spec_source`). A monorepo
+keeps ONE `SPEC.md` at the root and it governs every repo — before 2.2.0 that case answered "no
+spec documents", which reads exactly like "no drift".
+
 Map specs to code with a `governs:` glob list in the frontmatter of `SPEC.md` and each
 `docs/adr/*.md`:
 
@@ -549,6 +554,9 @@ QL=".claude/skills/uscha-devloop/qa_ledger.py"
 
 python3 $QL --help                                  # see subcommands
 python3 $QL init --config uscha.config.json      # creates QA-LEDGER.json
+# later, a new service joins an existing loop — this APPENDS and re-seals the checksum,
+# it never rebuilds the ledger (2.2.0):
+python3 $QL init --add-repo web-app --path web-app --type node --test-command "npm test"
 
 # run your build with the reports, then:
 python3 $QL snapshot      --repo backend-api --phase pre
@@ -705,10 +713,19 @@ exactly what it printed before.
 
 `bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (53 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
-The **fact gates** (golden-diff, gate-check, pit-check, simplicity) are PERSISTED with
+`gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
+carries every repo's hunks, and a sibling's findings are neither this repo's report nor this
+repo's exit code. A rename is reported under `moved` — informational, never a deletion — both
+from git's own rename headers (`--from-git` forces `-M`, so the caller's `diff.renames` config
+cannot hide one) and from an exact delete/add pair in a diff whose producer detected none. A
+real deletion still blocks.
+
+The **fact gates** (golden-diff, gate-check, pit-check, simplicity, **ci**) are PERSISTED with
 `log-gate`: a fail blocks convergence and caps readiness ≤65 via the ledger; `--verdict
 advisory` records a run that is measured but not gating (it caps nothing, blocks nothing, and
-never counts as an `ok` gate). A CONSTITUTION violation is recorded with `flag-blocker` (same
+never counts as an `ok` gate) and is accepted ONLY for `simplicity|waste` — every FACT gate
+refuses it. `--kind ci` (2.2.0) records what the pipeline did, with `--ref <run URL or id>`
+stored on the record as the receipt; a `ci` fail caps and blocks exactly like `gate-check`. A CONSTITUTION violation is recorded with `flag-blocker` (same
 effect, until `--resolve`).
 
 ## Notes

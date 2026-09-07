@@ -13362,6 +13362,501 @@ case "$T160" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T160";;
 esac
 
+echo "== T161 (2.2.0): four field fixes -- a rename is a move, --repo scopes, the monorepo SPEC is found, ci is a gate, a repo can be added =="
+# Four reports from a live monorepo, each reproduced against the 2.1.0 engine before a line was
+# written. (1) `git mv tests/a_test.py tests/b_test.py` blocked as a DELETED test, and --repo
+# scoped nothing -- a sibling repo findings were reported under whichever repo was named, with
+# that repo exit code behind them. (2) spec-drift looked for SPEC.md only inside repos[R].path,
+# so a monorepo whose SPEC sits at the root, next to uscha.config.json, was told it had no spec
+# documents. (3) a green pipeline could not be recorded at all: log-gate --kind had no ci. (4)
+# adding a second service meant re-running init, which builds a NEW ledger and drops every
+# step -- and hand-editing the file trips the integrity checksum, correctly.
+#
+# AC-FF-10 is the RED PROBE: the v2.1.0 engine must still show all four failures. The positive
+# cases carry their own controls -- a real deletion still blocks, a repo-local SPEC still wins,
+# ci is measured as PARITY with gate-check rather than against a literal, and no repo that was
+# already measured moves when a new one is added.
+T161=$(pyin "$KIT" "$ROOT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+# the release before these fixes: its engine must show all four field failures (AC-FF-10).
+PREV_TAG = "v2.1.0"
+TMPS = []
+res, why = {}, {}
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-ff-")
+    TMPS.append(d)
+    return d
+
+
+def run(args, cwd=None):
+    return subprocess.run([sys.executable] + list(args), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                          errors="replace")
+
+
+def eng(cwd, args, engine=None):
+    return run([engine or ENG] + list(args), cwd=cwd)
+
+
+def git(cwd, *args):
+    return subprocess.run(["git"] + list(args), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                          errors="replace")
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def write(path, text):
+    d = os.path.dirname(path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
+def read_json(path):
+    with io.open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+CFG = {"project": {"name": "demo"},
+       "defaults": {"coverage_threshold": 70},
+       "repos": [{"name": "backend-api", "type": "python", "path": "backend-api"},
+                 {"name": "mobile-app", "type": "python", "path": "mobile-app"}]}
+
+TEST_A = "def test_a():\n    assert 1\n"
+TEST_M = "def test_m():\n    assert 1\n"
+# a monorepo SPEC lives at the ROOT, next to the config, and governs every repo.
+SPEC_ROOT = "---\ngovers: none\n---\n# SPEC\n"
+SPEC_MAPPED = "---\ngoverns:\n  - backend-api/**\n---\n# SPEC\n"
+
+
+def monorepo(spec_at_root=True, spec_at_repo=False, renames_off=True):
+    """A two-repo monorepo committed once: the ledger, the config and the SPEC at the root,
+    the code one level down. This IS the field shape -- one git tree, several repos in it."""
+    d = tmp()
+    git(d, "init", "-q", ".")
+    git(d, "config", "user.email", "smoke@example.invalid")
+    git(d, "config", "user.name", "smoke")
+    if renames_off:
+        # the caller declaring rename detection OFF: the engine must detect the rename anyway.
+        git(d, "config", "diff.renames", "false")
+    write(os.path.join(d, "uscha.config.json"), json.dumps(CFG, indent=2) + "\n")
+    write(os.path.join(d, "backend-api", "tests", "a_test.py"), TEST_A)
+    write(os.path.join(d, "mobile-app", "tests", "m_test.py"), TEST_M)
+    if spec_at_root:
+        write(os.path.join(d, "SPEC.md"), SPEC_MAPPED)
+    if spec_at_repo:
+        write(os.path.join(d, "backend-api", "SPEC.md"), SPEC_ROOT)
+    git(d, "add", "-A")
+    git(d, "commit", "-qm", "init")
+    eng(d, ["init", "--config", "uscha.config.json", "--out", "L.json"])
+    return d
+
+
+def gate(d, args):
+    r = eng(d, ["gate-check", "--json"] + list(args))
+    try:
+        return r, json.loads(r.stdout)
+    except ValueError:
+        return r, None
+
+
+def measure():
+    # --- AC-FF-01: a rename is a MOVE, and the engine detects it, not the caller config ------
+    d = monorepo()
+    git(d, "mv", "backend-api/tests/a_test.py", "backend-api/tests/b_test.py")
+    r, j = gate(d, ["--from-git", "--base", "HEAD"])
+    p = []
+    if j is None:
+        p.append("no JSON from gate-check: %s" % (r.stderr or "")[:120])
+    else:
+        if j.get("removed_tests"):
+            p.append("a rename is still reported as a deletion: %r" % (j["removed_tests"],))
+        if "backend-api/tests/a_test.py -> backend-api/tests/b_test.py" not in (j.get("moved") or []):
+            p.append("the move is not reported: %r" % (j.get("moved"),))
+        if j.get("verdict") != "CLEAN":
+            p.append("verdict is %r, expected CLEAN" % (j.get("verdict"),))
+    if r.returncode != 0:
+        p.append("exit is %d, expected 0 -- a rename must not block" % r.returncode)
+    # the CONTROL: a real deletion still blocks, with the same engine on the same tree shape.
+    c = monorepo()
+    git(c, "rm", "-qf", "backend-api/tests/a_test.py")
+    rc, jc = gate(c, ["--from-git", "--base", "HEAD"])
+    if rc.returncode != 1 or not (jc or {}).get("removed_tests"):
+        p.append("a REAL deletion no longer blocks: exit %d, removed %r"
+                 % (rc.returncode, (jc or {}).get("removed_tests")))
+    res["AC-FF-01"] = not p
+    why["AC-FF-01"] = "; ".join(p[:3]) or ("git mv reads as a move at exit 0 even with "
+                                           "diff.renames false; a real deletion still blocks")
+
+    # --- AC-FF-02: a diff whose producer did NOT detect renames is paired by CONTENT ---------
+    # This is the shape the field report carried: a saved diff, rename detection off, and a
+    # pure move read as a deleted test. Pairing is EXACT and one-to-one; ambiguity is refused.
+    d = monorepo()
+    git(d, "mv", "backend-api/tests/a_test.py", "backend-api/tests/b_test.py")
+    saved = os.path.join(d, "nr.diff")
+    write(saved, git(d, "diff", "--no-renames", "--unified=0", "HEAD").stdout)
+    r, j = gate(d, ["--diff", saved])
+    p = []
+    if r.returncode != 0 or (j or {}).get("removed_tests"):
+        p.append("the delete/add pair is not paired: exit %d, removed %r"
+                 % (r.returncode, (j or {}).get("removed_tests")))
+    if "backend-api/tests/a_test.py -> backend-api/tests/b_test.py" not in ((j or {}).get("moved") or []):
+        p.append("the move is not reported from a rename-less diff: %r" % ((j or {}).get("moved"),))
+    # AMBIGUITY: two deleted files sharing one body and two added ones. Nothing is paired --
+    # guessing which moved where would be inventing a fact to clear a gate.
+    a = monorepo()
+    write(os.path.join(a, "backend-api", "tests", "two_test.py"), TEST_A)
+    git(a, "add", "-A")
+    git(a, "commit", "-qm", "second")
+    git(a, "mv", "backend-api/tests/a_test.py", "backend-api/tests/x_test.py")
+    git(a, "mv", "backend-api/tests/two_test.py", "backend-api/tests/y_test.py")
+    saved2 = os.path.join(a, "amb.diff")
+    write(saved2, git(a, "diff", "--no-renames", "--unified=0", "HEAD").stdout)
+    ra, ja = gate(a, ["--diff", saved2])
+    if ra.returncode != 1 or len((ja or {}).get("removed_tests") or []) != 2:
+        p.append("an AMBIGUOUS pair was resolved instead of refused: exit %d, removed %r"
+                 % (ra.returncode, (ja or {}).get("removed_tests")))
+    if (ja or {}).get("moved"):
+        p.append("an ambiguous pair was reported as a move: %r" % ((ja or {}).get("moved"),))
+    res["AC-FF-02"] = not p
+    why["AC-FF-02"] = "; ".join(p[:3]) or ("an exact delete/add pair is a move; two identical "
+                                           "bodies are ambiguous and stay deletions")
+
+    # --- AC-FF-03: --repo R scopes the diff to repos[R].path --------------------------------
+    d = monorepo()
+    write(os.path.join(d, "mobile-app", "tests", "m_test.py"), TEST_M + "# eslint-disable\n")
+    p = []
+    r_all, j_all = gate(d, ["--from-git", "--base", "HEAD"])
+    r_be, j_be = gate(d, ["--from-git", "--base", "HEAD", "--ledger", "L.json",
+                          "--repo", "backend-api"])
+    r_mo, j_mo = gate(d, ["--from-git", "--base", "HEAD", "--ledger", "L.json",
+                          "--repo", "mobile-app"])
+    if "mobile-app/tests/m_test.py" not in ((j_all or {}).get("suppressions_added") or []):
+        p.append("the unscoped run does not see the sibling finding at all: %r"
+                 % ((j_all or {}).get("suppressions_added"),))
+    if (j_be or {}).get("suppressions_added"):
+        p.append("--repo backend-api still reports a mobile-app finding: %r"
+                 % ((j_be or {}).get("suppressions_added"),))
+    if (j_be or {}).get("verdict") != "CLEAN" or (j_be or {}).get("scope") != "backend-api":
+        p.append("--repo backend-api reports %r scoped to %r"
+                 % ((j_be or {}).get("verdict"), (j_be or {}).get("scope")))
+    if "mobile-app/tests/m_test.py" not in ((j_mo or {}).get("suppressions_added") or []):
+        p.append("--repo mobile-app lost its OWN finding: %r"
+                 % ((j_mo or {}).get("suppressions_added"),))
+    # exit semantics per scope: a BLOCKER in the sibling is exit 1 for its owner and exit 0
+    # for the repo that did not cause it -- the whole point of scoping an exit code.
+    b = monorepo()
+    git(b, "rm", "-qf", "mobile-app/tests/m_test.py")
+    rb_be = eng(b, ["gate-check", "--from-git", "--base", "HEAD", "--ledger", "L.json",
+                    "--repo", "backend-api"])
+    rb_mo = eng(b, ["gate-check", "--from-git", "--base", "HEAD", "--ledger", "L.json",
+                    "--repo", "mobile-app"])
+    if rb_be.returncode != 0 or rb_mo.returncode != 1:
+        p.append("a sibling deletion exits %d for backend-api and %d for mobile-app, "
+                 "expected 0 and 1" % (rb_be.returncode, rb_mo.returncode))
+    res["AC-FF-03"] = not p
+    why["AC-FF-03"] = "; ".join(p[:3]) or ("hunks outside repos[R].path are not this repo "
+                                           "findings, and its exit code follows")
+
+    # --- AC-FF-04: spec-drift falls back to the CONFIG ROOT, and says which it read ----------
+    d = monorepo(spec_at_root=True)
+    r = eng(d, ["spec-drift", "--ledger", "L.json", "--repo", "backend-api", "--json"])
+    p = []
+    try:
+        j = json.loads(r.stdout)
+    except ValueError:
+        j = None
+        p.append("no JSON from spec-drift: %s" % (r.stderr or "")[:120])
+    if j is not None:
+        if j.get("spec_source") != "root":
+            p.append("spec_source is %r, expected root" % (j.get("spec_source"),))
+        if [x.get("file") for x in j.get("results") or []] != ["SPEC.md"]:
+            p.append("the root SPEC was not read: %r"
+                     % ([x.get("file") for x in j.get("results") or []],))
+    human = eng(d, ["spec-drift", "--ledger", "L.json", "--repo", "backend-api"])
+    if "no spec documents found" in human.stdout:
+        p.append("the human output still says no spec documents")
+    if "CONFIG ROOT" not in human.stdout:
+        p.append("the human output does not say WHICH tree it read: %r" % human.stdout[:160])
+    if r.returncode != 0 or human.returncode != 0:
+        p.append("spec-drift is still advisory: exit %d / %d" % (r.returncode, human.returncode))
+    # the repo path WINS when it carries its own SPEC: a repo describing itself is not the
+    # monorepo describing everyone.
+    d2 = monorepo(spec_at_root=True, spec_at_repo=True)
+    j2 = json.loads(eng(d2, ["spec-drift", "--ledger", "L.json", "--repo", "backend-api",
+                             "--json"]).stdout)
+    if j2.get("spec_source") != "repo":
+        p.append("a repo-local SPEC did not win: spec_source %r" % (j2.get("spec_source"),))
+    # and with nothing anywhere the answer is still an honest empty, at exit 0.
+    d3 = monorepo(spec_at_root=False)
+    r3 = eng(d3, ["spec-drift", "--ledger", "L.json", "--repo", "backend-api", "--json"])
+    j3 = json.loads(r3.stdout)
+    if j3.get("results") or j3.get("spec_source") is not None or r3.returncode != 0:
+        p.append("with no SPEC anywhere: results %r, source %r, exit %d"
+                 % (j3.get("results"), j3.get("spec_source"), r3.returncode))
+    res["AC-FF-04"] = not p
+    why["AC-FF-04"] = "; ".join(p[:3]) or ("the config root is the fallback, the repo path "
+                                           "wins, and the answer names which was read")
+
+    # --- AC-FF-05: --kind ci is a FACT gate that behaves exactly like gate-check -------------
+    # Measured as PARITY against gate-check on two ledgers built identically, not asserted
+    # against a literal: the claim is that ci gates like the gate it was modelled on.
+    def loaded(kind, extra=None):
+        d = monorepo()
+        for repo in ("backend-api", "mobile-app"):
+            for i in (1, 2, 3):
+                eng(d, ["log-step", "--ledger", "L.json", "--repo", repo, "--tool", "t%d" % i,
+                        "--iteration", "1", "--fixed", "0", "--files-changed", "0",
+                        "--tests-passed", "yes"])
+        if kind is not None:
+            eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration",
+                    "1", "--kind", kind, "--verdict", "fail", "--note", "n"] + list(extra or []))
+        return d
+
+    p = []
+    dg, dc = loaded("gate-check"), loaded("ci")
+    rg = eng(dg, ["readiness", "--ledger", "L.json", "--json"]).stdout
+    rc = eng(dc, ["readiness", "--ledger", "L.json", "--json"]).stdout
+    if not rc.strip() or rc.replace("gate:ci", "gate:gate-check") != rg:
+        p.append("readiness over a ci fail is not what it is over a gate-check fail")
+    cg = eng(dg, ["converged", "--ledger", "L.json", "--repo", "backend-api"])
+    cc = eng(dc, ["converged", "--ledger", "L.json", "--repo", "backend-api"])
+    if cg.returncode != 1 or cc.returncode != 1:
+        p.append("convergence exits %d for gate-check and %d for ci, expected 1 and 1"
+                 % (cg.returncode, cc.returncode))
+    if "gate:ci" not in cc.stdout:
+        p.append("the convergence refusal does not name the ci gate: %r" % cc.stdout[:140])
+    # pass clears it, and not-run records absence without an iterations record.
+    dp = loaded("ci")
+    eng(dp, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+             "--kind", "ci", "--verdict", "pass"])
+    if eng(dp, ["converged", "--ledger", "L.json", "--repo", "backend-api"]).returncode != 0:
+        p.append("a ci pass does not clear the gate it set")
+    dn = loaded(None)
+    before = len(read_json(os.path.join(dn, "L.json"))["repos"]["backend-api"]["iterations"])
+    eng(dn, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+             "--kind", "ci", "--verdict", "not-run"])
+    after = len(read_json(os.path.join(dn, "L.json"))["repos"]["backend-api"]["iterations"])
+    if after != before:
+        p.append("not-run wrote an iterations record (%d -> %d): absence is not evidence"
+                 % (before, after))
+    res["AC-FF-05"] = not p
+    why["AC-FF-05"] = "; ".join(p[:3]) or ("a ci fail caps and blocks exactly as gate-check "
+                                           "does; pass clears; not-run records nothing")
+
+    # --- AC-FF-06: ci is a FACT kind, so --verdict advisory is refused, ledger untouched -----
+    # The AC-SG-08 posture, extended the day a FACT kind is added: a mandatory gate cleared by
+    # goodwill is the one thing this ledger exists to refuse.
+    d = monorepo()
+    led = os.path.join(d, "L.json")
+    before = io.open(led, "rb").read()
+    r = eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+                "--kind", "ci", "--verdict", "advisory"])
+    p = []
+    if r.returncode != 2:
+        p.append("advisory on --kind ci exits %d, expected 2" % r.returncode)
+    if "advisory is not accepted" not in (r.stderr or ""):
+        p.append("the refusal does not say what was refused: %r" % (r.stderr or "")[:140])
+    if io.open(led, "rb").read() != before:
+        p.append("the refused run still wrote to the ledger")
+    ok = eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+                 "--kind", "simplicity", "--verdict", "advisory"])
+    if ok.returncode != 0:
+        p.append("the CONTROL (simplicity advisory) was refused too: exit %d" % ok.returncode)
+    res["AC-FF-06"] = not p
+    why["AC-FF-06"] = "; ".join(p[:3]) or ("ci refuses advisory with the ledger untouched; "
+                                           "simplicity still accepts it")
+
+    # --- AC-FF-07: --ref is stored, travels, and is ABSENT when not given -------------------
+    d = monorepo()
+    eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+            "--kind", "ci", "--verdict", "pass", "--ref", "https://ci.example/run/4711"])
+    p = []
+    recs = read_json(os.path.join(d, "L.json"))["repos"]["backend-api"]["iterations"]
+    if not recs or recs[-1].get("ref") != "https://ci.example/run/4711":
+        p.append("the record carries ref %r" % (recs[-1].get("ref") if recs else None,))
+    roll = json.loads(eng(d, ["readiness", "--ledger", "L.json", "--json"]).stdout)["gates"]
+    if [g for g in roll if g.get("ref") == "https://ci.example/run/4711"] == []:
+        p.append("the gates rollup dropped the ref: %r" % (roll,))
+    d2 = monorepo()
+    eng(d2, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+             "--kind", "ci", "--verdict", "pass"])
+    recs2 = read_json(os.path.join(d2, "L.json"))["repos"]["backend-api"]["iterations"]
+    if not recs2:
+        p.append("the control run recorded nothing at all")
+    elif "ref" in recs2[-1]:
+        p.append("a run with no --ref invented one: %r" % (recs2[-1].get("ref"),))
+    roll2 = json.loads(eng(d2, ["readiness", "--ledger", "L.json", "--json"]).stdout)["gates"]
+    if any("ref" in g for g in roll2):
+        p.append("the rollup invented a ref key: %r" % (roll2,))
+    res["AC-FF-07"] = not p
+    why["AC-FF-07"] = "; ".join(p[:3]) or "the ref travels to the rollup, and is absent when absent"
+
+    # --- AC-FF-08: init --add-repo appends without resetting anything ------------------------
+    d = monorepo()
+    eng(d, ["log-step", "--ledger", "L.json", "--repo", "backend-api", "--tool", "code-review",
+            "--iteration", "1", "--reported", "3", "--fixed", "3", "--files-changed", "2",
+            "--tests-passed", "yes"])
+    led = os.path.join(d, "L.json")
+    old = read_json(led)
+    r = eng(d, ["init", "--out", "L.json", "--add-repo", "web-app", "--path", "web-app",
+                "--type", "node", "--test-command", "npm test"])
+    new = read_json(led)
+    p = []
+    if r.returncode != 0:
+        p.append("--add-repo exits %d: %s" % (r.returncode, (r.stderr or "")[:120]))
+    if new["steps"] != old["steps"] or new["step_counter"] != old["step_counter"]:
+        p.append("the step log was reset: %d -> %d steps"
+                 % (len(old["steps"]), len(new["steps"])))
+    for name in ("backend-api", "mobile-app"):
+        if new["repos"][name] != old["repos"][name]:
+            p.append("repo %s was rewritten by the add" % name)
+    if new["repos"].get("web-app") != {"type": "node", "path": "web-app",
+                                       "snapshots": [], "iterations": []}:
+        p.append("the new node is not the shape init writes: %r" % (new["repos"].get("web-app"),))
+    if [x.get("name") for x in new["config"]["repos"]] != ["backend-api", "mobile-app", "web-app"]:
+        p.append("the frozen config did not grow: %r"
+                 % ([x.get("name") for x in new["config"]["repos"]],))
+    # the checksum is re-sealed: any command that LOADS the ledger verifies it.
+    if eng(d, ["summary", "--ledger", "L.json"]).returncode != 0:
+        p.append("the re-sealed ledger no longer loads (checksum)")
+    cfg_names = [x.get("name") for x in read_json(os.path.join(d, "uscha.config.json"))["repos"]]
+    if cfg_names != ["backend-api", "mobile-app", "web-app"]:
+        p.append("uscha.config.json was not updated as the source: %r" % (cfg_names,))
+    # a duplicate name is refused with BOTH files byte-untouched.
+    led_b = io.open(led, "rb").read()
+    cfg_b = io.open(os.path.join(d, "uscha.config.json"), "rb").read()
+    dup = eng(d, ["init", "--out", "L.json", "--add-repo", "web-app", "--path", "x",
+                  "--type", "node"])
+    if dup.returncode == 0:
+        p.append("a duplicate repo name was accepted")
+    if io.open(led, "rb").read() != led_b or \
+            io.open(os.path.join(d, "uscha.config.json"), "rb").read() != cfg_b:
+        p.append("the refused duplicate still wrote something")
+    # a config file that has DRIFTED from the frozen config is left alone, with the reason said.
+    drifted = json.loads(cfg_b.decode("utf-8"))
+    drifted["repos"].append({"name": "someone-else", "type": "node", "path": "x"})
+    write(os.path.join(d, "uscha.config.json"), json.dumps(drifted, indent=2) + "\n")
+    keep = io.open(os.path.join(d, "uscha.config.json"), "rb").read()
+    r2 = eng(d, ["init", "--out", "L.json", "--add-repo", "ops", "--path", "ops",
+                 "--type", "node"])
+    if io.open(os.path.join(d, "uscha.config.json"), "rb").read() != keep:
+        p.append("a drifted config file was rewritten anyway")
+    if "left untouched" not in r2.stdout:
+        p.append("the drift was not named: %r" % r2.stdout[:160])
+    # and --add-repo without --path/--type is a refusal, never a guess.
+    if eng(d, ["init", "--out", "L.json", "--add-repo", "nope"]).returncode == 0:
+        p.append("--add-repo with no --path/--type was accepted")
+    res["AC-FF-08"] = not p
+    why["AC-FF-08"] = "; ".join(p[:3]) or ("the repo list grows, nothing else moves, the "
+                                           "checksum re-seals and a duplicate is refused")
+
+    # --- AC-FF-09: the added repo reads UNMEASURED, never as a regression -------------------
+    d = monorepo()
+    eng(d, ["log-step", "--ledger", "L.json", "--repo", "backend-api", "--tool", "code-review",
+            "--iteration", "1", "--reported", "3", "--fixed", "3", "--files-changed", "2",
+            "--tests-passed", "yes"])
+    before = json.loads(eng(d, ["readiness", "--ledger", "L.json", "--json"]).stdout)
+    eng(d, ["init", "--out", "L.json", "--add-repo", "web-app", "--path", "web-app",
+            "--type", "node"])
+    after = json.loads(eng(d, ["readiness", "--ledger", "L.json", "--json"]).stdout)
+    p = []
+    if "web-app" not in (after["facts"].get("static_unmeasured_repos") or []):
+        p.append("the new repo is not listed as unmeasured: %r"
+                 % (after["facts"].get("static_unmeasured_repos"),))
+    for name in ("backend-api", "mobile-app"):
+        if before["by_repo"][name] != after["by_repo"][name]:
+            p.append("repo %s reads differently after the add -- that IS a regression" % name)
+    if [g for g in after["gates"] if g.get("repo") == "web-app"]:
+        p.append("the fresh repo arrived carrying a gate: %r"
+                 % ([g for g in after["gates"] if g.get("repo") == "web-app"],))
+    w = (after["by_repo"].get("web-app") or {}).get("facts")
+    if w is None:
+        p.append("the added repo never reached readiness at all")
+    elif w.get("tests_red") or w.get("severity"):
+        p.append("the fresh repo reads as failing: tests_red %r severity %r"
+                 % (w.get("tests_red"), w.get("severity")))
+    if after.get("cap_reason") != before.get("cap_reason"):
+        p.append("adding an unmeasured repo tripped a cap: %r -> %r"
+                 % (before.get("cap_reason"), after.get("cap_reason")))
+    res["AC-FF-09"] = not p
+    why["AC-FF-09"] = "; ".join(p[:3]) or ("the new repo is unmeasured, no repo already "
+                                           "measured moved, and no cap fired")
+
+    # --- AC-FF-10: the RED PROBE -- the PREV_TAG engine shows all four field failures --------
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-FF-10"] = None
+        why["AC-FF-10"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        w = tmp()
+        old = os.path.join(w, "prev_engine.py")
+        write(old, prev)
+        p = []
+        # (1) a rename blocks as a deleted test
+        d = monorepo()
+        git(d, "mv", "backend-api/tests/a_test.py", "backend-api/tests/b_test.py")
+        o = eng(d, ["gate-check", "--from-git", "--base", "HEAD", "--json"], engine=old)
+        if o.returncode != 1 or "a_test.py" not in o.stdout:
+            p.append("the old engine did NOT block on a rename (exit %d)" % o.returncode)
+        # (2) --repo does not scope
+        d2 = monorepo()
+        write(os.path.join(d2, "mobile-app", "tests", "m_test.py"), TEST_M + "# eslint-disable\n")
+        o2 = eng(d2, ["gate-check", "--from-git", "--base", "HEAD", "--ledger", "L.json",
+                      "--repo", "backend-api", "--json"], engine=old)
+        if "mobile-app/tests/m_test.py" not in o2.stdout:
+            p.append("the old engine already scoped --repo")
+        # (3) spec-drift cannot see a root SPEC
+        o3 = eng(d2, ["spec-drift", "--ledger", "L.json", "--repo", "backend-api"], engine=old)
+        if "no spec documents found" not in o3.stdout:
+            p.append("the old engine already read the root SPEC: %r" % o3.stdout[:140])
+        # (4) --kind ci and --add-repo do not exist
+        o4 = eng(d2, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration",
+                      "1", "--kind", "ci", "--verdict", "pass"], engine=old)
+        if o4.returncode != 2:
+            p.append("the old engine already accepted --kind ci (exit %d)" % o4.returncode)
+        o5 = eng(d2, ["init", "--out", "L.json", "--add-repo", "web-app", "--path", "web-app",
+                      "--type", "node"], engine=old)
+        if o5.returncode != 2:
+            p.append("the old engine already had --add-repo (exit %d)" % o5.returncode)
+        res["AC-FF-10"] = not p
+        why["AC-FF-10"] = "; ".join(p[:3]) or ("all four failures reproduce on " + PREV_TAG
+                                               + " and none of them here")
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".ff-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T161" in
+  OK*) PASS=$((PASS+1)); echo "  ok   field fixes (AC-FF-01..10): $T161";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T161";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -14443,6 +14938,10 @@ FAMILIES = (
     # clone, an extracted kit) they report None = UNMEASURED, never a silent pass.
     (".oa-cases.json", "agent-origin", "T160",                       # ADR-044, 2.2.0
      _seq("AC-OA", 1, 7)),
+    # AC-FF-10 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
+    # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
+    (".ff-cases.json", "field-fixes", "T161",                        # 2.2.0
+     _seq("AC-FF", 1, 10)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

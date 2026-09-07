@@ -154,6 +154,13 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
   asserts and **new dependencies** (the "0 deps without approval" rule, made visible —
   kit 1.30.0) = review (or `--strict`). For high blast-radius a checker
   uncorrelated with the maker (different family/profile) is also required — that is process, not code.
+- The **CI pipeline** is a FACT gate without an invariant of its own: `log-gate --kind ci
+  --verdict <pass|fail|not-run>` records what the pipeline actually did, with `--ref <run URL or
+  id>` as the receipt. A `fail` is a **BLOCKER** — readiness cap ≤ 65 and convergence blocked —
+  exactly like `gate-check`; a `not-run` records absence and leaves the last state standing.
+  `--verdict advisory` is REFUSED on it, as on every FACT gate. It is admitted to the closed
+  `--kind` vocabulary (ADR-014, INV-ADVISORY-01) because a pipeline either went green on a
+  commit or it did not: an LLM judgment does not become a gate by being important.
 - The **Golden (INV-GOLDEN-01)** invariant is measured by `qa_ledger.py golden-diff`: any `.received`
   that does not match its `.approved` (or is unapproved) = **DIVERGE**, cutting the chain before judgment-day.
   The agent does not touch `.approved` (ideally a `PreToolUse` hook makes it impossible).

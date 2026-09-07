@@ -146,6 +146,12 @@ QL="./.claude/skills/uscha-devloop/qa_ledger.py"                      # instalac
 [ -f "$QL" ] || QL="$HOME/plugins/uscha/skills/uscha-devloop/qa_ledger.py"  # Codex plugin install
 [ -f "$QL" ] || QL="$HOME/.claude/skills/uscha-devloop/qa_ledger.py"  # Claude global install
 python3 $QL init --config uscha.config.json
+
+# adding a service LATER never re-runs init: that would build a NEW ledger and drop every
+# step. --add-repo appends and re-seals the checksum, leaving every existing repo untouched
+# (kit 2.2.0). The new repo has no evidence yet, so it reads UNMEASURED and the repo
+# averages read lower until its first snapshot — that is absence, not a regression:
+python3 $QL init --add-repo <NAME> --path <path> --type <type> --test-command "<cmd>"
 ```
 
 ## Execution policy line (before every phase)
@@ -388,7 +394,9 @@ python3 $QL log-step --repo <REPO> --tool <code-review|judgment-day|improve> \
 weaken the measuring apparatus? did it ADD a secret? — private keys, cloud tokens and
 key-container files block as facts, kit 1.12.0; generic password/token literals advise;
 new dependencies advise too — the change-budget rule "no new deps without approval" made
-visible, kit 1.30.0)
+visible, kit 1.30.0). A rename is reported as a MOVE, never as a deleted test, and `--repo`
+SCOPES the diff to that repo's path, so a monorepo sibling's hunks are neither this repo's
+findings nor this repo's exit code (kit 2.2.0)
 and, for migration work, golden-diff (does behavior still match the human-approved
 baseline?). Then PERSIST each verdict with `log-gate` — a failing fact gate blocks
 convergence and caps readiness ≤65 through the ledger:
@@ -416,6 +424,10 @@ have caught this and what was done>"` — reflection is part of closing, not opt
 ```bash
 python3 $QL gate-check --from-git --base <base> --repo <REPO>   # exit 1 = BLOCKER
 python3 $QL log-gate --repo <REPO> --iteration <N> --kind gate-check --verdict <pass|fail>
+
+# CI, when the pipeline has run for this commit (kit 2.2.0). A green run is a FACT and
+# belongs in the ledger; --ref is the receipt that outlives the conversation:
+python3 $QL log-gate --repo <REPO> --iteration <N> --kind ci   --verdict <pass|fail|not-run> --ref <run URL or id>
 
 python3 $QL golden-diff [--dir <fixtures-root>]   # exit 0 CLEAN · 1 DIVERGE · 2 NOT-RUN
 python3 $QL log-gate --repo <REPO> --iteration <N> --kind golden-diff \
@@ -565,6 +577,11 @@ Right after readiness, run the spec-maintenance advisory (kit 1.66.0):
 ```bash
 python3 $QL spec-drift --repo <REPO>
 ```
+
+It searches the repo's own path first and the CONFIG ROOT (where `uscha.config.json` and
+the ledger live) second, and NAMES which of the two it read — in a monorepo the single
+`SPEC.md` at the root is the spec of every repo, and "no spec documents" used to be
+indistinguishable from "no drift" (kit 2.2.0).
 
 Milliseconds, deterministic, exit 0 always — it never gates, so running it every pass
 adds zero ceremony. What it adds is VISIBILITY: the run lands in the ledger, so the

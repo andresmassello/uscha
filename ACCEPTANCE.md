@@ -1139,6 +1139,89 @@ CONTROL, the same ledger with no markers at all, rather than asserting it.
   appended after the original tag on the same line is read, so the item counts as confirmed;
   a marker inside an HTML comment is documentation and is skipped, like a fenced block.
 
+## Four field fixes from a live monorepo (2.2.0) - closes on green `AC-FF-nn` smoke assertions
+
+Four reports from a team running the kit on a monorepo, each reproduced against the 2.1.0
+engine before a line was written. They share one shape: the engine answered confidently about
+a tree it was reading wrongly, or refused to answer at all about a fact the human could see.
+
+1. `gate-check` read `git mv tests/a_test.py tests/b_test.py` as a DELETED test - a BLOCKER and
+   exit 1 for a change that deleted nothing. And `--repo R` scoped nothing: in a monorepo one
+   `git diff` carries every repo's hunks, so a sibling repo's findings were reported under
+   whichever repo was named, with that repo's exit code behind them.
+2. `spec-drift --repo R` looked for `SPEC.md` and `docs/adr/` only inside `repos[R].path`. A
+   monorepo keeps ONE spec at the root, next to `uscha.config.json` - so the answer was "no spec
+   documents", which is indistinguishable from "no drift" and stayed unnoticed for a week.
+3. A green pipeline could not be recorded at all: `log-gate --kind` had no `ci`. The one fact
+   every team already has, and the ledger had no word for it.
+4. Adding a second service meant re-running `init`, which builds a NEW ledger and drops every
+   step, snapshot and iteration; hand-editing `QA-LEDGER.json` instead trips the integrity
+   checksum, correctly. There was no supported door, so the field used the destructive one.
+
+The fixes stay inside the posture the kit already has. A rename becomes a MOVE - reported,
+informational, never an absolution: a real deletion still blocks, and an AMBIGUOUS pair (two
+files sharing one body) is refused rather than guessed, because guessing which moved where
+would be inventing a fact to clear a gate. `--repo` scopes with `realpath` on BOTH sides (the
+Windows 8.3 trap this repo has already paid for once). `spec-drift` names WHICH tree it read.
+`ci` is admitted to the `--kind` vocabulary because it is MEASURABLE, not because it is useful -
+it is a FACT gate, so `--verdict advisory` is refused on it exactly as on every other, and the
+addition is declared in the CONSTITUTION template where that closed vocabulary is stated to the
+project rather than only to the parser (ADR-014, INV-ADVISORY-01). `init --add-repo` grows the
+repo list and moves nothing else. `AC-FF-10` is the RED PROBE: all four failures must still
+reproduce on the `v2.1.0` engine.
+
+The decision `init --add-repo` records rather than hides: a repo added with no evidence reads
+as UNMEASURED, so every aggregate that averages over repos reads LOWER until its first snapshot
+or gate lands. That is not a regression and the command says so - nothing already measured
+moved, which `AC-FF-09` asserts entry by entry. Excluding an unmeasured repo from the average
+instead would be the opposite mistake: an aggregate produced by silence, which the readiness
+code refuses on purpose.
+
+- [ ] AC-FF-01 - a rename is a MOVE, and the ENGINE detects it, not the caller's config: with
+  `diff.renames false` set in the fixture, `gate-check --from-git` reports
+  `moved: ["a_test.py -> b_test.py"]`, `removed_tests: []`, verdict CLEAN, exit 0. The CONTROL
+  on the same tree shape - the file actually deleted - still reports it and still exits 1.
+- [ ] AC-FF-02 - a diff whose producer did NOT detect renames is paired by CONTENT: a saved
+  `git diff --no-renames` of a pure `git mv` reports the move and exits 0. Ambiguity is REFUSED,
+  not resolved: two deleted test files sharing one body and two added ones pair with nothing,
+  stay two deletions and still exit 1.
+- [ ] AC-FF-03 - `--repo R` restricts the scanned hunks to `repos[R].path`. The same diff
+  reports a `mobile-app` suppression unscoped and under `--repo mobile-app`, and NOT under
+  `--repo backend-api`, which reads CLEAN with `scope: "backend-api"`. The exit code follows the
+  scope: a deletion in `mobile-app` exits 1 for `mobile-app` and 0 for `backend-api`.
+- [ ] AC-FF-04 - `spec-drift` searches the repo path FIRST and the config root second, and says
+  which it read. With the SPEC at the root, `spec_source` is `root`, the file is analysed, and
+  the human output says `CONFIG ROOT` instead of "no spec documents". A repo carrying its own
+  `SPEC.md` still wins (`spec_source: repo`), and with no spec anywhere the answer is an honest
+  empty at exit 0 - the command never gates, before or after.
+- [ ] AC-FF-05 - `--kind ci` is a FACT gate, measured as PARITY with `gate-check` rather than
+  against a literal: over two ledgers built identically, `readiness --json` after a `ci` fail is
+  byte-identical to the one after a `gate-check` fail once the tool name is normalized, and
+  `converged` exits 1 in both, naming `gate:ci`. A `pass` clears the gate it set; a `not-run`
+  writes no iterations record at all, because absence is not evidence.
+- [ ] AC-FF-06 - `--verdict advisory --kind ci` is REFUSED (exit 2, the refusal names what it
+  refused) with the ledger byte-untouched, while the control `--kind simplicity --verdict
+  advisory` is still accepted. A mandatory gate cleared by goodwill is what this ledger exists
+  to refuse, and a new FACT kind inherits that on the day it ships.
+- [ ] AC-FF-07 - `--ref` is stored on the record and travels to the `readiness --json` gates
+  rollup; a run logged WITHOUT `--ref` carries no `ref` key on the record nor in the rollup.
+  Absence is never invented - a receipt the engine made up is worse than no receipt.
+- [ ] AC-FF-08 - `init --add-repo` appends and resets NOTHING: `steps`, `step_counter` and every
+  existing repo's node are byte-identical across the add; the new node is exactly the shape
+  `init` writes; the frozen config grows by one; the checksum is re-sealed (a following command
+  loads the ledger). `uscha.config.json` gains the entry when it IS the source, and is left
+  untouched with the divergence NAMED when its repo list has drifted from the frozen one. A
+  duplicate name is refused with both files byte-untouched, and `--add-repo` without `--path` /
+  `--type` is refused rather than guessed.
+- [ ] AC-FF-09 - the added repo reads like a FRESH repo, never as a regression: it appears in
+  `facts.static_unmeasured_repos`, arrives with no gate and no `tests_red`, trips no cap, and
+  every repo that was already measured has a byte-identical `by_repo` entry before and after.
+- [ ] AC-FF-10 - the RED PROBE. The `v2.1.0` engine, read out of git and run on these same
+  fixtures, MUST still show all four failures: the rename blocks as a deleted test, `--repo`
+  reports the sibling's finding, `spec-drift` says "no spec documents", and `--kind ci` and
+  `init --add-repo` are rejected by the parser. Without git or the tagged copy it reports `None`
+  = UNMEASURED, never a silent pass.
+
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".

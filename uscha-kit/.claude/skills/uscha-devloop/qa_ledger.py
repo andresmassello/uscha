@@ -2108,7 +2108,96 @@ def _validate_log_step_counts(args):
         raise SystemExit("[qa_ledger] gated-reported cannot exceed reported")
 
 
+def _add_repo_to_config_file(path, entry, frozen_names):
+    """Mirror the new repo into uscha.config.json when that file IS the source the ledger was
+    frozen from -- same repo names, in the same order. A file that has DRIFTED from the frozen
+    config is somebody else's edit, and it is left alone with the divergence named: silently
+    rewriting a config that no longer matches the ledger would be resolving a conflict the human
+    has not seen. Returns the sentence to print, never raises: the ledger is the source of truth
+    and its write already happened."""
+    if not os.path.isfile(path):
+        return "%s not found -- the ledger's frozen config is the only copy that changed" % path
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            cfg = json.load(fh)
+        names = [r.get("name") for r in cfg.get("repos", [])]
+    except (OSError, ValueError, AttributeError, TypeError) as exc:
+        return "%s left untouched (unreadable: %s)" % (path, exc)
+    if names != frozen_names:
+        return ("%s left untouched: its repos %s differ from the ledger's frozen %s, so it is "
+                "not the source this ledger was built from" % (path, names, frozen_names))
+    cfg["repos"].append(dict(entry))
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(cfg, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+        os.replace(tmp, path)
+    except OSError as exc:
+        return "%s left untouched (not writable: %s)" % (path, exc)
+    return "%s updated too (it is the source this ledger was frozen from)" % path
+
+
+def _init_add_repo(args):
+    """Append ONE repo to an EXISTING ledger without resetting it (2.2.0 field fix).
+
+    Until now the only door was re-running `init --config`, which builds a NEW ledger: the step
+    counter, every repo's iterations and every snapshot went back to zero, so adding a second
+    service to a live loop cost the evidence of the first. Editing QA-LEDGER.json by hand is not
+    the workaround either -- `_load` verifies the sha256 that `_save` writes, so a hand edit
+    turns the file into a refusal. That refusal is correct and stays: it is what makes 'measured
+    beats narrated' worth anything. What was missing was a supported door, and this is it.
+
+    What this deliberately does NOT do: touch any existing repo's steps, snapshots or
+    iterations, and re-freeze `defaults`. The config a project started under stays the config it
+    ran under -- only the repo list grows. `_save` re-seals the checksum over the result.
+
+    The new repo starts with NO evidence, and readiness says so rather than hiding it: it enters
+    `facts.static_unmeasured_repos`, and every aggregate that averages over repos reads LOWER
+    until its first snapshot or gate lands. That is an unmeasured repo, never a regression --
+    nothing already measured changed, and `by_repo` proves it entry by entry. Excluding it from
+    the average instead would be the opposite mistake: an aggregate produced by silence."""
+    name = args.add_repo
+    if not _has_text(args.path) or not _has_text(args.type):
+        raise SystemExit("[qa_ledger] init --add-repo needs --path and --type: the engine never "
+                         "guesses where a repo lives or how it is built")
+    if name == "integration":
+        raise SystemExit("[qa_ledger] repo name 'integration' is reserved")
+    ledger = _load(args.out)
+    cfg = ledger.get("config") or {}
+    frozen_names = [r.get("name") for r in cfg.get("repos", [])]
+    if name in frozen_names or name in ledger.get("repos", {}):
+        raise SystemExit(
+            "[qa_ledger] repo '%s' already exists in %s -- nothing was written. Adding it twice "
+            "would either duplicate the config entry or reset that repo's steps, which is the "
+            "very loss this flag exists to prevent." % (name, args.out))
+    entry = {"name": name, "type": args.type, "path": args.path}
+    if _has_text(args.test_command):
+        entry["test_command"] = args.test_command
+    cfg.setdefault("repos", []).append(entry)
+    ledger["config"] = cfg
+    # the same node shape `init` writes, so nothing downstream can tell an appended repo from
+    # one that was there since the first run.
+    ledger["repos"][name] = {"type": args.type, "path": args.path,
+                             "snapshots": [], "iterations": []}
+    _save(args.out, ledger)
+    cfg_path = args.config or os.path.join(
+        os.path.dirname(os.path.abspath(args.out)), "uscha.config.json")
+    print("[qa_ledger] %s: repo '%s' added (%s at %s) -- %d repos, every existing repo's steps "
+          "untouched, checksum re-sealed"
+          % (args.out, name, args.type, args.path, len(ledger["repos"])))
+    print("[qa_ledger] %s" % _add_repo_to_config_file(cfg_path, entry, frozen_names))
+    print("[qa_ledger] '%s' starts with NO evidence: it reads as UNMEASURED (readiness lists it "
+          "under facts.static_unmeasured_repos) and every repo average reads lower until its "
+          "first snapshot or gate lands. That is an unmeasured repo, not a regression." % name)
+
+
 def cmd_init(args):
+    if getattr(args, "add_repo", None):
+        return _init_add_repo(args)
+    if not _has_text(getattr(args, "config", None)):
+        raise SystemExit("[qa_ledger] init needs --config to create a ledger, or --add-repo "
+                         "NAME (with --path and --type) to append one repo to an existing one")
     cfg = _load(args.config, what="config", flag="--config")
     _validate_init_config(cfg)
     defaults = cfg.get("defaults", {})
@@ -2504,6 +2593,10 @@ def _gate_rollup(ledger):
                           # at -- the false-clean is the failure mode, not the absence.
                           "advisory": bool(rec.get("advisory")),
                           "gated": rec.get("gated_reported", 0),
+                          # WHERE it was measured (2.2.0, log-gate --ref): a CI verdict without
+                          # its run is a claim, and the rollup is where a reader looks first.
+                          # Absent on every record that carries none -- never invented.
+                          **({"ref": rec["ref"]} if rec.get("ref") else {}),
                           "note": rec.get("note")})
     return sorted(gates, key=lambda g: (g["repo"], g["tool"]))
 
@@ -2731,7 +2824,7 @@ def cmd_spec_change_request(args):
 
 
 def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, note,
-                        advisory=False):
+                        advisory=False, ref=None):
     """Append a static-gate-shaped record for a FACT gate so the EXISTING plumbing
     sees it: _gate_open_and_sev feeds the BLOCKER/CRITICAL readiness cap (<=65) and
     _converged refuses while the latest record for the tool is failing. A later
@@ -2755,6 +2848,11 @@ def _append_gate_record(ledger, node, repo, tool, iteration, failing, count, not
     }
     if advisory:
         rec["advisory"] = True
+    if ref:
+        # WHERE the verdict was measured (2.2.0). A CI verdict typed by hand is a claim; the
+        # run id or URL beside it is the receipt, and the ledger is the only place it survives
+        # the conversation that produced it.
+        rec["ref"] = ref
     node["iterations"].append(rec)
     ledger["steps"].append({"n": rec["n"], "at": rec["at"], "kind": "static-gate",
                             "repo": repo, "tool": tool, "iteration": iteration})
@@ -2767,8 +2865,9 @@ ADVISORY_CAPABLE_KINDS = ("simplicity", "waste")
 
 
 def cmd_log_gate(args):
-    """Persist a FACT-gate verdict (golden-diff / gate-check / pit-check / simplicity / regression)
-    into the ledger, so 'facts may block' is enforced by the engine, not by goodwill.
+    """Persist a FACT-gate verdict (golden-diff / gate-check / pit-check / simplicity /
+    regression / ci) into the ledger, so 'facts may block' is enforced by the engine, not by
+    goodwill.
       fail     -> BLOCKER record: trips the <=65 readiness cap AND blocks convergence.
       pass     -> clean record for the same tool: credits the fix, convergence sees clean.
       advisory -> a MEASURED, non-gating record (kit 2.1.0, ADR-043): zero gated findings, so
@@ -2790,6 +2889,13 @@ def cmd_log_gate(args):
     # an advisory-class dimension (e.g. "semantic") cannot be registered as a gate through
     # this door at all -- the refusal is structural. The smoke suite measures that the
     # vocabulary stays closed; widening it to admit an advisory kind is a red build.
+    #
+    # `ci` (2.2.0) is the one addition since ADR-014, and it is a FACT: a pipeline either went
+    # green on a commit or it did not, and the engine can be TOLD that fact with the run id or
+    # URL beside it (--ref). It is admitted here because it is measurable, not because it is
+    # useful -- an LLM judgment does not become a gate by being important. Adding a FACT kind
+    # is DECLARED in the CONSTITUTION template, which is where the closed vocabulary is stated
+    # to the project rather than only to this parser.
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
     tool = f"gate:{args.kind}"
@@ -2816,7 +2922,8 @@ def cmd_log_gate(args):
               f"records pass, fail or not-run", file=sys.stderr)
         sys.exit(2)
     rec = _append_gate_record(ledger, node, args.repo, tool, args.iteration,
-                              failing, args.count, args.note, advisory=advisory)
+                              failing, args.count, args.note, advisory=advisory,
+                              ref=getattr(args, "ref", None))
     _save(args.ledger, ledger)
     if advisory:
         state, effect = "ADVISORY (measured, not gating)", (
@@ -2826,7 +2933,8 @@ def cmd_log_gate(args):
                          "caps readiness <=65 and blocks convergence")
     else:
         state, effect = "PASS (clean)", "clears the gate for convergence"
-    print(f"[qa_ledger] {args.repo}/{tool}: {state} logged — {effect}")
+    print(f"[qa_ledger] {args.repo}/{tool}: {state} logged — {effect}"
+          + (f" [ref {rec['ref']}]" if rec.get("ref") else ""))
 
 
 def cmd_flag_blocker(args):
@@ -3502,15 +3610,35 @@ def cmd_spec_drift(args):
     lag_days = int(args.max_lag_days if args.max_lag_days is not None
                    else cfg.get("max_lag_days", 30))
     repo_path = _scope_path(ledger, args.repo)
+    root_path = os.path.dirname(os.path.abspath(args.ledger)) or "."
 
     # The spec surface is fixed by ADR-005: the repo SPEC.md plus every ADR.
-    spec_files = []
-    if os.path.isfile(os.path.join(repo_path, "SPEC.md")):
-        spec_files.append("SPEC.md")
-    adr_dir = os.path.join(repo_path, "docs", "adr")
-    if os.path.isdir(adr_dir):
-        spec_files += sorted("docs/adr/" + f for f in os.listdir(adr_dir)
-                             if f.lower().endswith(".md"))
+    def _specs_at(base):
+        found = []
+        if os.path.isfile(os.path.join(base, "SPEC.md")):
+            found.append("SPEC.md")
+        adr_dir = os.path.join(base, "docs", "adr")
+        if os.path.isdir(adr_dir):
+            found += sorted("docs/adr/" + f for f in os.listdir(adr_dir)
+                            if f.lower().endswith(".md"))
+        return found
+
+    # 2.2.0 field fix: a MONOREPO keeps ONE SPEC.md and one docs/adr/ at the root, next to
+    # uscha.config.json, while repos[R].path points at a subdirectory -- and this command read
+    # only that subdirectory, so `spec-drift --repo backend-api` answered "no spec documents"
+    # about a project whose spec was one level up. A spec found at the root is the MONOREPO's
+    # spec and governs every repo. The repo's own path still WINS when it has one (a repo that
+    # carries its own SPEC is describing itself); the config root -- taken as the ledger's
+    # directory, which is where `init --config uscha.config.json` is run -- is the fallback.
+    # The answer NAMES which of the two it read: "no drift" and "read the wrong tree" produced
+    # the same silence, and that is what made the field report take a week to notice.
+    base_path, spec_source = repo_path, "repo"
+    spec_files = _specs_at(repo_path)
+    if not spec_files and os.path.realpath(root_path) != os.path.realpath(repo_path):
+        root_specs = _specs_at(root_path)
+        if root_specs:
+            base_path, spec_source, spec_files = root_path, "root", root_specs
+    repo_path = base_path
 
     tracked = []
     ls = subprocess.run(["git", "ls-files"], cwd=repo_path, capture_output=True,
@@ -3582,20 +3710,26 @@ def cmd_spec_drift(args):
         results.append(row)
 
     out = {"repo": args.repo, "max_lag_days": lag_days, "results": results,
-           "advisory": True}
+           "advisory": True, "spec_source": spec_source if spec_files else None,
+           "spec_base": repo_path}
 
     # Latest-state record so the mirador can surface an advisory row. Advisory data,
     # not a step in the loop: no step_counter, no gate record, no readiness input.
     ledger["spec_drift"] = {"repo": args.repo, "at": _now(), "max_lag_days": lag_days,
-                            "results": results}
+                            "results": results,
+                            "spec_source": spec_source if spec_files else None}
     _save(args.ledger, ledger)
 
     if args.json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
     else:
         print("SPEC-DRIFT %s (advisory, lag > %dd):" % (args.repo, lag_days))
+        if spec_source == "root" and spec_files:
+            print("  specs read from the CONFIG ROOT (%s): the monorepo's SPEC governs "
+                  "every repo" % repo_path)
         if not results:
-            print("  no spec documents found (SPEC.md / docs/adr/*.md)")
+            print("  no spec documents found (SPEC.md / docs/adr/*.md) in the repo path "
+                  "nor at the config root")
         mark = {"SPEC_STALE": "!!", "CLEAN": "ok", "UNMAPPED": "--", "UNTRACKED": "--",
                 "NO-CODE": "ok"}
         for r_ in results:
@@ -10334,18 +10468,25 @@ def _rebuild_compare(args):
 # --------------------------------------------------------------------------- #
 # simplicity-check  (the "Reduce" gate)
 # --------------------------------------------------------------------------- #
-def _read_diff(args):
-    """Unified-diff text from --diff, --from-git, or stdin."""
+def _read_diff(args, detect_renames=False):
+    """Unified-diff text from --diff, --from-git, or stdin.
+
+    detect_renames (2.2.0) adds `-M` to the `--from-git` command so git reports a rename AS a
+    rename, whatever the caller's `diff.renames` config says. It is OPT-IN because the other
+    readers of this helper count LINES (simplicity, waste, regression): collapsing a rename into
+    a header would silently change the numbers they have been measuring for releases. gate-check
+    is the caller that needs it -- a rename read as a delete/add pair is what made
+    `git mv tests/a_test.py tests/b_test.py` block as a deleted test in the field."""
     if getattr(args, "diff", None):
         with open(args.diff, "r", encoding="utf-8", errors="replace") as fh:
             return fh.read()
     if getattr(args, "from_git", False):
         import subprocess
         base = args.base or "HEAD"
+        cmd = ["git", "diff", "--unified=0"] + (["-M"] if detect_renames else []) + [base]
         try:
             return subprocess.run(
-                ["git", "diff", "--unified=0", base],
-                check=True, capture_output=True, text=True,
+                cmd, check=True, capture_output=True, text=True,
                 encoding="utf-8", errors="replace").stdout
         except Exception as exc:  # noqa: BLE001
             print(f"[qa_ledger] git diff failed: {exc}", file=sys.stderr)
@@ -11105,8 +11246,125 @@ def _gc_new_dep(path, body):
     return bool(rx.search(body)) if rx else False
 
 
+def _gc_moves(diff):
+    """Renames read as MOVES, never as deletions (2.2.0 field fix).
+
+    `git mv tests/a_test.py tests/b_test.py` used to be reported as a deleted test -- a BLOCKER
+    and exit 1 for a change that deleted nothing. A rename reaches this parser in one of two
+    shapes, and both are read here:
+
+      * git's own `rename from` / `rename to` headers, present when the producer detected
+        renames (`--from-git` now forces `-M`, so the caller's `diff.renames` config can no
+        longer hide one); and
+      * an EXACT delete/add pair -- the same file content leaving one path and arriving at
+        another inside the same diff. That is what a producer with rename detection OFF emits,
+        and it is the shape that actually blocked in the field.
+
+    Returns (moves, paired). `moves` is the informational report. `paired` holds the paths of
+    the exact pairs ONLY: their hunks say nothing about the change and are skipped. A rename
+    WITH edits keeps its hunks, because moving a file is not a deletion but deleting a test out
+    of a moved file still is -- and that verdict must not change.
+
+    The pairing is deliberately EXACT and one-to-one: same content, one file losing it, one file
+    gaining it. Two deleted files with identical bodies are ambiguous, so neither is paired --
+    guessing which moved where would be inventing a fact to clear a gate, which is the one thing
+    this gate exists to refuse."""
+    moves = []
+    deleted, added = {}, {}      # path -> tuple of line bodies
+    path = None                  # the whole-file side currently being collected
+    side = None                  # "-" while inside a deletion, "+" inside an addition
+    bodies = []
+    minus_path = None
+
+    def _flush():
+        if path is not None and bodies:
+            (deleted if side == "-" else added)[path] = tuple(bodies)
+
+    for raw in diff.splitlines():
+        if raw.startswith("diff --git"):
+            _flush()
+            path, side, bodies, minus_path = None, None, [], None
+            continue
+        if raw.startswith("rename from "):
+            minus_path = raw[len("rename from "):].strip()
+            continue
+        if raw.startswith("rename to "):
+            if minus_path:
+                moves.append("%s -> %s" % (minus_path, raw[len("rename to "):].strip()))
+            minus_path = None
+            continue
+        if raw.startswith("--- "):
+            p = raw[4:].strip().split("\t")[0]
+            if p == "/dev/null":
+                side = "+"
+            else:
+                minus_path = p[2:] if p[:2] in ("a/", "b/") else p
+            continue
+        if raw.startswith("+++ "):
+            p = raw[4:].strip().split("\t")[0]
+            if p == "/dev/null":
+                side, path = "-", minus_path
+            elif side == "+":
+                path = p[2:] if p[:2] in ("a/", "b/") else p
+            else:
+                path, side = None, None      # an ordinary edit: neither half of a move
+            bodies = []
+            continue
+        if path is not None and side and raw.startswith(side):
+            bodies.append(raw[1:])
+    _flush()
+
+    paired = set()
+    for dpath, content in deleted.items():
+        hits = [a for a, c in added.items() if c == content]
+        if len(hits) != 1:
+            continue
+        if sum(1 for c in deleted.values() if c == content) != 1:
+            continue
+        moves.append("%s -> %s" % (dpath, hits[0]))
+        paired.add(dpath)
+        paired.add(hits[0])
+    return sorted(set(moves)), paired
+
+
+def _gc_scope(args, ledger):
+    """`--repo R` SCOPES the diff to the files under repos[R].path (2.2.0 field fix).
+
+    In a monorepo one `git diff` carries every repo's hunks, and gate-check reported all of them
+    under whichever repo was named: a fact about someone ELSE's code, attributed to yours, with
+    your exit code behind it. Returns (base, scope) as absolute directories, or None when there
+    is nothing to scope by (no --repo, or a scope that is the whole tree).
+
+    realpath on BOTH sides before comparing. On Windows a path under a username longer than 8
+    characters comes back short-formed (`RUNNER~1`) from one API and long-formed from another,
+    and a file INSIDE the tree is then judged outside it -- the CI-only failure this repo has
+    already paid for once. The scope directory is realpath'd; the diff path is joined onto an
+    already-realpath'd base rather than realpath'd itself, because a DELETED file no longer
+    exists and would resolve inconsistently."""
+    if ledger is None or not getattr(args, "repo", None):
+        return None
+    base = os.path.realpath(os.path.dirname(os.path.abspath(args.ledger)) or ".")
+    scope = os.path.realpath(os.path.join(base, _scope_path(ledger, args.repo)))
+    return None if scope == base else (base, scope)
+
+
+def _gc_in_scope(path, scope):
+    if scope is None:
+        return True
+    base, root = scope
+    full = os.path.normpath(os.path.join(base, path.replace("/", os.sep)))
+    return full == root or full.startswith(root + os.sep)
+
+
 def cmd_gate_check(args):
-    diff = _read_diff(args)
+    # --repo now does TWO things, and both need the ledger: it scopes the diff to that repo's
+    # path (_gc_scope) and it adds the measured snapshot cross-check below. Loading it here
+    # keeps the existing behaviour of an unreadable ledger or an unknown repo name exiting 2
+    # rather than being scoped to nothing in silence.
+    ledger = _load(args.ledger) if getattr(args, "repo", None) else None
+    scope = _gc_scope(args, ledger)
+    diff = _read_diff(args, detect_renames=True)
+    moves, paired = _gc_moves(diff)
     removed_tests, disabled_tests, suppressions, thresholds = [], [], [], []
     secrets, secret_literals, scrub_edits, new_deps = [], [], [], []
     assertions_removed = 0
@@ -11137,12 +11395,16 @@ def cmd_gate_check(args):
                     path = minus_path
                 else:
                     path = p[2:] if p[:2] in ("a/", "b/") else p
-                    if _GC_KEYFILE.search(path):
-                        secrets.append(f"{path}: contenedor de claves agregado/modificado")
+                if path is not None and (path in paired or not _gc_in_scope(path, scope)):
+                    # a MOVED half (one side of an exact delete/add pair) and a file outside
+                    # --repo's scope are not this run's business: their hunks are skipped whole.
+                    path = None
+                elif path is not None and p != "/dev/null" and _GC_KEYFILE.search(path):
+                    secrets.append(f"{path}: contenedor de claves agregado/modificado")
             elif raw.startswith("Binary files "):
                 # los .p12/.jks binarios no traen +++ — el lado b/ vive en esta linea
                 m = re.search(r" and b/(.+) differ$", raw)
-                if m and _GC_KEYFILE.search(m.group(1)):
+                if m and _GC_KEYFILE.search(m.group(1)) and _gc_in_scope(m.group(1), scope):
                     secrets.append(f"{m.group(1)}: contenedor de claves agregado/modificado (binario)")
             continue
         if not path:
@@ -11203,9 +11465,8 @@ def cmd_gate_check(args):
     # optional MEASURED cross-check (heuristic-independent): with --repo, compare the
     # last two snapshots' executed-test totals — a drop is a fact no regex can miss.
     test_count_drop = None
-    if getattr(args, "repo", None):
+    if ledger is not None:
         try:
-            ledger = _load(args.ledger)
             node = _repo_node(ledger, args.repo)
             snaps = node.get("snapshots", [])
             if len(snaps) >= 2:
@@ -11239,10 +11500,15 @@ def cmd_gate_check(args):
             "new_dependencies": sorted(set(new_deps)),
             "assertions_removed": assertions_removed,
             "test_count_drop": test_count_drop,
+            # informational, and deliberately OUTSIDE hard/soft: a move is neither a finding
+            # nor an absolution, it is the reason a deletion is not being reported.
+            "moved": moves,
+            "scope": (os.path.basename(scope[1]) if scope else None),
         }, indent=2, ensure_ascii=False))
         sys.exit(1 if blocker else 0)
 
-    print(f"GATE-INTEGRITY: {verdict}")
+    print(f"GATE-INTEGRITY: {verdict}"
+          + (f" (scoped to {args.repo})" if scope else ""))
 
     def _show(label, items):
         if items:
@@ -11264,6 +11530,10 @@ def cmd_gate_check(args):
         print(f"  ~ asserts removed from tests: {assertions_removed} (review)")
     if test_count_drop:
         print(f"  ~ executed-test count dropped: {test_count_drop} (measured in snapshots — review)")
+    if moves:
+        tail = " ..." if len(moves) > 5 else ""
+        print(f"  . files moved: {len(moves)} — {'; '.join(moves[:5])}{tail} "
+              f"(informational: a rename is not a deletion)")
     if verdict == "CLEAN":
         print("  the change does not weaken the measuring apparatus")
     elif not blocker:
@@ -12783,9 +13053,21 @@ def build_parser():
     pri.add_argument("--json", action="store_true")
     pri.set_defaults(func=cmd_rubric_ingest)
 
-    pi = sub.add_parser("init", help="create the ledger from a config file")
-    pi.add_argument("--config", required=True)
+    pi = sub.add_parser("init", help="create the ledger from a config file, or --add-repo one "
+                                     "repo into an existing ledger")
+    pi.add_argument("--config", default=None,
+                    help="the uscha.config.json to freeze into a NEW ledger (required unless "
+                         "--add-repo); with --add-repo it is the file to mirror the new repo "
+                         "into (default: uscha.config.json next to --out)")
     pi.add_argument("--out", default=DEFAULT_LEDGER)
+    pi.add_argument("--add-repo", dest="add_repo", default=None, metavar="NAME",
+                    help="append ONE repo to the EXISTING ledger at --out instead of creating a "
+                         "new one: every existing repo's steps, snapshots and iterations are "
+                         "left untouched and the checksum is re-sealed")
+    pi.add_argument("--path", default=None, help="(with --add-repo) the new repo's path")
+    pi.add_argument("--type", default=None, help="(with --add-repo) the new repo's type")
+    pi.add_argument("--test-command", dest="test_command", default=None,
+                    help="(with --add-repo) the new repo's test command")
     pi.set_defaults(func=cmd_init)
 
     def add_ledger(sp):
@@ -13141,14 +13423,16 @@ def build_parser():
 
     plg = sub.add_parser(
         "log-gate",
-        help="persist a FACT-gate verdict (golden-diff/gate-check/pit-check/simplicity/regression) "
-             "so converged and readiness actually see it")
+        help="persist a FACT-gate verdict (golden-diff/gate-check/pit-check/simplicity/"
+             "regression/ci) so converged and readiness actually see it")
     add_ledger(plg)
     plg.add_argument("--repo", required=True)
     plg.add_argument("--iteration", type=int, required=True)
     plg.add_argument("--kind", required=True,
                      choices=["golden-diff", "gate-check", "pit-check", "simplicity",
-                              "regression", "rubric", "waste"])
+                              "regression", "rubric", "waste", "ci"],
+                     help="ci (2.2.0) records a pipeline run as the FACT it is: a fail caps "
+                          "readiness <=65 and blocks convergence exactly like gate-check")
     plg.add_argument("--verdict", required=True,
                      choices=["pass", "fail", "advisory", "not-run"],
                      help="advisory (ADR-043) records a measured, non-gating run: it never "
@@ -13157,6 +13441,9 @@ def build_parser():
     plg.add_argument("--count", type=int, default=1,
                      help="failing finding count (fail only; default 1)")
     plg.add_argument("--note", default=None)
+    plg.add_argument("--ref", default=None,
+                     help="where the verdict was measured (a CI run URL or id), stored on the "
+                          "record so the evidence outlives the conversation")
     plg.set_defaults(func=cmd_log_gate)
 
     pfb = sub.add_parser(
@@ -13404,8 +13691,9 @@ def build_parser():
     pgc.add_argument("--ledger", default=DEFAULT_LEDGER,
                      help="(with --repo) ledger for the measured test-count cross-check")
     pgc.add_argument("--repo", default=None,
-                     help="optional: compare the last two snapshots' executed-test totals "
-                          "(a measured drop flags REVIEW — no regex can miss it)")
+                     help="SCOPE the diff to repos[R].path (a monorepo sibling's hunks are not "
+                          "this repo's findings) and compare the last two snapshots' "
+                          "executed-test totals (a measured drop flags REVIEW)")
     pgc.add_argument("--json", action="store_true")
     pgc.set_defaults(func=cmd_gate_check)
 

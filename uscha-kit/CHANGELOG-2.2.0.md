@@ -142,4 +142,113 @@ and ADR-043's rule is that a budget is declared, not defaulted. It is not extend
 commits or PR titles: the three artifact kinds that hold decisions are where it belongs, and a
 marker in a comment would be noise.
 
+---
+
+# Also in 2.2.0 — four field fixes from a live monorepo
+
+Four reports from a team running the kit on a monorepo, all four reproduced against the 2.1.0
+engine before a line was written. They share one shape, and it is the shape this release is
+already about: the engine answered **confidently about a tree it was reading wrongly**, or
+refused to answer at all about a fact the human could see.
+
+## 1. A rename is a MOVE, and `--repo` scopes the diff (`gate-check`)
+
+`git mv tests/a_test.py tests/b_test.py` blocked as a **deleted test** — a BLOCKER and exit 1 for
+a change that deleted nothing. Two paths reached that verdict: `--from-git` did not pass `-M`, so
+whether a rename was even visible depended on the caller's `diff.renames` config; and a saved
+`--diff` whose producer detected no renames arrived as a delete/add pair, which is exactly what
+the parser was built to catch.
+
+Both are fixed. `--from-git` now forces `-M` — the option is opt-in inside the engine, because
+the other readers of the same helper (simplicity, waste, regression) count LINES, and collapsing
+a rename into a header would silently change numbers they have been measuring for releases. A
+diff with no rename headers is paired by CONTENT: the same file body leaving one path and
+arriving at another. Moves are reported under `moved`, informational and outside the hard/soft
+tally.
+
+What did NOT move: a real deletion still blocks, and **ambiguity is refused rather than
+resolved** — two deleted test files sharing one body pair with nothing and stay two deletions,
+because guessing which moved where would be inventing a fact to clear a gate.
+
+The second half of the same report: `--repo R` did not scope anything. In a monorepo ONE
+`git diff` carries every repo's hunks, so a sibling repo's suppressions and deletions were
+reported under whichever repo was named — a fact about someone else's code, attributed to yours,
+with your exit code behind it. `--repo R` now restricts the scanned hunks to `repos[R].path`,
+comparing with `realpath` on BOTH sides (the Windows 8.3 short-path trap this repo has already
+paid for once, in CI and never locally).
+
+## 2. `spec-drift` reads the monorepo's SPEC
+
+`spec-drift --repo R` looked for `SPEC.md` and `docs/adr/` only inside `repos[R].path`. A
+monorepo keeps ONE spec at the root, next to `uscha.config.json` — so the answer was
+`no spec documents found`, which is indistinguishable from "no drift" and went unnoticed for a
+week. It now searches the repo path FIRST (a repo carrying its own SPEC is describing itself and
+still wins), the config root second, and the report NAMES which of the two it read — `spec_source`
+in `--json`, and a `CONFIG ROOT` line for a human. Still advisory, still exit 0 always.
+
+## 3. `log-gate --kind ci` — the one fact every team already has
+
+A green pipeline could not be recorded. `--kind` had no `ci`, so the fact the whole team looks at
+every day was the one fact the ledger had no word for. `ci` joins the closed vocabulary as a FACT
+gate: a `fail` caps readiness ≤65 and blocks convergence exactly like `gate-check`, a `pass`
+clears it, a `not-run` records absence and leaves the last state standing. `--verdict advisory`
+is REFUSED on it, as on every FACT gate — a mandatory gate cleared by goodwill is what this
+ledger exists to refuse. `--ref <run URL or id>` is stored on the record and travels to the gates
+rollup: a CI verdict typed by hand is a claim, and the run beside it is the receipt.
+
+It is admitted because it is MEASURABLE, not because it is useful — an LLM judgment does not
+become a gate by being important (ADR-014, INV-ADVISORY-01). Adding a FACT kind is declared in
+the CONSTITUTION template, where that closed vocabulary is stated to the project rather than only
+to the parser. `ci` gets no CONSTITUTION invariant of its own: the seven are unchanged.
+
+## 4. `init --add-repo` — a service can join a live loop
+
+Adding a second service meant re-running `init`, which builds a NEW ledger: the step counter,
+every repo's iterations and every snapshot went back to zero. Hand-editing `QA-LEDGER.json`
+instead trips the integrity checksum — correctly, and that refusal stays, because it is what
+makes "measured beats narrated" worth anything. What was missing was a supported door.
+
+`init --add-repo NAME --path P --type T [--test-command C]` appends one repo to the frozen config
+and to `ledger["repos"]`, and `_save` re-seals the checksum. Nothing else moves: `defaults` are
+not re-frozen, and every existing repo's steps, snapshots and iterations are byte-identical
+across the add. `uscha.config.json` gains the same entry when it IS the source the ledger was
+frozen from; when its repo list has drifted, it is left alone and the divergence is NAMED —
+silently rewriting it would resolve a conflict the human has not seen. A duplicate name is
+refused with both files untouched, and `--add-repo` without `--path`/`--type` is refused rather
+than guessed.
+
+**And the decision the command records rather than hides.** A repo added with no evidence reads
+as UNMEASURED: it enters `facts.static_unmeasured_repos`, and every aggregate that averages over
+repos reads LOWER until its first snapshot or gate lands. That is absence, not a regression — the
+command says so in as many words, and `AC-FF-09` asserts it entry by entry: no repo that was
+already measured moves, no gate arrives with the new repo, no cap fires. Excluding an unmeasured
+repo from the average instead would be the opposite mistake, and the readiness code refuses it on
+purpose: an aggregate of 1.0 must never be producible by silence.
+
+## Measured, with a red probe per fix
+
+`T161` carries `AC-FF-01..10`. `AC-FF-10` is the RED PROBE that ships: the `v2.1.0` engine, read
+out of git and run on the same fixtures, must still show all four failures — the rename blocking,
+`--repo` reporting the sibling, `spec-drift` saying "no spec documents", and `--kind ci` and
+`--add-repo` rejected by the parser. Without git or the tagged copy it reports `None` =
+UNMEASURED, never a silent pass.
+
+Each fix was also reverted one at a time against this engine before it shipped. Removing `-M` and
+the move pairing turns `AC-FF-01` and `-02` red; making the scope helper return nothing turns
+`-03` red; dropping the config-root fallback turns `-04` red; removing `ci` from the choices
+turns `-05`, `-06` and `-07` red; dropping the `--ref` write turns `-07` red on its own; and
+disabling the `--add-repo` branch turns `-08` and `-09` red. A criterion that cannot go red
+measures nothing.
+
+Acceptance goes 273 → 283 criteria; nothing was dropped.
+
+## Not in this release
+
+`ci` does not run anything: the engine is TOLD what the pipeline did, it never asks a CI
+provider. The move pairing is deliberately EXACT and one-to-one — a rename WITH edits keeps its
+hunks, so deleting a test out of a moved file still blocks, and a producer that both renames and
+rewrites a file without emitting rename headers is beyond what a diff can prove. `init
+--add-repo` adds ONE repo and never removes or renames one: removing a repo would orphan its
+evidence, which is a decision, not a flag.
+
 Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
