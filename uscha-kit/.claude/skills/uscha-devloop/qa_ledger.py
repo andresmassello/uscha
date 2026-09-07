@@ -9909,9 +9909,19 @@ def cmd_readiness(args):
     # lifecycle (ADR-040): advisory, and CONDITIONAL like fast_path/spec_drift -- a project
     # that declares no lifecycle: block keeps the exact prior payload and the exact prior
     # text. Speaking only when it matters is the anti-ceremony rule applied to itself.
-    _lc = _lifecycle_for(os.path.dirname(os.path.abspath(args.ledger)) or os.getcwd())
+    _ready_root = os.path.dirname(os.path.abspath(args.ledger)) or os.getcwd()
+    _lc = _lifecycle_for(_ready_root)
     if _lc["declared"]:
         out["lifecycle"] = _lc
+    # agent-origin (ADR-044): advisory and CONDITIONAL for the same reason -- a project
+    # that tags nothing keeps the exact prior payload and the exact prior text. It never
+    # enters the gates line, never caps the score, never blocks convergence.
+    _ao = _agent_origin_report(_ready_root,
+                               acc_path if acc_found else None)
+    if _ao["n_unconfirmed"] or _ao["confirmed"]:
+        out["agent_origin"] = {"unconfirmed": _ao["unconfirmed"],
+                               "confirmed": _ao["confirmed"],
+                               "files_scanned": _ao["files_scanned"]}
     if args.json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
@@ -10027,6 +10037,13 @@ def cmd_readiness(args):
             print(f"--- gates: {n_ok} ok{adv_str} · {len(blocking)} blocking ({names}){hint}")
         else:
             print(f"--- gates: {n_ok} ok{adv_str}, none blocking{hint}")
+    # ADR-044: its OWN line, deliberately outside the gates rollup. An unconfirmed
+    # agent-origin item is a decision still owed to the human, not a gate that ran --
+    # folding it into "N ok" or into "N blocking" would be the false clean ADR-043
+    # refused, in the other direction. It caps nothing and blocks nothing.
+    if _ao["n_unconfirmed"]:
+        print(f"--- origin: {_ao['n_unconfirmed']} agent-origin item(s) unconfirmed"
+              f"   (spec-check names them)")
     if not args.verbose:
         return
     print("--- dimensions (weight | raw | contribution) ---")
@@ -11639,6 +11656,142 @@ def _lifecycle_for(root, adr_dir=None, spec_text=None, fallback=True):
     return _lifecycle_report(adr_dir or os.path.join(root, "docs", "adr"), spec_text)
 
 
+# --------------------------------------------------------------------------- #
+# agent-origin markers (ADR-044): the agent asks for DECISIONS, never for INFORMATION
+# --------------------------------------------------------------------------- #
+# A decision the human never made must not enter scope by rebound. Every acceptance
+# criterion, ADR decision item or HANDOFF rule the AGENT introduced carries one trailing
+# marker on its own line:
+#
+#     (origin: agent)                          introduced by the agent, NOT confirmed
+#     (origin: agent, confirmed: YYYY-MM-DD)   a human confirmed THIS item, on that day
+#
+# No marker = human origin. That is the default on purpose: nothing existing is
+# retro-tagged, so the absence of a marker never has to be re-audited.
+#
+# ADVISORY, always. This section never changes an exit code and never caps readiness --
+# it reports what has not been confirmed yet, and the human decides. A gate here would
+# need an adopted budget (the 2.1.0 posture, ADR-043), and nobody has declared one.
+#
+# A marker inside a fenced block or an inline code span is DOCUMENTATION, not a decision:
+# the ADR and the ACCEPTANCE section that DEFINE this grammar quote it, and a scanner that
+# read its own definition as a finding would be measuring its own prose.
+_AO_MARK_RX = re.compile(r"origin:\s*agent\b(?P<rest>[^)\n]*)", re.I)
+_AO_CONF_RX = re.compile(r"confirmed:\s*(?P<value>[^,)\s]*)", re.I)
+_AO_ID_RX = re.compile(r"^[\s>*+-]*(?:\[[ xX]\]\s*)?(?:\d+[.)]\s*)?[*_]*"
+                       r"(?P<id>[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)")
+_AO_INLINE_CODE_RX = re.compile(r"`[^`]*`")
+_AO_HTML_COMMENT_RX = re.compile(r"<!--.*?-->")
+
+
+def _agent_origin_scan_text(text, label):
+    """Every agent-origin marker in one markdown file. Returns (unconfirmed, confirmed):
+    a list of {id, file, line, malformed, detail} and a count. A `confirmed:` that is not
+    a real YYYY-MM-DD date counts as UNCONFIRMED and is NAMED -- a typo must never read as
+    a human's approval, which is the one failure this marker exists to prevent."""
+    lines = text.split("\n")
+    # A fence that never closes is a typo, not a decision to hide the rest of the file:
+    # the lines after an unmatched opener are scanned as prose. Every OTHER fence still
+    # hides its body, so the grammar's own definitions stay documentation.
+    fenced, in_fence, opener = [False] * len(lines), False, None
+    for idx, raw in enumerate(lines):
+        st = raw.strip()
+        if st.startswith("```") or st.startswith("~~~"):
+            in_fence = not in_fence
+            opener = idx if in_fence else None
+            fenced[idx] = True
+            continue
+        fenced[idx] = in_fence
+    if in_fence and opener is not None:
+        for idx in range(opener, len(lines)):
+            fenced[idx] = False
+    unconfirmed, confirmed = [], 0
+    for i, raw in enumerate(lines, 1):
+        if fenced[i - 1]:
+            continue
+        line = _AO_HTML_COMMENT_RX.sub("", _AO_INLINE_CODE_RX.sub("", raw))
+        idm = _AO_ID_RX.match(line)
+        item = idm.group("id") if idm else "line %d" % i
+        # every marker on the line, not the first: a confirmation appended after the
+        # original tag must be read, never dropped in silence
+        for m in _AO_MARK_RX.finditer(line):
+            cm = _AO_CONF_RX.search(m.group("rest") or "")
+            if cm is None:
+                unconfirmed.append({"id": item, "file": label, "line": i,
+                                    "malformed": False, "detail": None})
+            elif _lc_valid_date(cm.group("value")):
+                confirmed += 1
+            else:
+                unconfirmed.append({"id": item, "file": label, "line": i, "malformed": True,
+                                    "detail": "malformed confirmed: %s"
+                                              % (cm.group("value") or "(empty)")})
+    return unconfirmed, confirmed
+
+
+def _agent_origin_report(root, acceptance=None, adr_dir=None, extra=()):
+    """The advisory dimension over the files that hold decisions: the ACCEPTANCE file
+    (the one named, else `<root>/ACCEPTANCE.md`), every ADR under `adr_dir`, `HANDOFF.md`
+    when present, and whatever the caller already had open (`extra`). Absent files are
+    simply not scanned -- there is nothing to report about a file that does not exist."""
+    paths, seen = [], set()
+
+    def add(p):
+        if not p:
+            return
+        try:
+            key = os.path.realpath(p)
+        except OSError:
+            key = os.path.abspath(p)
+        if key in seen or not os.path.isfile(p):
+            return
+        seen.add(key)
+        paths.append(p)
+
+    for p in extra:
+        add(p)
+    add(acceptance or os.path.join(root, "ACCEPTANCE.md"))
+    add(os.path.join(root, "HANDOFF.md"))
+    adr = adr_dir or os.path.join(root, "docs", "adr")
+    if os.path.isdir(adr):
+        for f in sorted(glob.glob(os.path.join(adr, "*.md"))):
+            add(f)
+    unconfirmed, confirmed, scanned = [], 0, []
+    for p in paths:
+        try:
+            with open(p, "r", encoding="utf-8", errors="replace") as fh:
+                body = fh.read()
+        except OSError:
+            continue          # unreadable is not a finding; it is simply not scanned
+        # forward slashes always: the same tree must name the same file the same way on
+        # Windows and on the CI cells, or a pinned line differs by separator alone.
+        label = _lc_short(p).replace("\\", "/")
+        scanned.append(label)
+        u, c = _agent_origin_scan_text(body, label)
+        unconfirmed += u
+        confirmed += c
+    return {"unconfirmed": unconfirmed, "confirmed": confirmed,
+            "n_unconfirmed": len(unconfirmed), "files_scanned": scanned}
+
+
+def _agent_origin_names(ao, limit=6):
+    """`AC-07 (ACCEPTANCE.md:41), D-03 (docs/adr/ADR-002-x.md:57)` -- the id, where it is,
+    and for a malformed marker WHY it did not count as confirmed."""
+    items = ao["unconfirmed"]
+    out = ", ".join("%s (%s:%d%s)" % (x["id"], x["file"], x["line"],
+                                      ", " + x["detail"] if x["detail"] else "")
+                    for x in items[:limit])
+    if len(items) > limit:
+        out += " +%d more" % (len(items) - limit)
+    return out
+
+
+def _agent_origin_line(ao):
+    """The one advisory line, shared by spec-check and readiness so the two surfaces
+    cannot drift apart."""
+    return ("origin: %d agent-origin item(s) unconfirmed -- %s"
+            % (ao["n_unconfirmed"], _agent_origin_names(ao)))
+
+
 def _spec_check_text(text):
     lines = text.split("\n")
     n = len(lines)
@@ -11934,10 +12087,14 @@ def cmd_spec_check(args):
          else {"blockers": [], "untestable": [], "stack_hits": [],
                "non_ears": 0, "n_criteria": 0})
     # lifecycle (ADR-040): read-only and advisory -- it never touches `fail` below.
-    lc = _lifecycle_for(_lifecycle_root(args.spec[0] if args.spec else None,
-                                        args.acceptance),
-                        getattr(args, "adr_dir", None), text,
+    _root = _lifecycle_root(args.spec[0] if args.spec else None, args.acceptance)
+    lc = _lifecycle_for(_root, getattr(args, "adr_dir", None), text,
                         fallback=not args.spec)
+    # agent-origin (ADR-044): read-only and advisory -- like lifecycle above, it never
+    # touches `fail` below. An unconfirmed item is not a defect; it is a decision still
+    # owed to the human.
+    ao = _agent_origin_report(_root, args.acceptance,
+                              getattr(args, "adr_dir", None), extra=args.spec or ())
     structural = len(m["blockers"]) + len(acc_block)  # estructura = FACT -> bloquea
     soft_find = len(m["untestable"]) + len(m["stack_hits"]) + len(acc_adv)
     fail = structural > 0 or (args.strict and soft_find > 0)
@@ -11946,7 +12103,9 @@ def cmd_spec_check(args):
     if args.json:
         print(json.dumps({"verdict": verdict, "advisory": structural == 0,
                           "acceptance_blockers": acc_block,
-                          "acceptance_advisory": acc_adv, "lifecycle": lc, **m},
+                          "acceptance_advisory": acc_adv, "lifecycle": lc,
+                          "agent_origin": {"unconfirmed": ao["unconfirmed"],
+                                           "confirmed": ao["confirmed"]}, **m},
                          indent=2, ensure_ascii=False))
         sys.exit(1 if fail else 0)
 
@@ -11972,6 +12131,10 @@ def cmd_spec_check(args):
         print("      %s %s %s - %s (%s)"
               % ("!" if c["status"] == "expires before go-live" else "~",
                  c["component"], c.get("version") or "?", c["status"], c["detail"]))
+    # conditional, like every other advisory line here: a tree with no marker prints
+    # exactly what it printed before this release.
+    if ao["n_unconfirmed"]:
+        print("  ~ " + _agent_origin_line(ao))
     print("  i consistency: INFERENTIAL (an uncorrelated checker), not this lint · "
           "structure = FACT (blocks) · prose = advisory (--strict to gate)")
     if verdict == "OK":

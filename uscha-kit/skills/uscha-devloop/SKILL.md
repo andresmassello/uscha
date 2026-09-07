@@ -110,10 +110,30 @@ Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, 
    only *run* the existing suite.
 4. **Stop at merge.** You create the PR and confirm CI is green. You do NOT merge.
    The human owns the merge gate.
-5. **Tracked-markdown protocol.** Before modifying any tracked `.md`
-   (CLAUDE.md, plan/delta docs, docs/adr), ask the human for the current version first.
-   Those files carry real progress (checkboxes, notes); never regenerate from scratch.
-6. **The golden is the one artifact you cannot author.** For migration/legacy work,
+5. **Tracked-markdown protocol: READ the file, never ask for it.** Before modifying any
+   tracked `.md` (CLAUDE.md, plan/delta docs, docs/adr), READ the current version out of
+   the tree. Those files carry real progress (checkboxes, notes): preserve it and edit in
+   place, never regenerate from scratch. The current version of a tracked file is
+   INFORMATION the tree already holds, so asking the human for it is noise — you ask the
+   human for DECISIONS, never for information you can read (ADR-044).
+6. **`origin: agent` — a decision the human never made does not enter scope silently.**
+   Every acceptance criterion, ADR decision item or HANDOFF rule that YOU introduce
+   (rather than one the human answered) carries the marker on its own line:
+
+   ```
+   - [ ] AC-12 — when X then Y. (origin: agent)
+   - [ ] AC-12 — when X then Y. (origin: agent, confirmed: 2026-09-07)
+   ```
+
+   Unmarked items are human-origin by default; nothing existing is retro-tagged. An
+   unconfirmed item is **not in scope**: do not implement it, do not gate on it, do not
+   quote it as agreed. Ask the human to confirm it ONE BY ONE — a package-level "ok" over
+   a twenty-item summary confirms nothing — and only then write
+   `confirmed: YYYY-MM-DD` on the same line. List every still-unconfirmed item in the PR
+   body under **Agent-origin, unconfirmed**. `spec-check` names them with file:line and
+   `readiness` counts them on their own line; both are ADVISORY and neither changes an
+   exit code or the score.
+7. **The golden is the one artifact you cannot author.** For migration/legacy work,
    `.approved` fixtures are field truth captured from the ORIGINAL code and approved by
    a HUMAN. You emit `.received` and stop; you never write, edit or rename `.approved`
    (a `PreToolUse` hook denies the write — INV-GOLDEN-01).
@@ -508,6 +528,10 @@ python3 $QL check-terminado          # 0 = sealed · 1 = broken · 2 = UNMEASURE
   seal broke. **Exit 2** — the seal is UNMEASURED (no git, or no snapshot recorded): say so
   plainly; an answer nobody could measure is not a TERMINADO either.
 - Ensure conventional-commit history is clean.
+- **List the agent-origin items that are still unconfirmed** in the PR body, under
+  **Agent-origin, unconfirmed** (principle 6). `spec-check` names them with file:line;
+  copy that list. An empty list is written as "none" — silence and "none" are not the
+  same fact.
 - Open the PR(s). Confirm CI is green.
 - **STOP.** Present the PR link(s) and wait for the human to merge.
 

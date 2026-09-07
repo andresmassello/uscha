@@ -94,9 +94,16 @@ Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, 
    that makes discovery work: you propose (entities, endpoints, architecture, a default
    decision), the human confirms or corrects. Never dump a list of 20 questions, and
    never ask the human to supply structure you can propose yourself.
-2. **Explore instead of asking.** If a reference doc/URL/PDF, the existing codebase, or
-   an existing `CONTEXT.md`/`docs/adr/` can answer a question, read it first. Only ask
-   the human what genuinely requires their judgment.
+   **Close every question round item by item.** Before moving on, list what YOU decided in
+   that round and ask the human to confirm each one SEPARATELY — an "ok" over a twenty-item
+   summary is a rebound, not a decision, and it is exactly how a global default became a
+   tree-wide rename nobody had asked for. Write the answer onto the item as it arrives
+   (principle 6).
+2. **Explore instead of asking — ask for DECISIONS, never for INFORMATION** (ADR-044). If a
+   reference doc/URL/PDF, the existing codebase, or an existing `CONTEXT.md`/`docs/adr/`
+   can answer a question, read it first. The current version of a tracked file, what a
+   config says, whether a test exists: all information — READ it. Only ask the human what
+   genuinely requires their judgment.
 3. **Propose the shape.** From the idea + references, propose the core entities, the
    operation/API surface, and 2–3 architecture options with trade-offs. Walk the design
    tree branch by branch, resolving dependencies between decisions one at a time.
@@ -105,6 +112,14 @@ Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, 
    failed.
 5. **Write files lazily and inline.** Create a file only when you have something real to
    write, and update it the moment a decision crystallizes — don't batch to the end.
+6. **Mark what YOU decided: `origin: agent`.** Any acceptance criterion, ADR decision item
+   or HANDOFF rule that came from your proposal rather than from a human answer is written
+   with the marker on its own line — `(origin: agent)` while it is unconfirmed, and
+   `(origin: agent, confirmed: YYYY-MM-DD)` the moment the human confirms THAT item. Items
+   with no marker are human-origin by default; nothing already written is retro-tagged. An
+   unconfirmed item is NOT in scope: it is written down so it is visible, never so it is
+   agreed. `spec-check` names the unconfirmed ones with file:line (advisory — it changes no
+   exit code), and your close block lists them.
 
 ## Inputs
 
@@ -210,7 +225,9 @@ answer.
   `Rollback / Supersede Criteria`.
 - **`ACCEPTANCE.md`** — Definition of Done as `- [ ]` checkboxes + success metrics. This
   is the file the readiness KPI measures downstream. Give EVERY criterion a stable
-  traceable ID: `- [ ] AC-01 — when X then Y` (sequential, never reused). Downstream,
+  traceable ID: `- [ ] AC-01 — when X then Y` (sequential, never reused); a criterion YOU
+  proposed also carries the `origin: agent` marker of principle 6 until the human confirms
+  it item by item. Downstream,
   a criterion only closes MEASURED when a green testcase carries its tag in the name
   (`test_ac1_x` / `testAC01X` / `"AC-01: ..."`) — write criteria so each one is
   coverable by at least one named test.
@@ -230,6 +247,18 @@ A shared system shape exists: entities, operations and big decisions taken (or r
 as explicit assumptions), every failure mode has defined behavior, out-of-scope is
 explicit, and the DoD is checkable. State plainly that it converged, then write/finalize
 the package and the handoff.
+
+**The close block names what is still unconfirmed.** Before you emit it, run
+
+```bash
+python3 <path-to>/qa_ledger.py spec-check --spec SPEC.md --acceptance ACCEPTANCE.md
+```
+
+and copy the `~ origin: N agent-origin item(s) unconfirmed` list into `Blocks:` — one item
+per line, with its file and line. Those are the decisions the human still owes; converging
+with them silently in the package is the failure this marker exists to prevent. `Produced:`
+still lists the files. If the list is empty, `Blocks:` says `nothing` as it always did:
+silence and an explicit `nothing` are not the same fact.
 
 ## Handoff
 

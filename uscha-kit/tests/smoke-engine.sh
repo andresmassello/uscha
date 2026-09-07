@@ -12988,6 +12988,380 @@ case "$T159" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T159";;
 esac
 
+echo "== T160 (2.2.0): the agent asks for DECISIONS, never for INFORMATION -- origin: agent is reported, never gated =="
+# ADR-044. Two field findings, one rule. An agent turned a global default into a tree-wide rename
+# -- a new acceptance criterion, a new HANDOFF rule and two ADR decision items nobody had answered
+# -- approved BY REBOUND inside a twenty-item summary, and cancelled after 112 files had moved.
+# And the devloop SKILL asked the human for the current version of a tracked .md, which is
+# information the tree holds. What is measured here is the second half: the marker, and the fact
+# that reporting it changes NOTHING else -- no exit code, no score, no gate. AC-OA-04 measures
+# that against a control rather than asserting it, and AC-OA-06 is the red probe.
+T160=$(pyin "$KIT" "$ROOT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+# the release before the change: its engine must print NO origin section on the marked fixture.
+PREV_TAG = "v2.1.0"
+TMPS = []
+res, why = {}, {}
+
+SPEC = "\n".join([
+    "# SPEC",
+    "",
+    "## Objetivo",
+    "Serve a request.",
+    "",
+    "## Fuera de alcance",
+    "- Nothing else.",
+    "",
+    "## Criterios de aceptacion",
+    "- [ ] AC-01 - when a request arrives then the service shall respond in under 200 ms.",
+    ""])
+
+# The MARKED tree. Line numbers are asserted below, so the shape of these three files is part of
+# the fixture: ACCEPTANCE.md:4 carries the unconfirmed one and :5 the confirmed one.
+ACC_MARKED = "\n".join([
+    "# ACCEPTANCE",
+    "",
+    "- [ ] AC-01 - when a request arrives then the service shall respond in under 200 ms.",
+    "- [ ] AC-07 - when the tree is renamed then the artifacts shall stay English. (origin: agent)",
+    "- [ ] AC-08 - when the queue drains then the worker shall stop. (origin: agent, confirmed: 2026-09-07)",
+    ""])
+HANDOFF_MARKED = "\n".join([
+    "# HANDOFF",
+    "- H-02 - never touch an approved golden. (origin: agent)",
+    ""])
+ADR_MARKED = "\n".join([
+    "# ADR-002: the tree language",
+    "",
+    "## Status: Proposed",
+    "",
+    "## Decision",
+    "- D-03 - the tree is renamed to English. (origin: agent)",
+    "- D-04 - nothing else changes.",
+    ""])
+
+# The CONTROL is the same tree with the markers, and ONLY the markers, removed: same criteria,
+# same ids, same count. A control that also dropped an item would be comparing two different
+# projects and would prove nothing about the marker.
+def strip_markers(text):
+    out = []
+    for ln in text.split("\n"):
+        i = ln.find(" (origin: agent")
+        out.append(ln[:i] if i >= 0 else ln)
+    return "\n".join(out)
+
+
+CFG = json.dumps({"project": "demo",
+                  "repos": [{"name": "app", "path": ".", "type": "python"}],
+                  "defaults": {"acceptance_file": "ACCEPTANCE.md"}}, indent=2) + "\n"
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-oa-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, text):
+    d = os.path.dirname(path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
+def run(args, cwd=None):
+    return subprocess.run([sys.executable] + list(args), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                          errors="replace")
+
+
+def project(marked=True, acc=None, handoff=True):
+    d = tmp()
+    write(os.path.join(d, "SPEC.md"), SPEC)
+    body = acc if acc is not None else ACC_MARKED
+    write(os.path.join(d, "ACCEPTANCE.md"), body if marked else strip_markers(body))
+    if handoff:
+        write(os.path.join(d, "HANDOFF.md"),
+              HANDOFF_MARKED if marked else strip_markers(HANDOFF_MARKED))
+    write(os.path.join(d, "docs", "adr", "ADR-002-x.md"),
+          ADR_MARKED if marked else strip_markers(ADR_MARKED))
+    write(os.path.join(d, "uscha.config.json"), CFG)
+    return d
+
+
+def spec_check(d, extra=()):
+    return run([ENG, "spec-check", "--spec", "SPEC.md",
+                "--acceptance", "ACCEPTANCE.md"] + list(extra), cwd=d)
+
+
+def origin_json(out):
+    try:
+        return json.loads(out).get("agent_origin")
+    except ValueError:
+        return None
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+# An ACCEPTANCE with no traceable id at all: a STRUCTURAL blocker, so spec-check exits 1. The
+# marked and unmarked forms of it are what proves "the exit code is unchanged" on the side that
+# actually matters -- a report that only preserved exit 0 would be pinning the easy half.
+ACC_BLOCKED = "\n".join([
+    "# ACCEPTANCE",
+    "",
+    "- [ ] when a request arrives then the service shall respond. (origin: agent)",
+    "- [ ] when the queue drains then the worker shall stop.",
+    ""])
+
+ACC_MALFORMED = "\n".join([
+    "# ACCEPTANCE",
+    "",
+    "- [ ] AC-01 - when a request arrives then the service shall respond in under 200 ms.",
+    "- [ ] AC-20 - when x then y. (origin: agent, confirmed: soon)",
+    "- [ ] AC-21 - when x then y. (origin: agent, confirmed: 2026-13-40)",
+    "- [ ] AC-22 - when x then y. (origin: agent, confirmed:)",
+    ""])
+
+
+def measure():
+    # --- AC-OA-01: an unconfirmed item is LISTED, with file and line, and the exit stays ----
+    d = project()
+    plain = spec_check(d)
+    js = spec_check(d, ["--json"])
+    p = []
+    line = [x for x in plain.stdout.split("\n") if "agent-origin item(s) unconfirmed" in x]
+    if len(line) != 1:
+        p.append("expected exactly one origin line, got %d" % len(line))
+    else:
+        if "origin: 3 agent-origin item(s) unconfirmed" not in line[0]:
+            p.append("the count is not 3: %r" % line[0][:120])
+        for want in ("AC-07 (ACCEPTANCE.md:4)", "H-02 (HANDOFF.md:2)",
+                     "D-03 (docs/adr/ADR-002-x.md:6)"):
+            if want not in line[0]:
+                p.append("the line does not name %s" % want)
+    ao = origin_json(js.stdout)
+    if not isinstance(ao, dict):
+        p.append("--json carries no agent_origin object")
+    else:
+        got = [(x.get("id"), x.get("file"), x.get("line")) for x in ao.get("unconfirmed") or []]
+        want = [("AC-07", "ACCEPTANCE.md", 4), ("H-02", "HANDOFF.md", 2),
+                ("D-03", "docs/adr/ADR-002-x.md", 6)]
+        if sorted(got) != sorted(want):
+            p.append("agent_origin.unconfirmed is %r" % (got,))
+    # the exit code, against the control, on three invocations -- one of which exits 1
+    ctl = project(marked=False)
+    for flags in ((), ("--strict",)):
+        a, b = spec_check(d, flags), spec_check(ctl, flags)
+        if a.returncode != b.returncode:
+            p.append("marked exits %d and the control exits %d with flags %r"
+                     % (a.returncode, b.returncode, flags))
+    bad = project(acc=ACC_BLOCKED)
+    bad_ctl = project(marked=False, acc=ACC_BLOCKED)
+    a, b = spec_check(bad), spec_check(bad_ctl)
+    if not (a.returncode == b.returncode == 1):
+        p.append("the blocked fixture exits %d marked and %d unmarked, expected 1 and 1"
+                 % (a.returncode, b.returncode))
+    if "agent-origin item(s) unconfirmed" not in a.stdout:
+        p.append("a BLOCKED run does not report its agent-origin items")
+    res["AC-OA-01"] = not p
+    why["AC-OA-01"] = "; ".join(p[:3]) or ("3 unconfirmed named with file and line in both "
+                                           "surfaces; the exit equals the control on 0 and on 1")
+
+    # --- AC-OA-02: a valid confirmed date removes the item and counts it --------------------
+    d = project()
+    js = spec_check(d, ["--json"])
+    ao = origin_json(js.stdout) or {}
+    p = []
+    ids = [x.get("id") for x in ao.get("unconfirmed") or []]
+    if "AC-08" in ids:
+        p.append("the confirmed item AC-08 is still listed as unconfirmed")
+    if ao.get("confirmed") != 1:
+        p.append("agent_origin.confirmed is %r, expected 1" % (ao.get("confirmed"),))
+    if "AC-08" in spec_check(d).stdout:
+        p.append("the confirmed item is named on the human line")
+    res["AC-OA-02"] = not p
+    why["AC-OA-02"] = "; ".join(p[:3]) or "AC-08 (a valid date) is counted, not listed"
+
+    # --- AC-OA-03: a malformed confirmed value counts as UNCONFIRMED and is NAMED -----------
+    # A typo must never read as a human approval. Three shapes: a word, a date-shaped
+    # impossibility, and an empty value.
+    d = project(acc=ACC_MALFORMED, handoff=False)
+    js = spec_check(d, ["--json"])
+    ao = origin_json(js.stdout) or {}
+    p = []
+    rows = {}
+    for x in ao.get("unconfirmed") or []:
+        rows[x.get("id")] = x
+    if ao.get("confirmed") != 0:
+        p.append("agent_origin.confirmed is %r, expected 0" % (ao.get("confirmed"),))
+    for cid, token in (("AC-20", "soon"), ("AC-21", "2026-13-40"), ("AC-22", "(empty)")):
+        row = rows.get(cid)
+        if row is None:
+            p.append("%s is not listed as unconfirmed" % cid)
+        elif not row.get("malformed") or token not in (row.get("detail") or ""):
+            p.append("%s does not name the failing value %s (detail %r)"
+                     % (cid, token, row.get("detail")))
+    txt = spec_check(d).stdout
+    for token in ("malformed confirmed: soon", "malformed confirmed: 2026-13-40",
+                  "malformed confirmed: (empty)"):
+        if token not in txt:
+            p.append("the human line does not carry %r" % token)
+    res["AC-OA-03"] = not p
+    why["AC-OA-03"] = "; ".join(p[:3]) or ("soon / 2026-13-40 / empty all list as unconfirmed, "
+                                           "each naming the value that failed")
+
+    # --- AC-OA-04: readiness prints ONE extra line and moves NOTHING (against a control) ----
+    # The same ledger, the same tree, the markers stripped: if the score, the status, the gates
+    # line or any dimension moved, the advisory would be a gate nobody declared. Measured, not
+    # asserted -- the control is the point of the case.
+    d = project(marked=False)
+    p = []
+    if run([ENG, "init", "--config", "uscha.config.json"], cwd=d).returncode != 0:
+        res["AC-OA-04"] = False
+        why["AC-OA-04"] = "the engine could not init the temp project"
+    else:
+        base_h = run([ENG, "readiness"], cwd=d)
+        base_j = json.loads(run([ENG, "readiness", "--json"], cwd=d).stdout)
+        if "agent_origin" in base_j:
+            p.append("the control carries agent_origin with no marker in the tree")
+        if "origin:" in base_h.stdout:
+            p.append("the control prints an origin line with no marker in the tree")
+        # now mark the SAME tree -- same ledger file, same repo, same criteria
+        write(os.path.join(d, "ACCEPTANCE.md"), ACC_MARKED)
+        write(os.path.join(d, "HANDOFF.md"), HANDOFF_MARKED)
+        write(os.path.join(d, "docs", "adr", "ADR-002-x.md"), ADR_MARKED)
+        mark_h = run([ENG, "readiness"], cwd=d)
+        mark_j = json.loads(run([ENG, "readiness", "--json"], cwd=d).stdout)
+        if mark_h.returncode != base_h.returncode:
+            p.append("readiness exits %d marked and %d unmarked"
+                     % (mark_h.returncode, base_h.returncode))
+        for key in ("score", "status", "dimensions", "gates", "facts", "churn", "advice"):
+            if mark_j.get(key) != base_j.get(key):
+                p.append("readiness %s moved: %r -> %r"
+                         % (key, base_j.get(key), mark_j.get(key)))
+        ao = mark_j.get("agent_origin") or {}
+        if len(ao.get("unconfirmed") or []) != 3 or ao.get("confirmed") != 1:
+            p.append("readiness --json agent_origin is %r" % (ao,))
+        base_lines = base_h.stdout.split("\n")
+        added = [x for x in mark_h.stdout.split("\n") if x not in base_lines]
+        if added != ["--- origin: 3 agent-origin item(s) unconfirmed   (spec-check names them)"]:
+            p.append("the human output differs by %r, expected exactly the origin line"
+                     % (added[:3],))
+        gate_lines = [x for x in mark_h.stdout.split("\n") if x.startswith("--- gates:")]
+        if [x for x in gate_lines if "origin" in x]:
+            p.append("the origin count leaked into the gates line: %r" % (gate_lines,))
+        res["AC-OA-04"] = not p
+        why["AC-OA-04"] = "; ".join(p[:3]) or ("one added line, score/status/gates/dimensions "
+                                               "identical to the marker-free control")
+
+    # --- AC-OA-05: a marker-free tree reports NOTHING new (byte-identical to v2.1.0) --------
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-OA-05"] = None
+        why["AC-OA-05"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        d = project(marked=False)
+        old = os.path.join(d, "prev_engine.py")
+        write(old, prev)
+        p = []
+        a = run([old, "spec-check", "--spec", "SPEC.md", "--acceptance", "ACCEPTANCE.md"], cwd=d)
+        b = spec_check(d)
+        if (a.stdout, a.stderr, a.returncode) != (b.stdout, b.stderr, b.returncode):
+            p.append("the marker-free output is not byte-identical to %s (rc %d vs %d)"
+                     % (PREV_TAG, a.returncode, b.returncode))
+        if "origin" in b.stdout:
+            p.append("this engine printed an origin line on a marker-free tree")
+        res["AC-OA-05"] = not p
+        why["AC-OA-05"] = "; ".join(p[:3]) or ("spec-check on a marker-free tree is byte-"
+                                               "identical to " + PREV_TAG)
+
+    # --- AC-OA-06: the RED PROBE -- the previous engine prints no origin section ------------
+    # A criterion that cannot go red proves nothing. The v2.1.0 engine is run on the AC-OA-01
+    # fixture and MUST stay silent there: that is the behaviour this release adds. Without git
+    # or the tagged copy it reports None = UNMEASURED, never a silent pass.
+    if prev is None:
+        res["AC-OA-06"] = None
+        why["AC-OA-06"] = PREV_TAG + " engine not reachable (no git, or a shallow clone)"
+    else:
+        d = project()
+        old = os.path.join(d, "prev_engine.py")
+        write(old, prev)
+        p = []
+        before = run([old, "spec-check", "--spec", "SPEC.md", "--acceptance", "ACCEPTANCE.md"],
+                     cwd=d)
+        if "agent-origin" in before.stdout:
+            p.append("%s already reports agent-origin items -- the probe measures nothing"
+                     % PREV_TAG)
+        bj = run([old, "spec-check", "--spec", "SPEC.md", "--acceptance", "ACCEPTANCE.md",
+                  "--json"], cwd=d)
+        if origin_json(bj.stdout) is not None:
+            p.append("%s already carries agent_origin in --json" % PREV_TAG)
+        after = spec_check(d)
+        if "agent-origin item(s) unconfirmed" not in after.stdout:
+            p.append("this engine does not report the marked fixture")
+        if after.returncode != before.returncode:
+            p.append("this engine exits %d where %s exits %d"
+                     % (after.returncode, PREV_TAG, before.returncode))
+        res["AC-OA-06"] = not p
+        why["AC-OA-06"] = "; ".join(p[:3]) or (PREV_TAG + " prints no origin section; this "
+                                               "engine prints it and exits the same")
+
+    # --- AC-OA-07: a markdown typo cannot hide a decision, a second marker is read ---------
+    # Three shapes the fresh review found: a fence that never closes (the lines after it are
+    # prose, not hidden), a confirmation APPENDED after the original tag on the same line
+    # (read, so the item counts confirmed), and a marker inside an HTML comment (documentation,
+    # skipped like a fenced block).
+    acc = "\n".join([
+        "# ACCEPTANCE", "",
+        "- [ ] AC-30 - when x then y. (origin: agent) later (origin: agent, confirmed: 2026-01-05)",
+        "- [ ] AC-31 - when x then y. <!-- (origin: agent) -->",
+        "", "```", "never closed",
+        "- [ ] AC-32 - when x then y. (origin: agent)", ""])
+    d = project(marked=False, handoff=False)
+    write(os.path.join(d, "ACCEPTANCE.md"), acc)  # the ADR under docs/ stays marker-free
+    ao = origin_json(spec_check(d, ["--json"]).stdout) or {}
+    p = []
+    ids = [x.get("id") for x in ao.get("unconfirmed") or []]
+    if ids != ["AC-30", "AC-32"]:
+        p.append("unconfirmed ids %r, expected AC-30 (its first tag) and AC-32 (after the "
+                 "unclosed fence); AC-31 sits in an HTML comment" % (ids,))
+    if ao.get("confirmed") != 1:
+        p.append("confirmed is %r, expected 1: the confirmation appended on AC-30 was not read"
+                 % (ao.get("confirmed"),))
+    res["AC-OA-07"] = not p
+    why["AC-OA-07"] = "; ".join(p[:3]) or ("unclosed fence hides nothing, appended confirmation "
+                                           "read, HTML comment skipped")
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".oa-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T160" in
+  OK*) PASS=$((PASS+1)); echo "  ok   agent-origin markers (AC-OA-01..07): $T160";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T160";;
+esac
+
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
 # defusedxml (stdlib-only is a hard contract). An unbounded read is a denial of service against
@@ -14065,6 +14439,10 @@ FAMILIES = (
     # git, a shallow clone, an extracted kit) it reports None = UNMEASURED, never a pass.
     (".sg-cases.json", "simplicity-advisory", "T159",                # ADR-043, 2.1.0
      _seq("AC-SG", 1, 8)),
+    # AC-OA-05 and AC-OA-06 run the v2.1.0 engine out of git -- without it (no git, a shallow
+    # clone, an extracted kit) they report None = UNMEASURED, never a silent pass.
+    (".oa-cases.json", "agent-origin", "T160",                       # ADR-044, 2.2.0
+     _seq("AC-OA", 1, 7)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

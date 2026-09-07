@@ -3,6 +3,7 @@
 One line per release, newest first; each links to the full per-release changelog
 (the per-release files are the canonical record — this file is an index).
 
+- **2.2.0** — [a decision nobody made entered scope by rebound, and the skill asked for information the tree already held: the agent asks for DECISIONS, never for INFORMATION, and what it decided carries `origin: agent` until a human confirms it item by item (ADR-044) (2026-09-07)](CHANGELOG-2.2.0.md)
 - **2.1.0** — [the simplicity gate stopped loops with a budget nobody had declared: the score advises by default, only a declared budget can make it gate, and `max_nesting` is named as the indentation proxy it is (ADR-043) (2026-09-07)](CHANGELOG-2.1.0.md)
 - **2.0.0** — [the risk profile had been outranked by the kit's own defaults, in every repo the kit set up: `init` generates a minimal config, the engine gets its own default layer, `doctor` says where each value came from (ADR-001 amended) (2026-09-07)](CHANGELOG-2.0.0.md)
 - **1.99.0** — [the bench meets a stranger: a second vendor compiles all 12 archetypes blind, and finds the ambiguity three relatives had agreed on (ADR-042) (2026-09-04)](CHANGELOG-1.99.0.md)

@@ -1075,6 +1075,70 @@ the old one: a gate that blocks wrongly is loud, a gate that passes wrongly is s
   FACT gate recorded as advisory would be a mandatory gate cleared by goodwill, which is the
   boundary ADR-043 promises not to move. The control (`waste --verdict advisory`) exits 0.
 
+## The agent asks for DECISIONS, never for INFORMATION (ADR-044) - closes on green `AC-OA-nn` smoke assertions
+
+Two field findings, one rule. In the first, the agent read a global default ("artifacts are
+written in English") and turned it into a tree-wide rename: a new acceptance criterion, a new
+`HANDOFF.md` rule and two new ADR decision items, none of them answered by a human. They were
+approved BY REBOUND - inside a twenty-item summary the human said "ok" to - and the work was
+cancelled after 112 files had already been renamed. The same shape, smaller, in a security fix:
+a stack trace moved to `DEBUG` because that is generally good practice, inside a change whose
+scope was something else. Neither is a hallucination; both are reasonable proposals, written in
+the same voice as the items the human DID decide, which is exactly what makes them
+indistinguishable once the conversation scrolls away. In the second finding, the devloop SKILL's
+rule 5 told the agent to ASK the human for the current version of a tracked `.md` - information
+the tree holds, so the question is noise, and cheap questions are what make an expensive one easy
+to wave through.
+
+2.2.0 rewrites rule 5 to READ the file (preserving its checkboxes and notes, never regenerating),
+and introduces one trailing marker on the item's own line for anything the AGENT decided:
+`(origin: agent)` while unconfirmed, `(origin: agent, confirmed: YYYY-MM-DD)` once a human has
+confirmed THAT item. No marker means human origin, so nothing existing is retro-tagged.
+Confirmation is per item: a package-level "ok" confirms none of them, which is the whole point.
+
+The engine REPORTS it and nothing more. `spec-check` gains one conditional line naming the
+unconfirmed items with `file:line` and an `agent_origin` object in `--json`; `readiness` prints
+one line of its own, outside the gates rollup. Both are ADVISORY: no exit code changes, no cap
+fires, no gate is credited or blocked. That is the 2.1.0 posture (ADR-043) applied on the day the
+feature ships - a gate needs a budget the project adopted, and nobody has declared one.
+
+`AC-OA-06` is the RED PROBE: the `v2.1.0` engine on the marked fixture must print no `origin:`
+section. `AC-OA-04` is the one that would catch the failure mode that matters here - an advisory
+that quietly moved a score would be a gate nobody declared - and it measures it against a
+CONTROL, the same ledger with no markers at all, rather than asserting it.
+
+- [ ] AC-OA-01 - an unconfirmed agent-origin item is LISTED: the human line reads
+  `~ origin: N agent-origin item(s) unconfirmed --` followed by each id with its `file:line`
+  (`AC-07 (ACCEPTANCE.md:4)`), across the `--spec` files, the `--acceptance` file, `HANDOFF.md`
+  and every `docs/adr/*.md`; `--json` carries the same rows under
+  `agent_origin.unconfirmed`. The EXIT CODE is byte-for-byte the one the same tree produces with
+  the markers stripped: the criterion measures a report, and a case that let the exit move would
+  be pinning the wrong thing.
+- [ ] AC-OA-02 - an item whose marker carries a valid `confirmed: YYYY-MM-DD` is NOT listed and
+  IS counted in `agent_origin.confirmed`. Both halves are asserted: a scanner that dropped the
+  item silently and one that counted it would be indistinguishable from the count alone.
+- [ ] AC-OA-03 - a malformed `confirmed:` counts as UNCONFIRMED and is NAMED with the value that
+  failed - `soon` (not a date), `2026-13-40` (shaped like one, not a calendar date) and an empty
+  value all list, each carrying `malformed confirmed: <value>`. A typo that read as a human's
+  approval is the one failure this marker exists to prevent.
+- [ ] AC-OA-04 - `readiness` prints `--- origin: N agent-origin item(s) unconfirmed` ONLY when
+  N > 0, on a line of its own, never inside the gates rollup - and against a CONTROL (the same
+  ledger and the same tree with every marker stripped) the score, the status, the gates line and
+  every dimension are identical, the human output differing by exactly that one added line.
+  `--json` carries `agent_origin` when there is something to report and is otherwise unchanged.
+- [ ] AC-OA-05 - a tree with no marker anywhere reports NOTHING new: this engine's `spec-check`
+  human output is byte-identical to the `v2.1.0` engine's on the same bytes, stdout and stderr
+  and exit code. Silence where nothing was tagged is what makes the marker adoptable, and it is
+  also the premise the red probe rests on.
+- [ ] AC-OA-06 - the RED PROBE. The `v2.1.0` engine, read out of git and run on the AC-OA-01
+  fixture, MUST print no `origin:` line and carry no `agent_origin` key - the behaviour this
+  release adds - while this engine prints both on the same bytes. Without git or the tagged copy
+  it reports `None` = UNMEASURED, never a silent pass.
+- [ ] AC-OA-07 - a markdown typo cannot hide a decision. A fence that never closes leaves the
+  lines after it scanned as prose (every other fence still hides its body); a confirmation
+  appended after the original tag on the same line is read, so the item counts as confirmed;
+  a marker inside an HTML comment is documentation and is skipped, like a fenced block.
+
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
 - ADR-002 — `golden_required`: a declarable cap for "an approved golden must exist".
@@ -1101,6 +1165,7 @@ the old one: a gate that blocks wrongly is loud, a gate that passes wrongly is s
 - ADR-041 — The dogfooding criterion is decided by git ANCESTRY, not by a wall clock — and the release ritual is a script that refuses (I1..I8), not prose a human re-reads.
 - ADR-042 — The cross-vendor arm: a SECOND vendor compiles the whole bench, blind, under the same withheld oracles; `--write-mode return` because the machine's approval policy forbids exec writes, and 0 executed commands means the confound that mode would have introduced does not exist.
 - ADR-043 — The simplicity score ADVISES by default: only a declared budget plus `defaults.simplicity.gate` makes it exit 1, `max_nesting` is named as the indentation proxy it is, and `log-gate --verdict advisory` records a measured, non-gating run that never reads as `ok`.
+- ADR-044 — The agent asks for DECISIONS, never for INFORMATION: information the tree holds is READ, and every acceptance criterion, ADR decision item or `HANDOFF.md` rule the AGENT introduced carries `(origin: agent)` until a human confirms THAT item with `confirmed: YYYY-MM-DD` — reported by `spec-check` and `readiness` as ADVISORY.
 
 Each ADR carries its own checkable Verification block; the executable form of those checks is
 the smoke suite (`uscha-kit/tests/smoke-engine.sh`), not `AC-nn` criteria here — a kit change

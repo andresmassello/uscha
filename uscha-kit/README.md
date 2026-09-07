@@ -593,6 +593,10 @@ python3 $QL spec-change-request --repo backend-api --source SD-001 --requested-c
   close measured (documented limitation).
 - A lintable repo whose static gate **never ran** scores that dimension UNMEASURED (0.0)
   — silence is not success.
+- **Agent-origin items (kit 2.2.0, ADR-044)**: when `ACCEPTANCE.md`, `docs/adr/*.md` or
+  `HANDOFF.md` carry unconfirmed `(origin: agent)` markers, readiness prints one line of its own
+  — `--- origin: N agent-origin item(s) unconfirmed` — outside the gates rollup. Advisory: it
+  caps nothing and blocks nothing. See below.
 - **Hard caps** (they override the ceiling): tests in red → ≤35, open BLOCKER/CRITICAL → ≤65,
   unresolved escalation → ≤75 (holds until `resolve-escalation`, a recorded event).
 - Bands: `<50 NOT READY` · `50–79 IN PROGRESS` · `80–94 RELEASE CANDIDATE` · `95–100 READY`.
@@ -653,6 +657,49 @@ python3 $QL simplicity-check --diff changes.diff --json        # consumed by usc
 - The flags tell you what to trim (guard clauses, speculative types/layers, giant hunks).
 - Budgets in `defaults.simplicity`. No risk profile owns them: the gate is a human declaration
   under every profile A–E.
+
+## Agent-origin markers — ask for DECISIONS, never for INFORMATION (ADR-044)
+
+Two field findings, one rule. **Information the tree holds is READ, never asked**: the current
+version of a tracked `.md`, what a config says, whether a test exists. And **a decision the human
+never made never enters scope silently** — an agent turned a global default into a tree-wide
+rename that was approved by rebound inside a twenty-item summary, and had to be cancelled after
+112 files had moved.
+
+So anything the AGENT introduced — an acceptance criterion, an ADR decision item, a `HANDOFF.md`
+rule — carries one trailing marker on its own line:
+
+```
+- [ ] AC-12 — when X then Y. (origin: agent)
+- [ ] AC-12 — when X then Y. (origin: agent, confirmed: 2026-09-07)
+```
+
+- **No marker = human origin.** That is the default, so nothing already written is retro-tagged.
+- **Confirmation is PER ITEM**, recorded as `confirmed: YYYY-MM-DD` on the same line. A
+  package-level "ok" confirms none of them, which is the whole point.
+- **An unconfirmed item is not in scope**: it is not implemented, not gated on, not quoted as
+  agreed.
+- A `confirmed:` that is not a real `YYYY-MM-DD` date counts as **unconfirmed** and is named — a
+  typo must never read as a human's approval.
+- A marker inside a fenced block or an inline code span (like the two above) is documentation and
+  is skipped, so a file that DEFINES the grammar is not read as a finding.
+
+What the engine does with it, on the files it already reads plus `ACCEPTANCE.md`, `docs/adr/*.md`
+and `HANDOFF.md`:
+
+```bash
+python3 $QL spec-check --spec SPEC.md --acceptance ACCEPTANCE.md
+#   ~ origin: 2 agent-origin item(s) unconfirmed -- AC-07 (ACCEPTANCE.md:41), D-03 (docs/adr/ADR-002-x.md:57)
+python3 $QL readiness
+#   --- origin: 2 agent-origin item(s) unconfirmed   (spec-check names them)
+```
+
+**ADVISORY, both of them.** `spec-check` keeps the exit code it had; `readiness` prints its line
+outside the gates rollup and caps nothing, blocks nothing, and changes no score. A gate here would
+need a budget the project adopted, and nobody has declared one (the 2.1.0 posture, ADR-043).
+`spec-check --json` carries `agent_origin: {unconfirmed: [...], confirmed: n}`; `readiness --json`
+carries the same object when there is anything to report. A tree with no marker anywhere prints
+exactly what it printed before.
 
 ## Ledger subcommands
 

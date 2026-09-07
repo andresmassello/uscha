@@ -33,6 +33,22 @@ each change lives in `SPEC.md` / `docs/adr/` / `ACCEPTANCE.md`, not here.
    forces a SPEC change, version it and go back to Ready.
 9. **Human gate.** Don't merge or release automatically. You stop at the PR; the merge and
    the smoke test in a real environment are decided by a person.
+10. **Ask for DECISIONS, never for INFORMATION — and mark what the agent decided.** What the
+   tree holds (the current version of a tracked file, what a config says, whether a test
+   exists) is READ, never asked. What the human has not decided is never entered silently:
+   every acceptance criterion, ADR decision item or `HANDOFF.md` rule the AGENT introduced
+   carries a trailing marker on its own line —
+
+    ```
+    - [ ] AC-12 — when X then Y. (origin: agent)
+    - [ ] AC-12 — when X then Y. (origin: agent, confirmed: 2026-09-07)
+    ```
+
+   Items with no marker are human-origin by default; nothing existing is retro-tagged. An
+   unconfirmed item is **not in scope**: it is confirmed ITEM BY ITEM, and a package-level
+   "ok" confirms none of them. `qa_ledger.py spec-check` names the unconfirmed ones with
+   file:line and `readiness` counts them on their own line — both advisory: they change no
+   exit code and cap no score.
 
 ## Truth hierarchy
 
