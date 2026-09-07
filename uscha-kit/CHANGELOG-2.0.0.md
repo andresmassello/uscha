@@ -212,4 +212,4 @@ The `uscha-devloop` skill actually SKIPPING sub-agents by profile is still what 
 it in 1.45.0: orchestrator behaviour, not deterministic engine logic. It is instructed here and
 measured nowhere, and the token saving stays an out-of-scope claim until an arm measures it.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 448 checks · 0 fail; acceptance 257/258.
