@@ -1998,7 +1998,14 @@ def _resolved_defaults(cfg):
     alike: `init` expands the profile before freezing, so on the frozen copy a profile-supplied
     knob is already sitting in `defaults` and would otherwise read as a human `override`.
     `_risk_profile_keys` -- written by `_apply_risk_profile` for exactly this reason, and
-    already read this way by the golden cap -- is what tells the two apart (ADR-048)."""
+    already read this way by the golden cap -- is what tells the two apart (ADR-048).
+
+    It tells them apart only while the value still IS the profile's, and that is the case the
+    fresh review found: a human who edits the FROZEN copy leaves a declaration the profile
+    never made, `_risk_profile_keys` still names the key, and `operability.gate: false` under
+    profile E reported `origin profile E` -- crediting the preset with the opposite of what it
+    supplies. The DECLARATION is therefore read first: a raw value that disagrees with what the
+    profile would have written is an `override`, whoever typed it and whenever."""
     raw = cfg.get("defaults") if isinstance(cfg, dict) else None
     raw = dict(raw) if isinstance(raw, dict) else {}
     profile = raw.get("risk_profile")
@@ -2008,10 +2015,12 @@ def _resolved_defaults(cfg):
     for key, fallback in ENGINE_DEFAULTS.items():
         found, value = _knob_get(expanded, key)
         resolved[key] = value if found else fallback
-        if key in from_profile and profile:
-            origin[key] = "profile %s" % profile
-        elif _knob_get(raw, key)[0]:
+        raw_found, raw_value = _knob_get(raw, key)
+        profile_value = RISK_PROFILES.get(profile, {}).get(key) if profile else None
+        if raw_found and not (key in from_profile and raw_value == profile_value):
             origin[key] = "override"
+        elif key in from_profile and profile:
+            origin[key] = "profile %s" % profile
         elif profile and key in RISK_PROFILES.get(profile, {}):
             origin[key] = "profile %s" % profile
         else:
@@ -3239,26 +3248,40 @@ def cmd_corpus_run(args):
 
 def _corpus_records(ledger):
     """The LATEST corpus record per repo -- the same latest-per-tool rule the gate rollup and
-    convergence already use, so the three cannot disagree about which run is current."""
+    convergence already use, so the three cannot disagree about which run is current. A record
+    logged through the `log-gate --kind corpus` parity door carries no `corpus` block and is
+    deliberately not here: it gates (it is a gate record like any other), but it has no run to
+    read back, and rendering it anyway printed the honest-looking nonsense
+    `corpus None % (None/None) >= None % PASS`. Same exclusion, same reason, as
+    `_smoke_records`."""
     out = {}
     for rname, rnode in ledger.get("repos", {}).items():
         rec = _latest_static_by_tool(rnode).get("gate:corpus")
-        if rec is not None:
+        if rec is not None and rec.get("corpus"):
             out[rname] = rec
     return out
 
 
-def _corpus_ac_closed(ledger):
-    """Criterion ids closed MEASURED by a green corpus run (ADR-046). A corpus record closes an
-    AC iff it PASSED: an advisory run measured a percentage against no adopted budget (it is
-    not a green gate, and ADR-043 refuses to let it read as one), and a failing run is evidence
-    AGAINST. Same rule as the JUnit path, for the same reason."""
-    closed = set()
+def _corpus_ac_verdicts(ledger):
+    """(closed, vetoed) criterion ids from the latest corpus record of every repo (ADR-046).
+
+    A corpus record CLOSES an AC iff it PASSED. An **advisory** run measured a percentage
+    against no adopted budget: it is not a green gate (ADR-043 refuses to let it read as one)
+    and it is not red evidence either, so it neither closes nor vetoes. A **failing** run is
+    evidence AGAINST, which ADR-046 said from the start -- and the engine used to merely skip
+    it, so a green testcase went on closing a criterion the field had just refuted. It now
+    VETOES the ids it carries, the same rule a red JUnit testcase and a failed tagged smoke
+    check already obey, and for the same reason: the cheapest way to fake a closed criterion is
+    to put a green beside a red."""
+    closed, vetoed = set(), set()
     for rec in _corpus_records(ledger).values():
-        if rec.get("advisory") or (rec.get("gated_reported") or 0) > 0:
+        if rec.get("advisory"):
             continue
-        closed.update(rec.get("ac") or [])
-    return closed
+        if (rec.get("gated_reported") or 0) > 0:
+            vetoed.update(rec.get("ac") or [])
+        else:
+            closed.update(rec.get("ac") or [])
+    return closed - vetoed, vetoed
 
 
 def _corpus_field(ledger):
@@ -4652,9 +4675,13 @@ def cmd_operability(args):
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
         sys.exit(0)
-    print("OPERABILITY %s (gate: %s, origin %s)"
-          % (args.repo, "declared" if gate else "not declared",
-             origin.get("operability.gate")))
+    # "not declared" and "declared false" are DIFFERENT facts: the first is a project that
+    # never mentioned the knob, the second a human who turned the gate off on purpose. Saying
+    # "not declared" for both erased the decision (fresh review, 2.2.0).
+    gate_origin = origin.get("operability.gate")
+    gate_shown = ("declared" if gate
+                  else "declared false" if gate_origin == "override" else "not declared")
+    print("OPERABILITY %s (gate: %s, origin %s)" % (args.repo, gate_shown, gate_origin))
     if report["ci_source"]:
         print("  read: %s" % report["ci_source"])
     for key in OPERABILITY_CHECKS:
@@ -10868,8 +10895,10 @@ def cmd_readiness(args):
     # ADR-046: a green corpus run is the OTHER way a criterion closes measured. Greenfield has
     # no old code to characterize, so for the criteria that are about real-world input the only
     # field evidence there can be is a corpus run over real inputs -- and it closes exactly like
-    # a green testcase does, with the same fail-closed rule below.
-    corpus_closed = _corpus_ac_closed(ledger)
+    # a green testcase does, with the same fail-closed rule below. `corpus_red` is a FAILING
+    # tagged run -- evidence AGAINST, in ADR-046's own words -- and it vetoes like a red
+    # testcase; an ADVISORY run is neither and does neither.
+    corpus_closed, corpus_red = _corpus_ac_verdicts(ledger)
     # ADR-047: and a green SMOKE check is the third way. "the jar served /admin" used to
     # arrive as a sub-agent's sentence; now it arrives as a check in a report the engine
     # READ, and a check named "AC-28 ..." closes AC-28 exactly as a green testcase named
@@ -10885,6 +10914,8 @@ def cmd_readiness(args):
             return False          # red evidence vetoes, whatever else says (fail-closed)
         if cid in smoke_red:
             return False          # a FAILED tagged smoke check is red evidence too
+        if cid in corpus_red:
+            return False          # and so is a FAILING tagged corpus run (ADR-046)
         if d and d["green"] >= 1:
             return True
         return cid in corpus_closed or cid in smoke_closed
@@ -11134,8 +11165,11 @@ def cmd_readiness(args):
                        "narrated_only": narrated_only,
                        "measured_unchecked": measured_unchecked,
                        # ADR-046: WHICH ids a green corpus run closed, so a reader can tell
-                       # field evidence from suite evidence instead of inferring it.
+                       # field evidence from suite evidence instead of inferring it -- and
+                       # `corpus_vetoed` for the ids a FAILING run holds open, the half a
+                       # reader cannot infer from the closed list.
                        "corpus_closed": sorted(corpus_closed, key=_top_ac_key),
+                       "corpus_vetoed": sorted(corpus_red, key=_top_ac_key),
                        # ADR-047: the same for the ids a green smoke check closed -- and
                        # `smoke_vetoed` for the ids a FAILED one holds open, which is the
                        # half a reader cannot infer from the closed list.

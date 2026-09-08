@@ -104,6 +104,16 @@ JUnit path has always obeyed, for the same reason:
 A ticked `AC-FIELD-01` with no green corpus record reports `narrated_only`, exactly as a ticked
 criterion with no green testcase always has. The checkbox is narration; the run is the fact.
 
+**Amended in the 2.2.0 fresh review — a failing run VETOES, it does not merely abstain.** "Evidence
+AGAINST" was written above and only half implemented: the failing record stopped *closing* the
+criterion, and a green `AC-n` testcase in the reports went on closing it anyway. The field had
+refuted exactly what the suite was affirming, and the suite won by default. A failing corpus record
+carrying `--ac AC-n` now vetoes `AC-n` outright, the same rule a red testcase and a failed tagged
+smoke check obey, in that order: red JUnit → smoke veto → corpus veto → a green closes.
+`readiness --json` gains `acceptance.corpus_vetoed` beside `corpus_closed`, because which ids a
+veto is holding open is the half no reader can infer from the closed list. An **advisory** run is
+still neither: it measured against no adopted budget and it moves nothing, in either direction.
+
 ### 5. Readiness gets a `field` line — and no weight
 
 One conditional line per repo that declares a corpus (`repos[R].corpus`) or has ever run one:
@@ -114,6 +124,12 @@ One conditional line per repo that declares a corpus (`repos[R].corpus`) or has 
 --- field backend-api: corpus 66.7 % (2/3) — no threshold declared, ADVISORY (measured, not gating)
 --- field backend-api: corpus UNMEASURED — a corpus is declared and was never run (real/corpus.jsonl)
 ```
+
+A record written through the `log-gate --kind corpus` PARITY door carries no run to read back,
+so it produces no line and no `field` entry — it gates like any other record, and it is excluded
+from this readout exactly as the smoke parity door is excluded from its own. Rendering it anyway
+printed `corpus None % (None/None) >= None % PASS`: a sentence shaped like a measurement over
+nothing measured.
 
 plus a conditional `field` object in `--json`. **A repo that declares no corpus and ran none
 prints nothing and emits nothing** — the same conditional-silence rule `lifecycle` (ADR-040) and

@@ -926,4 +926,43 @@ ID list it carries is still compared byte for byte. A criterion that starts or s
 narrated-only is still red, and so is every other line: probed by altering the unrelated
 `static gate NEVER ran` sentence, which turns both cases red and green again on restore.
 
+## A failing corpus run VETOES the criterion it carries (ADR-046)
+
+ADR-046 says a failing run is *evidence AGAINST, not absence of evidence*, and only half of that
+shipped: the failing record stopped CLOSING the criterion, and a green `AC-n` testcase in the
+reports went on closing it anyway. The field refuted exactly what the suite affirmed, and the
+suite won by default.
+
+A `fail` corpus record carrying `--ac AC-n` now vetoes `AC-n`, in the order every other veto
+already obeys: red JUnit, then a failed tagged smoke check, then a failing corpus run, and only
+then does a green close. `readiness --json` gains `acceptance.corpus_vetoed` beside
+`corpus_closed` — declared here, and named in `AC-RP-04`'s additive-key list so a payload that
+grew a key nobody wrote down is still the drift that case refuses. An **advisory** run is neither
+green nor red and moves nothing in either direction (ADR-043). Pinned as `AC-CO-11` in **T163**
+with that control, and probed by dropping the veto: *a failing tagged run left it closed*.
+
+## A corpus record with no run says nothing, instead of saying `None`
+
+`log-gate --kind corpus` is the parity door (`AC-CO-08`): it writes a gate record with no `corpus`
+block. The field readout rendered it anyway, and printed
+`--- field app: corpus None % (None/None) >= None % PASS` — a sentence shaped like a measurement
+over nothing measured. The readout now excludes it, exactly as the smoke readout already excludes
+its own parity door, and the record still GATES like any other. `AC-CO-10`, **T163**.
+
+## `operability.gate: false` is a decision, not an absence (ADR-048)
+
+`_risk_profile_keys` tells a profile-supplied knob apart from a human one — while the value still
+IS the profile's. A human who edits the FROZEN config leaves a declaration the profile never made,
+the key is still listed, and `operability.gate: false` under profile E reported
+`gate: not declared, origin profile E`: the preset credited with the opposite of what it supplies,
+and a deliberate decision reported as an absence.
+
+The declaration is read FIRST now — a raw value that disagrees with what the profile would have
+written is an `override`, whoever typed it and whenever — and the readout stops collapsing two
+different facts into one word: `not declared` is a project that never mentioned the knob,
+`declared false` is a human who turned the gate off. `AC-OP-09` in **T165** pins both, with the
+untouched profile as its control, and the red probe restores the old order.
+
+Acceptance goes 324 → 330 criteria; nothing was dropped.
+
 Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.

@@ -101,6 +101,16 @@ reads `_risk_profile_keys` — written by `_apply_risk_profile` for exactly this
 already read this way by the golden cap — so a profile-supplied knob is reported as
 `profile <X>` on the frozen copy instead of masquerading as a human `override`.
 
+**Amended in the 2.2.0 fresh review.** `_risk_profile_keys` tells the two apart only while the
+value still IS the profile's. A human who edits the FROZEN copy leaves a declaration the profile
+never made, the key is still listed, and `operability.gate: false` under profile E reported
+`gate: not declared, origin profile E` — crediting the preset with the opposite of what E supplies
+and erasing a decision someone made on purpose. The DECLARATION is therefore read first: a raw
+value that disagrees with what the profile would have written is an `override`, whoever typed it
+and whenever. The readout also stopped collapsing two different facts into one sentence —
+**`not declared`** is a project that never mentioned the knob, **`declared false`** is a human who
+turned the gate off.
+
 **5. Readiness shows it on one line, conditional on a record existing** (house rule: speak only
 when it matters):
 

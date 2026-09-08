@@ -12603,7 +12603,8 @@ def measure():
             # the old payload and present-and-empty in the new one over a ledger with no such
             # evidence, and with them removed the two payloads must still be equal. A key
             # added without a line in this tuple is still the drift this case refuses.
-            ADDITIVE_2_2_0 = ("corpus_closed", "smoke_closed", "smoke_vetoed")
+            ADDITIVE_2_2_0 = ("corpus_closed", "corpus_vetoed",
+                              "smoke_closed", "smoke_vetoed")
             try:
                 ja, jb = json.loads(a), json.loads(b)
             except ValueError:
@@ -15558,6 +15559,79 @@ def measure():
         why["AC-CO-09"] = "; ".join(p[:3]) or ("neither the subcommand nor the --kind nor the "
                                                "field block exists on " + PREV_TAG)
 
+    # --- AC-CO-10: a PARITY record has no run to read back, and says so by saying nothing ----
+    # log-gate --kind corpus (AC-CO-08) writes a gate record with no `corpus` block. Rendering
+    # it as field truth anyway printed honest-looking nonsense -- corpus None % (None/None)
+    # >= None % PASS -- so the field readout excludes it, exactly as the smoke readout already
+    # excludes its own parity door. It still GATES: the record counts in the rollup like any
+    # other, which is the half a silent exclusion could quietly drop.
+    d = project(ONE)
+    eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration", "1",
+            "--kind", "corpus", "--verdict", "pass"])
+    text = ready(d).stdout
+    j = ready_json(d)
+    p = []
+    if "--- field " in text:
+        p.append("a parity record produced a field line: %r"
+                 % [ln for ln in text.splitlines() if ln.startswith("--- field ")])
+    if "None" in text:
+        p.append("readiness printed a None: %r"
+                 % [ln for ln in text.splitlines() if "None" in ln])
+    if (j.get("field") or {}).get("backend-api") is not None:
+        p.append("the JSON carries a field entry for a run that never happened: %r"
+                 % (j.get("field"),))
+    ok_gates = [g for g in j["gates"] if g.get("tool") == "gate:corpus"]
+    if not ok_gates or any(g.get("blocking") for g in ok_gates):
+        p.append("the parity record stopped counting as a gate: %r" % (j["gates"],))
+    if "--- gates: 1 ok" not in text:
+        p.append("the gate rollup does not count it: %r"
+                 % [ln for ln in text.splitlines() if ln.startswith("--- gates:")])
+    res["AC-CO-10"] = not p
+    why["AC-CO-10"] = "; ".join(p[:3]) or ("a log-gate corpus record prints no field line and "
+                                           "emits no field entry, and still counts as a gate")
+
+    # --- AC-CO-11: a FAILING tagged run VETOES, an ADVISORY one does not ---------------------
+    # ADR-046 already said a failing run is "evidence AGAINST, not absence of evidence", and
+    # the engine only skipped it: a green testcase went on closing a criterion the field had
+    # just refuted. It now vetoes like a red testcase does. The control is the other half of
+    # the same sentence: an ADVISORY run measured against no adopted budget is neither green
+    # nor red, so it must leave the green testcase's closure alone (ADR-043).
+    def with_junit(defaults=None):
+        w = project(ONE, defaults=defaults or {"readiness_weights": WEIGHTS})
+        write(os.path.join(w, "backend-api", "reports", "junit.xml"),
+              '<testsuites><testsuite name="s">'
+              '<testcase classname="C" name="AC-FIELD-01_ok"/>'
+              '</testsuite></testsuites>')
+        return w
+
+    d = with_junit()
+    p = []
+    base = ready_json(d)["acceptance"]
+    if base["measured_closed"] != ["AC-FIELD-1"]:
+        p.append("the green testcase does not close it to begin with: %r"
+                 % (base["measured_closed"],))
+    corpus(d, ["--repo", "backend-api", "--corpus", "two-of-three.jsonl",
+               "--threshold", "90", "--ac", "AC-FIELD-01"])
+    vetoed = ready_json(d)["acceptance"]
+    if vetoed["measured_closed"] != []:
+        p.append("a failing tagged run left it closed: %r" % (vetoed["measured_closed"],))
+    if vetoed["narrated_only"] != ["AC-FIELD-1"]:
+        p.append("the vetoed criterion is not narrated_only: %r" % (vetoed["narrated_only"],))
+    if vetoed["corpus_vetoed"] != ["AC-FIELD-1"]:
+        p.append("the veto is not attributed to the corpus: %r" % (vetoed["corpus_vetoed"],))
+    # the control: no threshold anywhere -> ADVISORY, and it must change nothing
+    d2 = with_junit()
+    corpus(d2, ["--repo", "backend-api", "--corpus", "two-of-three.jsonl",
+                "--ac", "AC-FIELD-01"])
+    adv = ready_json(d2)["acceptance"]
+    if adv["measured_closed"] != ["AC-FIELD-1"] or adv["corpus_vetoed"]:
+        p.append("an ADVISORY run vetoed: closed %r vetoed %r"
+                 % (adv["measured_closed"], adv["corpus_vetoed"]))
+    res["AC-CO-11"] = not p
+    why["AC-CO-11"] = "; ".join(p[:3]) or ("a failing tagged run vetoes a green testcase and "
+                                           "is named in corpus_vetoed; an advisory one does "
+                                           "not")
+
 
 try:
     measure()
@@ -15572,7 +15646,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T163" in
-  OK*) PASS=$((PASS+1)); echo "  ok   corpus field truth (AC-CO-01..09): $T163";;
+  OK*) PASS=$((PASS+1)); echo "  ok   corpus field truth (AC-CO-01..11): $T163";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T163";;
 esac
 
@@ -16283,6 +16357,51 @@ def measure():
         why["AC-OP-08"] = "sub rc=%s kind rc=%s knobs=%s" % (
             p_sub.returncode, p_kind.returncode, sorted(old_eff))
 
+    # --- AC-OP-09: a knob TURNED OFF by hand is an override, whatever the profile supplies ---
+    # `init` expands the profile before freezing, so on a frozen config a profile-supplied knob
+    # is sitting in `defaults` and `_risk_profile_keys` is what told it apart from a human
+    # declaration. It stopped telling them apart the moment a human EDITED the frozen copy: the
+    # key is still listed, so `operability.gate: false` under E reported "not declared, origin
+    # profile E" -- crediting the preset with the opposite of what E supplies, and erasing a
+    # decision someone made on purpose. The declaration is now read first, and a value that
+    # disagrees with the profile's is an override. Deleting `integrity` is the explicit human
+    # act the engine demands for an external edit; it is what makes this case the real shape.
+    d, _ = project("E")
+    led_path = os.path.join(d, "QA-LEDGER.json")
+    led = read_json(led_path)
+    frozen = led["config"]["defaults"]
+    p9 = []
+    if "operability.gate" not in (frozen.get("_risk_profile_keys") or []):
+        p9.append("the frozen config does not credit the profile with the knob: %r"
+                  % (frozen.get("_risk_profile_keys"),))
+    frozen["operability"] = dict(frozen.get("operability") or {}, gate=False)
+    led.pop("integrity", None)
+    write(led_path, json.dumps(led, indent=2) + NL)
+    r9, rep9 = report(d)
+    if rep9.get("gate") is not False:
+        p9.append("gate=%r, expected False -- the hand-declared value did not win"
+                  % rep9.get("gate"))
+    if rep9.get("gate_origin") != "override":
+        p9.append("gate_origin=%r, expected override" % rep9.get("gate_origin"))
+    r9_text = eng(["operability", "--repo", "app", "--ledger", "QA-LEDGER.json",
+                   "--iteration", "2"], d)
+    if "gate: declared false, origin override" not in r9_text.stdout:
+        p9.append("the human readout still says nothing was declared: %r"
+                  % r9_text.stdout.splitlines()[:1])
+    g9 = op_gate(d)
+    if not g9 or g9.get("blocking") is not False:
+        p9.append("the record gates with the gate turned off: %r" % (g9,))
+    # the CONTROL: the same profile, untouched -- the preset still gets the credit
+    dc, _ = project("E")
+    _rc, repc = report(dc)
+    if repc.get("gate") is not True or repc.get("gate_origin") != "profile E":
+        p9.append("the untouched profile no longer reads profile E: gate=%r origin=%r"
+                  % (repc.get("gate"), repc.get("gate_origin")))
+    res["AC-OP-09"] = not p9
+    why["AC-OP-09"] = "; ".join(p9[:3]) or ("a hand-declared false reads override and gates "
+                                            "nothing; the untouched profile still reads "
+                                            "profile E")
+
 
 try:
     measure()
@@ -16298,7 +16417,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T165" in
-  OK*) PASS=$((PASS+1)); echo "  ok   operability measured (AC-OP-01..08): $T165";;
+  OK*) PASS=$((PASS+1)); echo "  ok   operability measured (AC-OP-01..09): $T165";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T165";;
 esac
 
@@ -16775,7 +16894,7 @@ FAMILIES = (
     # AC-CO-09 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".co-cases.json", "corpus-field-truth", "T163",                 # ADR-046, 2.2.0
-     _seq("AC-CO", 1, 9)),
+     _seq("AC-CO", 1, 11)),
     # AC-SI-09 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git,
     # a shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".si-cases.json", "smoke-measured", "T164",                     # ADR-047, 2.2.0
@@ -16783,11 +16902,11 @@ FAMILIES = (
     # AC-OP-08 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".op-cases.json", "operability", "T165",                        # ADR-048
-     _seq("AC-OP", 1, 8)),
+     _seq("AC-OP", 1, 9)),
     # DOC criteria (2.2.0): the first-use walkthrough. T166 measures the PAGE -- its links, its
     # own extracted commands, its routes, its twin and its silence about completion time.
     (".fu-cases.json", "first-use-walkthrough", "T166",              # 2.2.0
-     _seq("AC-FU", 1, 5)),
+     _seq("AC-FU", 1, 6)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

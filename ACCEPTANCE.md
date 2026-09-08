@@ -1348,6 +1348,13 @@ in `defaults`, so the origin ladder now reads DOTTED knob names. Measured by T16
   `operability` subcommand, `log-gate --kind operability` rejected at the parser, and no
   `operability.gate` in `doctor --json`'s effective settings. Without git or the tagged copy it
   reports `None` = UNMEASURED, never a silent pass.
+- [ ] AC-OP-09 - a knob TURNED OFF by hand is an `override`, whatever the profile supplies. On a
+  FROZEN config under `risk_profile: E` -- where `init` already expanded `operability.gate: true`
+  and `_risk_profile_keys` still names the key -- a hand-declared `operability.gate: false`
+  reports gate off with origin `override` and prints `gate: declared false`, not
+  `not declared, origin profile E`. Crediting the preset with the opposite of what it supplies
+  erased a decision someone made on purpose. CONTROL: the same profile untouched still reads
+  `declared, origin profile E`.
 
 ## Recorded decisions
 - ADR-001 — The risk profile modulates the flow (kit-shipped, overridable presets).
@@ -1439,6 +1446,16 @@ and one conditional readiness line.
   fixtures, has neither `corpus-run`, nor `--kind corpus`, nor a `field` block in
   `readiness --json`. Without git or the tagged copy it reports `None` = UNMEASURED, never a
   silent pass.
+- [ ] AC-CO-10 - a record logged through the `log-gate --kind corpus` PARITY door carries no
+  `corpus` block, so it produces NO field line and NO `field` entry -- rendering it anyway
+  printed `corpus None % (None/None) >= None % PASS`, honest-looking nonsense. It still GATES:
+  the record counts in the rollup like any other, which a silent exclusion could quietly drop.
+- [ ] AC-CO-11 - a FAILING corpus run carrying `--ac AC-n` VETOES that criterion: with a green
+  `AC-n` testcase in the reports it is `narrated_only` again, `measured_closed` drops it and
+  `corpus_vetoed` names it. ADR-046 always called a failing run *evidence AGAINST*; the engine
+  used to merely skip it, so a green testcase went on closing a criterion the field had refuted.
+  CONTROL: an ADVISORY run carrying the same `--ac` measured against no adopted budget and
+  vetoes NOTHING -- neither green nor red (ADR-043).
 
 ## The smoke run as measured evidence: `smoke-ingest` (ADR-047) - closes on green `AC-SI-nn` smoke assertions
 
@@ -1523,3 +1540,8 @@ page, not the engine. Measured by T166 through the `.fu-cases.json` sidecar.
   `minutos` / `minute` / `minuto` in either direction. The kit measures evidence, not effort, and
   the one runtime the page claims is the one that was exercised. (Client and project names are
   AC-03's hash scan over every tracked file; this criterion pins the time promise only.)
+- [ ] AC-FU-06 - the transcripts are the engine's, still. For every `readiness` fence in either
+  twin that shows a `narrated-only:` line, the sentence the page prints EQUALS the sentence this
+  engine prints (normalised only for the `<repo>` / `<home>` placeholders and the guide's
+  declared continuation convention). A page that claims real output must go RED when the output
+  moves, instead of shipping prose the engine stopped saying.
