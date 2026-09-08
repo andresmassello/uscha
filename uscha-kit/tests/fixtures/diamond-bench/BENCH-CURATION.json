@@ -1206,6 +1206,789 @@
       "note": "human verdict given interactively in session 2026-09-04",
       "entry": "guard",
       "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-1b6dc224cba1",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:35+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "crud-store",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-8b1976ea22b0",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:36+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "crud-store",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-7b0a0add0e9c",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:37+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ledger-lite",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-3fc92d8b8920",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:37+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ledger-lite",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-92e75dbc4747",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:38+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "parser",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-4b0aa1bda1ff",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:39+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "parser",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-3a59243d2b3f",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:39+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "parser",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-0d971017880b",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:39+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "parser",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-92e75dbc4747",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:40+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "parser",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-df5cc2343b6f",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:41+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "parser",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-0faf70ccf41b",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:41+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "parser",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-802cb1d06295",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:41+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "parser",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-b5f42d835a10",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:42+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-fd8ef3c94caf",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:43+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-0ab1b82b8d2f",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:43+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-fd370db48d25",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:43+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-cf85fda9918d",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:44+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-9c55165068bc",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:44+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-d73c079fe4f1",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:45+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-0d971017880b",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:45+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-e20608e021fd",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:46+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-ee3e74f5f403",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:47+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-793494ecc427",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:47+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-fd370db48d25",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:48+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-4b64da16db48",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:48+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-a19f1d5714e5",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:49+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-11265514cd71",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:49+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "protocol-adapter",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-db1dc237c9d5",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:51+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rate-limiter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-e9c6912e96f3",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:51+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rate-limiter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-7d646e0fc3f1",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:52+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rate-limiter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-9edc69468a70",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:53+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rate-limiter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-b8c6282fcaa3",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:53+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rate-limiter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-b4e1c579afc4",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:54+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rate-limiter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-ec1ff721c396",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:55+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rate-limiter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-b6307159cf92",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:55+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rate-limiter",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-774a32617120",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:56+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-ec7bdb3f0261",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:56+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-560da056c539",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:57+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-d86865dfcb9b",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:57+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-7ff505956d7e",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:57+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-f2313a070741",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:58+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-bc13440f983d",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:58+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-cecccdc2b1e5",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:59+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-e05efeaea4fb",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:28:59+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-774a32617120",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:00+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-bcf536ca3c77",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:00+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-f3de6f97df2f",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:00+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-8f9684326104",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:00+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-35f8555c2176",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:01+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-025a716101ff",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:01+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-44a0bd15814c",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:01+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-04d96f62d655",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:01+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "rest-handler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-aa2da16cb1ac",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:02+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-2e00c53e9e14",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:02+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-82de5a89dddd",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:02+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-d10a9d09ca32",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:03+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-6b64eb44f36c",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:03+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-8779a8498365",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:03+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-23b979654896",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:04+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-a4a1673cae2f",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:04+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-95e9bdab137a",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:04+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "scheduler",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-6ee4bc6a369d",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:05+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "state-machine",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-f4bd2be8113d",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:05+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "state-machine",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-1b6dc224cba1",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:05+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "state-machine",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-c85ee6953e50",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:06+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "transformer",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-e8eed398c946",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:06+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "transformer",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-d05a301c44a9",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:06+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "transformer",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-fa8226143af1",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:07+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "transformer",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-00ee60b2cbfd",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:07+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "transformer",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-b4559d893e78",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:07+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ui-render",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-1c4105d3a094",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:08+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ui-render",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-c4a39c100bad",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:08+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ui-render",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-43ea5b0478a5",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:09+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ui-render",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-02e8b5732103",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:09+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ui-render",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-84dd5cc8b8a9",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:09+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ui-render",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-2664795789cc",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:09+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ui-render",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-275af472a889",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:10+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "ui-render",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-2fbe276a7d66",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:10+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-95bc447fec49",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:10+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-7aa094d95833",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:10+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-82da0f27b9e3",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:11+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-6699ede43359",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:11+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-b8450017e4fb",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:11+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-2b199971ea22",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:12+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-6c01b313dd50",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:12+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-5ad63ddfe377",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:12+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-2ecad7ac2184",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-08T13:29:12+00:00",
+      "note": "structural fact of the compilation; verdict given in block by the human on 2026-09-08",
+      "entry": "worker",
+      "dir": "r2/c-codex"
     }
   ]
 }
