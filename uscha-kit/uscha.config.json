@@ -1,6 +1,6 @@
 {
   "_comment": "COMPREHENSIVE REFERENCE, not a project config. Every knob the engine and the skills understand, at the kit's own value, so a human can read what can be declared. `uscha init` does NOT copy this file: it GENERATES a minimal project config, because a copied default is an explicit declaration and an explicit declaration outranks the preset named by defaults.risk_profile (ADR-001, as amended). Copy a block from here into your project only when you mean to override the engine default or the preset. NOTE: no version string may be written into this comment -- the release script requires exactly one occurrence of the version in this file (I3), and a second one refuses the next release.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "project": null,
   "defaults": {
     "coverage_threshold": 60,
