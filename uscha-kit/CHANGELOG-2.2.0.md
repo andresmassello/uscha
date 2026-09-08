@@ -1020,4 +1020,4 @@ no longer does*.
 
 Acceptance goes 324 → 330 criteria; nothing was dropped.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 457 checks · 0 fail; acceptance 329/330.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="266" failures="0" errors="0" skipped="1">
+<testsuite name="uscha-acceptance" tests="330" failures="0" errors="0" skipped="1">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -464,6 +464,12 @@
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FW-05_facts-writer">
   </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FW-06_facts-writer">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FW-07_facts-writer">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FW-08_facts-writer">
+  </testcase>
   <testcase classname="uscha.acceptance" name="AC-VC-01_narrated-backlog">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-VC-02_narrated-backlog">
@@ -518,6 +524,58 @@
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-SG-08_simplicity-advisory">
   </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-01_agent-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-02_agent-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-03_agent-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-04_agent-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-05_agent-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-06_agent-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-07_agent-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-01_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-02_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-03_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-04_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-05_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-06_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-07_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-08_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-09_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FF-10_field-fixes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-01_installed-skill-freshness">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-02_installed-skill-freshness">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-03_installed-skill-freshness">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-04_installed-skill-freshness">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-05_installed-skill-freshness">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-06_installed-skill-freshness">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-07_installed-skill-freshness">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-08_installed-skill-freshness">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SK-09_installed-skill-freshness">
+  </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-01_family-ids">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-02_family-ids">
@@ -529,6 +587,76 @@
   <testcase classname="uscha.acceptance" name="AC-FA-05_family-ids">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FA-06_family-ids">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-01_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-02_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-03_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-04_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-05_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-06_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-07_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-08_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-09_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-10_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-CO-11_corpus-field-truth">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-01_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-02_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-03_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-04_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-05_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-06_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-07_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-08_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SI-09_smoke-measured">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-01_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-02_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-03_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-04_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-05_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-06_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-07_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-08_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OP-09_operability">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FU-01_first-use-walkthrough">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FU-02_first-use-walkthrough">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FU-03_first-use-walkthrough">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FU-04_first-use-walkthrough">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FU-05_first-use-walkthrough">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-FU-06_first-use-walkthrough">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
     <skipped message="shallow clone or no git: ancestry unmeasurable"/>
