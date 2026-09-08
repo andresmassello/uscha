@@ -904,4 +904,26 @@ ship. The runtime the page claims is the one that was exercised, and no second o
 
 Acceptance goes 319 → 324 criteria; nothing was dropped.
 
+# Also in 2.2.0 — what the fresh review measured
+
+A fresh-context review of the assembled batch found the tree red and named why. Each finding
+below was reproduced before it was fixed, and each fix carries the red probe that proves the
+measurement still bites.
+
+## The two byte-identity anchors keep their tags — ONE line is named instead
+
+`AC-FA-03` (smoke **T140**, anchored at `v1.86.1`) and `AC-FR-06` (smoke **T147**, anchored at
+`v1.92.0`) pin the readiness TEXT byte-identical against a pre-change engine. ADR-046 and ADR-047
+widened exactly one line of it — the `narrated-only` sentence now also says *without a green
+corpus run carrying it and without a green 'AC-n' smoke check* — so both pins went red on a
+change they were never meant to refuse.
+
+**The anchors do NOT move.** Re-pointing them at a later release would compare the new engine
+with itself and retire the pin without anyone deciding to, which is the policy both blocks carry
+and which this line exists to satisfy: nothing is re-pointed here. What changed is narrower —
+the PROSE of that one named line is normalised on both sides before the comparison, while the
+ID list it carries is still compared byte for byte. A criterion that starts or stops being
+narrated-only is still red, and so is every other line: probed by altering the unrelated
+`static gate NEVER ran` sentence, which turns both cases red and green again on restore.
+
 Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.

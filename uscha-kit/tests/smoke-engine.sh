@@ -8197,6 +8197,7 @@ res["AC-FA-02"] = bool(
 # commit (1.87.0 review). No git / tag not fetched -> UNMEASURED, never a silent pass.
 # POLICY: this anchor tag is re-pointed at a later release ONLY through a changelog line that
 # says so -- moving it silently retires the pin without anyone deciding to (audit 1.94.1).
+# 2.2.0: the anchor STAYS at v1.86.1. ONE readiness line moved and it is named below.
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top", "fixture-honesty-negative")
 gsh = subprocess.run(["git", "show",
                       "v1.86.1:uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"],
@@ -8218,9 +8219,30 @@ else:
             return None
         j.pop("generated", None)
         return json.dumps(j, sort_keys=True)
+    def norm_narrated(s):
+        """the ONE readiness line 2.2.0 moved, normalised on BOTH sides.
+
+        ADR-046 and ADR-047 widened the narrated-only sentence -- a ticked criterion now
+        also needs no green corpus run and no green smoke check to stay narrated-only --
+        so whole-text byte identity against v1.86.1 would prove those declared features
+        MISSING, the opposite of what this pin is for. The anchor tag therefore does NOT
+        move (see the POLICY above, and the line in CHANGELOG-2.2.0.md that records this).
+        What is exempted is the PROSE of this one named line and nothing else: the ID list
+        it carries is still compared, so a criterion that starts or stops being
+        narrated-only is still red, and every other line is still byte-compared.
+        """
+        head = "  ! narrated-only: "
+        out = []
+        for ln in s.split("\n"):
+            if ln.startswith(head):
+                ids = ln[len(head):].split(" " + chr(8212) + " ", 1)[0]
+                ln = head + ids + " <prose normalised: 2.2.0>"
+            out.append(ln)
+        return "\n".join(out)
     rc_o, o_rd = run_in_fix(old, "readiness", "--ledger", "QA-LEDGER.json")
     rc_n, n_rd = run_in_fix(ENG, "readiness", "--ledger", "QA-LEDGER.json")
-    same = (rc_o == rc_n and o_rd == n_rd and "acceptance" in o_rd)
+    same = (rc_o == rc_n and norm_narrated(o_rd) == norm_narrated(n_rd)
+            and "acceptance" in o_rd and "narrated-only: AC-24 " in norm_narrated(n_rd))
     rc_o, o_db = run_in_fix(old, "dashboard", "--json", "--ledger", "QA-LEDGER.json")
     rc_n, n_db = run_in_fix(ENG, "dashboard", "--json", "--ledger", "QA-LEDGER.json")
     same = (same and rc_o == rc_n and no_clock(o_db) is not None
@@ -10168,6 +10190,9 @@ res["AC-FR-05"] = bool(mc == [] and stale == 1)
 # rather than asserted: readiness text and top --json (minus the wall clock) must not move a
 # single byte, on the committed uscha-top fixtures and on a repo with no work tree.
 # Tag not fetched / no git -> None = UNMEASURED, never a silent pass.
+# POLICY: this anchor tag is re-pointed at a later release ONLY through a changelog line that
+# says so -- moving it silently retires the pin without anyone deciding to (audit 1.94.1).
+# 2.2.0: the anchor STAYS at v1.92.0. ONE readiness line moved and it is named below.
 gsh = subprocess.run(["git", "show",
                       "v1.92.0:uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"],
                      cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -10197,11 +10222,34 @@ else:
                 return None
         return json.dumps(j, sort_keys=True)
 
+    def norm_narrated(s):
+        """the ONE readiness line 2.2.0 moved, normalised on BOTH sides.
+
+        ADR-046 and ADR-047 widened the narrated-only sentence -- a ticked criterion now
+        also needs no green corpus run and no green smoke check to stay narrated-only --
+        so whole-text byte identity against v1.92.0 would prove those declared features
+        MISSING, the opposite of what this pin is for. The anchor tag therefore does NOT
+        move (see the POLICY above, and the line in CHANGELOG-2.2.0.md that records this).
+        What is exempted is the PROSE of this one named line and nothing else: the ID list
+        it carries is still compared, so a criterion that starts or stops being
+        narrated-only is still red, and every other line is still byte-compared.
+        """
+        head = "  ! narrated-only: "
+        out = []
+        for ln in s.split("\n"):
+            if ln.startswith(head):
+                ids = ln[len(head):].split(" " + chr(8212) + " ", 1)[0]
+                ln = head + ids + " <prose normalised: 2.2.0>"
+            out.append(ln)
+        return "\n".join(out)
+
     def pair(where, *a):
         return eng(where, *a, engine=old), eng(where, *a)
 
     o, n = pair(FIX, "readiness", "--ledger", "QA-LEDGER.json")
-    same = bool(o.returncode == n.returncode and o.stdout == n.stdout and o.stdout)
+    same = bool(o.returncode == n.returncode and o.stdout
+                and norm_narrated(o.stdout) == norm_narrated(n.stdout)
+                and "narrated-only: AC-24 " in norm_narrated(n.stdout))
     o, n = pair(FIX, "top", "--json", "--ledger", "QA-LEDGER.json")
     same = (same and o.returncode == n.returncode and no_clock(o.stdout) is not None
             and no_clock(o.stdout) == no_clock(n.stdout))
@@ -10211,7 +10259,8 @@ else:
     shutil.rmtree(os.path.join(d6, ".git"), ignore_errors=True)
     redate_source(d6)
     o, n = pair(d6, "readiness", "--ledger", "L.json")
-    same = same and o.returncode == n.returncode and o.stdout == n.stdout
+    same = (same and o.returncode == n.returncode
+            and norm_narrated(o.stdout) == norm_narrated(n.stdout))
     o, n = pair(d6, "top", "--json", "--ledger", "L.json")
     same = (same and o.returncode == n.returncode and no_clock(o.stdout) is not None
             and no_clock(o.stdout) == no_clock(n.stdout))
