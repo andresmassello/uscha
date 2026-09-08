@@ -506,12 +506,19 @@ from 1.54.0 while the kit was at 1.97.0 and nothing said a word. `/uscha-status`
 finding as one line above its readout.
 
 The comparison needs BOTH halves, so the installer ships the second one: `install` copies
-`uscha-kit/VERSION` beside the installed skills (`~/.claude/skills/VERSION`, and the equivalent
-root for `pi`, `cursor`, `copilot`, `gemini` and `cline`; the Codex plugin already carried one at
-its plugin root), and `uninstall` removes it. Without that copy an INSTALLED engine has no kit
-version to compare against and `doctor` says so — `installed-skill freshness is UNMEASURED`,
-naming the directories it read, never a silent `current`. Found by running the first-use
-walkthrough end to end; pinned by `AC-SK-07`, which installs for real.
+`uscha-kit/VERSION` beside the installed skills as **`.uscha-kit-VERSION`**
+(`~/.claude/skills/.uscha-kit-VERSION`, and the equivalent root for `pi`, `cursor`, `copilot`,
+`gemini` and `cline`; the Codex plugin carries the same file at its plugin root), and `uninstall`
+removes it. The name is namespaced on purpose: `~/.claude/skills/` is a directory the kit does not
+own, and a copy called `VERSION` would overwrite whatever else lived under that name and delete it
+on uninstall. **A foreign `VERSION` is never written and never removed** (`AC-SK-08`).
+
+Without that copy an INSTALLED engine has no kit version to compare against and `doctor` says so —
+`installed-skill freshness is UNMEASURED`, naming the directories it read, never a silent
+`current`. Two other sources answer first where they can: the kit checkout itself, reached through
+the engine's REALPATH so a `--mode link` install resolves the kit its skills point into
+(`AC-SK-09`), and `uscha-install.json`'s `version` where the copy was removed by hand. Found by
+running the first-use walkthrough end to end; pinned by `AC-SK-07`, which installs for real.
 
 ## Configure
 

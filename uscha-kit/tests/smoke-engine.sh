@@ -14096,6 +14096,9 @@ GEN = os.path.join(root, "tools", "gen-skill-blocks.py")
 INSTALLER = os.path.join(kit, "install-uscha.py")
 PREV_TAG = "v2.1.0"
 MARK = re.compile(r"uscha kit:\s*(\d+\.\d+\.\d+)")
+# The NAMESPACED name the installer writes the kit version under (2.2.0). It was the bare
+# `VERSION` until the fresh review; AC-SK-08 is why it is not any more.
+COPY_NAME = ".uscha-kit-VERSION"
 BEGIN = "<!-- uscha:orientation-block:begin -->"
 END = "<!-- uscha:orientation-block:end -->"
 TREES = (os.path.join("uscha-kit", ".claude", "skills"), os.path.join("uscha-kit", "skills"))
@@ -14331,20 +14334,27 @@ def measure():
         except ValueError:
             got = {}
         ri = (got.get("skills_installed") or [{}])[0]
-        vfile = os.path.join(sroot, "VERSION")
+        vfile = os.path.join(sroot, COPY_NAME)
         copied = os.path.isfile(vfile)
         green = bool(r_in.returncode == 0 and copied
                      and got.get("kit_version") == kit_version
                      and ri.get("status") == "current")
-        # the RED PROBE for this case: delete the copy the installer made and the SAME engine
-        # over the SAME tree must go back to UNMEASURED, naming the directories it read. A
-        # green half alone would not prove the copy is what answers the question. Guarded on
-        # `copied`, so an installer that writes NO copy reports this case as a named red
-        # instead of dying on the remove -- which is exactly how the 2.1.0 installer behaves,
-        # and a crash there would report the failure as a broken block, not a broken install.
+        # the RED PROBE for this case: delete every source this engine can reach inside the
+        # install tree and the SAME engine over the SAME tree must go back to UNMEASURED,
+        # naming the directories it read. A green half alone would not prove the copy is what
+        # answers the question. Since 2.2.0 there are TWO of them here -- the namespaced copy
+        # and `uscha-install.json`'s `version` -- and a probe that removed only the first would
+        # be silently answered by the second. (The kit checkout is not a third: this is a COPY
+        # install, so no link leads back to it.) Guarded on `copied`, so an installer that
+        # writes NO copy reports this case as a named red instead of dying on the remove --
+        # which is exactly how the 2.1.0 installer behaves, and a crash there would report the
+        # failure as a broken block, not a broken install.
         after, r_text, red = {}, None, False
         if copied:
             os.remove(vfile)
+            marker9 = os.path.join(home, ".claude", "uscha-install.json")
+            if os.path.isfile(marker9):
+                os.remove(marker9)
             r_gone = doctor(home, ["--installed", sroot, "--json"], engine=ieng)
             try:
                 after = json.loads(r_gone.stdout)
@@ -14359,6 +14369,105 @@ def measure():
         why["AC-SK-07"] = "copied=%s green=%s red=%s kit=%r->%r status=%r" % (
             copied, green, red, got.get("kit_version"), after.get("kit_version"),
             ri.get("status"))
+
+    # --- AC-SK-08: the installer owns its own prefix, and NOTHING else ----------------------
+    # The copy AC-SK-07 introduced was called `VERSION` -- a bare, shared name written into a
+    # directory the kit does not own. Whatever else lived under it in `~/.claude/skills/` was
+    # overwritten by an install and DELETED by an uninstall. So a foreign file is planted
+    # under that exact name and must come back byte-identical from both halves of the cycle.
+    # The RED PROBE is the old behaviour itself: an installer that still wrote `VERSION` would
+    # clobber it here, which is what this case exists to make impossible to reintroduce.
+    home8 = tmp()
+    sroot8 = os.path.join(home8, ".claude", "skills")
+    foreign = os.path.join(sroot8, "VERSION")
+    FOREIGN_BODY = "other 4.2.1" + NL
+    write(foreign, FOREIGN_BODY)
+    p8 = []
+    i8 = subprocess.run(
+        [sys.executable, INSTALLER, "install", "--target", "claude", "--home", home8],
+        cwd=home8, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        encoding="utf-8", errors="replace",
+        env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    if i8.returncode != 0:
+        res["AC-SK-08"] = None
+        why["AC-SK-08"] = "install did not complete (rc=%s): %s" % (
+            i8.returncode, i8.stdout[-160:])
+    else:
+        if not os.path.isfile(os.path.join(sroot8, COPY_NAME)):
+            p8.append("the installer wrote no %s beside the skills" % COPY_NAME)
+        if not os.path.isfile(foreign) or read(foreign) != FOREIGN_BODY:
+            p8.append("install overwrote the foreign VERSION: %r"
+                      % (read(foreign) if os.path.isfile(foreign) else None))
+        u8 = subprocess.run(
+            [sys.executable, INSTALLER, "uninstall", "--target", "claude", "--home", home8],
+            cwd=home8, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            encoding="utf-8", errors="replace",
+            env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        if u8.returncode != 0:
+            p8.append("uninstall rc=%s: %s" % (u8.returncode, u8.stdout[-120:]))
+        if not os.path.isfile(foreign) or read(foreign) != FOREIGN_BODY:
+            p8.append("uninstall DELETED the foreign VERSION: %r"
+                      % (read(foreign) if os.path.isfile(foreign) else None))
+        if os.path.isfile(os.path.join(sroot8, COPY_NAME)):
+            p8.append("uninstall left the kit's own %s behind" % COPY_NAME)
+        res["AC-SK-08"] = not p8
+        why["AC-SK-08"] = "; ".join(p8[:3]) or ("a foreign VERSION survives install and "
+                                                "uninstall byte-identically; the kit's own "
+                                                "copy is written and removed")
+
+    # --- AC-SK-09: a LINK install resolves the kit it points into ---------------------------
+    # Under --mode link the installed skill directory is a junction/symlink into the kit
+    # checkout. The walk-up used to start at abspath(__file__), so it climbed the AGENT's tree
+    # and could only ever find what the installer had copied there -- the kit on the other end
+    # of the link was unreachable. It starts at realpath now. Measured with the copy AND the
+    # install marker removed, so the only source left is the kit root the link points into: an
+    # abspath walk answers from the install home, or not at all.
+    home9 = tmp()
+    i9 = subprocess.run(
+        [sys.executable, INSTALLER, "install", "--target", "claude", "--home", home9,
+         "--mode", "link"],
+        cwd=home9, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        encoding="utf-8", errors="replace",
+        env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    sroot9 = os.path.join(home9, ".claude", "skills")
+    ieng9 = os.path.join(sroot9, "uscha-devloop", "qa_ledger.py")
+    if i9.returncode != 0 or not os.path.isfile(ieng9):
+        # no junction/symlink privilege on this machine -> UNMEASURED, never a silent pass
+        res["AC-SK-09"] = None
+        why["AC-SK-09"] = "link install did not complete (rc=%s): %s" % (
+            i9.returncode, i9.stdout[-160:])
+    else:
+        for leftover in (os.path.join(sroot9, COPY_NAME),
+                         os.path.join(home9, ".claude", "uscha-install.json")):
+            if os.path.isfile(leftover):
+                os.remove(leftover)
+        probe = os.path.join(tmp(), "probe.py")
+        write(probe,
+              "import importlib.util, json, sys" + NL
+              + "spec = importlib.util.spec_from_file_location('ql_probe', sys.argv[1])" + NL
+              + "m = importlib.util.module_from_spec(spec)" + NL
+              + "spec.loader.exec_module(m)" + NL
+              + "v, where = m._engine_kit_version()" + NL
+              + "print(json.dumps({'v': v, 'where': where}))" + NL)
+        r9 = subprocess.run([sys.executable, probe, ieng9], stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                            errors="replace",
+                            env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        try:
+            got9 = json.loads(r9.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            got9 = {}
+        p9 = []
+        if got9.get("v") != kit_version:
+            p9.append("the link install cannot read its kit version: %r (%s)"
+                      % (got9.get("v"), r9.stdout[-120:]))
+        where9 = got9.get("where")
+        if not isinstance(where9, str) or os.path.realpath(where9) != os.path.realpath(kit):
+            p9.append("resolved from %r, expected the kit checkout %r -- an abspath walk "
+                      "answers from the install home" % (where9, kit))
+        res["AC-SK-09"] = not p9
+        why["AC-SK-09"] = "; ".join(p9[:3]) or ("a link install with no copy and no marker "
+                                                "resolves the kit through realpath")
 
 
 try:
@@ -14375,7 +14484,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T162" in
-  OK*) PASS=$((PASS+1)); echo "  ok   installed-skill freshness (AC-SK-01..07): $T162";;
+  OK*) PASS=$((PASS+1)); echo "  ok   installed-skill freshness (AC-SK-01..09): $T162";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T162";;
 esac
 
@@ -16886,7 +16995,7 @@ FAMILIES = (
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     # AC-SK-07 installs for real; an install that cannot complete reports None, never a pass.
     (".sk-cases.json", "installed-skill-freshness", "T162",           # 2.2.0
-     _seq("AC-SK", 1, 7)),
+     _seq("AC-SK", 1, 9)),
     # AC-FA-03 (the bare form pinned byte-identical against the previous engine) reports None
     # without git or the tagged copy -> skipped, never a silent pass.
     (".fa-cases.json", "family-ids", "T140",                        # ADR-036

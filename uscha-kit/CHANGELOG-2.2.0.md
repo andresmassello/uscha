@@ -424,10 +424,11 @@ reader does — install, then `doctor` — and got `kit VERSION not readable: in
 freshness is UNMEASURED`. The installed skills carried their marker; the KIT half of the
 comparison was missing, because nothing put `uscha-kit/VERSION` anywhere an installed engine
 could reach. `install-uscha.py` now copies it beside the installed skills for the `claude`
-target and for all five Agent-Skills targets — the Codex plugin already shipped one at its
-plugin root — and removes it on uninstall; `doctor` resolves the version by walking up from
-the engine for a VERSION file, and when there is none it NAMES the directories it read instead
-of only reporting failure. `_kit_root()`, which answers a different question — which KIT tree
+target and for all five Agent-Skills targets — and at the Codex plugin root — and removes it on
+uninstall; `doctor` resolves the version by walking up from the engine, and when there is none it
+NAMES the directories it read instead of only reporting failure. The copy is called
+**`.uscha-kit-VERSION`**: see the review section at the end of this changelog for why it is not
+the bare `VERSION` it started as. `_kit_root()`, which answers a different question — which KIT tree
 is this — now requires a skills tree beside the VERSION, so the new copy cannot make `facts`
 derive `0 skills` from an install root that never held any. `AC-SK-07` installs for real and
 reads the INSTALLED engine, which is the only shape that could have caught this; its own red
@@ -962,6 +963,32 @@ written is an `override`, whoever typed it and whenever — and the readout stop
 different facts into one word: `not declared` is a project that never mentioned the knob,
 `declared false` is a human who turned the gate off. `AC-OP-09` in **T165** pins both, with the
 untouched profile as its control, and the red probe restores the old order.
+
+## The installed version file is namespaced, and a link install resolves its own kit
+
+`AC-SK-07` shipped a copy of `uscha-kit/VERSION` beside the installed skills so an INSTALLED
+engine could date them. It was written under the bare name `VERSION`, into directories the kit
+does NOT own — `~/.claude/skills/`, and the same root for `pi`, `cursor`, `copilot`, `gemini` and
+`cline`. Whatever else lived under that name was overwritten by an install and **deleted by an
+uninstall**. An installer owns the files it creates and nothing else.
+
+The copy is now **`.uscha-kit-VERSION`**. `AC-SK-08` plants a foreign
+`~/.claude/skills/VERSION` reading `other 4.2.1` and requires it back byte-identical from BOTH
+halves of the cycle; the red probe is the old name itself, which clobbers it on install and
+deletes it on uninstall.
+
+The engine reads three sources on the way up, in order: `.uscha-kit-VERSION`, then a kit root's
+own `VERSION` — read, never written — then `uscha-install.json`'s `version`, so an install whose
+copy someone removed by hand still answers instead of going UNMEASURED. And the walk now starts at
+the engine's **realpath**: under `--mode link` the installed skill directory is a junction into
+the kit checkout, and an abspath walk-up climbed the agent's tree instead, so a link install could
+never resolve the kit on the other end of its own link. `AC-SK-09` measures that with the copy and
+the marker removed, so the kit root reached through the link is the only source left; the red
+probe restores `abspath` and the case names the install home it answered from instead.
+
+`AC-SK-07`'s own red probe was widened in the same change: it deletes the marker as well as the
+copy, because a probe that removed only one of two sources would have been silently answered by
+the other.
 
 Acceptance goes 324 → 330 criteria; nothing was dropped.
 

@@ -33,6 +33,13 @@ SKILL_ROOTS = {
 }
 TARGETS = ("codex", "claude") + tuple(SKILL_ROOTS)
 HOOK_NAME = "block-approved-writes.py"
+# The kit's version, copied beside the installed skills so an INSTALLED engine can date them
+# (ADR-045). The name is NAMESPACED (2.2.0, fresh review): until this release the copy was
+# called `VERSION`, a bare shared name written into directories the kit does not own --
+# `~/.claude/skills/`, `~/.cursor/skills/` -- where an install would overwrite whatever else
+# lived under it and an uninstall would delete it. An installer owns the files it creates and
+# nothing else, and the only way to guarantee that is to claim a name nobody else would pick.
+KIT_VERSION_COPY = ".uscha-kit-VERSION"
 
 
 class InstallError(Exception):
@@ -274,7 +281,7 @@ def stage_plugin(plugin_root, mode):
         (stage / "skills").mkdir()
         for skill in SKILLS:
             copy_skill(source / skill, stage / "skills" / skill, mode)
-        shutil.copy2(KIT_ROOT / "VERSION", stage / "VERSION")
+        shutil.copy2(KIT_ROOT / "VERSION", stage / KIT_VERSION_COPY)
         shutil.copy2(KIT_ROOT / "uscha.config.json", stage / "uscha.config.json")
         return stage
     except Exception:
@@ -366,7 +373,7 @@ def install_claude(home, mode, dry_run, operations):
     data = prepared_settings(settings, hook_command(hook))  # parse and merge before writes, including dry-run
     marker_data = marker("claude", root, mode)
     operations.extend({"action": "install-skill", "path": str(root / "skills" / skill)} for skill in SKILLS)
-    operations.extend([{"action": "copy-version", "path": str(root / "skills" / "VERSION")}, {"action": "copy-hook", "path": str(hook)}, {"action": "atomic-write-json", "path": str(settings)}, {"action": "write-marker-last", "path": str(install_marker)}])
+    operations.extend([{"action": "copy-version", "path": str(root / "skills" / KIT_VERSION_COPY)}, {"action": "copy-hook", "path": str(hook)}, {"action": "atomic-write-json", "path": str(settings)}, {"action": "write-marker-last", "path": str(install_marker)}])
     if dry_run:
         return root
 
@@ -383,7 +390,7 @@ def install_claude(home, mode, dry_run, operations):
             copy_skill(source / skill, staged / "skills" / skill, mode)
         (staged / "hooks").mkdir()
         shutil.copy2(KIT_ROOT / "hooks" / HOOK_NAME, staged / "hooks" / HOOK_NAME)
-        shutil.copy2(KIT_ROOT / "VERSION", staged / "skills" / "VERSION")
+        shutil.copy2(KIT_ROOT / "VERSION", staged / "skills" / KIT_VERSION_COPY)
         atomic_json(staged / "settings.json", data)
         atomic_json(staged / "uscha-install.json", marker_data)
 
@@ -391,7 +398,8 @@ def install_claude(home, mode, dry_run, operations):
         entries = [(skills_root / skill, staged / "skills" / skill, backups / "skills" / skill)
                    for skill in SKILLS]
         entries.extend([
-            (skills_root / "VERSION", staged / "skills" / "VERSION", backups / "skills" / "VERSION"),
+            (skills_root / KIT_VERSION_COPY, staged / "skills" / KIT_VERSION_COPY,
+             backups / "skills" / KIT_VERSION_COPY),
             (hook, staged / "hooks" / HOOK_NAME, backups / "hooks" / HOOK_NAME),
             (settings, staged / "settings.json", backups / "settings.json"),
             (install_marker, staged / "uscha-install.json", backups / "uscha-install.json"),
@@ -458,7 +466,7 @@ def install_skills_only(target, home, mode, dry_run, operations):
     install_marker = root / "uscha-install.json"
     marker_data = marker(target, root, mode)
     operations.extend({"action": "install-skill", "path": str(root / skill)} for skill in SKILLS)
-    operations.append({"action": "copy-version", "path": str(root / "VERSION")})
+    operations.append({"action": "copy-version", "path": str(root / KIT_VERSION_COPY)})
     operations.append({"action": "write-marker-last", "path": str(install_marker)})
     if dry_run:
         return root
@@ -474,11 +482,12 @@ def install_skills_only(target, home, mode, dry_run, operations):
         backups.mkdir()
         for skill in SKILLS:
             copy_skill(source / skill, staged / skill, mode)
-        shutil.copy2(KIT_ROOT / "VERSION", staged / "VERSION")
+        shutil.copy2(KIT_ROOT / "VERSION", staged / KIT_VERSION_COPY)
         atomic_json(staged / "uscha-install.json", marker_data)
 
         entries = [(root / skill, staged / skill, backups / skill) for skill in SKILLS]
-        entries.append((root / "VERSION", staged / "VERSION", backups / "VERSION"))
+        entries.append((root / KIT_VERSION_COPY, staged / KIT_VERSION_COPY,
+                        backups / KIT_VERSION_COPY))
         entries.append((install_marker, staged / "uscha-install.json", backups / "uscha-install.json"))
         # The loops below bind PATHS. They must NOT be named `target`: a Python for-loop has no
         # scope of its own, so that would permanently rebind this function's `target` argument
@@ -1061,13 +1070,13 @@ def uninstall_target(target, home, dry_run, operations, force):
     elif target in SKILL_ROOTS:
         for skill in SKILLS:
             drop(root / skill, "uscha skill")
-        drop(root / "VERSION", "kit VERSION beside the installed skills")
+        drop(root / KIT_VERSION_COPY, "kit version beside the installed skills")
         drop(marker_path, "install marker")
     else:
         skills_root = root / "skills"
         for skill in SKILLS:
             drop(skills_root / skill, "uscha skill")
-        drop(skills_root / "VERSION", "kit VERSION beside the installed skills")
+        drop(skills_root / KIT_VERSION_COPY, "kit version beside the installed skills")
         drop(root / "hooks" / HOOK_NAME, "INV-GOLDEN-01 hook")
         drop(marker_path, "install marker")
         settings_path = root / "settings.json"

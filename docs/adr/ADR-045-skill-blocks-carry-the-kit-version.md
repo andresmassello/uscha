@@ -131,10 +131,19 @@ T162, through the `.sk-cases.json` sidecar:
   `doctor --json` has no `skills_installed` key. `None` = UNMEASURED without git.
 - **AC-SK-07** — a REAL install: `install-uscha.py install --target claude --home <tmp>` and then
   the INSTALLED engine's `doctor --json`, which must report `kit_version` and `current`. Removing
-  the copied `VERSION` must put the same engine back to `null` / `unknown` with the directories it
-  read named in the fix line. Amended in the same release: the planted fixtures above all passed
-  while a real install reported UNMEASURED, because nothing put `uscha-kit/VERSION` where an
-  installed engine could reach it (found by running the first-use guide end to end).
+  every source inside the install tree — the copied version file and `uscha-install.json` — must
+  put the same engine back to `null` / `unknown` with the directories it read named in the fix
+  line. Amended in the same release: the planted fixtures above all passed while a real install
+  reported UNMEASURED, because nothing put `uscha-kit/VERSION` where an installed engine could
+  reach it (found by running the first-use guide end to end).
+- **AC-SK-08** — the copy is written as **`.uscha-kit-VERSION`**, not as the bare `VERSION`: a
+  pre-existing foreign `~/.claude/skills/VERSION` survives install AND uninstall byte-identically.
+  The installer owns the files it creates and nothing else, and the only way to guarantee that in
+  a directory the kit does not own is to claim a name nobody else would pick.
+- **AC-SK-09** — a `--mode link` install resolves the kit it points INTO: with the copy and the
+  install marker removed, the installed engine still answers with the kit checkout's version,
+  because the walk-up starts at the engine's REALPATH. An abspath walk climbs the agent's tree and
+  can only ever find what the installer put there.
 
 The release wiring is measured where a real release runs: **AC-RL-03** (T151) asserts that commit X
 carries the re-rendered `SKILL.md` pair alongside the six surfaces, stamped with the new version.

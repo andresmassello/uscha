@@ -8463,6 +8463,10 @@ def _render_lang_md(r, has_js=False):
 # --------------------------------------------------------------------------- #
 
 FACTS_FILE = "SYSTEM-FACTS.json"
+# The NAMESPACED name `install-uscha.py` writes the kit's version under, beside the installed
+# skills (2.2.0). It is not `VERSION`: that bare name is shared with whatever else the agent's
+# skills directory holds, and an installer that writes it owns a file it did not create.
+KIT_VERSION_COPY = ".uscha-kit-VERSION"
 
 
 def _kit_root():
@@ -8478,8 +8482,13 @@ def _kit_root():
     skills so `doctor` could date them: that root carries a version and no kit, and answering
     it here would make `facts` derive `0 skills` from a directory that never held any --
     a manufactured fact, which is worse than the honest refusal this returns instead.
-    An engine that only needs the VERSION asks _engine_kit_version()."""
-    cur = os.path.dirname(os.path.abspath(__file__))
+    An engine that only needs the VERSION asks _engine_kit_version().
+
+    The walk starts at the engine's REALPATH: a `--mode link` install puts a link to the kit's
+    skill directory under the agent's skills root, and an abspath walk-up from there climbs the
+    agent's tree instead of the checkout the link points into (fresh review, 2.2.0). Same lesson
+    the Windows 8.3 gotcha teaches: resolve before you compare, resolve before you walk."""
+    cur = os.path.dirname(os.path.realpath(__file__))
     for _ in range(6):
         if (os.path.isfile(os.path.join(cur, "VERSION"))
                 and (os.path.isdir(os.path.join(cur, ".claude", "skills"))
@@ -8497,20 +8506,45 @@ def _engine_kit_version():
 
     Which kit an installed skill came from is a different question from which kit tree this
     engine sits in, and an INSTALLED engine has no kit tree at all: `install-uscha.py` copies
-    `uscha-kit/VERSION` beside the installed skills precisely so the question stays answerable
-    there. So this walk wants the VERSION file and nothing else -- from a checkout it lands on
-    the kit root like _kit_root() does, and from an install it lands on the install root.
+    the kit's version beside the installed skills precisely so the question stays answerable
+    there -- from a checkout this walk lands on the kit root like _kit_root() does, and from an
+    install it lands on the install root.
 
-    Never guesses: with no VERSION anywhere it returns the directories it READ, so the report
+    THREE sources, in this order at every level (2.2.0, fresh review):
+
+    1. `.uscha-kit-VERSION` -- the NAMESPACED copy the installer writes. The copy used to be
+       called `VERSION`, a bare shared name dropped into directories the kit does not own
+       (`~/.claude/skills/`, `~/.cursor/skills/`): whatever else lived under that name was
+       overwritten by an install and deleted by an uninstall. The kit owns its prefix and
+       nothing else.
+    2. `VERSION` -- the KIT ROOT's own file, which is the checkout case and is never written by
+       an install any more. A foreign file under that name is read, not written: reading is what
+       this walk is for, and a wrong version is reported as a version, never as damage.
+    3. `uscha-install.json`'s `version` -- the install marker, already on the walk, so an
+       install whose copy was removed by hand still answers instead of going UNMEASURED.
+
+    The walk starts at the engine's REALPATH: under `--mode link` the installed skill directory
+    is a link into the kit checkout, and an abspath walk-up climbs the agent's tree rather than
+    the kit's -- so a link install could not resolve its own kit without the copy.
+
+    Never guesses: with no version anywhere it returns the directories it READ, so the report
     can say where it looked instead of only that it failed."""
-    cur = os.path.dirname(os.path.abspath(__file__))
+    cur = os.path.dirname(os.path.realpath(__file__))
     looked = []
     for _ in range(6):
         looked.append(cur)
+        for name in (KIT_VERSION_COPY, "VERSION"):
+            try:
+                with open(os.path.join(cur, name), encoding="utf-8") as fh:
+                    return fh.read().strip().split()[-1], cur
+            except (OSError, IndexError):
+                pass
         try:
-            with open(os.path.join(cur, "VERSION"), encoding="utf-8") as fh:
-                return fh.read().strip().split()[-1], cur
-        except (OSError, IndexError):
+            with open(os.path.join(cur, "uscha-install.json"), encoding="utf-8") as fh:
+                declared = (json.load(fh) or {}).get("version")
+            if isinstance(declared, str) and declared.strip():
+                return declared.strip().split()[-1], cur
+        except (OSError, ValueError, AttributeError):
             pass
         nxt = os.path.dirname(cur)
         if nxt == cur:
@@ -14137,8 +14171,9 @@ def cmd_doctor(args):
         ok("skills not installed for: " + ", ".join(t for t, _ in absent),
            "not an error -- the kit installs per agent, one target at a time")
     if kit_version is None:
-        warn("kit VERSION not readable: installed-skill freshness is UNMEASURED",
-             "the comparison needs a VERSION file at or above the engine; looked in: "
+        warn("kit version not readable: installed-skill freshness is UNMEASURED",
+             "the comparison needs a `%s`, a `VERSION` or an `uscha-install.json` at or "
+             "above the engine; looked in: " % KIT_VERSION_COPY
              + ", ".join(version_src or []) + " -- re-install with "
              "`python install-uscha.py install` (2.2.0 and later copy it beside the "
              "installed skills)")
