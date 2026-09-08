@@ -972,6 +972,240 @@
       "note": "human verdict given interactively in session 2026-08-18",
       "entry": "ledger-lite",
       "dir": "c-sonnet"
+    },
+    {
+      "obs_id": "OBS-050d6c3ac91e",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:14+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-35839f9c09e3",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:14+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-5378a708c0a8",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:14+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-5d70a52ad9cd",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:15+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-b0ea047d5931",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:15+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-62af11eea7f4",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:15+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-1bf0f482ac66",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:15+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-802a10b04100",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:16+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-a7753471ce06",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:16+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-23f7bc06353e",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:16+00:00",
+      "note": "human verdict given interactively in session 2026-09-04; diff absent from the read-only executable list (oracle: allow); the interpreter-as-reader boundary is tightened by all four compilers",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-30fe18ec2200",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:16+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-e2bc7bb07294",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:16+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-f2e01ca252d6",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:17+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "c-codex"
+    },
+    {
+      "obs_id": "OBS-e32206817ee8",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:17+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-374c4a1ca4cc",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:17+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-0ea683a68e1b",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:18+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-1ee40b65293a",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:18+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-fa4569fa4623",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:18+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-974c6a62a538",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:18+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-30defeb81ef5",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:19+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-5890141a96c4",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:19+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-f753a64c91f0",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:19+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-26b105772dfe",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:19+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-c02191377bd1",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:19+00:00",
+      "note": "human verdict given interactively in session 2026-09-04; diff absent from the read-only executable list (oracle: allow); the interpreter-as-reader boundary is tightened by all four compilers",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-791d8a7222b2",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:20+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
+    },
+    {
+      "obs_id": "OBS-f6a97f105874",
+      "verdict": "preserve",
+      "human": "Andres Massello",
+      "at": "2026-09-04T15:48:20+00:00",
+      "note": "human verdict given interactively in session 2026-09-04",
+      "entry": "guard",
+      "dir": "r2/c-codex"
     }
   ]
 }
