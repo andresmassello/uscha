@@ -13544,7 +13544,10 @@ def measure():
         "# ACCEPTANCE", "",
         "- [ ] AC-30 - when x then y. (origin: agent) later (origin: agent, confirmed: 2026-01-05)",
         "- [ ] AC-31 - when x then y. <!-- (origin: agent) -->",
-        "", "```", "never closed",
+        # the fence is BUILT, never written literally: three backticks inside a
+        # $( ... <<PY ... PY ) block leave bash 3.2 hunting for a closing one to the end
+        # of the file (CLAUDE.md, Known gotchas) -- invisible outside the macOS cell.
+        "", chr(96) * 3, "never closed",
         "- [ ] AC-32 - when x then y. (origin: agent)", ""])
     d = project(marked=False, handoff=False)
     write(os.path.join(d, "ACCEPTANCE.md"), acc)  # the ADR under docs/ stays marker-free
