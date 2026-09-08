@@ -18,7 +18,7 @@ Commons Attribution 4.0 International (CC BY 4.0) license.}\\
 \small \texttt{info@uscha.dev} $\cdot$ \texttt{github.com/andresmassello}
 $\cdot$ \texttt{linkedin.com/in/amassello}\\
 \small DOI: \url{https://doi.org/10.5281/zenodo.21228014}}
-\date{July 2026 (revised August 2026)}
+\date{July 2026 (revised September 2026)}
 
 \begin{document}
 \maketitle
@@ -60,8 +60,8 @@ ten shipped improvements; and sustained self-application, in which fresh-context
 reviews repeatedly caught real defects before merge across the release series. We report design
 validation, self-application, and one bounded controlled evaluation --- the
 Diamond program, a blind, oracle-certified benchmark of implementation
-replaceability across twelve archetypes, compiled by three models of a single
-vendor and qualified by a measured noise floor; a
+replaceability across twelve archetypes, compiled by four models across two
+vendors and qualified by a measured noise floor; a
 controlled evaluation on external operators remains future work.
 \end{abstract}
 
@@ -132,10 +132,11 @@ quality). Computational checks are allowed to block progress mechanically.
 Inferential checks may only advise, unless a human explicitly declares them
 gating. A natural-language heuristic that blocks produces false positives, gets
 disabled, and dies; keeping guesses advisory is what keeps them alive.
-\item[Measured beats narrated.] The evidence ledger records two tiers: measured
-records parsed from real artifacts (test reports, coverage files, linter
-output) and self-reported agent counts. A measured red always overrides a
-narrated green. Acceptance criteria close per criterion only when a green,
+\item[Measured beats narrated.] The evidence ledger records two tiers: records
+that are \emph{measured} (parsed from a real artifact --- a test report, a
+coverage file, linter output) and records that are \emph{narrated} (an agent's
+own account of what it did, believed only because it says so). A measured red
+always overrides a narrated green. Acceptance criteria close per criterion only when a green,
 name-tagged test case exists in the ingested reports --- a checked checkbox
 without a test is recorded as \emph{narrated-only} and does not close.
 \item[The human at three fixed points.] The human approves the \emph{shape}
@@ -149,11 +150,12 @@ contract; who produced the JSON --- one vendor's agent, another's, or a human
 --- is irrelevant to the ledger.
 \end{description}
 
-This paper describes the methodology (\S\ref{sec:method}), its evidence engine
-(\S\ref{sec:engine}), the reference implementation (\S\ref{sec:impl}), and the
-design-validation evidence accumulated so far (\S\ref{sec:validation}),
-followed by limitations (\S\ref{sec:limitations}) and future work
-(\S\ref{sec:future}).
+The rest of the paper places the approach against related work
+(\S\ref{sec:related}), then describes the methodology (\S\ref{sec:method}), its
+evidence engine (\S\ref{sec:engine}), the reference implementation
+(\S\ref{sec:impl}), and the design-validation evidence accumulated so far
+(\S\ref{sec:validation}), followed by limitations (\S\ref{sec:limitations}) and
+future work (\S\ref{sec:future}).
 
 \section{Related Work}\label{sec:related}
 
@@ -190,8 +192,8 @@ downstream --- implementation, testing, maintenance --- while the upstream
 phases (requirements, specification, design) remain the least mature, and it
 identifies output verifiability as the primary enabler of adoption.
 Uscha is a direct wager on that gap: it invests its heaviest machinery
-precisely upstream, where the review reports support is thinnest, and makes
-verifiability --- not autonomy --- the axis it optimizes. The framing is
+precisely upstream, where that review reports agentic support to be thinnest, and
+makes verifiability --- not autonomy --- the axis it optimizes. The framing is
 deliberately narrow: the review establishes that the upstream,
 verifiability-first niche is real and underserved; it does not, and cannot,
 measure Uscha itself, whose own evidence remains design validation and
@@ -247,17 +249,16 @@ checklists, acceptance file, risks, and handoff. Figure~\ref{fig:hierarchy}
 shows how the package's artifacts feed the evidence engine and how the engine
 verifies the result across six layers of truth.
 
-% TODO fig2: regenerate toolbar band, 9 skills
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{fig2-spec-hierarchy.png}
-\caption{The specification package (left: what gets done) and the six layers
-of truth (right: how it is verified), joined by the evidence engine. The
-bottom band states the four commitments the diagram encodes: evidence produced
-by execution rather than asserted by the author; merge and release decided by
-a person; convergence instead of perfection; and legacy awareness --- freeze
-the old debt, block the new. The implementation ships nine skills; the
-figure's toolbar band predates two of them.}
+\caption{The five steps of the flow (left: what gets done) and the six
+layers of truth (right: how each result is verified), joined by the evidence
+engine. The band beneath states the four commitments the diagram encodes:
+evidence produced by execution rather than asserted by the author; merge and
+release decided by a person; convergence instead of perfection; and legacy
+awareness --- freeze the old debt, block the new. The strip at the foot names
+the runtime surfaces the implementation binds to.}
 \label{fig:hierarchy}
 \end{figure}
 
@@ -290,18 +291,19 @@ specification from judged candidates only.
 \subsection{The development loop}
 
 The loop consumes the specification package and proceeds through phases, each
-guarded: plan (constitution first; no acceptance criteria, no build); a
-coverage gate that triggers boundary characterization tests when the safety
-net is insufficient; build under decision-record discipline (the agent
-consults records before touching governed areas and must propose --- never
-silently take --- new architectural decisions); a simplicity gate scoring the
-diff against declared budgets, with test code excluded so that writing tests
-is never penalized; a severity-gated review loop that \emph{converges instead
-of chasing zero} (findings below the declared gate are deferred, not fixed
-forever); an integration pass across repositories; late test-writing against
-stabilized code; an optional rebuild test measuring specification
-completeness; and a pull request opened only when the derived workflow state
-says the facts allow it. The loop stops at merge: merging is human.
+guarded. It opens with planning (constitution first; no acceptance criteria, no
+build) and a coverage gate that triggers boundary characterization tests when the
+safety net is insufficient. The build itself runs under decision-record
+discipline: the agent consults the records before touching governed areas and
+must propose --- never silently take --- new architectural decisions, while a
+simplicity gate scores the diff against declared budgets, with test code excluded
+so that writing tests is never penalized. Verification is a severity-gated review
+loop that \emph{converges instead of chasing zero} (findings below the declared
+gate are deferred, not fixed forever), followed by an integration pass across
+repositories, late test-writing against stabilized code, and an optional rebuild
+test measuring specification completeness. A pull request opens only when the
+derived workflow state says the facts allow it. The loop stops at merge: merging
+is human.
 
 An escalation contract enumerates the situations in which the agent must stop
 and ask --- iteration cap, oscillating findings, a previously-passing test now
@@ -416,7 +418,7 @@ break the contract, and unevaluated criteria count as failed (unevaluated is
 not approved). The advisory layer also carries \emph{reuse detection}: a
 deterministic Type-1/Type-2 clone check of the diff against the existing
 repository. This targets the duplication that a diff-local simplicity gate is
-blind to by construction --- the muda most characteristic of generated
+blind to by construction --- the form of waste most characteristic of generated
 code~\cite{poppendieck2006lean,gitclear2026gap}. It too reports a fact (a
 byte-identical window already exists at \texttt{file:line}) while leaving the
 verdict ``wasteful'' advisory, because a normalized-line proxy has honest false
@@ -469,10 +471,13 @@ requirement or a kit default.}
 \section{Reference Implementation}\label{sec:impl}
 
 The reference implementation packages the methodology as nine agent skills
-(the two fronts, a precision interview for known features, the loop
-orchestrator, golden capture, a two-audience system-documentation generator,
-the rubric grader adapter, and two read-only status views --- a dashboard and
-an in-chat readout) plus the engine (56 subcommands). Three
+--- the two specification fronts (\texttt{discovery}, \texttt{reverse-discovery}),
+a Socratic interview for an already-scoped feature (\texttt{adr-refine}), the
+loop orchestrator (\texttt{devloop}), golden capture (\texttt{characterize}), a
+two-audience documentation generator (\texttt{sysdoc}), the rubric grader adapter
+(\texttt{rubric}), and two read-only status views, a dashboard
+(\texttt{mirador}) and an in-chat readout (\texttt{status}) --- plus the engine
+(56 subcommands). Three
 properties matter for portability. First, the skills are markdown instruction
 files readable by any instruction-following agent; the engine is invoked
 identically from any of them. Second, every LLM-judgment interface is a
@@ -519,12 +524,12 @@ any instruction-following agent; the engine is invoked identically from each.}
 \end{table}
 
 The implementation carries its process in executable form. A smoke suite of
-440 checks (at kit 1.96.0) exercises the implementation --- the engine against
+457 checks (at kit 2.2.0) exercises the implementation --- the engine against
 synthetic ledgers, plus the installer and the distribution router --- including,
 deliberately, the agnosticism claim: the rubric-layer tests fill the grader's
 JSON by hand, with no model in the loop. The same run measures the
 implementation's own acceptance criteria the way the methodology prescribes for
-any project: 227 of 227 closed on green, name-tagged test evidence at that
+any project: 329 of 330 closed on green, name-tagged test evidence at that
 version. The engine also reports a passive Lean
 process metric --- first-time yield, the fraction of repositories that cleared
 QA on the first cycle with no rework or escalation --- derived from ledger facts
@@ -572,7 +577,7 @@ definition; only the numbers are opinion, and they now state their
 provenance), and the workflow state machine is derived rather than declared.
 
 \textbf{Self-application.} The implementation is developed under its own
-process. Across the self-application arc (versions 1.10 through 1.96), each engine
+process. Across the self-application arc (versions 1.10 through 2.2), each engine
 change carried smoke checks in the same commit, a fresh-context review before
 merge, and a version consistency check across every release artifact, enforced
 by the suite. These reviews repeatedly caught real defects prior to
@@ -590,47 +595,94 @@ consistency of this defect stream as evidence for the methodology's core
 premise: independent, fresh-context checking against recorded criteria
 catches what the authoring context cannot see.
 
-\textbf{The Diamond program (versions 1.72--1.90): a bounded controlled evaluation.}
-Between July and August 2026 the methodology's central claim --- that a canonical
-specification package is the source and code is a build artifact --- was put under
-its own instruments. A \emph{Diamond Bench} of twelve bounded archetypes (eleven
-Python, one JavaScript, one multi-module with a decided seam) was compiled blind by
-three LLM compilers --- Claude Haiku, Sonnet and Opus: three models of a single
-vendor, so cross-vendor compilation is not yet measured --- from the canonical
-package alone and certified by a
-\emph{withheld oracle} authored before any compilation and shown discriminating
-against a degenerate stub and per-rule wrong implementations: nine archetypes PASS
-(three oracle-green, structurally distinct implementations of the same system),
-three PARTIAL. The oracle caught a convergent aliasing defect two compilers shared.
-A \emph{controlled-language arm} compared free-prose against EARS+STE authoring of
-the same package under the same oracle, deconfounded by same-generation runs of both
-arms, across five archetypes: REDUCED in one, IMPROVED in one, NO EFFECT in two,
-WORSE in one --- dense archetypes helped behaviourally, simple ones did not, and one
-rewrite sharpened a latent ambiguity into an over-commitment the oracle rejected. The
-single REDUCED entry (the guard) carries its own qualifiers: it is classified NOISY at
-an intra/inter ratio of 0.642, and the same comparison reads MIXED under Python 3.8, so
-by the program's own doctrine structural variance alone no longer carries a claim.
-A \emph{noise-floor} run of second blind runs of the same models read NOISY, over the
-ten of twelve archetypes that have one (ledger-lite and rate-limiter have none) and at
-$n=2$ per model --- the minimum that yields a floor at all, and a floor rather than a
-distribution: SIGNAL in one entry, NOISY in five, and outright NOISE in four
-(\texttt{parser} 1.13, \texttt{state-machine} 1.12, \texttt{worker} 1.48,
-\texttt{scheduler} 1.78), for a mean intra/inter distance ratio of 0.98, while
-behaviour is stable (26/30 reruns fail the
-same oracle cases) --- so the program's variance claims now carry a per-entry
-qualifier and its controlled-language conclusion is stated behaviour-first, with one
-earlier variance narrative retracted. A \emph{round-trip} instrument measures how much
-of the human-authored intermediate representation the mechanical reverse organs can
-anchor in each compiled artifact: 0.828 under Python 3.13 and 0.827 under 3.8, counting
-static and behavioural footing. It
-read 0.062 with the behavioural dimension unmeasured everywhere while no oracle tagged
-its cases per acceptance criterion; the twelve bench oracles were then curated case by
-case by a human --- 201 of the 216 cases tagged, the remaining 15 owned by no single
-criterion, and three tags adjusted by hand --- leaving payloads and expectations
-untouched, and the dimension became
-measurable --- so the reverse half of the diamond now anchors names \emph{and}
-behaviour, and both numbers are published with the reason the second differs from the
-first. Every one of these numbers is regenerated by the engine from committed fixtures
+\textbf{The Diamond program (versions 1.72--1.99): a bounded controlled evaluation.}
+An \emph{archetype}, in this program, is a system specified completely enough to be
+built from its specification alone --- a token-bucket rate limiter, a request router,
+a two-module ledger --- and small enough that a withheld oracle can decide whether a
+given build is the same system. Between July and August 2026 the methodology's central
+claim --- that a canonical specification package is the source and code is a build
+artifact --- was put under its own instruments. A \emph{Diamond Bench} of twelve such
+archetypes (eleven in Python, one of them a two-module system with a decided seam, and
+one in JavaScript) was compiled \emph{blind} --- the compiling model never sees the
+oracle, and its working directory holds nothing but what the prompt puts there ---
+from the canonical package alone, and certified by a \emph{withheld oracle} authored
+before any compilation and shown discriminating against a degenerate stub and per-rule
+wrong implementations.
+
+The first arm ran three compilers of a single vendor (Claude Haiku, Sonnet and Opus):
+nine of the twelve archetypes reached PASS and three were PARTIAL, and the oracle
+caught a convergent aliasing defect two compilers shared. That arm left open the
+question a reader is entitled to ask --- is regeneration fidelity a property of the
+\emph{method}, or of one model family? --- and version 1.99.0 answered it the only way
+a single arm can, as a falsification test the claim survived (ADR-042). A fourth
+compiler, from a second vendor (the OpenAI Codex command-line interface driving
+\texttt{gpt-5.5}), compiled all twelve archetypes blind under the same protocol and
+the same withheld oracles, plus second runs of the ten archetypes that have one: 22
+dispatches, all 22 accepted by the engine's own compilation validator, none
+re-dispatched to obtain a greener result. Two mechanical deviations are recorded
+rather than smoothed over. The second vendor's tool carries a large system prompt of
+its own that the first arm's compilers never had. And because the machine's
+administrator policy forbids that tool's exec-mode file writes, the model returned its
+source inside the validated JSON and the harness wrote the bytes --- defeating an
+administrator's security control to make a benchmark run is not a method. The second
+deviation removes nothing the bench measures: the number of shell commands executed is
+0 across all 22 dispatches, so neither arm ever ran its own code.
+
+The measured result is 8 PASS, 4 PARTIAL: 8 of 12 archetypes regenerate the
+system under the withheld oracle, where the single-vendor arm had read nine and
+three. Exactly one verdict moved, and the move is
+the point. On \texttt{transformer} the canonical specification says each input record
+has ``exactly'' three named fields and then never lists an extra field among the error
+cases; the withheld oracle resolved that silence one way, the new compiler resolved it
+the other, \emph{declared that reading in its own unresolved-intent record before the
+oracle judged it}, and reproduced it in a second blind run. The defect is an
+under-specification in the canonical package that three related models had resolved
+identically --- exactly the blind spot a single-vendor bench cannot see --- and it
+corroborates, from the opposite direction, what the controlled-language arm had
+recorded about the same sentence sixteen releases earlier.
+
+A \emph{controlled-language arm} compared free-prose authoring of the same package
+against EARS+STE authoring --- the Easy Approach to Requirements Syntax, plus
+Simplified Technical English --- under the same oracle, deconfounded by
+same-generation runs of both arms, across five archetypes: REDUCED in one, IMPROVED in
+one, NO EFFECT in two, WORSE in one --- dense archetypes helped behaviourally, simple
+ones did not, and one rewrite sharpened a latent ambiguity into an over-commitment the
+oracle rejected. The single REDUCED entry (the guard) carries its own qualifiers: it is
+classified NOISY at an intra/inter ratio of 0.642, and the same comparison reads MIXED
+under Python 3.8, so by the program's own doctrine structural variance alone no longer
+carries a claim.
+
+A \emph{noise-floor} run --- second blind runs of the same models, over the ten of
+twelve archetypes that have one (\texttt{ledger-lite} and \texttt{rate-limiter} have
+none) and at $n=2$ per model, the minimum that yields a floor at all, and a floor
+rather than a distribution --- reads NOISY overall: SIGNAL in one entry, NOISY in
+seven, and outright NOISE in two (\texttt{scheduler} 1.20, \texttt{worker} 1.10), for
+a mean intra/inter distance ratio of 0.815, while behaviour is stable (36 of 40 reruns
+fail the same oracle cases). The cross-vendor arm moved two entries out of NOISE
+(\texttt{parser} 1.13 to 0.73, \texttt{state-machine} 1.12 to 0.81) for a mechanical
+reason worth stating: a compiler that is not a relative of the other three widens the
+between-compiler spread more than it raises the same-model floor. Both land within
+about 0.3 of the class threshold, so the classes are pinned by the suite and the ratios
+are not. The program's variance claims therefore carry a per-entry qualifier, its
+controlled-language conclusion is stated behaviour-first, and one earlier variance
+narrative was retracted.
+
+A \emph{round-trip} instrument measures how much of the human-authored intermediate
+representation the mechanical reverse organs can anchor in each compiled artifact,
+counting static and behavioural footing: mean recoverability 0.815, the same value
+under Python 3.8 and 3.13. The aggregate is published as a range rather than a float
+because, before the fourth compiler joined, the per-entry means summed to a value whose
+twelfth part fell exactly on a rounding boundary and printed 0.828 under one
+interpreter against 0.827 under the other. The instrument's first release read 0.062,
+with the behavioural dimension unmeasured in every entry, because no oracle case in the
+bench was tagged with the acceptance criterion it certifies. Closing that gap was a
+curation, not a re-measurement: a human tagged the twelve withheld oracles case by case
+--- 201 of the 216 cases tagged, the remaining 15 owned by no single criterion, three
+tags adjusted by hand --- leaving payloads and expectations untouched. What changed is
+what the instrument can attribute; what the compiled artifacts do did not move. The
+reverse half of the diamond now anchors names \emph{and} behaviour.
+
+Every one of these numbers is regenerated by the engine from committed fixtures
 and pinned by the suite; most releases passed an independent blind review before they
 shipped, with two exceptions that say so in their own changelogs --- 1.74.0 and 1.75.0
 were reviewed inline by the author, and the independent review later run on 1.74.0
@@ -639,12 +691,65 @@ caught real defects in most releases --- each catch is recorded in that release'
 changelog --- including two
 that changed how a result was stated (a spec found self-contradictory, a
 false-precision ratio). Human curation of the machine-generated code --- one verdict
-per observation, 108 across three rounds covering all twelve archetypes --- found eight
-defects the oracles had passed; all 108 verdicts were recorded by a single curator (the
-author), and their coverage per archetype is uneven (17 on the guard, 2 on the state
-machine).
+per observation, and no observation promoted without one --- is complete as of
+2026-09-08: 221 verdicts over all twelve archetypes and all four compilers, 213
+\texttt{preserve} and 8 \texttt{fix}, none left unjudged, the eight \texttt{fix}
+verdicts naming defects the oracles had passed. All 221 were recorded by a single
+curator (the author), and their coverage per archetype is uneven (43 on the guard, 5 on
+the state machine).
 This is a controlled evaluation of the artifact-level claim; it is not the
 operator-level study below.
+
+\textbf{The release ritual under its own instruments (versions 1.96--2.2, 2026).}
+After the Diamond program the same discipline was turned on the process that ships the
+implementation, and each of the changes below began as a defect that process found in
+itself. \emph{The ritual became a program.} The release procedure had been prose a
+maintainer re-read; since 1.96.0 it is a script (ADR-041) that performs the steps and
+refuses, naming which of eight invariants it broke --- among them that the version
+surfaces move together, that the suite runs on the code commit and a non-zero exit is a
+refusal rather than a note, that the evidence commit carries evidence and nothing else,
+and that the tag is created after the push, so a red continuous-integration run is a
+wait and never a publish. The same decision retired a wall clock: whether the project's
+own ledger is fresh is now decided by version-control ancestry --- was the ledger
+recorded in, or after, the commit that last changed the engine? --- which deleted a
+step whose only purpose had been to keep a timestamp ahead of a commit. Roughly half of
+the readiness history since August 2026 had been that step, plotting the ritual as if
+it were the product.
+
+\emph{Published claims became a gate.} Version 1.97.0 derived the counts a document may
+claim --- version, subcommand count, skill count --- from the tree itself, and gated one
+list of published files against them, rewriting a stale claim in place and failing on
+one it does not recognise. Version 2.2.0 extended the derivation to the benchmark
+headline, after the gate was caught missing it: the project's own home page went on
+claiming nine of the twelve archetypes through nine releases after the cross-vendor arm
+moved one verdict, because the number sat in one markup element and the noun that gives
+it meaning in the next, and because no derived fact existed to compare it against. Both halves of
+that defect were repaired, and a red probe against the previous engine ships beside the
+check.
+
+\emph{Two shipped defaults were found never to have taken effect.} Version 2.0.0
+measured that the risk presets --- which exist to make a trivial change run one review
+and a high-risk change run three --- had never modulated anything in a repository the
+implementation itself had set up, because the installer copied the reference
+configuration, so every default arrived as an explicit declaration and outranked the
+preset by the precedence rule's own terms. The installer now generates a minimal
+configuration that declares no knob a preset owns. Version 2.1.0 (ADR-043) found the
+simplicity gate stopping loops on a budget nobody had adopted: a six-line diff scored
+OVERBUILT because the gate's indentation proxy read one wrapped call argument as nesting
+depth nine. That gate now advises unless the project declares a numeric budget
+\emph{and} asks for gating --- this paper's own rule, guesses advise, applied to a check
+that had quietly crossed into blocking.
+
+\emph{Two field retrospectives added evidence classes.} Version 2.2.0 carried, from two
+projects using the method in the field, an origin marker recording \emph{who} decided a
+specification item, so that an item the agent introduced and an item the human chose are
+no longer the same sentence in the same file (ADR-044); a corpus gate that scores a
+command against a body of real inputs (ADR-046); ingestion of a project's own smoke run
+as measured evidence rather than a prose checklist (ADR-047); and an operability check
+reading four facts out of the tree --- a pipeline running the repository's configured
+test command, a workflow publishing a release asset, a runbook naming start,
+configuration, rollback and smoke, and a declared seed command whose script exists
+(ADR-048).
 
 \section{Limitations and Threats to Validity}\label{sec:limitations}
 
@@ -659,11 +764,13 @@ instrument now states.
 \textbf{Single-operator bias.} Self-application shares authorship context;
 although reviews run in fresh contexts, they share the model family and the
 author's configuration. The same bias reaches the Diamond program's human
-layer: all 108 curation verdicts over the compiled artifacts were recorded by
+layer: all 221 curation verdicts over the compiled artifacts were recorded by
 that single operator, with no second curator and no inter-rater measurement.
-\textbf{One vendor.} The three blind compilers are three models of a single
-vendor (Claude Haiku, Sonnet, Opus). Replaceability across vendors is a
-different claim and is not measured here.
+\textbf{Two vendors, and one model of the second.} The cross-vendor arm is a
+falsification test the replaceability claim survived, not a survey: four blind
+compilers, two vendors, and exactly one model (\texttt{gpt-5.5}) of the second,
+at $n=2$ runs. Nothing here measures a vendor, and nothing generalizes to
+language models at large.
 \textbf{Noise-floor coverage.} The floor that qualifies every variance
 statement rests on ten of the twelve archetypes at $n=2$ per model; it is a
 floor, not a distribution, and two archetypes have no second run at all.
@@ -678,9 +785,23 @@ evidence-or-nothing, human-declared gating) but does not eliminate variance.
 \textbf{Scope.} The loop targets a single operator driving one non-trivial
 change; multi-operator concurrency is out of scope, and the ledger is
 single-writer by design.
-\textbf{Heuristic residue.} Some gates carry documented approximations
-(path-based test classification, stale-report windows); each is disclosed at
-the point of use, but disclosure is not elimination.
+\textbf{Heuristic residue.} Some gates carry documented approximations; each is
+disclosed at the point of use, but disclosure is not elimination. Three are worth
+naming. Path-based test classification and stale-report windows are approximations
+of what the engine cannot see directly. The simplicity gate's
+\texttt{max\_nesting} is an \emph{indentation proxy}, not a measure of nesting:
+it divides the leading indentation of added lines by the configured indent width,
+so wrapped arguments, JSX and multi-line literals inflate it --- which is why the
+gate advises unless a budget is adopted (\S\ref{sec:validation}). And the
+operability check grades \emph{presence}, not quality: it can see that a runbook
+names a rollback section and that a workflow runs the configured test command, not
+that the procedure is correct or the tests meaningful.
+\textbf{Field evidence is instrumented, not yet weighted.} The corpus gate scores a
+command against real inputs and blocks through its own record, but readiness gains
+no \texttt{field} dimension and no weight from it: adding a weighted dimension
+moves every existing project's score on upgrade, so it is deferred to a decision
+record of its own rather than smuggled in beside the instrument that would feed
+it.
 
 \section{Future Work}\label{sec:future}
 
@@ -717,9 +838,9 @@ intermediate representation the mechanical reverse organs (static extraction,
 the withheld oracle's own case results) can anchor --- deliberately \emph{not}
 by regenerating a specification from code and diffing it, which would
 reintroduce the narrated inference the doctrine forbids. The measured result
-is stated as measured: mean recoverability 0.828 (0.827 under Python 3.8, the
-aggregate being pinned as a range rather than a float), counting only static and
-behavioural footing (the compiler's own trace-manifest claims are excluded as
+is stated as measured: mean recoverability 0.815 (the aggregate being pinned as a
+range rather than a float, because an earlier sum fell on a rounding boundary),
+counting only static and behavioural footing (the compiler's own trace-manifest claims are excluded as
 tautological, since the blind prompt supplied the very node identifiers being
 ``recovered''). It read 0.062 in the instrument's first release, with the
 behavioural dimension unmeasured across all twelve entries, because no oracle
