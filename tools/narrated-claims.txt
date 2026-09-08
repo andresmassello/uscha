@@ -27,7 +27,7 @@
 # Paths are repo-relative with forward slashes and must exist (a row pointing at a deleted file
 # would pass by accident, which is the failure mode this whole file exists to refuse).
 
-base = v1.97.0
+base = 223ec9e
 
 [retired]
 
