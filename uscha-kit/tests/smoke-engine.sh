@@ -16692,6 +16692,75 @@ def measure():
     res["AC-FU-05"] = not hits
     why["AC-FU-05"] = "time promises: %r" % (hits,)
 
+    # --- AC-FU-06: the readiness transcripts are the ENGINE's sentence, still -----------------
+    # The page promises real output. It was carrying the pre-2.2.0 `narrated-only` line months
+    # after ADR-046 and ADR-047 widened it: a claim of real output is only worth what a machine
+    # can re-check, so this case re-derives the sentence from the engine and compares.
+    # Normalised for two things and nothing else: the ID LIST (the guide's fixture is not this
+    # fixture) and WHITESPACE, which is how the guide's wrap convention is undone.
+    def records(buf):
+        """A text fence split into the records readiness prints: a line at indent <= 2 opens
+        one, deeper lines are the wrapped continuations of it. Whitespace is collapsed."""
+        out, cur = [], None
+        for line in buf:
+            if not line.strip():
+                continue
+            if len(line) - len(line.lstrip()) <= 2:
+                if cur is not None:
+                    out.append(" ".join(cur.split()))
+                cur = line
+            elif cur is not None:
+                cur = cur + " " + line
+        if cur is not None:
+            out.append(" ".join(cur.split()))
+        return out
+
+    HEAD = "! narrated-only:"
+
+    def sentence(record):
+        """the record with its ID LIST replaced -- what is compared is the SENTENCE."""
+        rest = record[len(HEAD):].split(" " + chr(8212) + " ", 1)
+        return HEAD + " <ids> " + chr(8212) + " " + (rest[1] if len(rest) > 1 else "")
+
+    # the engine's own line, MEASURED: a ticked criterion with no evidence anywhere
+    fix = tmp()
+    os.makedirs(os.path.join(fix, "app"))
+    with io.open(os.path.join(fix, "uscha.config.json"), "w", encoding="utf-8") as fh:
+        fh.write('{"version": "1.0.0", "project": "fu",'
+                 ' "defaults": {"acceptance_file": "ACCEPTANCE.md"},'
+                 ' "repos": [{"name": "app", "path": "app", "type": "python"}]}' + chr(10))
+    with io.open(os.path.join(fix, "ACCEPTANCE.md"), "w", encoding="utf-8") as fh:
+        fh.write("# ACCEPTANCE" + chr(10) + chr(10) + "- [x] AC-01 - one" + chr(10))
+    subprocess.run([sys.executable, ENG, "init", "--config", "uscha.config.json",
+                    "--out", "L.json"], cwd=fix, stdout=subprocess.PIPE,
+                   stderr=subprocess.STDOUT, universal_newlines=True)
+    # decoded as UTF-8 on BOTH ends: the sentence carries an em dash, and letting the child's
+    # bytes come back through the locale codec turns it into a different character on Windows
+    # -- a comparison that then fails for a reason nobody wrote down.
+    rr = subprocess.run([sys.executable, ENG, "readiness", "--ledger", "L.json"], cwd=fix,
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                        universal_newlines=True, encoding="utf-8", errors="replace",
+                        env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    live = [sentence(" ".join(ln.split()))
+            for ln in rr.stdout.split(chr(10)) if ln.strip().startswith(HEAD)]
+    p6 = []
+    if len(live) != 1:
+        p6.append("the engine printed %d narrated-only lines on the fixture: %r"
+                  % (len(live), rr.stdout[-200:]))
+    else:
+        for label, body in (("EN", en), ("ES", es)):
+            shown = [sentence(r) for _lang, buf in fences(body) for r in records(buf)
+                     if r.startswith(HEAD)]
+            if not shown:
+                p6.append("%s shows no narrated-only transcript at all" % label)
+            for got in shown:
+                if got != live[0]:
+                    p6.append("%s prints a sentence the engine no longer does: %r != %r"
+                              % (label, got, live[0]))
+    res["AC-FU-06"] = not p6
+    why["AC-FU-06"] = "; ".join(p6[:3]) or ("both twins print the sentence this engine prints: "
+                                            + (live[0] if live else "?"))
+
 
 try:
     measure()
@@ -16707,7 +16776,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T166" in
-  OK*) PASS=$((PASS+1)); echo "  ok   first-use walkthrough (AC-FU-01..05): $T166";;
+  OK*) PASS=$((PASS+1)); echo "  ok   first-use walkthrough (AC-FU-01..06): $T166";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T166";;
 esac
 

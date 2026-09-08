@@ -113,7 +113,7 @@ for.
 - It does not compare anything but the nine `uscha-*` skills, and it makes no claim about skills
   installed by other means.
 
-## What is measured (`AC-SK-01..07`)
+## What is measured (`AC-SK-01..09`)
 
 T162, through the `.sk-cases.json` sidecar:
 

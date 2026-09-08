@@ -14,10 +14,12 @@ page. For the other agents and operating systems the kit installs to, read
 [README](../README.md) — placement there is measured; *loading inside every agent* is a
 documented expectation.
 
-**About the transcripts below.** Every one of them is real output from that run. Two edits
-were made and no others: absolute paths were shortened to `<repo>` / `<home>`, and lines longer
-than 120 columns were wrapped with an indented continuation so a narrow screen never has to
-scroll sideways. Nothing was retyped, invented, or improved. Where a step could not be
+**About the transcripts below.** Every one of them is real output from that run, whole: no
+row is dropped, not even the ones a first reader will not need yet. Three edits were made and no
+others: absolute paths were shortened to `<repo>` / `<home>`, lines longer than 120 columns were
+wrapped with a continuation indented under the line it continues so a narrow screen never has to
+scroll sideways, and the one long `_comment` in the generated config is abridged — which the page
+says again where it happens. Nothing was retyped, invented, or improved. Where a step could not be
 exercised here, it says so in place.
 
 **No promise is made about how long this takes.** The kit measures evidence, not effort.
@@ -76,15 +78,25 @@ what landed on disk:
       "enabled": true,
       "max_files_changed": 3,
       "max_loc_delta": 80,
-      "protected_paths": ["**/migrations/**", "**/*.approved", "db/**"],
+      "protected_paths": [
+        "**/migrations/**",
+        "**/*.approved",
+        "db/**"
+      ],
       "require_asserting_test": true,
       "forbid_when_golden_touched": false
     }
   },
   "repos": [
-    { "name": "backend-api", "path": ".", "type": "python" }
+    {
+      "name": "backend-api",
+      "path": ".",
+      "type": "python"
+    }
   ],
-  "integration": { "enabled": true }
+  "integration": {
+    "enabled": true
+  }
 }
 ```
 
@@ -116,21 +128,50 @@ USCHA DOCTOR - installation diagnosis
   [OK] engine: <home>/.claude/skills/uscha-devloop/qa_ledger.py
        instalacion global (~/.claude/skills)
   [OK] skills 9/9 next to the engine
+       uscha-discovery, uscha-adr-refine, uscha-reverse-discovery, uscha-characterize,
+           uscha-devloop, uscha-sysdoc, uscha-rubric, uscha-mirador, uscha-status
   [OK] skills claude: current (kit 2.1.0)
        <home>/.claude/skills
+  [OK] skills not installed for: codex, pi, cursor, copilot, gemini, cline
+       not an error -- the kit installs per agent, one target at a time
   [OK] hook INV-GOLDEN-01: present, registered (PreToolUse) and interpretable
+       <home>/.claude/hooks/block-approved-writes.py (block-approved-writes.py)
   [OK] project: uscha.config.json v2.1.0 (1 repo(s))
   [ !] acceptance_file declared but missing: ACCEPTANCE.md
+  [OK] risk profile: none declared
+       effective settings below - precedence: override > profile > default
+  [OK] effective qa_tools_order = not declared - convergence uses a window of --tools-per-cycle
+           agent steps
+       origin: default
+  [OK] effective coverage_threshold = 60
+       origin: default
+  [OK] effective golden_required = False
+       origin: default
+  [OK] effective operability.gate = False
+       origin: default
   [OK] toolchain backend-api (python): pytest on PATH
   [OK] ledger QA-LEDGER.json: loads, integrity OK
+  [ !] skills de QA no encontradas como archivo: code-review, judgment-day, improve
+       install your QA skills in ~/.claude/skills/ or declare others in
+           config.defaults.qa_tools_order; if it is a harness built-in (e.g. code-review),
+           ignore this notice
 RESULT: 15 ok - 2 warning(s) - 0 error(s)  -> installation healthy
 ```
 
-Read the warning, because it is the method in miniature: `acceptance_file declared but missing`
-is the next thing to fix — section 4 fixes it. The green row above it is the same idea from the
-other side: `skills claude: current` is a COMPARISON, not a reassurance — the installer copies
-the kit's `VERSION` beside the installed skills, so `doctor` can date them. Before 2.2.0 there
-was no copy to read and that line said `freshness is UNMEASURED`: not a pass, a named absence.
+Read the warnings, because the first one is the method in miniature:
+`acceptance_file declared but missing` is the next thing to fix — section 4 fixes it. The second,
+`skills de QA no encontradas como archivo`, is the notice telling you so itself: those three are
+harness built-ins here, not files, and the fix line says to ignore it in that case. A warning is
+never a failure — `doctor` reports and exits 0.
+
+The green row further up is the same idea from the other side: `skills claude: current` is a
+COMPARISON, not a reassurance — the installer copies the kit's version beside the installed skills
+as `.uscha-kit-VERSION`, so `doctor` can date them. (The name is namespaced because
+`~/.claude/skills/` is not the kit's directory: a file called `VERSION` there would belong to
+whoever wrote it first.) Before 2.2.0 there was no copy to read and that line said
+`freshness is UNMEASURED`: not a pass, a named absence. The `effective ...` rows below are the
+same discipline applied to the config: every profile-owned knob, with the origin of the value in
+force — `override`, `profile <X>` or `default`.
 
 ## 4. The first skill invocation
 
@@ -214,7 +255,7 @@ python "$QL" readiness
 
 ```text
 [qa_ledger] snapshot backend-api (post): coverage=100.0% (found=True), tests=2 (found=True),
-    freshness=fresh, origin=bde3ea3b/dirty, prod_loc=248, test_loc=7
+    freshness=fresh, origin=d090593b/dirty, prod_loc=248, test_loc=7
 
 READINESS: 45.0/100 — NOT READY
   acceptance medido: 100.0% (1/1 criteria closed by a green test — measured, does not gate)
@@ -269,8 +310,11 @@ matching green test and the engine says so, and does not close it:
 ```text
 READINESS: 45.0/100 — NOT READY
   acceptance medido: 50.0% (1/2 criteria closed by a green test — measured, does not gate)
-  ! narrated-only: AC-2 — checkbox ticked WITHOUT a green 'AC-n' testcase in the reports
-    (measured beats narrated: does NOT close)
+  ! narrated-only: AC-2 — checkbox ticked WITHOUT a green 'AC-n' testcase in the reports,
+    without a green corpus run carrying it and without a green 'AC-n' smoke check (measured
+    beats narrated: does NOT close)
+  ! static gate NEVER ran in: backend-api — dimension scored UNMEASURED (0.0), silence is not
+    success
 ```
 
 *Next action:* write a test whose name carries the id, run the test command, re-run `snapshot`.

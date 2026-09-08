@@ -151,7 +151,7 @@ the seed?* — because the cheapest moment to decide that is before anything is 
 
 ## Acceptance
 
-Family `AC-OP-01..08`, measured by smoke **T165** over real temp projects:
+Family `AC-OP-01..09`, measured by smoke **T165** over real temp projects:
 
 - **AC-OP-01** — without a CI workflow, `operability` reports `ci: missing`, exits 0, and under
   profile B the record is advisory: non-blocking, never counted as `ok`.

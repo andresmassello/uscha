@@ -14,11 +14,13 @@ lea [`CROSS-PLATFORM.md`](CROSS-PLATFORM.md) y la matriz de compatibilidad del
 [README](../README.md): allí la ubicación de los archivos está medida; que *carguen dentro de
 cada agente* es una expectativa documentada.
 
-**Sobre las transcripciones de abajo.** Todas son salida real de esa corrida. Se hicieron dos
-ediciones y ninguna más: las rutas absolutas se acortaron a `<repo>` / `<home>`, y las líneas
-de más de 120 columnas se cortaron con una continuación indentada para que una pantalla angosta
-nunca tenga que desplazarse en horizontal. Nada fue retipeado, inventado ni mejorado. Donde un
-paso no pudo ejercitarse acá, se dice en el lugar.
+**Sobre las transcripciones de abajo.** Todas son salida real de esa corrida, y completas: no
+se omite ninguna fila, ni siquiera las que un primer lector todavía no necesita. Se hicieron tres
+ediciones y ninguna más: las rutas absolutas se acortaron a `<repo>` / `<home>`, las líneas de más
+de 120 columnas se cortaron con una continuación indentada bajo la línea que continúan para que
+una pantalla angosta nunca tenga que desplazarse en horizontal, y el único `_comment` largo del
+config generado está abreviado — cosa que la página vuelve a decir donde pasa. Nada fue
+retipeado, inventado ni mejorado. Donde un paso no pudo ejercitarse acá, se dice en el lugar.
 
 **No se promete cuánto tarda esto.** El kit mide evidencia, no esfuerzo.
 
@@ -76,15 +78,25 @@ byte por byte lo que quedó en disco:
       "enabled": true,
       "max_files_changed": 3,
       "max_loc_delta": 80,
-      "protected_paths": ["**/migrations/**", "**/*.approved", "db/**"],
+      "protected_paths": [
+        "**/migrations/**",
+        "**/*.approved",
+        "db/**"
+      ],
       "require_asserting_test": true,
       "forbid_when_golden_touched": false
     }
   },
   "repos": [
-    { "name": "backend-api", "path": ".", "type": "python" }
+    {
+      "name": "backend-api",
+      "path": ".",
+      "type": "python"
+    }
   ],
-  "integration": { "enabled": true }
+  "integration": {
+    "enabled": true
+  }
 }
 ```
 
@@ -116,21 +128,50 @@ USCHA DOCTOR - installation diagnosis
   [OK] engine: <home>/.claude/skills/uscha-devloop/qa_ledger.py
        instalacion global (~/.claude/skills)
   [OK] skills 9/9 next to the engine
+       uscha-discovery, uscha-adr-refine, uscha-reverse-discovery, uscha-characterize,
+           uscha-devloop, uscha-sysdoc, uscha-rubric, uscha-mirador, uscha-status
   [OK] skills claude: current (kit 2.1.0)
        <home>/.claude/skills
+  [OK] skills not installed for: codex, pi, cursor, copilot, gemini, cline
+       not an error -- the kit installs per agent, one target at a time
   [OK] hook INV-GOLDEN-01: present, registered (PreToolUse) and interpretable
+       <home>/.claude/hooks/block-approved-writes.py (block-approved-writes.py)
   [OK] project: uscha.config.json v2.1.0 (1 repo(s))
   [ !] acceptance_file declared but missing: ACCEPTANCE.md
+  [OK] risk profile: none declared
+       effective settings below - precedence: override > profile > default
+  [OK] effective qa_tools_order = not declared - convergence uses a window of --tools-per-cycle
+           agent steps
+       origin: default
+  [OK] effective coverage_threshold = 60
+       origin: default
+  [OK] effective golden_required = False
+       origin: default
+  [OK] effective operability.gate = False
+       origin: default
   [OK] toolchain backend-api (python): pytest on PATH
   [OK] ledger QA-LEDGER.json: loads, integrity OK
+  [ !] skills de QA no encontradas como archivo: code-review, judgment-day, improve
+       install your QA skills in ~/.claude/skills/ or declare others in
+           config.defaults.qa_tools_order; if it is a harness built-in (e.g. code-review),
+           ignore this notice
 RESULT: 15 ok - 2 warning(s) - 0 error(s)  -> installation healthy
 ```
 
-Lea la advertencia, porque es el método en miniatura: `acceptance_file declared but missing` es
-lo próximo a arreglar — la sección 4 lo arregla. La fila verde de arriba es la misma idea por el
-otro lado: `skills claude: current` es una COMPARACIÓN, no una tranquilidad — el instalador copia
-el `VERSION` del kit junto a las skills instaladas, para que `doctor` pueda fecharlas. Antes de
-2.2.0 no había copia que leer y esa línea decía `freshness is UNMEASURED`: una ausencia nombrada.
+Lea las advertencias, porque la primera es el método en miniatura:
+`acceptance_file declared but missing` es lo próximo a arreglar — la sección 4 lo arregla. La
+segunda, `skills de QA no encontradas como archivo`, es el aviso diciéndolo por sí mismo: esas tres
+acá son built-ins del harness, no archivos, y la línea de fix dice que en ese caso se ignora. Una
+advertencia nunca es una falla: `doctor` informa y sale con 0.
+
+La fila verde de más arriba es la misma idea por el otro lado: `skills claude: current` es una
+COMPARACIÓN, no una tranquilidad — el instalador copia la versión del kit junto a las skills
+instaladas como `.uscha-kit-VERSION`, para que `doctor` pueda fecharlas. (El nombre lleva prefijo
+porque `~/.claude/skills/` no es el directorio del kit: un archivo llamado `VERSION` ahí es de
+quien lo haya escrito primero.) Antes de 2.2.0 no había copia que leer y esa línea decía
+`freshness is UNMEASURED`: una ausencia nombrada. Las filas `effective ...` de abajo son la misma
+disciplina aplicada al config: cada knob que un perfil gobierna, con el origen del valor vigente
+— `override`, `profile <X>` o `default`.
 
 ## 4. La primera invocación de skill
 
@@ -215,7 +256,7 @@ python "$QL" readiness
 
 ```text
 [qa_ledger] snapshot backend-api (post): coverage=100.0% (found=True), tests=2 (found=True),
-    freshness=fresh, origin=bde3ea3b/dirty, prod_loc=248, test_loc=7
+    freshness=fresh, origin=d090593b/dirty, prod_loc=248, test_loc=7
 
 READINESS: 45.0/100 — NOT READY
   acceptance medido: 100.0% (1/1 criteria closed by a green test — measured, does not gate)
@@ -271,8 +312,11 @@ un test verde que le corresponda, el motor lo dice y no lo cierra:
 ```text
 READINESS: 45.0/100 — NOT READY
   acceptance medido: 50.0% (1/2 criteria closed by a green test — measured, does not gate)
-  ! narrated-only: AC-2 — checkbox ticked WITHOUT a green 'AC-n' testcase in the reports
-    (measured beats narrated: does NOT close)
+  ! narrated-only: AC-2 — checkbox ticked WITHOUT a green 'AC-n' testcase in the reports,
+    without a green corpus run carrying it and without a green 'AC-n' smoke check (measured
+    beats narrated: does NOT close)
+  ! static gate NEVER ran in: backend-api — dimension scored UNMEASURED (0.0), silence is not
+    success
 ```
 
 *Próxima acción:* escriba un test cuyo nombre lleve el identificador, corra el comando de test,

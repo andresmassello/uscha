@@ -406,7 +406,7 @@ of those surfaces to ask a question `doctor` already exists to answer.
 
 ## What is measured
 
-New family `AC-SK-01..07` in `T162`. All 18 rendered regions carry the kit's own version and the
+New family `AC-SK-01..09` in `T162`. All 18 rendered regions carry the kit's own version and the
 stamp comes from the template, not from 18 hand edits (`-01`); bumping only `VERSION` in a
 throwaway copy makes `--check` exit 1 naming the drifted regions and writing nothing, and the
 plain run re-stamps all 18 (`-02`); `doctor` reports `outdated` with both versions for a planted
@@ -574,7 +574,7 @@ invented input this whole instrument exists to expose.
 
 ## What is measured
 
-Smoke **T163**, nine criteria (`AC-CO-01..09`), over real temp projects and the real engine:
+Smoke **T163**, eleven criteria (`AC-CO-01..11`), over real temp projects and the real engine:
 the 66.7 % gate persisted and rendered (`-01`); `narrated_only` → measured → reopened as the tag's
 evidence changes (`-02`); UNMEASURED for a declared-and-never-run corpus and total silence for a
 repo that declares none (`-03`); ADVISORY with no budget, held out of the `ok` count, plus the
@@ -837,7 +837,7 @@ expensive is the week before go-live.
 
 ## What is measured
 
-T165, `AC-OP-01..08`, over real temp projects: `ci: missing` with no workflow, exit 0, advisory
+T165, `AC-OP-01..09`, over real temp projects: `ci: missing` with no workflow, exit 0, advisory
 under B (`-01`); an absent RUNBOOK under E persists `fail`, the rollup row blocks, and
 `phase --require pr-ready` exits 1 naming `runbook missing` (`-02`); the CONTROL PAIR — the
 same complete tree reads `pass` under E and `advisory` under B with a byte-identical note, and
@@ -887,7 +887,7 @@ Every transcript on the page is real output from the run that wrote it. The two 
 steps are labelled *not exercised here* rather than dressed up as a transcript — the same rule
 ADR-047 applies to a smoke list, applied to a walkthrough.
 
-## What is measured — `AC-FU-01..05`, smoke **T166**
+## What is measured — `AC-FU-01..06`, smoke **T166**
 
 These are DOC criteria: the block measures the PAGE, not the engine. `T166` extracts every fenced
 `bash` command in the guide that invokes the engine or the installer and RUNS them in order in a
@@ -989,6 +989,34 @@ probe restores `abspath` and the case names the install home it answered from in
 `AC-SK-07`'s own red probe was widened in the same change: it deletes the marker as well as the
 copy, because a probe that removed only one of two sources would have been silently answered by
 the other.
+
+## The first-use transcripts are the engine's output again, and a check keeps them that way
+
+`docs/FIRST-USE.md` and its English twin promise that every transcript on the page is real
+output. Three of them had stopped being it, and nothing on the page could tell:
+
+- the `readiness` fences printed the pre-2.2.0 `narrated-only` sentence — the very line ADR-046
+  and ADR-047 widened in this same batch;
+- the generated `uscha.config.json` showed `protected_paths` and the `repos` entry on one line
+  each, where `init` writes `json.dumps(indent=2)` and they land broken across lines;
+- the `doctor` transcript dropped ten real rows — the skills list, the not-installed targets, the
+  hook path, the whole effective-settings block and the second warning — while the page's own
+  policy said only two edits had been made and no others.
+
+The guide's commands were re-run at HEAD in a clean temp project and a redirected home, and every
+transcript in BOTH twins is that run's output, whole. The stated policy is now true of the page:
+three named edits — the `<repo>` / `<home>` placeholders, the 120-column wrap, and the one long
+`_comment` abridged where the page says so — and no rows omitted. The prose around the `doctor`
+block gained the two sentences the restored rows need: what the QA-skills warning means, and what
+the `effective ...` rows are for.
+
+Keeping it true is `AC-FU-06` (**T166**): for every `readiness` fence in either twin that shows a
+`narrated-only` line, the page's sentence must EQUAL the sentence this engine prints, re-derived
+by running readiness over a ticked criterion with no evidence. Only two things are normalised —
+the ID list (the guide's fixture is not the case's fixture) and whitespace, which is how the
+guide's wrap convention is undone. A future message change is a red suite here instead of stale
+prose in the entry document. Probed by rewording the page's copy: *EN prints a sentence the engine
+no longer does*.
 
 Acceptance goes 324 → 330 criteria; nothing was dropped.
 

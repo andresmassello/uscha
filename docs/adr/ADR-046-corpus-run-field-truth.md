@@ -179,7 +179,7 @@ was "nobody asked whether one existed", and a question nobody asks is a gap nobo
 - It does not run the corpus automatically in the loop. A corpus can be large and slow; when to
   run it is the project's scheduling decision, like `pit-check`.
 
-## What is measured (`AC-CO-01..09`)
+## What is measured (`AC-CO-01..11`)
 
 Smoke **T163**, nine criteria, over real temp projects and the real engine:
 
