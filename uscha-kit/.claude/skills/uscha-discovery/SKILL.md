@@ -112,6 +112,12 @@ Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, 
 4. **Grill, don't agree.** Surface contradictions, fuzzy/overloaded terms, missing
    failure modes and unstated constraints. A discovery where you agreed with everything
    failed.
+   Two habits, both advisory (unmeasured, kept because they are cheap): **every magnitude
+   carries a number or a range** -- "many tasks", "fast", "large files" are not scope;
+   "20 to 100 tasks", "under 200 ms", "up to 50 MB" are -- and **rules are written as
+   constraints, not wishes**: "no partial implementations, no TODO left in the diff" is
+   checkable; "remember to finish things" is not. A magnitude without a number and a rule
+   without a boundary are questions you still owe the human.
 5. **Write files lazily and inline.** Create a file only when you have something real to
    write, and update it the moment a decision crystallizes — don't batch to the end.
 6. **Mark what YOU decided: `origin: agent`.** Any acceptance criterion, ADR decision item
@@ -238,7 +244,8 @@ answer.
   you proposed and the human approved). Distinct from the glossary: this is the model, not
   the vocabulary.
 - **`SPEC.md`** — objective/value, risk, scope/out-of-scope, behavior,
-  inputs/outputs/errors, acceptance, test plan, operation, rollback.
+  inputs/outputs/errors, acceptance, test plan, operation, rollback. Magnitudes with numbers
+  or ranges; rules as constraints with a boundary, never as reminders.
 - **`docs/adr/ADR-NNN-<slug>.md`** — one per durable decision. Format: Status
   (proposed/accepted/**experiment**/deprecated/superseded) · Context · Alternatives · Decision ·
   Consequences · **Implementation Plan** (affected paths, patterns to follow, tests to

@@ -263,6 +263,15 @@ maker-checker separation the review loop enforces is the evaluator-optimizer
 pattern [15]. The design stance throughout is an application of Goodhart's law
 [8] to agent verification: any signal the agent can see, it will eventually
 optimize.</p>
+<p>Independent evidence for the premise behind <code>check-terminado</code> arrived from
+a different scale: Cursor&rsquo;s report on a week-long, thousands-of-agents build with
+no human in the loop [19] states that its first harness failed because the model
+proclaimed success while far from it, and that output quality tracked the quality of
+the specification rather than the infrastructure. The same report removed its
+independent judge as a bottleneck at that scale, which this paper does not attempt
+to reconcile: the single-agent setting studied here has the gate as its only
+correction mechanism, and a scale criterion for when a gate stops paying for itself
+is stated as an open question, not a result.</p>
 
 <h2>3&nbsp;&nbsp;The Methodology</h2>
 
@@ -939,6 +948,8 @@ arXiv:2510.03463 [cs.SE], 2025.</p>
 <p>[18] D. Polivaev, &ldquo;spec-loop: a design-first AI-assisted development
 framework,&rdquo; open-source project, 2026.
 github.com/dpolivaev/spec-loop</p>
+<p>[19] W. Lin, &ldquo;Self-driving codebases,&rdquo; Cursor Research, February 2026.
+cursor.com/blog/self-driving-codebases</p>
 </div>
 
 </body>

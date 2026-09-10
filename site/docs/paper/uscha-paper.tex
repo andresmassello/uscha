@@ -229,6 +229,16 @@ loop enforces is the evaluator-optimizer pattern~\cite{anthropic2024agents}.
 The design stance throughout is an application of Goodhart's
 law~\cite{strathern1997improving} to agent verification: any signal the agent
 can see, it will eventually optimize.
+Independent evidence for the premise behind \texttt{check-terminado} arrived from
+a different scale: Cursor's report on a week-long, thousands-of-agents build with
+no human in the loop~\cite{lin2026selfdriving} states that its first harness
+failed because the model proclaimed success while far from it, and that output
+quality tracked the quality of the specification rather than the
+infrastructure. The same report removed its independent judge as a bottleneck
+at that scale, which this paper does not attempt to reconcile: the single-agent
+setting studied here has the gate as its only correction mechanism, and a
+scale criterion for when a gate stops paying for itself is stated as an open
+question, not a result.
 
 \section{The Methodology}\label{sec:method}
 
@@ -956,6 +966,10 @@ arXiv:2510.03463 [cs.SE], 2025.
 \bibitem{polivaev2026specloop}
 D.~Polivaev, ``spec-loop: a design-first AI-assisted development framework,''
 open-source project, 2026. \url{https://github.com/dpolivaev/spec-loop}
+
+\bibitem{lin2026selfdriving}
+W.~Lin, ``Self-driving codebases,'' Cursor Research, February 2026.
+\url{https://cursor.com/blog/self-driving-codebases}
 
 \end{thebibliography}
 
