@@ -83,4 +83,4 @@ construction (`AC-VC-02` verifies it) and there is no new asymmetry to record.
 No engine change. `qa_ledger.py` is untouched, so nothing here moves a version surface's derived
 fact beyond what `facts --write` already renders from `uscha-kit/VERSION`.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 457 checks · 0 fail; acceptance 330/330.
