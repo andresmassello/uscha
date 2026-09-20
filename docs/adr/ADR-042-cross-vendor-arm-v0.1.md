@@ -271,3 +271,19 @@ Stated plainly, because an arm that overclaims is worse than no arm:
 - **Give `ledger-lite` and `rate-limiter` a codex-only `r2/`.** Rejected, see UNMEASURED 6.
 - **Let `ir_region` stay free text.** Rejected: it would permanently fork the UINT address space
   between arms.
+
+## Known under-specifications (registered, not fixed)
+
+`transformer`'s `extra-field-tolerated` case (above, "The one finding") is one instance of a
+broader pattern this arm's four-way comparison made visible: a canonical SPEC sentence that
+several independently blind compilers read two different, both-internally-consistent ways.
+Re-checking the bench for the same pattern found three more entries with the same shape
+(`protocol-adapter`, `scheduler`, `ui-render`) plus five unrelated ambiguities (parser's repeated
+unary minus, rate-limiter's `Number.isInteger` vs `Number.isSafeInteger`, the `json.dumps`
+byte-format freedom in three Python-only entries, ledger-lite's entry-point organization, and two
+genuine spec/acceptance-criteria tensions in `scheduler` and `guard`). Per the 2026-09-20
+decision, none of the v1 canonical packages are edited to resolve these — doing so after the
+withheld oracle's verdict is known would tune the benchmark to its own answer key and invalidate
+the compilations recorded against the current wording. They are registered instead, with the
+exact sentence, the readings taken, and a one-sentence "v2 sharpening" for a future recompilation
+round: see `uscha-kit/tests/fixtures/diamond-bench/SPEC-AMBIGUITIES.md`.
