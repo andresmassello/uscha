@@ -44,7 +44,7 @@ Requires **Python 3.8+** on the machine (the engine is Python stdlib — no pip 
 runtime dependencies). The npm package is a thin router; the canonical installer is
 `uscha-kit/install-uscha.py`.
 
-**Kit v2.2.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v2.3.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -217,6 +217,11 @@ And `bench-r2` measured
 that same-model reruns differ structurally about as much as different models do (aggregate
 `NOISY`) — so one earlier variance narrative was **retracted**. Every claim above is a subcommand
 you can run; every unmeasured part is labeled. That honesty is the method applied to itself.
+
+Every verdict above is tied to a named criterion, and every one a human judged is tied to the
+person who signed it — the ledger itself, `bench-curate --human` for the compiled artifacts, and
+the `origin: agent` markers that record which specification items the agent proposed versus the
+human decided.
 
 → The full thesis, with before/after diagrams and the REAL vs VISION vs REJECTED table:
 **[uscha.dev/diamond](https://uscha.dev/diamond)** · the mechanism, in three diagrams:

@@ -19,7 +19,7 @@ shape.** Your job is to interrogate until there is a shared system shape, and to
 the documents as you go — not to ask the human to design the system for you.
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.2.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.3.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## First contact (show ONCE, then never again)
 

@@ -239,6 +239,20 @@ at that scale, which this paper does not attempt to reconcile: the single-agent
 setting studied here has the gate as its only correction mechanism, and a
 scale criterion for when a gate stops paying for itself is stated as an open
 question, not a result.
+Independent evidence at the review stage, rather than the build stage, comes
+from Garg~\cite{garg2026spec}: a controlled study (accepted at GAISS 2026)
+found that a specification baseline did not raise reviewers' bug-detection
+rate over code-only review --- the two were statistically indistinguishable
+--- but raised the share of findings attributable to a named, approved
+requirement from zero to a majority. A reasoning-first baseline with no
+specification captured nearly all of the apparent gain on simpler tasks, and
+specification-anchored review cost more reviewer time. This is a different
+measurement than the Diamond program's replaceability claim --- reviewer
+attribution and time, not regeneration under a withheld oracle --- and is not
+presented here as validation of it; the confound the source itself names,
+that part of the effect attributed to ``specifying first'' may be a
+reasoning effect rather than the specification, is stated as the source
+states it.
 
 \section{The Methodology}\label{sec:method}
 
@@ -812,6 +826,15 @@ no \texttt{field} dimension and no weight from it: adding a weighted dimension
 moves every existing project's score on upgrade, so it is deferred to a decision
 record of its own rather than smuggled in beside the instrument that would feed
 it.
+\textbf{No control for reasoning-first.} Independent evidence~\cite{garg2026spec}
+found that prompting a model to reason about edge cases with no specification
+captured most of the apparent benefit on simple tasks; this paper does not
+isolate a reasoning-only baseline from the specification-driven flow, so the
+quality claim made here is defensible only for the multi-constraint work the
+methodology targets, not for simple tasks in general.
+\textbf{Reviewer cost is unmeasured.} The human cost of spec-anchored review
+--- measured elsewhere~\cite{garg2026spec} as a substantial increase in
+reviewer minutes --- is not measured in this work.
 
 \section{Future Work}\label{sec:future}
 
@@ -868,6 +891,14 @@ was applied to the tempting unification ``drift detection is incremental
 reverse discovery'': recorded as an equivalence of idea, rejected as shared
 architecture, because one instrument advises about staleness while the other
 proposes content.
+
+As models improve, the package's value plausibly shifts: from ``regenerates
+better'' toward \emph{auditable contract} --- every verdict attributable to a
+named criterion and, where a human judged, to the person who signed it. That
+is what the ledger, \texttt{bench-curate --human}, and the \texttt{origin:
+agent} markers (\S\ref{sec:validation}) together produce, and it is a
+different value proposition than regeneration fidelity, one that does not
+erode as models close the fidelity gap.
 
 \section{Conclusion}\label{sec:conclusion}
 
@@ -970,6 +1001,10 @@ open-source project, 2026. \url{https://github.com/dpolivaev/spec-loop}
 \bibitem{lin2026selfdriving}
 W.~Lin, ``Self-driving codebases,'' Cursor Research, February 2026.
 \url{https://cursor.com/blog/self-driving-codebases}
+
+\bibitem{garg2026spec}
+N.~Garg, ``When Spec-Driven Development Pays Off,'' InfoQ, September 2026.
+\url{https://www.infoq.com/articles/when-spec-driven-development-pays-off/}
 
 \end{thebibliography}
 

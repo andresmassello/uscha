@@ -271,7 +271,21 @@ the specification rather than the infrastructure. The same report removed its
 independent judge as a bottleneck at that scale, which this paper does not attempt
 to reconcile: the single-agent setting studied here has the gate as its only
 correction mechanism, and a scale criterion for when a gate stops paying for itself
-is stated as an open question, not a result.</p>
+is stated as an open question, not a result.
+Independent evidence at the review stage, rather than the build stage, comes
+from Garg [20]: a controlled study (accepted at GAISS 2026) found that a
+specification baseline did not raise reviewers' bug-detection rate over
+code-only review &mdash; the two were statistically indistinguishable &mdash;
+but raised the share of findings attributable to a named, approved
+requirement from zero to a majority. A reasoning-first baseline with no
+specification captured nearly all of the apparent gain on simpler tasks, and
+specification-anchored review cost more reviewer time. This is a different
+measurement than the Diamond program's replaceability claim &mdash; reviewer
+attribution and time, not regeneration under a withheld oracle &mdash; and is
+not presented here as validation of it; the confound the source itself
+names, that part of the effect attributed to &ldquo;specifying first&rdquo;
+may be a reasoning effect rather than the specification, is stated as the
+source states it.</p>
 
 <h2>3&nbsp;&nbsp;The Methodology</h2>
 
@@ -807,7 +821,16 @@ gate scores a command against real inputs and blocks through its own record, but
 readiness gains no <code>field</code> dimension and no weight from it: adding a
 weighted dimension moves every existing project's score on upgrade, so it is
 deferred to a decision record of its own rather than smuggled in beside the
-instrument that would feed it.</p>
+instrument that would feed it.
+<b class="rh">No control for reasoning-first.</b> Independent evidence [20]
+found that prompting a model to reason about edge cases with no specification
+captured most of the apparent benefit on simple tasks; this paper does not
+isolate a reasoning-only baseline from the specification-driven flow, so the
+quality claim made here is defensible only for the multi-constraint work the
+methodology targets, not for simple tasks in general.
+<b class="rh">Reviewer cost is unmeasured.</b> The human cost of
+spec-anchored review &mdash; measured elsewhere [20] as a substantial
+increase in reviewer minutes &mdash; is not measured in this work.</p>
 
 <h2>8&nbsp;&nbsp;Future Work</h2>
 
@@ -865,6 +888,14 @@ specification. The same discipline was applied to the tempting unification
 &ldquo;drift detection is incremental reverse discovery&rdquo;: recorded as an
 equivalence of idea, rejected as shared architecture, because one instrument
 advises about staleness while the other proposes content.</p>
+
+<p>As models improve, the package's value plausibly shifts: from
+&ldquo;regenerates better&rdquo; toward <i>auditable contract</i> &mdash;
+every verdict attributable to a named criterion and, where a human judged, to
+the person who signed it. That is what the ledger, <code>bench-curate
+--human</code>, and the <code>origin: agent</code> markers (&sect;6) together
+produce, and it is a different value proposition than regeneration fidelity,
+one that does not erode as models close the fidelity gap.</p>
 
 <h2>9&nbsp;&nbsp;Conclusion</h2>
 
@@ -950,6 +981,8 @@ framework,&rdquo; open-source project, 2026.
 github.com/dpolivaev/spec-loop</p>
 <p>[19] W. Lin, &ldquo;Self-driving codebases,&rdquo; Cursor Research, February 2026.
 cursor.com/blog/self-driving-codebases</p>
+<p>[20] N. Garg, &ldquo;When Spec-Driven Development Pays Off,&rdquo; InfoQ, September 2026.
+infoq.com/articles/when-spec-driven-development-pays-off/</p>
 </div>
 
 </body>

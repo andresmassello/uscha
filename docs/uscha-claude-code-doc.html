@@ -181,9 +181,9 @@ body::before{content:"";position:fixed;inset:0;background:
 <div class="deck" id="deck">
 
 <section class="slide title-slide active" data-section="Inicio"><div class="hero" id="overview">
-  <div class="eyebrow">Documentación completa · instanciación en Claude Code</div>
+  <div class="eyebrow">Documentación completa · instanciación en Claude Code y Codex</div>
   <h1>Uscha: traés la idea, <span class="accent">el método arma el resto.</span></h1>
-  <p class="lead">Una metodología spec-driven, tool-agnóstica, que empieza <em>antes</em> de la SPEC: de una idea vaga + material de referencia, el asistente propone la forma del sistema, vos decidís, y recién ahí se especifica, se construye y se avanza solo con evidencia. Este doc cubre la instanciación en Claude Code con el <code class="in">uscha-kit</code>.</p>
+  <p class="lead">Una metodología spec-driven, tool-agnóstica, que empieza <em>antes</em> de la SPEC: de una idea vaga + material de referencia, el asistente propone la forma del sistema, vos decidís, y recién ahí se especifica, se construye y se avanza solo con evidencia. Este doc cubre la instanciación en Claude Code y Codex con el <code class="in">uscha-kit</code>.</p>
   <div class="stampline">
     <span><span class="dot">●</span> Idea → Discovery → Ready → SPEC → ADR? → Build → Verify → Evidence → Human gate</span>
   </div>
@@ -234,7 +234,7 @@ body::before{content:"";position:fixed;inset:0;background:
 <section class="slide" data-section="La especificación">
 <div class="kicker"><span class="n">◆</span> overview visual</div>
 <h2>La especificación, <span class="accent">de un vistazo.</span></h2>
-<p>El motor de evidencia al centro, las fases del flujo a la izquierda, las seis capas de verificación a la derecha, los principios en la franja, y las piezas de Claude Code que lo sostienen abajo.</p>
+<p>El motor de evidencia al centro, las fases del flujo a la izquierda, las seis capas de verificación a la derecha, los principios en la franja, y las piezas del agente que lo sostienen abajo.</p>
 <div style="margin-top:1.1rem;display:flex;justify-content:center">
 <svg viewBox="0 108 1200 772" style="width:100%;max-width:1080px;height:auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama de la especificacion Uscha">
 <style>
@@ -932,6 +932,32 @@ $ python3 .claude/skills/uscha-devloop/qa_ledger.py simplicity-check --diff HEAD
   <div class="card"><h3>La métrica cuando autonomices</h3><p><strong>Cost per accepted change</strong> — no tokens ni tareas intentadas. Si la tasa de cambios aceptados cae por debajo del 50%, el loop te está devolviendo el trabajo de revisión que vino a sacarte: ahí pierde. Uscha es el payload ideal del heartbeat justamente porque su gate sube esa tasa.</p></div>
 </section>
 
+<section class="slide" data-section="El diamante, medido">
+  <div class="kicker"><span class="n">◆</span> reverse discovery, bajo un oráculo escondido</div>
+  <h2>El diamante, <span class="accent">medido.</span></h2>
+  <p>Doce arquetipos acotados, un oráculo escondido (M4), cuatro compiladores ciegos de dos proveedores. La pregunta: ¿cuánto del sistema sobrevive el viaje de ida y vuelta?</p>
+  <div class="stats">
+    <div class="stat"><div class="v">8<small>/12</small></div><div class="k">arquetipos regeneran al mismo sistema</div></div>
+    <div class="stat"><div class="v">8 PASS<small> · </small>4 PARTIAL</div><div class="k">veredicto por arquetipo</div></div>
+    <div class="stat"><div class="v">0.815</div><div class="k">recoverability del round-trip (media)</div></div>
+    <div class="stat"><div class="v">221</div><div class="k">veredictos de curación humana</div></div>
+  </div>
+  <p>221 veredictos: 213 <code class="in">preserve</code>, 8 <code class="in">fix</code>, ninguno sin juzgar. El brazo cross-vendor es un test de falsación que la afirmación de reemplazabilidad sobrevivió, no una encuesta: cuatro compiladores ciegos, dos proveedores, <code class="in">gpt-5.5</code> vía Codex incluido.</p>
+  <div class="card note"><p><strong>Más:</strong> <a href="https://uscha.dev/diamond">uscha.dev/diamond</a> · el paper completo en <a href="paper/uscha-paper.html">docs/paper/uscha-paper.html</a>.</p></div>
+</section>
+
+<section class="slide" data-section="2.x: el kit bajo sus propios instrumentos">
+  <div class="kicker"><span class="n">◆</span> dogfooding medido, no narrado</div>
+  <h2>2.x: el kit <span class="accent">bajo sus propios instrumentos.</span></h2>
+  <div class="grid2">
+    <div class="card"><h3>El ritual es un script (ADR-041)</h3><p>La release ya no es una checklist a mano: <code class="in">tools/release.py</code> corre ocho invariantes y se niega nombrando cuál falló. La frescura del dogfooding se decide por ANCESTRÍA de git, nunca por reloj.</p></div>
+    <div class="card"><h3>El facts gate (1.97.0)</h3><p>Todo claim publicado (versión, subcomandos, skills, arquetipos del diamante) es un HECHO derivado, comparado contra el motor. Nació porque el homepage dijo "9/12" durante nueve releases después de que el número se movió — y ningún gate lo vio.</p></div>
+    <div class="card"><h3>2.0.0 — init genera, no copia</h3><p>Los presets de riesgo nunca habían tenido efecto: <code class="in">init</code> copiaba la config de referencia del kit, y esa copia superaba al perfil por la regla "lo explícito gana". Ahora <code class="in">init</code> genera una config mínima.</p></div>
+    <div class="card"><h3>2.1.0 — SIMPLICITY es advisory por default (ADR-043)</h3><p>Un gate necesita un presupuesto adoptado. Sin uno declarado, el score informa mas no bloquea.</p></div>
+    <div class="card"><h3>2.2.0 — cinco ADRs de dos retros de campo</h3><p><code class="in">origin: agent</code> (ADR-044, quién decidió cada ítem), <code class="in">corpus-run</code> (ADR-046, verdad de campo con inputs reales), <code class="in">smoke-ingest</code> (ADR-047, la propia suite como evidencia medida), <code class="in">operability</code> (ADR-048, dimensión medida) y el marcador de versión en cada skill instalada (ADR-045, <code class="in">doctor</code> dice si está desactualizada).</p></div>
+  </div>
+</section>
+
 <section class="slide" data-section="Cuándo NO usarlo">
   <div class="kicker"><span class="n">15</span> una metodología madura define sus bordes</div>
   <h2>Cuándo <span class="accent">NO</span> usar Uscha.</h2>
@@ -975,7 +1001,16 @@ claude --version &amp;&amp; claude doctor                     <span class="c"># 
 
 <section class="slide" data-section="Piezas de Claude Code">
   <div class="kicker"><span class="n">17</span> no es magia: son features concretas</div>
-  <h2>Las piezas de Claude Code <span class="accent">que lo sostienen.</span></h2>
+  <h2>Las piezas del agente <span class="accent">que lo sostienen.</span></h2>
+  <p>El kit instala en siete agentes. Lo que cada uno aporta no es parejo — y la honestidad es decir dónde no lo es.</p>
+  <table>
+    <thead><tr><th>Agente</th><th>Qué aporta</th></tr></thead>
+    <tbody>
+      <tr><td class="t">Claude Code</td><td>skills, sub-agentes, hooks — incluido el hook de escritura de INV-GOLDEN-01 (bloquea que el agente authoree un <code class="in">.approved</code>), <code class="in">--add-dir</code> multi-repo.</td></tr>
+      <tr><td class="t">Codex</td><td><code class="in">.codex-plugin</code> + skills + <code class="in">AGENTS.md</code> como archivo de contexto. Sin hooks nativos: el golden guard (INV-GOLDEN-01) <strong>no se aplica ahí</strong> — es una honestidad, no un detalle menor.</td></tr>
+      <tr><td class="t">pi · cursor · copilot · gemini · cline</td><td>los cinco targets de skill-root: solo skills (Agent Skills estándar), sin plugin ni hooks.</td></tr>
+    </tbody>
+  </table>
   <div class="grid2">
     <div class="card"><h3>CLAUDE.md / AGENTS.md</h3><p>Protocolo estable del repo: comandos, no-go zones, DoD, cómo registrar evidencia. Lo permanente vive acá; lo puntual en SPEC/ADR.</p></div>
     <div class="card"><h3>Skills (/comando)</h3><p>uscha-discovery, uscha-adr-refine, uscha-devloop, uscha-sysdoc, uscha-reverse-discovery, uscha-characterize, uscha-rubric, uscha-mirador, uscha-status en <code class="in">.claude/skills/</code>. Invocables, versionables, compartibles con el equipo.</p></div>
@@ -987,6 +1022,7 @@ claude --version &amp;&amp; claude doctor                     <span class="c"># 
     <p><strong>engram es OPCIONAL: uscha no lo requiere.</strong> El kit no declara ninguna dependencia (solo Node ≥18 para el router y Python 3.8+ stdlib para el motor) y no nombra a engram en una sola línea de lo que publica. Resuelven cosas distintas: la verdad del <em>proyecto</em> vive en el <code class="in">QA-LEDGER.json</code>, versionado junto al repo y compartido por el equipo; engram guarda la memoria del <em>agente</em>, que es personal de cada máquina. Sin engram el método funciona igual; lo que perdés es contexto del agente entre sesiones, no evidencia.</p></div>
     <div class="card"><h3>Higiene de sesión</h3><p>Los <code class="in">/uscha-devloop</code> largos inflan el transcript hasta colgar la app — visto en vivo: <strong>77 MB = sesión perdida</strong>. Un hook que avisa por tamaño, un mapa con semáforo y un rescate del <code class="in">.jsonl</code> a Markdown legible (tooling del autor — no viene en el kit). Regla: rotá de sesión antes del umbral.</p></div>
   </div>
+  <div class="card note"><h3>Honestidad cross-vendor</h3><p><strong>Verificado en Codex:</strong> la instalación, <code class="in">AGENTS.md</code>, los prompts portables (<code class="in">templates/rubric-grader-prompt.md</code>, <code class="in">templates/esceptico-prompt.md</code>) y el brazo de compilación cross-vendor (ADR-042: <code class="in">gpt-5.5</code> vía <code class="in">codex-cli</code>, <code class="in">--write-mode return</code>, 0 comandos de shell). <strong>NO verificado:</strong> un <code class="in">/uscha-devloop</code> completo, de punta a punta, corriendo en Codex.</p></div>
 </section>
 
 <section class="slide" data-section="CLAUDE.md — reglas">
@@ -1049,7 +1085,7 @@ $ claude
 <section class="slide" data-section="Reproducir el entorno en el equipo">
   <div class="kicker"><span class="n">20</span> mismo comportamiento en otra cuenta / otra PC <span class="callout-status prop">setup del autor — no viene en el kit</span></div>
   <h2>Reproducir el entorno <span class="accent">en el equipo.</span></h2>
-  <p>Los skills son "compartibles con el equipo" — pero el comportamiento NO vive en un archivo. Esta taxonomía de <strong>7 capas</strong> + una CLI externa + un gotcha de paths describe el entorno completo <em>del autor</em>; el kit en sí solo requiere Claude Code, Python 3.8+, git (gh opcional), los skills copiados a <code class="in">~/.claude/skills/</code> y la config/permisos por repo. Copiar solo <code class="in">settings.json</code> no alcanza.</p>
+  <p>Los skills son "compartibles con el equipo" — pero el comportamiento NO vive en un archivo. Esta taxonomía de <strong>7 capas</strong> + una CLI externa + un gotcha de paths describe el entorno completo <em>del autor</em> en Claude Code Desktop; el kit en sí solo requiere Python 3.8+, git (gh opcional), los skills instalados por agente y la config/permisos por repo. Copiar solo <code class="in">settings.json</code> no alcanza. Instalar el kit en <strong>otro</strong> agente no necesita nada de esto: <code class="in">npx --yes @andresmassello/uscha@latest install --target codex</code>.</p>
   <table>
     <thead><tr><th>Capa</th><th>Qué es</th><th>Cómo se reproduce</th></tr></thead>
     <tbody>
