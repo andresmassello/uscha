@@ -6587,6 +6587,9 @@ COMPILE_REQUIRED = ("schema_version", "canonical_ir", "target_stack", "source",
 # The seal covers the load-bearing contract, NOT compilation_report: model, versions and
 # timestamps legitimately vary and never change WHAT was compiled. A hand edit of the
 # substance (source/tests/manifest/unresolved_intent) after production must trip the seal.
+# A future compiler script SHOULD populate compilation_report.model_version with the exact
+# resolved model id (as bench-compile-codex.py does with "gpt-5.5 via codex-cli ..."), never
+# a bare alias -- provenance the seal deliberately does not enforce (ADR-042 item 8).
 COMPILE_SEALED = ("schema_version", "canonical_ir", "target_stack",
                   "implementation_constraints", "source", "tests",
                   "trace_manifest", "unresolved_intent")

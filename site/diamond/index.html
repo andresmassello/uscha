@@ -264,7 +264,7 @@
         <tr><td>Semantic round-trip (does the code <em>say the same thing</em> as the spec?)</td>
             <td><span class="chip real">REAL</span> (measured, bounded)</td><td>recoverability 0.815 measured, behaviour measured in 12/12 — anchors names and behaviour · 1.90 · ADR-030 (amended)</td></tr>
         <tr><td>Implementation replaceability, demonstrated on bounded systems — independent compilations regenerate the same system from the canonical package, a withheld oracle certifies it — four blind compilers across two vendors (Haiku · Sonnet · Opus · OpenAI Codex gpt-5.5) — one model of the second vendor, so the arm is a falsification test, not a survey</td>
-            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 archetypes (11 Python + 1 JavaScript, one multi-unit): 8 PASS, 4 PARTIAL · 1.74–1.99 · ADR-017/018/020/025/028/029/042</td></tr>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 archetypes (11 Python + 1 JavaScript, one multi-unit): 8 PASS, 4 PARTIAL (measured September 2026) · 1.74–1.99 · ADR-017/018/020/025/028/029/042</td></tr>
         <tr><td>Per-compiler fidelity (reverse discovery over each compiled artifact) + human curation of machine-generated code, one verdict per observation</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED stays literal where no verdict exists</td></tr>
         <tr><td>Controlled authoring (EARS+STE) reduces inter-compiler variance</td>
@@ -300,7 +300,7 @@
       <thead><tr><th>Instrument</th><th>Measured result</th><th>Releases</th></tr></thead>
       <tbody>
         <tr><td>Diamond Bench — 12 bounded archetypes × 4 blind compilers across two vendors (Haiku · Sonnet · Opus · OpenAI Codex gpt-5.5), each judged by a withheld oracle</td>
-            <td>8 PASS · 4 PARTIAL. The oracle also caught a convergent aliasing bug two independent compilers shared — a defect no code review of either would have flagged as suspicious.</td>
+            <td>8 PASS · 4 PARTIAL (measured September 2026). The oracle also caught a convergent aliasing bug two independent compilers shared — a defect no code review of either would have flagged as suspicious.</td>
             <td>1.74–1.99</td></tr>
         <tr><td>Controlled language, deconfounded — free prose vs EARS+STE, same generation, shared oracle, 5 archetypes</td>
             <td>REDUCED in 1, IMPROVED in 1: the decision-dense guard dropped variance −61%; the control and the state-machine read null; the transformer read WORSE — the rewrite sharpened a latent ambiguity ("exactly the fields") into a commitment the oracle rejects; the second decision-dense archetype (scheduler) gained an oracle-green and raised mean pass-rate while variance rose — two compilers had converged on the same bug in free prose.</td>

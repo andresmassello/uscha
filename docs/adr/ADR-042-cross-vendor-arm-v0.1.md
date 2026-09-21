@@ -234,6 +234,12 @@ Stated plainly, because an arm that overclaims is worse than no arm:
 7. **The paper is not revised here.** Its numbers are dated at 1.96.0 and it is revised in its
    own round; asserting a phrase into a document nobody has rewritten yet is the same narrated
    claim pointed the other way.
+8. **The Anthropic arms record only a bare alias, not an exact model id.** `c-haiku/`,
+   `c-sonnet/` and `c-opus/` each write `model`/`model_version` as the alias handed to the
+   API — `"haiku"`, `"sonnet"`, `"opus"` — in their `COMPILATION.json`. The Codex arm records
+   the exact slug and CLI version instead (`gpt-5.5 via codex-cli 0.142.5`). What each alias
+   resolved to on Anthropic's backend in Aug 2026 was never captured and cannot be reconstructed
+   after the fact. Future rounds must record an exact model id for every arm, Anthropic included.
 
 ## Consequences
 

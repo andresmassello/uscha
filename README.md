@@ -191,12 +191,12 @@ automatic tool can perform: a human verdict.
 |---|---|---|
 | Asset → typed graph | `ir-extract`, `ir-render` | the whole package becomes one canonical IR (M2, ADR-015) — deterministic, `UNTYPED` is a measurement not an error |
 | Forward, the compiler | `compile-validate`, `compile-ingest` | any model produces code; the engine validates the output contract and never compiles (M3, ADR-016) |
-| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 8 PASS · 4 PARTIAL**, four blind compilers across two vendors (Haiku · Sonnet · Opus · OpenAI Codex `gpt-5.5`), JS included (M4/M5, ADR-017/018/028/029/042) |
+| Forward, is it the *same* system? | `bootstrap-oracle`, `bootstrap-variance`, `bench` | a withheld oracle judges blind compilations — **12 archetypes, 8 PASS · 4 PARTIAL (measured September 2026)**, four blind compilers across two vendors (Haiku · Sonnet · Opus · OpenAI Codex `gpt-5.5`), JS included (M4/M5, ADR-017/018/028/029/042) |
 | Reverse, facts | `discover`, `golden-diff` (+ the `/uscha-characterize` skill) | system map + mechanically captured golden; typed candidate observations with evidence class (M1, ADR-013) |
 | Reverse, the human gate | `curate`, `promote`, `curation-check`, `bench-curate` | one verdict per candidate, append-only ledger verified against git; unjudged → `pr-ready` blocked naming it (ADR-009/010, INV-CURATION-01) |
 | Fidelity, honestly | `fidelity`, `roundtrip`, `bench-roundtrip`, `bench-r2` | per-compiler fidelity vector, id-level round trip, recoverability **0.815**, and the **noise floor** under every variance claim (ADR-014/022/027/030) |
 
-**Read the numbers the way the repo does.** 8 of 12 archetypes regenerate to the same system
+**Read the numbers the way the repo does.** 8 of 12 archetypes (measured September 2026; four blind compilers — Haiku, Sonnet, Opus and OpenAI Codex gpt-5.5) regenerate to the same system
 under an oracle the compilers never saw — that is the closed loop working. It was 9 of 12 until
 1.99.0, when a fourth compiler from a second vendor read one genuinely ambiguous sentence in
 `transformer` the other way and lost a case the three Claude-family models had agreed on

@@ -264,7 +264,7 @@
         <tr><td>Round-trip semántico (¿el código <em>dice lo mismo</em> que la spec?)</td>
             <td><span class="chip real">REAL</span> (medido, acotado)</td><td>recoverability 0.815 medido, comportamiento medido en 12/12 — ancla nombres y comportamiento · 1.90 · ADR-030 (enmendado)</td></tr>
         <tr><td>Reemplazabilidad de implementación, demostrada en sistemas acotados — compilaciones independientes regeneran el mismo sistema desde el paquete canónico, y un oráculo oculto lo certifica — cuatro compiladores ciegos de dos vendors (Haiku · Sonnet · Opus · OpenAI Codex gpt-5.5) — un solo modelo del segundo vendor, así que el brazo es un test de falsación, no un relevamiento</td>
-            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 arquetipos (11 Python + 1 JavaScript, uno multi-unidad): 8 PASS, 4 PARTIAL · 1.74–1.99 · ADR-017/018/020/025/028/029/042</td></tr>
+            <td><span class="chip real">REAL</span></td><td>Diamond Bench: 12 arquetipos (11 Python + 1 JavaScript, uno multi-unidad): 8 PASS, 4 PARTIAL (medido en septiembre de 2026) · 1.74–1.99 · ADR-017/018/020/025/028/029/042</td></tr>
         <tr><td>Fidelidad por compilador (reverse discovery sobre cada artefacto compilado) + curación humana de código generado por máquina, un veredicto por observación</td>
             <td><span class="chip real">REAL</span></td><td>1.79–1.80 · ADR-022/023 · UNMEASURED queda literal donde no hay veredicto</td></tr>
         <tr><td>La autoría controlada (EARS+STE) reduce la varianza entre compiladores</td>
@@ -302,7 +302,7 @@
       <thead><tr><th>Instrumento</th><th>Resultado medido</th><th>Releases</th></tr></thead>
       <tbody>
         <tr><td>Diamond Bench — 12 arquetipos acotados × 4 compiladores ciegos de dos vendors (Haiku · Sonnet · Opus · OpenAI Codex gpt-5.5), cada uno juzgado por un oráculo oculto</td>
-            <td>8 PASS · 4 PARTIAL. El oráculo además cazó un bug de aliasing convergente que dos compiladores independientes compartían — un defecto que ninguna revisión de código de uno solo habría marcado como sospechoso.</td>
+            <td>8 PASS · 4 PARTIAL (medido en septiembre de 2026). El oráculo además cazó un bug de aliasing convergente que dos compiladores independientes compartían — un defecto que ninguna revisión de código de uno solo habría marcado como sospechoso.</td>
             <td>1.74–1.99</td></tr>
         <tr><td>Lenguaje controlado, deconfundido — prosa libre vs EARS+STE, misma generación, oráculo compartido, 5 arquetipos</td>
             <td>REDUCED en 1, IMPROVED en 1: el guard, denso en decisiones, bajó la varianza −61%; el control y la state-machine leyeron nulo; el transformer leyó WORSE — la reescritura afiló una ambigüedad latente («exactly the fields») hacia un compromiso que el oráculo rechaza; el segundo arquetipo denso en decisiones (scheduler) ganó un verde de oráculo y subió el pass-rate medio mientras la varianza subía — dos compiladores habían convergido en el mismo error en prosa libre.</td>

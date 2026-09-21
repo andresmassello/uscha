@@ -37,7 +37,7 @@ compiler, reverse discovery is the decompiler — and code becomes a regenerable
 artifact, so the spec package + behavior ledger is the canonical asset of a system.
 Truth-pass status: the human-judgment layer (curation, oracle, id-level roundtrip) is
 real and shipped; implementation replaceability is now demonstrated for bounded systems
-(the Diamond Bench, kit 1.74–1.99, four blind compilers across two vendors — Haiku, Sonnet, Opus and OpenAI Codex gpt-5.5: 8 of 12 archetypes (11 Python + 1 JavaScript, one
+(the Diamond Bench, kit 1.74–1.99, four blind compilers across two vendors — Haiku, Sonnet, Opus and OpenAI Codex gpt-5.5 (measured September 2026): 8 of 12 archetypes (11 Python + 1 JavaScript, one
 multi-unit) regenerate to the same system, mechanically certified by a withheld oracle
 — ADR-017/018/020/025/028/029); semantic round-trip is now REAL but bounded (kit 1.85/1.90, ADR-030 amended: bench-roundtrip measures how
 much of the human-authored IR the mechanical reverse organs can anchor in each compiled artifact
