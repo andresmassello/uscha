@@ -1545,3 +1545,49 @@ page, not the engine. Measured by T166 through the `.fu-cases.json` sidecar.
   engine prints (normalised only for the `<repo>` / `<home>` placeholders and the guide's
   declared continuation convention). A page that claims real output must go RED when the output
   moves, instead of shipping prose the engine stopped saying.
+
+## The Anthropic arm (ADR-050) - closes on green `AC-CA-nn` smoke assertions
+
+The three Claude arms were compiled by hand and each recorded only the bare alias handed to the
+API (`"haiku"`, `"sonnet"`, `"opus"`) in its `COMPILATION.json`. What each alias resolved to on
+Anthropic's backend was never captured - the last UNMEASURED item ADR-042 left open (item 8).
+`tools/bench-compile-claude.py` is the dispatcher that closes it for every future round: it
+re-runs a Claude arm through headless `claude -p` under the Codex arm's exact protocol, keeps the
+alias in `compilation_report.model` (so the bench's anonymised lettering is unchanged) and records
+the EXACT resolved model id in `model_version` and `backend.model_slug`. This release LANDS the
+tool, dry-run-proven, exactly as `bench-compile-codex.py` was first landed: no live `claude -p`
+compilation, no spend, and the frozen v1 `c-haiku/`, `c-sonnet/`, `c-opus/` records untouched. A
+real round - the user copying a validated staged run into `c-<alias>/` - comes later and is what
+finally records the id. Measured by T168 through the `.ca-cases.json` sidecar; the criteria that
+read the repo-root dispatcher report UNMEASURED from an extracted kit, never a silent pass.
+
+- [ ] AC-CA-01 - `--dry-run` renders a prompt for all 12 entries and dispatches or stages
+  NOTHING: `run_entry` returns `DRY-RUN` with a non-empty prompt for every entry, and no
+  `COMPILATION.json` appears anywhere under the temp target root. Landing the tool is not running
+  it.
+- [ ] AC-CA-02 - no oracle string reaches the arm. Every rendered prompt is oracle-free under the
+  ported leak audit (same thresholds as the Codex arm), a distinctive oracle string planted into
+  the prompt TRIPS the audit, and a RED PROBE breaks the audit (`leaks()` returns `[]`) to prove
+  the assertion is load-bearing: with it broken the planted case stops refusing, so an audit that
+  ever went silent turns this criterion red.
+- [ ] AC-CA-03 - the prompt sha256 is re-derivable: byte-stable across two `--dry-run` renders (a
+  prompt is a pure function of the committed canonical package and the shared `slots.json`), and,
+  because the arm reuses the SAME slot table as the Codex arm, byte-identical to the Codex arm's
+  committed prompt hashes when `CODEX-ARM-RUN.json` is present.
+- [ ] AC-CA-04 - a returned payload validates and records an EXACT id, not a bare alias. A canned
+  payload built from the frozen `c-opus` source stages a `COMPILATION.json` that `compile-validate`
+  exits 0 on and PROMOTES; `compilation_report.model` is the bare alias `opus` while
+  `model_version` and `backend.model_slug` carry an exact id (the alias-vs-exact distinction
+  asserted directly), `backend.vendor` is `anthropic`; and a corrupted payload (one source
+  `sha256` rewritten) is a NAMED refusal into `x-opus-REFUSED/`, exit 2, never a silent stage. No
+  `claude` was dispatched.
+- [ ] AC-CA-05 - this release added a dispatcher, not a fifth arm. The anonymised model map is the
+  pinned four-key `{codex: M1, haiku: M2, opus: M3, sonnet: M4}`, and the 36 frozen v1 Claude arm
+  records still carry the BARE alias in `compilation_report.model` (a representative entry's three
+  still `compile-validate`) - proof this release rewrote none of them.
+- [ ] AC-CA-06 - the no-tools guarantee is MEASURED, not merely flagged. A clean event stream
+  counts 0 `tool_use` blocks and recovers the exact model id from the result; a stream carrying a
+  `tool_use` counts more than 0, which `run_entry` turns into a REFUSAL - so a real run that ever
+  reached a tool cannot stage a compilation; and `build_command` carries the isolation posture
+  (`--restricted`, `--tools ""`, `--strict-mcp-config`, `--permission-prompts none`,
+  `--json-schema`, `--max-budget-usd`).

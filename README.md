@@ -45,7 +45,7 @@ runtime dependencies). The npm package is a thin router; the canonical installer
 `uscha-kit/install-uscha.py`. `init` also writes a minimal, per-repo-type `.gitignore` when the
 project has none (kit 2.4.0) — it never lists `reports/`, the ledger's own evidence.
 
-**Kit v2.4.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v2.5.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 

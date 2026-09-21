@@ -17024,6 +17024,311 @@ case "$T167" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T167";;
 esac
 
+echo "== T168 (ADR-050): the Anthropic arm -- a Claude arm re-run by SCRIPT, recording the EXACT model id =="
+# The three Claude arms were compiled by hand and each recorded only a bare alias in its
+# COMPILATION.json (ADR-042 UNMEASURED item 8). This dispatcher re-runs a Claude arm through
+# headless `claude -p` and records the EXACT resolved model id next to the alias. This block
+# proves the tool LANDED and is honest WITHOUT dispatching a live claude (not available in CI,
+# costs money) -- the same way T157 tests the Codex arm without invoking codex-cli: dry-run
+# prompt rendering, the leak audit with its red probe, re-derivable hashes, a returned-payload
+# staging that compile-validates and carries an exact id (alias-vs-exact asserted explicitly),
+# the fourth-vendor lettering unchanged, and the frozen v1 arms untouched.
+T168=$(pyin "$KIT" "$ROOT" <<'PY'
+import hashlib, importlib.util, io, json, os, re, shutil, subprocess, sys, tempfile, types
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+BENCH = os.path.join(kit, "tests", "fixtures", "diamond-bench")
+ARM = os.path.join(root, "tools", "bench-compile-claude.py")
+ENTRIES = ("crud-store", "guard", "ledger-lite", "parser", "protocol-adapter", "rate-limiter",
+           "rest-handler", "scheduler", "state-machine", "transformer", "ui-render", "worker")
+res, why, TMPS = {}, {}, []
+
+
+def read_json(p):
+    with io.open(p, encoding="utf-8-sig") as fh:
+        return json.load(fh)
+
+
+def arm_module():
+    """The dispatcher, imported. It lives at the REPO root, not inside the kit, so an extracted
+    kit does not carry it -- absence is UNMEASURED (None), never a silent pass (as AC-XV does)."""
+    if not os.path.isfile(ARM):
+        return None
+    try:
+        sys.dont_write_bytecode = True
+        spec = importlib.util.spec_from_file_location("bench_compile_claude_t168", ARM)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:
+        return None
+
+
+def measure():
+    mod = arm_module()
+
+    # --- AC-CA-05: bench lettering is unchanged, and the frozen v1 arms are untouched ----------
+    # This release added a dispatcher, not a fifth arm, so the anonymised model map still has its
+    # four keys and every published M<n> claim is still correct. And the three hand-compiled
+    # Claude arms still validate and still record the BARE alias -- proof this release did not
+    # rewrite them with exact ids (that is a future round the user runs, not this one).
+    p5 = []
+    # The anonymised model map, computed the way `bench` computes it -- sorted distinct
+    # compilation_report.model across every c-* dir, lettered M1.. -- read DIRECTLY from the
+    # fixture, never from the shared bench cache: this block runs in the acceptance section,
+    # after the engine pass has torn its sandbox (and that cache) down.
+    _models = set()
+    for _e in ENTRIES:
+        _ed = os.path.join(BENCH, _e)
+        for _d in sorted(os.listdir(_ed)):
+            _cj = os.path.join(_ed, _d, "COMPILATION.json")
+            if _d.startswith("c-") and os.path.isfile(_cj):
+                _m = (read_json(_cj).get("compilation_report") or {}).get("model")
+                if _m:
+                    _models.add(_m)
+    model_map = {_m: "M%d" % (_i + 1) for _i, _m in enumerate(sorted(_models))}
+    if model_map != {"codex": "M1", "haiku": "M2", "opus": "M3", "sonnet": "M4"}:
+        p5.append("model map is %s" % json.dumps(model_map, sort_keys=True))
+
+    def run(*a):
+        return subprocess.run([sys.executable, ENG] + list(a), capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+    for e in ENTRIES:
+        for alias in ("haiku", "sonnet", "opus"):
+            cj = os.path.join(BENCH, e, "c-" + alias, "COMPILATION.json")
+            if not os.path.isfile(cj):
+                p5.append("%s/c-%s missing" % (e, alias))
+                continue
+            if (read_json(cj).get("compilation_report") or {}).get("model") != alias:
+                p5.append("%s/c-%s no longer records the bare alias" % (e, alias))
+    # validate one representative entry's three frozen arms (36 subprocess runs is wasteful; the
+    # bare-alias check above already covers all 36, and the bench cache validated them all)
+    for alias in ("haiku", "sonnet", "opus"):
+        cj = os.path.join(BENCH, "guard", "c-" + alias, "COMPILATION.json")
+        if os.path.isfile(cj) and run("compile-validate", "--ir",
+                                      os.path.join(BENCH, "guard", "IR.json"),
+                                      "--compilation", cj).returncode != 0:
+            p5.append("guard/c-%s no longer validates" % alias)
+    res["AC-CA-05"] = not p5
+    why["AC-CA-05"] = "; ".join(p5[:4]) or "map is the four-key set; 36 frozen arms still bare-alias"
+
+    if mod is None:
+        for k in ("AC-CA-01", "AC-CA-02", "AC-CA-03", "AC-CA-04", "AC-CA-06"):
+            res[k] = None
+            why[k] = "tools/bench-compile-claude.py not present"
+        return
+    slots = json.loads(io.open(mod.SLOTS, encoding="utf-8-sig").read())["entries"]
+    eng_mod = mod._engine()
+
+    # --- AC-CA-01: --dry-run renders a prompt for every entry and dispatches/stages nothing ----
+    p1 = []
+    tmp = tempfile.mkdtemp(prefix="uscha-cla-")
+    TMPS.append(tmp)
+    out_dir = os.path.join(tmp, "out")
+    os.makedirs(out_dir)
+    target = os.path.join(tmp, "target")
+    os.makedirs(target)
+    args = types.SimpleNamespace(bench=BENCH, model="opus", effort="high", write_mode="return",
+                                 r2=False, dry_run=True, target_root=target, budget=1.0)
+    for e in ENTRIES:
+        rec = mod.run_entry(args, eng_mod, e, slots[e], out_dir, None, "2.1.270")
+        if rec.get("status") != "DRY-RUN":
+            p1.append("%s: dry-run status %s (%s)" % (e, rec.get("status"), rec.get("reason")))
+        if not rec.get("prompt_bytes"):
+            p1.append("%s: empty prompt" % e)
+    stray = []
+    for base_dir, _d, fs in os.walk(target):
+        for f in fs:
+            if f == "COMPILATION.json":
+                stray.append(os.path.join(base_dir, f))
+    if stray:
+        p1.append("dry-run staged a COMPILATION.json: %s" % stray[:2])
+    res["AC-CA-01"] = not p1
+    why["AC-CA-01"] = "; ".join(p1[:4]) or "12 prompts rendered, nothing dispatched or staged"
+
+    # --- AC-CA-02: no oracle string in any prompt, and a planted one REFUSES (+ a RED PROBE) ---
+    # The leak audit is the core blindness guarantee. Every rendered prompt is oracle-free; a
+    # distinctive oracle string planted into the prompt trips the audit; and the RED PROBE proves
+    # the assertion is load-bearing -- with the audit broken (leaks() -> []) the planted case
+    # stops refusing, so a real audit that ever went silent would turn this case red.
+    p2 = []
+    for e in ENTRIES:
+        prompt, canon = mod.render_prompt(BENCH, e, slots[e], "return")
+        strings = mod.oracle_strings(BENCH, e)
+        if not strings:
+            p2.append("%s: the oracle yielded no distinctive strings -- the audit measures nothing"
+                      % e)
+        if mod.leaks(prompt, canon, strings):
+            p2.append("%s: oracle strings in the rendered prompt" % e)
+    prompt, canon = mod.render_prompt(BENCH, "guard", slots["guard"], "return")
+    strings = mod.oracle_strings(BENCH, "guard")
+    planted = next((s for s in sorted(strings) if s not in canon), None)
+    if planted is None:
+        p2.append("guard: no plantable oracle string outside the canonical package")
+    else:
+        leaky = prompt + "\nLEAK PLANTED FOR THE RED PROBE: " + planted + "\n"
+        real = mod.leaks(leaky, canon, strings)
+        if not real:
+            p2.append("a planted oracle string did NOT trip the real leak audit")
+        saved = mod.leaks
+        try:
+            mod.leaks = lambda t, c, s: []
+            broken = mod.leaks(leaky, canon, strings)
+        finally:
+            mod.leaks = saved
+        if broken:
+            p2.append("red probe: the broken audit still reported a leak")
+    res["AC-CA-02"] = not p2
+    why["AC-CA-02"] = "; ".join(p2[:4]) or "12 prompts oracle-free; a planted string refuses; red probe holds"
+
+    # --- AC-CA-03: the prompt sha256 is re-derivable ------------------------------------------
+    # Stable across two --dry-run renders (a prompt is a pure function of the committed canonical
+    # package and slot table); and, because the arm reuses the SAME slots.json as the Codex arm,
+    # byte-identical to it -- so the Codex manifest's committed sha re-derives here when present.
+    p3 = []
+    for e in ENTRIES:
+        a1 = hashlib.sha256(mod.render_prompt(BENCH, e, slots[e], "return")[0].encode("utf-8"))
+        a2 = hashlib.sha256(mod.render_prompt(BENCH, e, slots[e], "return")[0].encode("utf-8"))
+        if a1.hexdigest() != a2.hexdigest():
+            p3.append("%s: prompt sha not stable across two renders" % e)
+    codex_man = os.path.join(BENCH, "CODEX-ARM-RUN.json")
+    if os.path.isfile(codex_man):
+        man = read_json(codex_man)
+        wm = man.get("write_mode") or "return"
+        for e in ENTRIES:
+            want = (man.get("entries") or {}).get(e, {}).get("prompt_sha256")
+            got = hashlib.sha256(mod.render_prompt(BENCH, e, slots[e], wm)[0].encode("utf-8")
+                                 ).hexdigest()
+            if want and want != got:
+                p3.append("%s: prompt not byte-identical to the Codex arm (%s vs %s)"
+                          % (e, str(want)[:12], got[:12]))
+    res["AC-CA-03"] = not p3
+    why["AC-CA-03"] = "; ".join(p3[:4]) or "12 hashes stable across two renders and match the Codex arm"
+
+    # --- AC-CA-04: a returned payload validates and records an EXACT id, not a bare alias ------
+    # The whole point of the tool (goal 2). A canned returned payload built from the frozen
+    # c-opus source stages a COMPILATION.json that compile-validate exits 0 on and promotes; its
+    # compilation_report.model is the bare alias opus (so lettering is stable) while
+    # model_version and backend.model_slug carry an EXACT id -- the alias-vs-exact distinction is
+    # asserted directly. A corrupted payload (one source sha256 rewritten) is a NAMED refusal
+    # into x-opus-REFUSED, never a silent stage. No claude was dispatched.
+    p4 = []
+    copus = read_json(os.path.join(BENCH, "guard", "c-opus", "COMPILATION.json"))
+    files = [{"path": u["unit"],
+              "content": io.open(os.path.join(BENCH, "guard", "c-opus",
+                                              u["unit"].replace("/", os.sep)),
+                                 encoding="utf-8-sig").read()}
+             for u in copus["source"]]
+    ret = {"target_stack": copus["target_stack"],
+           "implementation_constraints": copus.get("implementation_constraints") or [],
+           "source_units": [u["unit"] for u in copus["source"]], "tests_units": [],
+           "trace_manifest": copus.get("trace_manifest") or [],
+           "unresolved_intent": copus.get("unresolved_intent") or [], "files": files}
+    exact = "claude-opus-4-8"
+    for corrupt in (False, True):
+        w = tempfile.mkdtemp(prefix="uscha-cla-")
+        TMPS.append(w)
+        staged = os.path.join(w, "staged")
+        comp, probs = mod.stage(eng_mod, BENCH, "guard", slots["guard"], ret, w, staged, "opus",
+                                exact, "high", {}, "t0", "t1", "return", "2.1.270", 0)
+        if comp is None:
+            p4.append("stage produced no compilation: %s" % probs)
+            continue
+        if corrupt:
+            cp = os.path.join(staged, "COMPILATION.json")
+            c = read_json(cp)
+            c["source"][0]["sha256"] = "0" * 64
+            io.open(cp, "w", encoding="utf-8", newline="\n").write(
+                json.dumps(c, indent=2, ensure_ascii=False) + "\n")
+        troot = os.path.join(w, "target")
+        os.makedirs(troot)
+        status, dest, reason, vexit, _o = mod.validate_and_place(
+            os.path.join(BENCH, "guard", "IR.json"), staged, troot, "guard", "c-opus", False, [])
+        promoted = os.path.isdir(os.path.join(troot, "guard", "c-opus"))
+        refused = os.path.isdir(os.path.join(troot, "guard", "x-opus-REFUSED"))
+        if corrupt:
+            if not (status == "REFUSED" and refused and not promoted and vexit == 2 and reason):
+                p4.append("corrupted: status=%s promoted=%s refused=%s exit=%s"
+                          % (status, promoted, refused, vexit))
+        else:
+            if not (status == "PROMOTED" and promoted and not refused and vexit == 0):
+                p4.append("intact: status=%s promoted=%s refused=%s exit=%s"
+                          % (status, promoted, refused, vexit))
+            rep = comp["compilation_report"]
+            if rep.get("model") != "opus":
+                p4.append("model is %r, not the bare alias" % rep.get("model"))
+            head = (rep.get("model_version") or "").split(" ")[0]
+            if not mod._EXACT_ID_RE.match(head):
+                p4.append("model_version %r does not carry an exact id" % rep.get("model_version"))
+            if head == "opus":
+                p4.append("model_version is the bare alias, not an exact id")
+            b = rep.get("backend") or {}
+            if b.get("vendor") != "anthropic" \
+                    or not mod._EXACT_ID_RE.match(str(b.get("model_slug") or "")):
+                p4.append("backend vendor/model_slug wrong: %s" % json.dumps(b))
+    res["AC-CA-04"] = not p4
+    why["AC-CA-04"] = "; ".join(p4[:4]) or "payload validates, model=alias, model_version=exact id; corrupt refuses"
+
+    # --- AC-CA-06: the no-tools guarantee is MEASURED, and the dispatch carries the posture -----
+    # A clean event stream counts 0 tool calls and recovers the exact model id from the result;
+    # a stream carrying a tool_use counts >0, which run_entry turns into a refusal -- so a real
+    # run that ever reached a tool cannot stage a compilation. And build_command carries the
+    # isolation flags that remove the tool surface in the first place.
+    p6 = []
+    w = tempfile.mkdtemp(prefix="uscha-cla-")
+    TMPS.append(w)
+
+    def evfile(events):
+        p = os.path.join(w, "ev.jsonl")
+        io.open(p, "w", encoding="utf-8").write("\n".join(json.dumps(x) for x in events) + "\n")
+        return p
+    clean = [{"type": "result", "subtype": "success", "is_error": False,
+              "result": json.dumps({"files": []}),
+              "usage": {"modelUsage": {"claude-opus-4-8": {"inputTokens": 1}}}}]
+    withtool = [{"type": "assistant",
+                 "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {}}]}}]
+    ce = mod.parse_events(evfile(clean))
+    te = mod.parse_events(evfile(withtool + clean))
+    if ce["tool_use_blocks"] != 0:
+        p6.append("a clean stream counted %d tool calls" % ce["tool_use_blocks"])
+    if te["tool_use_blocks"] < 1:
+        p6.append("a stream carrying a tool_use counted %d" % te["tool_use_blocks"])
+    if not (ce.get("model_reported") and mod._EXACT_ID_RE.match(ce["model_reported"] or "")):
+        p6.append("the exact model id was not recovered from the event stream")
+    os.environ["CLAUDE_BIN"] = "claude"  # override so build_command does not resolve a binary in CI
+    cmd = mod.build_command(mod.output_schema(slots["guard"], "return"), "opus", "high",
+                            "return", 1.0)
+    joined = " ".join(str(x) for x in cmd)
+    for needle in ("--restricted", "--strict-mcp-config", "--json-schema", "--max-budget-usd", "--disallowed-tools"):
+        if needle not in joined:
+            p6.append("build_command omits %s" % needle)
+    if "--tools" not in cmd:
+        p6.append("build_command omits --tools")
+    if "--permission-prompts" not in cmd or "none" not in cmd:
+        p6.append("build_command omits --permission-prompts none")
+    res["AC-CA-06"] = not p6
+    why["AC-CA-06"] = "; ".join(p6[:4]) or "0 tools clean, >0 with a tool_use, exact id recovered, posture carried"
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".ca-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T168" in
+  OK*) PASS=$((PASS+1)); echo "  ok   Anthropic arm (AC-CA-01..06): $T168";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T168";;
+esac
+
 # ---------------------------------------------------------------------------- #
 # ACCEPTANCE EMISSION (kit 1.44.0) — uscha applied to itself.
 # Runs the repo's own ACCEPTANCE.md criteria and writes the JUnit report the engine
@@ -17333,6 +17638,11 @@ FAMILIES = (
     # git, a shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".cx-cases.json", "codex-pilot-fixes", "T167",                   # 2.4.0
      _seq("AC-CX", 1, 7)),
+    # AC-CA-01..04 and AC-CA-06 read tools/bench-compile-claude.py, which lives at the REPO root
+    # and is not shipped inside the kit -- from an extracted kit they report None = UNMEASURED,
+    # never a silent pass (AC-CA-05 measures the fixture and the bench cache, so it still runs).
+    (".ca-cases.json", "anthropic-arm", "T168",                       # ADR-050, 2.5.0
+     _seq("AC-CA", 1, 6)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

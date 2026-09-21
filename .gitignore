@@ -69,3 +69,4 @@ tests/golden/*.received.json
 # seal can see would break check-terminado at X+1 (ADR-038).
 .uscha-release-state.json
 tools/.codex-arm/
+tools/.claude-arm/
