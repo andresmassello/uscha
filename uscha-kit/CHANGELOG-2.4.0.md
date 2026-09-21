@@ -77,4 +77,4 @@ states the rule explicitly, by name, right beside the command.
 No risk-profile default moved, no coverage threshold changed — only what an ABSENT report
 reports. No new subcommand: `check-coverage` and `init` keep their existing shape.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 458 checks · 0 fail; acceptance 336/337.
