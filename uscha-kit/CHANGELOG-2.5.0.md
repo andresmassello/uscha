@@ -89,4 +89,4 @@ No live compilation, no spend, no change to the frozen v1 arms or the bench verd
 engine subcommand: `bench-compile-claude.py` is a repo-root research tool, so the published
 subcommand count does not move.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 459 checks · 0 fail; acceptance 342/343.
