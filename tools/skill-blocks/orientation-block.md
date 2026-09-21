@@ -31,6 +31,14 @@ block onward, derived state wins.
 The operator must never have to ask "where am I?" or "what happens now?". Two markers, always.
 They are navigation, not ceremony: one line per turn, one block at the end.
 
+**No statusline (kit 2.4.0): the visible reply IS the statusline.** On a surface with no live
+statusline — Codex, pi, a plain terminal — these markers are the only signal the operator gets,
+so they MUST appear in the visible reply text, never only inside a collapsed tool-call log the
+operator may not expand. On such a surface, the FINAL message of every turn STARTS with the
+compact `uscha-status` block (derived phase · loop · measured acceptance · next criterion, read
+from the ledger — see the `uscha-status` skill), immediately before the breadcrumb/close marker
+below.
+
 **Open every turn with a breadcrumb**, then the content:
 
 `[uscha · {{skill}} · <step> → <target>]`

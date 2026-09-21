@@ -9,7 +9,8 @@ siendo suya. La tesis, los ADR y la investigación vienen después, no antes.
 
 **Verificado en:** Windows 10, git-bash, Python 3.13.12, Claude Code, un repositorio **Python**
 chico con `pytest` y `pytest-cov`. Ese es el único runtime ejercitado de punta a punta al
-escribir esta página. Para los demás agentes y sistemas operativos a los que el kit instala,
+escribir esta página. También verificado: un ciclo completo de `/uscha-devloop` en la app de
+escritorio de Codex, sobre otro repositorio piloto greenfield (ADR-049). Para los demás agentes y sistemas operativos a los que el kit instala,
 lea [`CROSS-PLATFORM.md`](CROSS-PLATFORM.md) y la matriz de compatibilidad del
 [README](../README.md): allí la ubicación de los archivos está medida; que *carguen dentro de
 cada agente* es una expectativa documentada.

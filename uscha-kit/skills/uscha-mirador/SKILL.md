@@ -18,7 +18,7 @@ Paints the REAL state of the project at a glance. It does not narrate or estimat
 wires the JSON the engine emits into the template. Read-only.
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.3.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.4.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## Orientation markers (non-negotiable)
 
@@ -27,6 +27,10 @@ The operator must never have to ask "where am I?" or "what happens now?".
 This skill is a **one-shot read-only readout**: its block IS the answer. It therefore does NOT
 take the conversational close block — that would be exactly the padding this skill forbids.
 It carries the two minimal markers instead.
+
+**No statusline (kit 2.4.0): the visible reply IS the statusline.** On a surface with no live
+statusline — Codex, pi, a plain terminal — this readout IS the operator's only signal, so it
+MUST appear in the visible reply text, never only inside a collapsed tool-call log.
 
 **Open with a breadcrumb:**
 

@@ -8,6 +8,10 @@ This skill is a **one-shot read-only readout**: its block IS the answer. It ther
 take the conversational close block — that would be exactly the padding this skill forbids.
 It carries the two minimal markers instead.
 
+**No statusline (kit 2.4.0): the visible reply IS the statusline.** On a surface with no live
+statusline — Codex, pi, a plain terminal — this readout IS the operator's only signal, so it
+MUST appear in the visible reply text, never only inside a collapsed tool-call log.
+
 **Open with a breadcrumb:**
 
 `[uscha · {{skill}} · step <n> → <target>]`

@@ -9,7 +9,8 @@ thesis, the ADRs and the research come after, not before.
 
 **Verified on:** Windows 10, git-bash, Python 3.13.12, Claude Code, a small **Python** repo
 with `pytest` and `pytest-cov`. That is the one runtime exercised end to end while writing this
-page. For the other agents and operating systems the kit installs to, read
+page. Also verified: a full `/uscha-devloop` cycle on the Codex desktop app, on a separate
+greenfield pilot repo (ADR-049). For the other agents and operating systems the kit installs to, read
 [`CROSS-PLATFORM.md`](CROSS-PLATFORM.md) and the compatibility matrix in the
 [README](../README.md) — placement there is measured; *loading inside every agent* is a
 documented expectation.

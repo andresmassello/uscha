@@ -19,7 +19,8 @@ Stdlib only. Python 3.8+.
 Usage (see `--help` on each subcommand):
   qa_ledger.py init        --config uscha.config.json [--out QA-LEDGER.json]
   qa_ledger.py snapshot    --repo backend-api    [--phase pre|post]
-  qa_ledger.py check-coverage --repo backend-api [--threshold 60]   # exit 0 >=, 1 <
+  qa_ledger.py check-coverage --repo backend-api [--threshold 60]
+                                        # exit 0 >= threshold, 1 < threshold, 2 UNMEASURED (no report)
   qa_ledger.py log-step    --repo backend-api --tool code-review --iteration 1 \
                            --reported 12 --gated-reported 4 --fixed 9 \
                            --deferred 2 --suppressed 1 --tests-passed true \
@@ -397,6 +398,24 @@ def coverage(repo_path, repo_type):
         return go_coverage(repo_path)
     # flutter + node + swift: all emit lcov (swift: llvm-cov export -format=lcov)
     return flutter_coverage(repo_path)
+
+
+_COVERAGE_REPORT_HINT = {
+    "ant": "target/site/jacoco/jacoco.xml (or -aggregate)",
+    "maven": "target/site/jacoco/jacoco.xml (or -aggregate)",
+    "gradle": "target/site/jacoco/jacoco.xml (or -aggregate)",
+    "python": "coverage.xml or reports/coverage.xml (Cobertura)",
+    "rust": "coverage.xml or reports/coverage.xml (Cobertura)",
+    "dotnet": "coverage.xml or reports/coverage.xml (Cobertura)",
+    "cpp": "coverage.xml or reports/coverage.xml (Cobertura)",
+    "go": "coverage.out, cover.out or reports/coverage.out",
+}
+
+
+def _coverage_report_hint(repo_type):
+    """Human-readable hint of where `coverage()` looked, for an UNMEASURED message --
+    never invents a single path, since several report types glob multiple locations."""
+    return _COVERAGE_REPORT_HINT.get(repo_type, "coverage/lcov.info")
 
 
 # --------------------------------------------------------------------------- #
@@ -2404,15 +2423,18 @@ def cmd_check_coverage(args):
         threshold = ledger["config"].get("defaults", {}).get("coverage_threshold", 60)
     cov = coverage(cfg["path"], cfg["type"])
     pct = cov["pct"]
+    if not cov["report_found"]:
+        # No coverage report at all is UNMEASURED, not a below-threshold verdict: on a
+        # greenfield repo pct 0.0 + report_found False means no report was ever produced,
+        # never that the code was tested and failed. Fail closed (exit 2) -- distinct from
+        # exit 1 (a real report that reads below threshold) -- so callers do not confuse
+        # "never measured" with "measured and failing".
+        print(f"[qa_ledger] {args.repo}: coverage UNMEASURED -- no coverage report found "
+              f"(looked for {_coverage_report_hint(cfg['type'])}). "
+              f"Run the test command with coverage first to produce a report.")
+        sys.exit(2)
     below = pct < threshold
     state = "BELOW" if below else "OK"
-    if not cov["report_found"]:
-        # No coverage report at all == treat as below threshold (needs char tests),
-        # but flag loudly so the skill knows tests simply haven't been run yet.
-        print(f"[qa_ledger] {args.repo}: NO coverage report found "
-              f"(threshold {threshold}%) -> treat as BELOW. "
-              f"Run the test command first if a report was expected.")
-        sys.exit(1)
     print(f"[qa_ledger] {args.repo}: coverage {pct}% vs threshold {threshold}% -> {state}")
     sys.exit(1 if below else 0)
 

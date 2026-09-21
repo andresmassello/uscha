@@ -1517,7 +1517,7 @@ sys.exit(0 if ok else 1)" \
   || { FAIL=$((FAIL+1)); echo "  FAIL metricas del mutation report mal computadas"; }
 chk "report inexistente -> exit 2 (no evidencia)" 2 run pit-check --report no-such.xml --min-score 60
 
-echo "== T49 check-coverage: gate de umbral (OK / BELOW / sin report = fail-closed) =="
+echo "== T49 check-coverage: gate de umbral (OK / BELOW / sin report = UNMEASURED exit 2, 2.4.0) =="
 printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" },\n  "repos": [ {"name":"cov","path":"covrepo","type":"python"}, {"name":"nocov","path":"nocovrepo","type":"python"} ], "integration": {"enabled": false} }\n' > cc-cfg.json
 mkdir -p covrepo nocovrepo
 # Cobertura: line-rate 0.85 -> 85% (lines-valid/lines-covered coherentes con line-rate)
@@ -1528,7 +1528,7 @@ EOF
 run init --config cc-cfg.json --out L-cc.json >/dev/null
 chk "coverage 85% >= threshold 60 -> OK exit 0" 0 run check-coverage --repo cov --threshold 60 --ledger L-cc.json
 chk "coverage 85% < threshold 90 -> BELOW exit 1" 1 run check-coverage --repo cov --threshold 90 --ledger L-cc.json
-chk "sin report de coverage -> fail-closed exit 1" 1 run check-coverage --repo nocov --threshold 60 --ledger L-cc.json
+chk "sin report de coverage -> UNMEASURED exit 2 (nunca un BELOW inventado)" 2 run check-coverage --repo nocov --threshold 60 --ledger L-cc.json
 
 echo "== T50 rebuild: baseline escribe la firma; compare puntua COVERS / DIVERGE =="
 mkdir -p rbrepo/src rbrepo/reports
@@ -10762,7 +10762,7 @@ def measure():
     dims3 = app3.get("dims") or {}
     res["AC-AU-03"] = bool(r3a.returncode == 1 and "50.0%" in r3a.stdout
                            and r3b.returncode != 0
-                           and "NO coverage report" in r3b.stdout
+                           and "UNMEASURED" in r3b.stdout
                            and "Traceback" not in r3b.stderr
                            and "coverage=0.0% (found=False)" in r3s.stdout
                            and facts3.get("coverage_pct") == 0.0
@@ -10779,7 +10779,7 @@ def measure():
     init(d4, MVN_CFG)
     r4 = eng(d4, "check-coverage", "--ledger", "L.json", "--repo", "app")
     res["AC-AU-04"] = bool(r4.returncode != 0 and "Traceback" not in r4.stderr
-                           and "NO coverage report" in r4.stdout)
+                           and "UNMEASURED" in r4.stdout)
     why["AC-AU-04"] = "rc=%s out=%r err=%r" % (r4.returncode, r4.stdout.strip()[-60:],
                                                r4.stderr.strip()[-80:])
 
@@ -16780,6 +16780,250 @@ case "$T166" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T166";;
 esac
 
+echo "== T167 (2.4.0): Codex pilot fixes -- coverage UNMEASURED not BELOW, init writes a scoped .gitignore, no-statusline visible-reply rule, pr-ready is a phase not a subcommand =="
+T167=$(pyin "$KIT" "$ROOT" <<'PY'
+import io, json, os, re, subprocess, sys, tarfile, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+INSTALLER = os.path.join(kit, "install-uscha.py")
+GEN_BLOCKS = os.path.join(root, "tools", "gen-skill-blocks.py")
+PREV_TAG = "v2.3.0"
+TMPS = []
+res, why = {}, {}
+
+
+def tmp():
+    d = tempfile.mkdtemp(prefix="uscha-cx-")
+    TMPS.append(d)
+    return d
+
+
+def run(args, cwd=None):
+    return subprocess.run([sys.executable] + list(args), cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+
+
+def read(path):
+    with io.open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def write(path, body):
+    with io.open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(body)
+
+
+def bare_python_repo():
+    repo = os.path.join(tmp(), "backend-api")
+    os.makedirs(repo)
+    write(os.path.join(repo, "pyproject.toml"), "[project]" + chr(10) + 'name = "backend-api"' + chr(10))
+    return repo
+
+
+def old_kit_copy():
+    """The kit tree exactly as it shipped at PREV_TAG, via a git archive into a temp dir --
+    NOT a git show on install-uscha.py alone, because it reads templates/ relative to its own
+    file. None (no git, a shallow clone, an extracted kit) is UNMEASURED, never a silent pass."""
+    dest = tmp()
+    proc = subprocess.run(["git", "-C", root, "archive", PREV_TAG, "uscha-kit"],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if proc.returncode != 0 or not proc.stdout:
+        return None
+    try:
+        tf = tarfile.open(fileobj=io.BytesIO(proc.stdout))
+        try:
+            tf.extractall(dest, filter="data")
+        except TypeError:
+            tf.extractall(dest)   # Python < 3.12: no filter= kwarg
+    except (tarfile.TarError, OSError):
+        return None
+    old_installer = os.path.join(dest, "uscha-kit", "install-uscha.py")
+    return old_installer if os.path.isfile(old_installer) else None
+
+
+def measure():
+    # --- AC-CX-01: check-coverage on a repo with NO report is UNMEASURED (exit 2), never
+    # the below-threshold verdict -- with a control: a REAL low-coverage report still fails
+    # with exit 1, so the fix narrows the UNMEASURED case, it does not weaken the real gate.
+    repo1 = bare_python_repo()
+    write(os.path.join(repo1, "uscha.config.json"), json.dumps({
+        "version": "1.0.0", "project": "backend-api",
+        "defaults": {"acceptance_file": "ACCEPTANCE.md", "coverage_threshold": 60},
+        "repos": [{"name": "backend-api", "path": ".", "type": "python"}]}) + chr(10))
+    init1 = run([ENG, "init", "--config", "uscha.config.json", "--out", "L.json"], cwd=repo1)
+    p1 = []
+    if init1.returncode != 0:
+        p1.append("ledger init failed: %r" % (init1.stdout + init1.stderr)[-160:])
+    none_out = run([ENG, "check-coverage", "--ledger", os.path.join(repo1, "L.json"),
+                    "--repo", "backend-api"], cwd=repo1)
+    none_text = none_out.stdout + none_out.stderr
+    if none_out.returncode != 2:
+        p1.append("no-report exit=%r, expected 2" % none_out.returncode)
+    if "UNMEASURED" not in none_text or "BELOW" in none_text:
+        p1.append("no-report message does not read UNMEASURED: %r" % none_text[-160:])
+    write(os.path.join(repo1, "coverage.xml"),
+         '<coverage lines-covered="1" lines-valid="10"></coverage>' + chr(10))
+    low_out = run([ENG, "check-coverage", "--ledger", os.path.join(repo1, "L.json"),
+                  "--repo", "backend-api", "--threshold", "60"], cwd=repo1)
+    if low_out.returncode != 1:
+        p1.append("real low-coverage report exit=%r, expected 1 (control)" % low_out.returncode)
+    res["AC-CX-01"] = not p1
+    why["AC-CX-01"] = "; ".join(p1[:3]) or "no report -> exit 2 UNMEASURED; real low report -> exit 1"
+
+    # --- AC-CX-02: init writes a scoped .gitignore for a python repo, and it never lists
+    # reports/ -- the ledger's own evidence directory must never be told to disappear ---------
+    repo2 = bare_python_repo()
+    out2 = run([INSTALLER, "init", "--repo", repo2, "--json"], cwd=repo2)
+    gi_path = os.path.join(repo2, ".gitignore")
+    p2 = []
+    if out2.returncode != 0:
+        p2.append("installer init failed: %r" % (out2.stdout + out2.stderr)[-200:])
+    elif not os.path.isfile(gi_path):
+        p2.append(".gitignore was not written")
+    else:
+        body = read(gi_path)
+        if "__pycache__/" not in body or "*.pyc" not in body:
+            p2.append(".gitignore missing expected python patterns: %r" % body)
+        # "reports" may appear in the file's OWN explanatory comment (kit 2.4.0 documents the
+        # rule right there); only a PATTERN line (not starting with #) may never name it.
+        pattern_lines = [ln for ln in body.split(chr(10)) if ln.strip() and not ln.startswith("#")]
+        if any("reports" in ln for ln in pattern_lines):
+            p2.append(".gitignore lists reports -- evidence must never be ignored: %r" % body)
+    res["AC-CX-02"] = not p2
+    why["AC-CX-02"] = "; ".join(p2[:3]) or "python .gitignore written, scoped, reports/ absent"
+
+    # --- AC-CX-03: an existing .gitignore is left byte-identical (even with --force), and a
+    # second init reports it unchanged rather than a conflict -------------------------------
+    repo3 = bare_python_repo()
+    write(os.path.join(repo3, ".gitignore"), "custom-content" + chr(10))
+    before = read(os.path.join(repo3, ".gitignore"))
+    run([INSTALLER, "init", "--repo", repo3, "--json", "--force"], cwd=repo3)
+    after_first = read(os.path.join(repo3, ".gitignore"))
+    out3b = run([INSTALLER, "init", "--repo", repo3, "--json"], cwd=repo3)
+    p3 = []
+    if before != after_first:
+        p3.append("existing .gitignore changed by init: %r -> %r" % (before, after_first))
+    try:
+        ops3b = json.loads(out3b.stdout).get("operations") or []
+    except ValueError:
+        ops3b = []
+    gi_ops = [o for o in ops3b if o.get("path", "").replace(chr(92), "/").endswith("/.gitignore")]
+    if not gi_ops or gi_ops[0].get("action") != "unchanged":
+        p3.append("second init did not report .gitignore unchanged: %r" % gi_ops)
+    res["AC-CX-03"] = not p3
+    why["AC-CX-03"] = ("; ".join(p3[:3])
+                       or "existing .gitignore untouched; second init reports unchanged")
+
+    # --- AC-CX-04: the rendered orientation block (every SKILL.md, both trees) carries the
+    # no-statusline rule, and the generator agrees its own output is up to date -------------
+    NEEDLE = "the visible reply IS the statusline"
+    missing = []
+    for tree in (os.path.join("uscha-kit", ".claude", "skills"), os.path.join("uscha-kit", "skills")):
+        base = os.path.join(root, tree)
+        if not os.path.isdir(base):
+            continue
+        for name in sorted(os.listdir(base)):
+            sk = os.path.join(base, name, "SKILL.md")
+            if os.path.isfile(sk) and NEEDLE not in read(sk):
+                missing.append(os.path.join(tree, name, "SKILL.md"))
+    check = subprocess.run([sys.executable, GEN_BLOCKS, "--check"], cwd=root,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                           encoding="utf-8")
+    p4 = list(missing)
+    if check.returncode != 0:
+        p4.append("gen-skill-blocks.py --check exit=%r: %r" % (check.returncode, check.stdout[-200:]))
+    res["AC-CX-04"] = not p4
+    why["AC-CX-04"] = "; ".join(p4[:4]) or "every SKILL.md carries the rule; --check is green"
+
+    # --- AC-CX-05: the devloop SKILL carries the tick-on-close rule and the reports-are-
+    # evidence rule, pinned by a stable phrase, in BOTH mirrored trees ----------------------
+    TICK = "Tick measured-but-unchecked boxes before closing"
+    EVID = "reports/" + chr(96) + " is EVIDENCE, not build noise"
+    p5 = []
+    for tree in (os.path.join("uscha-kit", ".claude", "skills"), os.path.join("uscha-kit", "skills")):
+        sk = os.path.join(root, tree, "uscha-devloop", "SKILL.md")
+        if not os.path.isfile(sk):
+            p5.append(sk + " missing")
+            continue
+        body = read(sk)
+        if TICK not in body:
+            p5.append(tree + ": tick-on-close rule missing")
+        if EVID not in body:
+            p5.append(tree + ": reports-are-evidence rule missing")
+    res["AC-CX-05"] = not p5
+    why["AC-CX-05"] = "; ".join(p5[:4]) or "both mirrors carry the tick-on-close and evidence rules"
+
+    # --- AC-CX-06: no gated doc presents pr-ready as if it were its own subcommand -- it
+    # is always read through the phase --require pr-ready form. A line naming the anti-pattern
+    # to WARN against it (this release's own SKILL.md fix) is excluded by its negation cue. --
+    BAD = re.compile(r"(qa_ledger\.py|" + re.escape("$QL") + r")[\s" + chr(34) + r"]*pr-ready\b")
+    NEGATION = ("no " + chr(96), "not a subcommand", "argparse error", "never")
+    targets = []
+    for tree in (os.path.join("uscha-kit", ".claude", "skills"), os.path.join("uscha-kit", "skills")):
+        base = os.path.join(root, tree)
+        if os.path.isdir(base):
+            for name in sorted(os.listdir(base)):
+                sk = os.path.join(base, name, "SKILL.md")
+                if os.path.isfile(sk):
+                    targets.append(os.path.join(tree, name, "SKILL.md"))
+    for rel in ("README.md", os.path.join("uscha-kit", "README.md"), "ACCEPTANCE.md",
+               os.path.join("docs", "FIRST-USE.md"), os.path.join("docs", "FIRST-USE-EN.md"),
+               os.path.join("docs", "uscha-claude-code-doc.html"),
+               os.path.join("docs", "uscha-claude-code-doc-EN.html")):
+        if os.path.isfile(os.path.join(root, rel)):
+            targets.append(rel)
+    p6 = []
+    for rel in targets:
+        body = read(os.path.join(root, rel))
+        for line in body.split(chr(10)):
+            if BAD.search(line) and not any(n in line.lower() or n in line for n in NEGATION):
+                p6.append(rel + ": " + line.strip()[:100])
+    res["AC-CX-06"] = not p6
+    why["AC-CX-06"] = "; ".join(p6[:4]) or "pr-ready is always read via phase --require pr-ready"
+
+    # --- AC-CX-07: RED PROBE -- the PREV_TAG installer, run out of git, wrote no .gitignore;
+    # the current installer does. None (no git, a shallow clone) is UNMEASURED, never a pass.
+    old_installer = old_kit_copy()
+    if old_installer is None:
+        res["AC-CX-07"] = None
+        why["AC-CX-07"] = PREV_TAG + " uscha-kit not reachable via git archive (no git, or a shallow clone)"
+    else:
+        repo7 = bare_python_repo()
+        out_old = run([old_installer, "init", "--repo", repo7, "--json"], cwd=repo7)
+        p7 = []
+        if out_old.returncode != 0:
+            p7.append(PREV_TAG + " installer init failed: %r" % (out_old.stdout + out_old.stderr)[-160:])
+        if os.path.isfile(os.path.join(repo7, ".gitignore")):
+            p7.append(PREV_TAG + " installer already wrote a .gitignore -- red probe invalid")
+        repo7b = bare_python_repo()
+        out_new = run([INSTALLER, "init", "--repo", repo7b, "--json"], cwd=repo7b)
+        if out_new.returncode != 0 or not os.path.isfile(os.path.join(repo7b, ".gitignore")):
+            p7.append("current installer did not write .gitignore: rc=%r" % out_new.returncode)
+        res["AC-CX-07"] = not p7
+        why["AC-CX-07"] = "; ".join(p7[:3]) or (PREV_TAG + " wrote no .gitignore; the current installer does")
+
+
+try:
+    measure()
+finally:
+    import shutil
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".cx-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T167" in
+  OK*) PASS=$((PASS+1)); echo "  ok   Codex pilot fixes (AC-CX-01..07): $T167";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T167";;
+esac
+
 # ---------------------------------------------------------------------------- #
 # ACCEPTANCE EMISSION (kit 1.44.0) — uscha applied to itself.
 # Runs the repo's own ACCEPTANCE.md criteria and writes the JUnit report the engine
@@ -17085,6 +17329,10 @@ FAMILIES = (
     # own extracted commands, its routes, its twin and its silence about completion time.
     (".fu-cases.json", "first-use-walkthrough", "T166",              # 2.2.0
      _seq("AC-FU", 1, 6)),
+    # AC-CX-07 is the RED PROBE: it runs the v2.3.0 installer out of git -- without it (no
+    # git, a shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
+    (".cx-cases.json", "codex-pilot-fixes", "T167",                   # 2.4.0
+     _seq("AC-CX", 1, 7)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

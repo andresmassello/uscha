@@ -27,7 +27,7 @@ artifacts; these can block) and **self-reported** agent counts (log-step — nar
 recorded for the retrospective; a measured red always overrides a narrated green).
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.3.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.4.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## First contact (show ONCE, then never again)
 
@@ -61,6 +61,14 @@ block onward, derived state wins.
 
 The operator must never have to ask "where am I?" or "what happens now?". Two markers, always.
 They are navigation, not ceremony: one line per turn, one block at the end.
+
+**No statusline (kit 2.4.0): the visible reply IS the statusline.** On a surface with no live
+statusline — Codex, pi, a plain terminal — these markers are the only signal the operator gets,
+so they MUST appear in the visible reply text, never only inside a collapsed tool-call log the
+operator may not expand. On such a surface, the FINAL message of every turn STARTS with the
+compact `uscha-status` block (derived phase · loop · measured acceptance · next criterion, read
+from the ledger — see the `uscha-status` skill), immediately before the breadcrumb/close marker
+below.
 
 **Open every turn with a breadcrumb**, then the content:
 
@@ -239,15 +247,22 @@ For each repo, decide whether a safety net exists before any refactoring:
 
 ```bash
 python3 $QL snapshot --repo <REPO> --phase pre
-python3 $QL check-coverage --repo <REPO>     # exit 0 = OK, exit 1 = BELOW threshold
+python3 $QL check-coverage --repo <REPO>
+# exit 0 = OK, exit 1 = BELOW threshold (a real report), exit 2 = UNMEASURED (no report)
 ```
 
 - **Coverage >= threshold:** the existing suite is the guardrail. Skip to Phase 2.
-- **Coverage < threshold (or no report):** write **characterization / contract tests
-  at the boundary** (public API, endpoints, input→output behavior) — NOT internals.
+- **Coverage < threshold (a real report, exit 1):** write **characterization / contract
+  tests at the boundary** (public API, endpoints, input→output behavior) — NOT internals.
   These must survive refactoring. The ADR acceptance criteria are the spec for these.
   **Have the human review these tests before trusting them as a gate** — a test that
-  passes for the wrong reason poisons the whole loop.
+  passes for the wrong reason poisons the whole loop. Characterization tests are for
+  EXISTING code nobody has tested yet, not for code that has not been run at all.
+- **UNMEASURED (exit 2, no report found):** on a greenfield repo this means the test
+  command has never been run with coverage — not that the code failed a test. Produce
+  the report first: run the repo's test command with coverage, then re-run
+  `check-coverage`. Only if a real report then shows coverage below threshold does the
+  characterization path above apply.
 - **Migration/legacy (profile E): capture the golden BEFORE touching anything.** Run
   the `uscha-characterize` skill (or `uscha-reverse-discovery` for a whole-system map first): it
   executes the ORIGINAL code against a real input corpus, emits `.received` fixtures,
@@ -521,6 +536,13 @@ python3 $QL snapshot --repo <REPO> --phase post   # for every repo + integration
 
 Full suite must be green and coverage at/above threshold before proceeding.
 
+**`reports/` is EVIDENCE, not build noise (kit 2.4.0).** JUnit XML, coverage reports
+(JaCoCo/Cobertura/lcov/go cover), and `reports/smoke.json` are what `snapshot`,
+`check-coverage` and `smoke-ingest` read to turn "we ran tests" into a measured fact.
+Keep it, commit it, and never delete or `.gitignore` it to get a clean-looking commit —
+a repo with no `reports/` reads UNMEASURED, not "clean". (`uscha init`'s generated
+`.gitignore`, kit 2.4.0, never lists `reports/` for exactly this reason.)
+
 ## Phase 5b — Rebuild test (optional; risk profile C+/E or periodic CI)
 
 Completeness of the SPEC, not correctness of the build: is the spec package enough to
@@ -548,6 +570,10 @@ is a spec gap, not a code bug.
 ```bash
 python3 $QL phase --repo <REPO> --require pr-ready   # exit 1 = the facts say no
 ```
+
+`pr-ready` is a PHASE VALUE, not a subcommand — there is no `qa_ledger.py pr-ready`.
+It is always read through `phase --repo <REPO> --require pr-ready` as shown above
+(`qa_ledger.py pr-ready` alone is an argparse error).
 
 The state is COMPUTED from the ledger (converged + green tests + zero
 BLOCKER/CRITICAL + no open escalation), never self-declared — if it exits 1, the
@@ -663,6 +689,16 @@ Always pass `--record` here (kit 1.47.0): it persists the score to `readiness_hi
 count, plateau flag per repo — to `ledger["measured"]` (what the statusline reads).
 Without it the trail starves: the mirador shows "no history yet" and the statusline
 falls back to counting checkboxes. Recording is append-only facts, never a gate.
+
+**Tick measured-but-unchecked boxes before closing (kit 2.4.0).** `readiness` reports
+`measured_unchecked` (`--json`) / a `· measured but unticked: AC-...` line (default view):
+AC-IDs the ledger already closed with a green, name-tagged test but whose `ACCEPTANCE.md`
+checkbox is still `[ ]`. For every ID it lists, flip that box to `[x]` in `ACCEPTANCE.md` —
+the engine measured it; ticking is bookkeeping, never the other way round. Then re-run
+`readiness` and confirm the list is empty before the close block. This is ONE-DIRECTIONAL:
+never tick a box the ledger has not closed (that would be narrating, and `readiness`
+already reports narrated-but-unmeasured boxes separately as `narrated_only`) — a tick
+without a green test stays narrated-only, not measured.
 
 Right after readiness, run the spec-maintenance advisory (kit 1.66.0):
 

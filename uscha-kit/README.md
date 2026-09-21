@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.3.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.4.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -531,6 +531,11 @@ both to OFF and the kit means them ON — without them `fastpath-eval` would ans
 of six. Every other knob is absent on purpose and resolves to the engine default. The kit's own
 `uscha-kit/uscha.config.json` is the **comprehensive reference** — every knob at the kit's
 value, to read and copy from — and is no longer copied into projects.
+
+`uscha init` also writes a minimal `.gitignore` (kit 2.4.0), scoped to the detected repo type
+(`__pycache__/`, `*.pyc`, `.pytest_cache/`, `.coverage` for python; `node_modules/` for node; and
+so on) — never `reports/`, which is the ledger's own evidence (JUnit, coverage, smoke). An
+existing `.gitignore` is always left untouched, even with `--force`.
 
 That matters because of one rule: **a knob you declare > the preset named by
 `defaults.risk_profile` > the engine default**. A copied default is an explicit declaration, so
