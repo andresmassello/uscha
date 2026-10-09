@@ -110,6 +110,24 @@ itself.
    therefore drifts all 18 regions: `tools/release.py` re-renders them in step 2, right after the
    six surfaces move and before the facts gate, and `--check` stays red until it has.
 
+## Running the suite fast (2.8.0, ADR-053)
+
+- `USCHA_JOBS=8 bash uscha-kit/tests/smoke-engine.sh` runs the self-contained blocks as background
+  units (`uscha-kit/tests/_jobs.sh`): the three bench-cache passes overlap the serial prefix, and
+  T128–T162 and T163–T171 run as units whose output is replayed in the original order at a
+  barrier. Measured on this 16-core Windows box: 17.7 min serial -> 7.5 min with `USCHA_JOBS=8`
+  (logs byte-identical); a 2–4-core CI runner gains much less. The serial prefix (T1–T127,
+  ~4 min) now bounds it.
+- **The ritual stays serial**: `tools/release.py` pins `USCHA_JOBS=1` for step 4, CI does not set
+  it, and `USCHA_COVERAGE=1` forces serial. Use the parallel run to iterate, never as the
+  measurement of record.
+- A block becomes a unit by wrapping it, body untouched, as `pj_tNNN() { ... }` +
+  `pj_unit TNNN pj_tNNN`, ONLY if it shares no file with a concurrent unit: its own temp dirs, its
+  own sidecar (a merged sidecar goes through `_harness.sidecar(merge=True)`, which locks), nothing
+  fixed under `$SB`. A unit's variables die with its subshell, so a later block may not read them.
+  T171 (AC-PJ-07) refuses a unit still running at the T128 header, the T112 header, the teardown or
+  the acceptance emitter, and (AC-PJ-03) any bash-4-only construct in the suite or the library.
+
 ## Known gotchas
 
 - **The smoke suite must parse under bash 3.2** — the one macOS still ships (2007, GPLv3).

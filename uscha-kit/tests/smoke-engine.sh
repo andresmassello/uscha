@@ -357,22 +357,31 @@ PY
   fi
   PYIN_DIR="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/uscha-pyin-$$")"
   mkdir -p "$PYIN_DIR"
-  # ONE fixed name is enough and is why there is no counter: every call site is a command
-  # substitution (its own subshell, so a counter would never advance), the suite is serial,
-  # and the file is removed as soon as the program has run.
-  pyin() { local prog rc
-           prog="$PYIN_DIR/pyin.py"
+  # One spool directory PER CALL, made by mktemp (ADR-053). It used to be one fixed name,
+  # justified by "the suite is serial" -- true until USCHA_JOBS: two units spooling at once
+  # would overwrite each other's program and one block would run the other's code. A counter
+  # cannot fix it (every call site is a command substitution, its own subshell, so it would
+  # never advance); a unique directory does, and the file keeps its .py name. Coverage mode
+  # also forces the suite serial (_jobs.sh), so this is the belt to that braces. T171 pins it.
+  pyin() { local spool prog rc
+           spool="$(mktemp -d "$PYIN_DIR/u.XXXXXX")" || return 1
+           prog="$spool/pyin.py"
            cat > "$prog"
            PYTHONIOENCODING=utf-8 "$PY" -m coverage run --parallel-mode \
              --source="$COV_SRC" "$prog" "$@"
            rc=$?
-           rm -f "$prog"
+           rm -rf "$spool"
            return $rc; }
 else
   run() { PYTHONIOENCODING=utf-8 "$PY" "$QL" "$@"; }
   runpy() { local script="$1"; shift; PYTHONIOENCODING=utf-8 "$PY" "$script" "$@"; }
   pyin() { PYTHONIOENCODING=utf-8 "$PY" - "$@"; }
 fi
+# Opt-in parallel units (ADR-053). USCHA_JOBS=N (N>1) runs the self-contained blocks marked
+# pj_unit as background units and pj_collect is their barrier; unset or 1 -- the ritual and CI
+# -- every pj_unit is a plain function call in this shell and pj_collect does nothing.
+. "$KIT/tests/_jobs.sh"
+pj_init
 
 cat > uscha.config.json <<'EOF'
 { "version": "1.3.0",
@@ -395,6 +404,33 @@ cat > uscha.config.json <<'EOF'
 EOF
 printf -- "# ACCEPTANCE\n\n- [x] criterio uno\n- [ ] criterio dos\n" > ACCEPTANCE.md
 run init --config uscha.config.json >/dev/null || { echo "FAIL init"; exit 1; }
+
+# The diamond-bench cache passes (see the cache section before T128) are DEFINED here so that,
+# with USCHA_JOBS, they can start now and overlap the serial prefix: they read only the
+# read-only fixture and each writes its own file under $SB/bench-cache. Serial, nothing runs
+# here -- the section before T128 calls the same functions at the same point as always.
+bench_cache_setup() {
+  BENCH_FIXTURE="$KIT/tests/fixtures/diamond-bench"
+  BENCH_CACHE_DIR="$SB/bench-cache"
+  mkdir -p "$BENCH_CACHE_DIR"
+  export BENCH_CACHE_DIR
+}
+bench_cache_plain() {
+  run bench --dir "$BENCH_FIXTURE" --out "$BENCH_CACHE_DIR/DIAMOND-BENCH.md" --json \
+    > "$BENCH_CACHE_DIR/bench.json"
+}
+bench_cache_fidelity() {
+  run bench --dir "$BENCH_FIXTURE" --fidelity --json > "$BENCH_CACHE_DIR/bench-fid.json"
+}
+bench_cache_r2() {
+  run bench-r2 --dir "$BENCH_FIXTURE" --json > "$BENCH_CACHE_DIR/bench-r2.json"
+}
+if [ "$PJ_JOBS" -gt 1 ]; then
+  bench_cache_setup
+  pj_unit bench-cache-plain bench_cache_plain
+  pj_unit bench-cache-fidelity bench_cache_fidelity
+  pj_unit bench-cache-r2 bench_cache_r2
+fi
 
 echo "== T1 readiness virgen: static UNMEASURED, no 1.0 por silencio =="
 run readiness 2>/dev/null | grep -q "UNMEASURED" && { PASS=$((PASS+1)); echo "  ok   warning UNMEASURED presente"; } || { FAIL=$((FAIL+1)); echo "  FAIL sin warning UNMEASURED"; }
@@ -3567,6 +3603,9 @@ echo "== T113 (1.57.0): fastpath-eval -- measured ALLOW/DENY, escalation, fail-c
 # -- `$KIT/reports/` is build output, gitignored, and holds nothing but these sidecars, so
 # a family added tomorrow is covered without anyone remembering to add a line here.
 rm -f "$KIT/reports/junit/".*-cases.json
+# ...and any merge lock an interrupted USCHA_JOBS run left behind (ADR-053): a stale lock would
+# make the next merging block wait out its timeout and go red on the lock, not on what it measures.
+rm -rf "$KIT/reports/junit/".*-cases.json.lock
 T113=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
@@ -5430,15 +5469,20 @@ esac
 # the JSON and DIAMOND-BENCH.md. A bench over a MUTATED or temporary copy of the fixture is a
 # different measurement and still runs in its own block; T128 keeps its scoped `guard`-only
 # --fidelity re-run as the determinism probe.
-BENCH_FIXTURE="$KIT/tests/fixtures/diamond-bench"
-BENCH_CACHE_DIR="$SB/bench-cache"
-mkdir -p "$BENCH_CACHE_DIR"
-export BENCH_CACHE_DIR
-run bench --dir "$BENCH_FIXTURE" --out "$BENCH_CACHE_DIR/DIAMOND-BENCH.md" --json \
-  > "$BENCH_CACHE_DIR/bench.json"
-run bench --dir "$BENCH_FIXTURE" --fidelity --json > "$BENCH_CACHE_DIR/bench-fid.json"
-run bench-r2 --dir "$BENCH_FIXTURE" --json > "$BENCH_CACHE_DIR/bench-r2.json"
+# 2.8.0 (ADR-053): the three passes are functions defined after the sandbox init. Serial, they
+# run HERE, in this order, exactly as before. With USCHA_JOBS they were launched as three
+# background units right after that init, overlapping the serial prefix; this barrier waits
+# for them before the first consumer reads the cache.
+if [ "$PJ_JOBS" -gt 1 ]; then
+  pj_collect
+else
+  bench_cache_setup
+  bench_cache_plain
+  bench_cache_fidelity
+  bench_cache_r2
+fi
 
+pj_t128() {
 echo "== T128 (1.75.0): the Diamond Bench -- regeneration fidelity across archetypes; PASS/PARTIAL/FAIL/PENDING (M5, ADR-018) =="
 T128=$("$PY" - "$KIT" <<'PY'
 import hashlib, importlib.util, io, json, os, shutil, subprocess, sys, tempfile
@@ -5703,7 +5747,10 @@ case "$T128" in
   OK*) PASS=$((PASS+1)); echo "  ok   bench: $T128";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T128";;
 esac
+}
+pj_unit T128 pj_t128
 
+pj_t129() {
 echo "== T129 (1.76.0): the controlled-language arm -- free prose vs EARS+STE, same withheld oracle (ADR-019) =="
 T129=$("$PY" - "$KIT" <<'PY'
 import hashlib, importlib.util, io, json, os, subprocess, sys, tempfile
@@ -5912,7 +5959,10 @@ case "$T129" in
   OK*) PASS=$((PASS+1)); echo "  ok   lang: $T129";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T129";;
 esac
+}
+pj_unit T129 pj_t129
 
+pj_t130() {
 echo "== T130 (1.80.0): bench-curate -- ONE human verdict per observation, measured closure, fail-closed store (ADR-023) =="
 T130=$("$PY" - "$KIT" <<'PY'
 import io, json, os, re, shutil, subprocess, sys, tempfile
@@ -6017,7 +6067,10 @@ case "$T130" in
   OK*) PASS=$((PASS+1)); echo "  ok   bench-curate: $T130";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T130";;
 esac
+}
+pj_unit T130 pj_t130
 
+pj_t131() {
 echo "== T131 (1.81.0): controlled-language v0.3 -- replication across archetypes; the aggregate is 1 of 4 (ADR-024) =="
 T131=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys
@@ -6112,7 +6165,10 @@ case "$T131" in
   OK*) PASS=$((PASS+1)); echo "  ok   lang-v03: $T131";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T131";;
 esac
+}
+pj_unit T131 pj_t131
 
+pj_t132() {
 echo "== T132 (1.83.0): the slack hypothesis, tested -- scheduler enters the bench + controlled-language, IMPROVED is a named verdict (ADR-025, ADR-026) =="
 T132=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import io, json, os, subprocess, sys
@@ -6269,7 +6325,10 @@ case "$T132" in
   OK*) PASS=$((PASS+1)); echo "  ok   slack-hypothesis: $T132";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T132";;
 esac
+}
+pj_unit T132 pj_t132
 
+pj_t133() {
 echo "== T133 (1.84.0): the noise floor -- intra-model variance under the bench, bench-r2 (ADR-027) =="
 T133=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
@@ -6450,7 +6509,10 @@ case "$T133" in
   OK*) PASS=$((PASS+1)); echo "  ok   noise-floor: $T133";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T133";;
 esac
+}
+pj_unit T133 pj_t133
 
+pj_t134() {
 echo "== T134 (1.85.0): the method leaves Python -- a JS archetype under the withheld oracle (ADR-028) =="
 T134=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
@@ -6639,7 +6701,10 @@ case "$T134" in
   OK*) PASS=$((PASS+1)); echo "  ok   non-python-archetype: $T134";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T134";;
 esac
+}
+pj_unit T134 pj_t134
 
+pj_t135() {
 echo "== T135 (1.85.0): the bench leaves the single file -- a multi-unit archetype with real IR edges (ADR-029) =="
 T135=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, subprocess, sys
@@ -6765,7 +6830,10 @@ case "$T135" in
   OK*) PASS=$((PASS+1)); echo "  ok   multi-unit-archetype: $T135";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T135";;
 esac
+}
+pj_unit T135 pj_t135
 
+pj_t136() {
 echo "== T136 (1.85.0): the round trip gets its honest number -- reverse organs anchor facts, never a spec (ADR-030) =="
 T136=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import glob, io, json, os, shutil, subprocess, sys, tempfile
@@ -7110,7 +7178,10 @@ case "$T136" in
   OK*) PASS=$((PASS+1)); echo "  ok   round-trip-recoverability: $T136";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T136";;
 esac
+}
+pj_unit T136 pj_t136
 
+pj_t137() {
 echo "== T137 (uscha top M1): the engine computes the WHOLE projection, and a field with no source is null (ADR-032) =="
 # The contract is the gate. Every KPI the terminal board shows is asserted HERE, over the
 # engine JSON alone -- so a renderer cannot be the place a number is invented, and the
@@ -7570,7 +7641,10 @@ case "$T137" in
   OK*) PASS=$((PASS+1)); echo "  ok   uscha-top contract (AC-T-01,02,03,04,05,06,09,10,11,24): $T137";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T137";;
 esac
+}
+pj_unit T137 pj_t137
 
+pj_t138() {
 echo "== T138 (uscha top M1): render() is pure and its oracle is golden frames (ADR-034) =="
 # A renderer nobody snapshots is a renderer free to round 96 up to 100. These frames are the
 # discriminator: byte-identical or red, with the negative-honesty frame carrying the whole
@@ -8062,7 +8136,10 @@ rc, out = run('init', '--config', 'NOPE.json'); ok &= rc != 0 and 'config ' in o
 rc, out = run('top', '--json', '--ledger', 'NOPE.json'); ok &= rc != 0 and 'ledger ' in out and '--ledger' in out and 'Traceback' not in out
 rc, out = run('rebuild', '--mode', 'compare', '--baseline', 'NOPE.json'); ok &= rc != 0 and 'baseline ' in out and '--baseline' in out and 'Traceback' not in out
 sys.exit(0 if ok else 1)" "$QL"   && { PASS=$((PASS+1)); echo "  ok   _load names the missing file kind and its flag (config/ledger/baseline), never a traceback"; }   || { FAIL=$((FAIL+1)); echo "  FAIL _load missing-file message is wrong for config/ledger/baseline"; }
+}
+pj_unit T138 pj_t138
 
+pj_t0() {
 echo "== T0 live: every published claim must match the derived facts (FACTUAL DRIFT = red) =="
 # The REAL check over the REAL claim surfaces -- the founding fixture (site said 1.65.0/32
 # while the repo was 1.67.0/35) went red on this exact command before being fixed.
@@ -8083,7 +8160,10 @@ else
   chk "site+README+manifests+docs claims match SYSTEM-FACTS" 0 \
     "$PY" "$QL" facts --check $T0_FILES --out "$ROOT/SYSTEM-FACTS.json"
 fi
+}
+pj_unit T0 pj_t0
 
+pj_t139() {
 echo "== T139 (facts table drift): a doc's parser-surface table missing a subcommand row fails facts --check by name =="
 # The table is a claim too, not just the numeric count beside it (the founding T0-live gate
 # only ever compared numbers) -- the `top` row was once missing here while the count stayed
@@ -8133,7 +8213,10 @@ if [ "$T139" = "OK" ]; then
 else
   FAIL=$((FAIL+1)); echo "  FAIL $T139"
 fi
+}
+pj_unit T139 pj_t139
 
+pj_t140() {
 echo "== T140 (ADR-036): family-prefixed AC ids enter the measured pipeline; the bare form is unchanged =="
 # The instrument could not see 166 of this repo's own 172 criteria: _AC_ID/_AC_TAG matched only
 # the bare AC-<n>. Widening them re-counts every family kit-wide, so the BARE form is pinned
@@ -8354,7 +8437,10 @@ case "$T140" in
   OK*) PASS=$((PASS+1)); echo "  ok   family AC ids measured, bare form byte-identical (AC-FA-01..05): $T140";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T140";;
 esac
+}
+pj_unit T140 pj_t140
 
+pj_t141() {
 echo "== T141 (uscha top M3): VERDICTS mode -- the ONE write, made by the engine's own curate (ADR-033) =="
 # The single writable action of the whole application. What is measured here is that the TUI
 # ADDS NOTHING to it: one keypress spawns exactly one curate process, the record that lands in
@@ -8854,7 +8940,10 @@ case "$T141" in
   OK*) PASS=$((PASS+1)); echo "  ok   uscha-top verdicts, the single write (AC-T-13,14,15,16,17): $T141";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T141";;
 esac
+}
+pj_unit T141 pj_t141
 
+pj_t142() {
 echo "== T142 (1.90.0): telemetry-extract -- upsert by session, best-effort parsing, nothing appended without usage =="
 # The mirador's vendor adapter ships in the kit and NOTHING measured it: the D-03 seam reported
 # it at 0%, "present but never invoked", which is an honest number about an unexercised file
@@ -9044,7 +9133,10 @@ case "$T143" in
   OK*) PASS=$((PASS+1)); echo "  ok   mirador telemetry aggregate + friendly failures: $T143";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T143";;
 esac
+}
+pj_unit T142 pj_t142
 
+pj_t144() {
 echo "== T144 (1.90.0): uscha top's READ boundary and its refusals -- every path that says no =="
 # The golden frames pin what the board DRAWS. This pins what it does when there is nothing to
 # draw from, which is the half a snapshot cannot reach: where the engine is found, what a
@@ -9205,7 +9297,10 @@ case "$T144" in
   OK*) PASS=$((PASS+1)); echo "  ok   uscha top read boundary + refusals: $T144";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T144";;
 esac
+}
+pj_unit T144 pj_t144
 
+pj_t145() {
 echo "== T145 (uscha top M4): the drift pane reads, and 'o' triggers what the human supplied (ADR-037) =="
 # Phase 2. Two keys, opposite natures: 'd' is a projection of a record the ledger already
 # holds (it runs nothing and can therefore lie only by omission -- which is why the empty case
@@ -9745,7 +9840,10 @@ case "$T145" in
   OK*) PASS=$((PASS+1)); echo "  ok   uscha-top phase 2, diff + rerun (AC-T-25,26,27,28,29): $T145";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T145";;
 esac
+}
+pj_unit T145 pj_t145
 
+pj_t146() {
 echo "== T146 (1.92.0): TERMINADO is sealed to the exact code state -- INV-T1 in the engine (ADR-038) =="
 # The three holes INV-T1 names, over a REAL temp git repo driven by the engine itself (init ->
 # report -> snapshot), never by a hand-written ledger: evidence from an old run, code touched
@@ -10039,7 +10137,10 @@ case "$T146" in
   OK*) PASS=$((PASS+1)); echo "  ok   sealed TERMINADO, INV-T1 (AC-CT-01..11): $T146";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T146";;
 esac
+}
+pj_unit T146 pj_t146
 
+pj_t147() {
 echo "== T147 (1.93.0): freshness by CONTENT and COMMIT, and a seal that tolerates non-source commits (ADR-039) =="
 # Rule (a) reads the clock, and the clock lies whenever a clone, a `git worktree add`, a merge or
 # a CI checkout re-dates every file without changing a byte -- the day INV-T1 shipped, the release
@@ -10412,7 +10513,10 @@ case "$T147" in
   OK*) PASS=$((PASS+1)); echo "  ok   freshness by content + commit, tolerant seal (AC-FR-01..11): $T147";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T147";;
 esac
+}
+pj_unit T147 pj_t147
 
+pj_t148() {
 echo "== T148 (1.94.0): the stack has an EXPIRY DATE -- the lifecycle dimension of spec-check (ADR-040) =="
 # A field run fixed the stack as a MAJOR line and found out ten days before go-live that the MINOR
 # line it chose had left OSS support months earlier. The ADR now carries a machine-readable
@@ -10651,7 +10755,10 @@ case "$T148" in
   OK*) PASS=$((PASS+1)); echo "  ok   stack lifecycle vs go-live (AC-LC-01..08): $T148";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T148";;
 esac
+}
+pj_unit T148 pj_t148
 
+pj_t149() {
 echo "== T149 (1.94.1): the audit fixes -- two false greens in the suite, three invented facts in the engine =="
 # An audit of the suite and the engine found five ways a red thing could read green. Two live in
 # the HARNESS (a chk whose counter died in a subshell; a T-block that ran after the exit status
@@ -10840,7 +10947,10 @@ case "$T149" in
   OK*) PASS=$((PASS+1)); echo "  ok   audit fixes (AC-AU-01..06): $T149";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T149";;
 esac
+}
+pj_unit T149 pj_t149
 
+pj_t150() {
 echo "== T150 (ADR-041): the dogfooding criterion is decided by git ancestry, not by a clock =="
 # AC-DF-01 asks whether the ledger was recorded AFTER the engine changed. Until 1.96.0 it asked a
 # WALL CLOCK, and the price of the unit mismatch was a throwaway `readiness --record` before every
@@ -10972,7 +11082,10 @@ case "$T150" in
   OK*) PASS=$((PASS+1)); echo "  ok   dogfood ancestry (AC-DF-02..04): $T150";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T150";;
 esac
+}
+pj_unit T150 pj_t150
 
+pj_t151() {
 echo "== T151 (ADR-041): the release ritual is a script that refuses, not prose a human re-reads =="
 # Repo rule 9 was ~20 manual steps and eight ordering invariants written as prose, the most
 # dangerous of them (never amend X after the record) in capitals because it had been hit.
@@ -11285,7 +11398,10 @@ case "$T151" in
   OK*) PASS=$((PASS+1)); echo "  ok   release ritual (AC-RL-01..06): $T151";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T151";;
 esac
+}
+pj_unit T151 pj_t151
 
+pj_t152() {
 echo "== T152 (1.97.0): the SKILL.md orientation block is a GENERATED region, and the generator is measured =="
 # Seven of the nine SKILL.md files carried a byte-identical "First contact" + "Orientation
 # markers" block, and the two short ones a second copy: 18 runtime files, across two skill trees,
@@ -11449,7 +11565,10 @@ case "$T152" in
   OK*) PASS=$((PASS+1)); echo "  ok   generated docs (AC-DC-01..04): $T152";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T152";;
 esac
+}
+pj_unit T152 pj_t152
 
+pj_t153() {
 echo "== T153 (1.97.0, extended 2.2.0): facts --write rewrites the claims it recognises, in the author's notation; the Diamond headline is one of them =="
 # ADR-012 made published claims comparable against derived facts; it never made them WRITABLE, so
 # every bump was ~25 hand edits across ~13 files and tools/release.py could only print the drift
@@ -11729,7 +11848,10 @@ case "$T153" in
   OK*) PASS=$((PASS+1)); echo "  ok   facts --write (AC-FW-01..08): $T153";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T153";;
 esac
+}
+pj_unit T153 pj_t153
 
+pj_t154() {
 echo "== T154 (1.98.0): the narrated backlog stays retired, and the twins moved together =="
 # A VISION / planned / not-yet label is a promise the reader cannot check. Round 1 of 1.98.0
 # rewrote six of them into the honest state -- rejected, deferred by a dated decision, or by
@@ -11871,7 +11993,10 @@ case "$T154" in
   OK*) PASS=$((PASS+1)); echo "  ok   narrated backlog (AC-VC-01..02): $T154";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T154";;
 esac
+}
+pj_unit T154 pj_t154
 
+pj_t155() {
 echo "== T155 (1.98.0): the three 1.69.0 deferred LOWs, closed and pinned =="
 # ISSUES-DEFERRED.md is not a graveyard: the three findings the 1.69.0 fresh review filed below
 # the severity gate each get their fix and their assertion here. All three share a shape -- the
@@ -12090,7 +12215,10 @@ case "$T155" in
   OK*) PASS=$((PASS+1)); echo "  ok   deferred LOWs closed (AC-DE-01..04): $T155";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T155";;
 esac
+}
+pj_unit T155 pj_t155
 
+pj_t157() {
 echo "== T157 (ADR-042): the cross-vendor arm -- a second VENDOR compiles the whole bench, blind =="
 # Until 1.99.0 every blind compilation in the Diamond Bench came from one vendor, so the
 # program's central claim -- implementation replaceability certified by a withheld oracle --
@@ -12419,7 +12547,10 @@ case "$T157" in
   OK*) PASS=$((PASS+1)); echo "  ok   cross-vendor arm (AC-XV-01..07): $T157";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T157";;
 esac
+}
+pj_unit T157 pj_t157
 
+pj_t158() {
 echo "== T158 (2.0.0): the risk preset decides, because init no longer copies the answer =="
 T158=$(pyin "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
@@ -12767,7 +12898,10 @@ case "$T158" in
   OK*) PASS=$((PASS+1)); echo "  ok   risk presets take effect (AC-RP-01..06): $T158";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T158";;
 esac
+}
+pj_unit T158 pj_t158
 
+pj_t159() {
 echo "== T159 (2.1.0): the simplicity score ADVISES; only a declared budget makes it gate =="
 # ADR-043. The kit shipped a complexity budget it invented and exited 1 on it, so a project
 # that had adopted no budget at all was stopped by an opinion -- reported, in the same JSON,
@@ -13209,7 +13343,10 @@ case "$T159" in
   OK*) PASS=$((PASS+1)); echo "  ok   simplicity advisory by default (AC-SG-01..08): $T159";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T159";;
 esac
+}
+pj_unit T159 pj_t159
 
+pj_t160() {
 echo "== T160 (2.2.0): the agent asks for DECISIONS, never for INFORMATION -- origin: agent is reported, never gated =="
 # ADR-044. Two field findings, one rule. An agent turned a global default into a tree-wide rename
 # -- a new acceptance criterion, a new HANDOFF rule and two ADR decision items nobody had answered
@@ -13586,7 +13723,10 @@ case "$T160" in
   OK*) PASS=$((PASS+1)); echo "  ok   agent-origin markers (AC-OA-01..07): $T160";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T160";;
 esac
+}
+pj_unit T160 pj_t160
 
+pj_t161() {
 echo "== T161 (2.2.0): four field fixes -- a rename is a move, --repo scopes, the monorepo SPEC is found, ci is a gate, a repo can be added =="
 # Four reports from a live monorepo, each reproduced against the 2.1.0 engine before a line was
 # written. (1) `git mv tests/a_test.py tests/b_test.py` blocked as a DELETED test, and --repo
@@ -14081,7 +14221,10 @@ case "$T161" in
   OK*) PASS=$((PASS+1)); echo "  ok   field fixes (AC-FF-01..10): $T161";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T161";;
 esac
+}
+pj_unit T161 pj_t161
 
+pj_t162() {
 echo "== T162 (2.2.0): an installed skill says which kit it came from, and doctor compares it =="
 # THE FIELD CASE, reproduced rather than described: skills under ~/.claude/skills/uscha-* dated
 # before 1.54.0 while the kit was 1.97.0. A whole discovery ran on three-month-old prose and
@@ -14491,6 +14634,14 @@ case "$T162" in
   OK*) PASS=$((PASS+1)); echo "  ok   installed-skill freshness (AC-SK-01..09): $T162";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T162";;
 esac
+}
+pj_unit T162 pj_t162
+
+# Barrier (ADR-053): every unit from T128 on has counted before the serial tail below,
+# and long before the teardown removes the sandbox, which several of them read. The
+# .top-cases.json merge shared by T137/T138/T141/T145 is serialized by a lock in
+# _harness.sidecar, and T142+T143 share one unit (T143 reads what T142 wrote).
+pj_collect
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
 # The engine ingests reports produced by SOMEONE ELSE\'s build, with a stdlib parser and no
@@ -15299,6 +15450,7 @@ if [ "${USCHA_P0_A_SKIP:-0}" != "1" ]; then
   PASS=$((PASS+1))
 fi
 
+pj_t163() {
 echo "== T163 (2.2.0): field truth for greenfield -- a real corpus is evidence, and an unbudgeted run gates nothing =="
 # The field report this block comes from: a parser passed every test its author wrote and was
 # wrong; the REAL corpus moved it from 96.96 % to 99.645 %. In a greenfield project every test
@@ -15762,7 +15914,10 @@ case "$T163" in
   OK*) PASS=$((PASS+1)); echo "  ok   corpus field truth (AC-CO-01..11): $T163";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T163";;
 esac
+}
+pj_unit T163 pj_t163
 
+pj_t164() {
 echo "== T164 (2.2.0): the smoke run as MEASURED evidence -- executed, never narrated =="
 # The field report this block comes from: every simulator run returned an empty list because the
 # database had no rows. The smoke was reported as "verified" in prose, and prose cannot carry
@@ -16142,7 +16297,10 @@ case "$T164" in
   OK*) PASS=$((PASS+1)); echo "  ok   smoke as measured evidence (AC-SI-01..09): $T164";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T164";;
 esac
+}
+pj_unit T164 pj_t164
 
+pj_t165() {
 echo "== T165 (2.2.0): operability is MEASURED -- CI, release, RUNBOOK and seed are FACTS in the tree (ADR-048) =="
 # THE FIELD FINDING, reproduced rather than described: release-by-CI, the reset/seed script and
 # the RUNBOOK arrived in the last week of two consecutive projects. The devloop NAMED them in
@@ -16533,7 +16691,10 @@ case "$T165" in
   OK*) PASS=$((PASS+1)); echo "  ok   operability measured (AC-OP-01..09): $T165";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T165";;
 esac
+}
+pj_unit T165 pj_t165
 
+pj_t166() {
 echo "== T166 (2.2.0): the first-use walkthrough is linked, executable and twinned =="
 # DOC criteria, measured like any other. The entry experience used to hand a newcomer the whole
 # model before one complete result; docs/FIRST-USE-EN.md + its Spanish twin docs/FIRST-USE.md are
@@ -16783,7 +16944,10 @@ case "$T166" in
   OK*) PASS=$((PASS+1)); echo "  ok   first-use walkthrough (AC-FU-01..06): $T166";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T166";;
 esac
+}
+pj_unit T166 pj_t166
 
+pj_t167() {
 echo "== T167 (2.4.0): Codex pilot fixes -- coverage UNMEASURED not BELOW, init writes a scoped .gitignore, no-statusline visible-reply rule, pr-ready is a phase not a subcommand =="
 T167=$(pyin "$KIT" "$ROOT" <<'PY'
 import io, json, os, re, subprocess, sys, tarfile, tempfile
@@ -17027,7 +17191,10 @@ case "$T167" in
   OK*) PASS=$((PASS+1)); echo "  ok   Codex pilot fixes (AC-CX-01..07): $T167";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T167";;
 esac
+}
+pj_unit T167 pj_t167
 
+pj_t168() {
 echo "== T168 (ADR-050): the Anthropic arm -- a Claude arm re-run by SCRIPT, recording the EXACT model id =="
 # The three Claude arms were compiled by hand and each recorded only a bare alias in its
 # COMPILATION.json (ADR-042 UNMEASURED item 8). This dispatcher re-runs a Claude arm through
@@ -17332,7 +17499,10 @@ case "$T168" in
   OK*) PASS=$((PASS+1)); echo "  ok   Anthropic arm (AC-CA-01..06): $T168";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T168";;
 esac
+}
+pj_unit T168 pj_t168
 
+pj_t169() {
 echo "== T169 (2.6.0): QA-tool readiness is MEASURED -- a declared tool that is not installed blocks (ADR-051) =="
 # The hole, reproduced rather than described: Phase 3 runs QA tools the kit ORCHESTRATES but does
 # not ship (qa_tools_order). log-step took any name with no existence check and _converged only
@@ -17862,7 +18032,10 @@ case "$T169" in
   OK*) PASS=$((PASS+1)); echo "  ok   QA-tool readiness measured (AC-QT-01..13): $T169";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T169";;
 esac
+}
+pj_unit T169 pj_t169
 
+pj_t170() {
 echo "== T170 (2.7.0): the installer DETECTS AND TELLS -- QA tools and the optional engram are reported, never installed (ADR-052) =="
 # 2.6.0 made a declared-but-absent QA tool a FACT gate in the engine, yet a fresh install said
 # nothing: the nine kit skills landed and the user met MISSING only at qa-tools-check. Since 2.7.0
@@ -18463,6 +18636,450 @@ case "$T170" in
   OK*) PASS=$((PASS+1)); echo "  ok   installer extras report (AC-IX-01..10): $T170";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T170";;
 esac
+}
+pj_unit T170 pj_t170
+
+pj_t171() {
+echo "== T171 (ADR-053): the parallel suite is OPT-IN and EQUIVALENT -- USCHA_JOBS changes the wall time, never the measurement =="
+# USCHA_JOBS=N runs the self-contained blocks as background units (tests/_jobs.sh). The suite is
+# the ruler every release is measured with, so the criterion is EQUIVALENCE, not speed: unset or
+# 1 must be today's serial path, and a parallel run must count, print and record exactly what the
+# serial run does. This block drives the SHIPPED library (never a re-implementation of it) through
+# a small mini-suite both ways, pins the bash-3.2 floor statically, proves the coverage spool is
+# unique under concurrency, and carries a RED probe (one unit's result file dropped) and a SHIPPED
+# probe (v2.7.0 has no USCHA_JOBS at all). The FULL-suite serial-vs-parallel diff is release
+# evidence (CHANGELOG-2.8.0), not something a suite can do to itself.
+# The bash under test is the bash running this suite -- on the macOS cell that is bash 3.2.
+T171_BASH="$(cygpath -m "$BASH" 2>/dev/null || printf '%s' "$BASH")"
+T171=$(pyin "$KIT" "$ROOT" "$T171_BASH" <<'PY'
+import io, json, os, re, shutil, subprocess, sys, tempfile
+kit, root, bash = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path.insert(0, os.path.join(kit, "tests"))
+import _harness
+from _harness import sidecar
+SUITE = os.path.join(kit, "tests", "smoke-engine.sh")
+JOBS = os.path.join(kit, "tests", "_jobs.sh")
+PREV_TAG = "v2.7.0"
+NL, D, LT, BS = chr(10), chr(36), chr(60), chr(92)
+SQ, DQ = chr(39), chr(34)
+TMPS = []
+res, why = {}, {}
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix=prefix)
+    TMPS.append(d)
+    return d
+
+
+def fwd(p):
+    return p.replace(BS, "/")
+
+
+def read(p):
+    with io.open(p, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def write(p, text):
+    with io.open(p, "w", encoding="utf-8", newline=NL) as fh:
+        fh.write(text)
+
+
+def sh(script, args, env_extra, merged):
+    env = dict(os.environ)
+    for k in ("USCHA_JOBS", "USCHA_COVERAGE"):
+        env.pop(k, None)
+    env.update(env_extra)
+    try:
+        return subprocess.run([bash, fwd(script)] + [fwd(a) for a in args],
+                              stdout=subprocess.PIPE,
+                              stderr=(subprocess.STDOUT if merged else subprocess.PIPE),
+                              env=env, text=True, encoding="utf-8", errors="replace",
+                              timeout=180)
+    except subprocess.TimeoutExpired as exc:
+        # a library that hangs is a red, never a hung suite
+        return subprocess.CompletedProcess(exc.cmd, 124, stdout="TIMEOUT", stderr="")
+
+
+# --- the mini-suite: four units, uneven durations (U1 is the slowest, so a parallel run FINISHES
+# in another order than it launches), stdout and stderr, PASS and FAIL increments, and two units
+# that merge into ONE sidecar through the real _harness.sidecar -- the .top-cases.json shape.
+W = tmp("uscha-pj-")
+MERGE = os.path.join(W, "merge.py")
+write(MERGE, "import sys" + NL + "sys.path.insert(0, sys.argv[1])" + NL
+      + "from _harness import sidecar" + NL
+      + "sidecar(sys.argv[2], " + DQ + ".m-cases.json" + DQ
+      + ", {sys.argv[3]: True}, merge=True)" + NL)
+MINI = os.path.join(W, "mini.sh")
+
+
+def unit(name, body):
+    return name.lower() + "() { echo " + DQ + "== " + name + DQ + "; " + body + " echo " + name \
+        + " >> " + DQ + D + "OUT/order.txt" + DQ + "; }"
+
+
+INC = D + "((PASS+1))"
+write(MINI, NL.join([
+    "set -u",
+    ". " + DQ + D + "1" + DQ,
+    "OUT=" + DQ + D + "2" + DQ,
+    "PASS=0; FAIL=0",
+    "pj_init",
+    "merge() { " + DQ + D + "PY" + DQ + " " + DQ + D + "MERGE" + DQ + " " + DQ + D + "TESTS" + DQ
+    + " " + DQ + D + "OUT/kit" + DQ + " " + DQ + D + "1" + DQ + "; }",
+    unit("U1", "sleep 0.6; PASS=" + INC + "; echo " + DQ + "  ok   u1" + DQ + "; echo "
+         + DQ + "u1 on stderr" + DQ + " >&2;"),
+    unit("U2", "PASS=" + INC + "; FAIL=" + D + "((FAIL+1)); echo " + DQ + "  FAIL u2 deliberate"
+         + DQ + ";"),
+    unit("U3", "sleep 0.3; merge u3; PASS=" + D + "((PASS+2)); echo " + DQ + "  ok   u3" + DQ + ";"),
+    unit("U4", "merge u4; PASS=" + INC + "; echo " + DQ + "  ok   u4" + DQ + ";"),
+    "pj_unit U1 u1", "pj_unit U2 u2", "pj_unit U3 u3", "pj_unit U4 u4",
+    "pj_collect",
+    "echo " + DQ + "RESULTADO: " + D + "PASS ok " + D + "FAIL fail" + DQ,
+    "printf " + SQ + "%s|%s" + SQ + " " + DQ + D + "PJ_JOBS" + DQ + " " + DQ + D + "PJ_DIR" + DQ
+    + " > " + DQ + D + "OUT/meta.txt" + DQ,
+    "pj_finish", ""]))
+
+
+def mini(lib, env_extra, merged=True):
+    d = tmp("uscha-pj-run-")
+    os.makedirs(os.path.join(d, "kit"))
+    extra = {"PY": fwd(sys.executable), "MERGE": fwd(MERGE),
+             "TESTS": fwd(os.path.join(kit, "tests"))}
+    extra.update(env_extra)
+    r = sh(MINI, [lib, d], extra, merged)
+
+    def opt(p):
+        return read(p) if os.path.isfile(p) else None
+    side = opt(os.path.join(d, "kit", "reports", "junit", ".m-cases.json"))
+    return {"rc": r.returncode, "out": r.stdout, "err": r.stderr or "",
+            "order": (opt(os.path.join(d, "order.txt")) or "").split(),
+            "meta": opt(os.path.join(d, "meta.txt")) or "",
+            "side": json.loads(side) if side else None}
+
+
+def tally(out):
+    m = re.search(r"RESULTADO: (\d+) ok (\d+) fail", out)
+    return m.groups() if m else None
+
+
+def equivalent(a, b):
+    """The comparator AC-PJ-02 passes and AC-PJ-05 must fail: same log, same tallies, same
+    sidecar. The acceptance XML is a pure function of the sidecars and the tallies, so equal
+    sidecars and equal tallies are equal acceptance."""
+    return (tally(a["out"]) is not None and tally(a["out"]) == tally(b["out"])
+            and a["out"] == b["out"] and a["side"] == b["side"])
+
+
+def jobs_of(r):
+    head = r["meta"].split("|")[0]
+    return int(head) if head.isdigit() else None
+
+
+def measure():
+    # --- AC-PJ-01: unset, 1, 0, a non-number, and coverage mode are ALL today's serial path ----
+    base = mini(JOBS, {}, merged=False)
+    p = []
+    if tally(base["out"]) != ("5", "1") or base["rc"] != 0:
+        p.append("the serial mini-suite did not count 5 ok / 1 fail: %r rc=%s"
+                 % (tally(base["out"]), base["rc"]))
+    if base["meta"] != "1|":
+        p.append("unset resolved to %r (want 1 job, no scratch dir)" % base["meta"])
+    if base["order"] != ["U1", "U2", "U3", "U4"]:
+        p.append("serial units did not run in launch order: %r" % base["order"])
+    if "u1 on stderr" in base["out"] or "u1 on stderr" not in base["err"]:
+        p.append("serial buffered a unit: its stderr did not reach stderr directly")
+    for label, extra in (("USCHA_JOBS=1", {"USCHA_JOBS": "1"}), ("USCHA_JOBS=0", {"USCHA_JOBS": "0"}),
+                         ("USCHA_JOBS=abc", {"USCHA_JOBS": "abc"}),
+                         ("USCHA_JOBS=8 under USCHA_COVERAGE=1",
+                          {"USCHA_JOBS": "8", "USCHA_COVERAGE": "1"})):
+        r = mini(JOBS, extra, merged=False)
+        if (r["out"], r["err"], r["meta"], r["order"]) != (base["out"], base["err"], base["meta"],
+                                                           base["order"]):
+            p.append("%s is not byte-identical to unset (meta %r)" % (label, r["meta"]))
+    rel = os.path.join(root, "tools", "release.py")
+    wfd = os.path.join(root, ".github", "workflows")
+    if not os.path.isfile(rel):
+        res["AC-PJ-01"] = None
+        why["AC-PJ-01"] = "tools/release.py absent (extracted kit): the ritual pin is unmeasurable"
+    else:
+        if "USCHA_JOBS=" + DQ + "1" + DQ not in read(rel):
+            p.append("tools/release.py does not pin USCHA_JOBS to 1 for the ritual's suite run")
+        if os.path.isdir(wfd):
+            for f in sorted(os.listdir(wfd)):
+                if "USCHA_JOBS" in read(os.path.join(wfd, f)):
+                    p.append("workflow %s sets USCHA_JOBS: CI must stay serial" % f)
+        res["AC-PJ-01"] = not p
+        why["AC-PJ-01"] = "; ".join(p[:3]) or "serial path is the default"
+
+    # --- AC-PJ-02: a parallel run of the same units is EQUIVALENT to the serial one -----------
+    ser = mini(JOBS, {}, merged=True)
+    par = mini(JOBS, {"USCHA_JOBS": "3"}, merged=True)
+    p = []
+    jp = jobs_of(par)
+    if jp is None or jp < 2:
+        res["AC-PJ-02"] = None
+        why["AC-PJ-02"] = "one core reported: the parallel path cannot be exercised here"
+    else:
+        if not equivalent(ser, par):
+            p.append("serial and parallel differ: tallies %r vs %r; log equal %s; sidecar %r vs %r"
+                     % (tally(ser["out"]), tally(par["out"]), ser["out"] == par["out"],
+                        ser["side"], par["side"]))
+        if ser["side"] != {"u3": True, "u4": True}:
+            p.append("the two merging units did not both land in the sidecar: %r" % ser["side"])
+        if par["order"] == ["U1", "U2", "U3", "U4"]:
+            p.append("the parallel units finished in launch order -- nothing was reordered")
+        if sorted(par["order"]) != ["U1", "U2", "U3", "U4"]:
+            p.append("a parallel unit did not run: %r" % par["order"])
+        cap = subprocess.run([bash, "-c", ". " + DQ + D + "1" + DQ + "; pj_resolve_jobs", "x",
+                              fwd(JOBS)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, env=dict(os.environ, USCHA_JOBS="9999"))
+        got = cap.stdout.strip()
+        if not got.isdigit() or not 1 <= int(got) <= max(os.cpu_count() or 1, 1):
+            p.append("USCHA_JOBS=9999 was not capped at the cores: %r" % got)
+        res["AC-PJ-02"] = not p
+        why["AC-PJ-02"] = "; ".join(p[:3]) or "equivalent"
+
+    # --- AC-PJ-03: the bash-3.2 floor, pinned by a static scan of the suite and the library ----
+    heredoc = re.compile(LT + LT + r"-?\s*(?:" + SQ + "|" + DQ + r")?([A-Za-z_]+)")
+    pats = [("wait -n", r"\bwait\s+-n\b"),
+            ("associative array", r"\b(?:declare|local|typeset)\s+-[a-zA-Z]*A"),
+            ("nameref", r"\b(?:declare|local|typeset)\s+-[a-zA-Z]*n\b"),
+            ("mapfile", r"\bmapfile\b"), ("readarray", r"\breadarray\b"),
+            ("coproc", r"\bcoproc\b"),
+            ("case-modifying expansion", re.escape(D + "{") + r"[^}]*(?:,,|\^\^)"),
+            ("case-modifying expansion", re.escape(D + "{") + r"[A-Za-z_]\w*[,^]\}"),
+            ("append-both redirect", r"&>>"), ("pipe-both", r"\|&")]
+
+    def shell_lines(text):
+        term = None
+        for n, ln in enumerate(text.split(NL), 1):
+            if term is not None:
+                if ln.strip() == term:
+                    term = None
+                continue
+            if not ln.lstrip().startswith("#"):
+                yield n, ln
+            m = heredoc.search(ln)
+            if m and LT * 3 not in ln:
+                term = m.group(1)
+
+    def scan(text):
+        return [(label, n) for n, ln in shell_lines(text) for label, rx in pats
+                if re.search(rx, ln)]
+    hits = ["%s:%s at line %d" % (os.path.basename(f), label, n)
+            for f in (SUITE, JOBS) for label, n in scan(read(f))]
+    teeth = ["wait -n", "declare -A m", "local -n r=x", "mapfile -t a", "readarray a",
+             "coproc cat", "echo " + D + "{v,,}", "echo " + D + "{v^}", "cmd &>> log", "a |& b"]
+    blind = [t for t in teeth if not scan(t)]
+    p = hits + ["the scanner misses " + repr(t) for t in blind]
+    res["AC-PJ-03"] = not p
+    why["AC-PJ-03"] = "; ".join(p[:4]) or "clean"
+
+    # --- AC-PJ-04: the coverage spool is unique under concurrency; the sidecar merge is locked --
+    src = read(SUITE).split(NL)
+    start = [i for i, ln in enumerate(src) if re.match(r"\s*pyin\(\) \{ local spool", ln)]
+    p = []
+
+    def spool_harness(defn):
+        h = tmp("uscha-pj-spool-")
+        pyin_dir = os.path.join(h, "spool")
+        os.makedirs(pyin_dir)
+        prog = NL.join([
+            "set -u",
+            "PYIN_DIR=" + DQ + D + "1" + DQ + "; COV_SRC=unused",
+            "pystub() { sleep 1; printf " + SQ + "%s" + BS + "n" + SQ + " " + DQ + D + "6" + DQ
+            + "; cat " + DQ + D + "6" + DQ + "; }",
+            "PY=pystub", defn,
+            "printf " + SQ + "program-A" + BS + "n" + SQ + " | pyin > " + DQ + D + "2/a.out"
+            + DQ + " 2>&1 &",
+            "printf " + SQ + "program-B" + BS + "n" + SQ + " | pyin > " + DQ + D + "2/b.out"
+            + DQ + " 2>&1 &",
+            "wait", ""])
+        script = os.path.join(h, "spool.sh")
+        write(script, prog)
+        sh(script, [pyin_dir, h], {}, True)
+        a = read(os.path.join(h, "a.out")).split(NL) if os.path.isfile(os.path.join(h, "a.out")) else []
+        b = read(os.path.join(h, "b.out")).split(NL) if os.path.isfile(os.path.join(h, "b.out")) else []
+        left = os.listdir(pyin_dir)
+        return a, b, left
+    if len(start) != 1:
+        p.append("the coverage-mode pyin (one mktemp spool per call) was not found exactly once")
+    else:
+        end = next((j for j in range(start[0], len(src)) if re.search(r"return " + re.escape(D) + r"rc; \}", src[j])), None)
+        defn = NL.join(src[start[0]:(end or start[0]) + 1])
+        if "mktemp" not in defn:
+            p.append("the coverage pyin spools to a fixed name")
+        a, b, left = spool_harness(defn)
+        if len(a) < 2 or len(b) < 2 or a[0] == b[0]:
+            p.append("two concurrent pyin calls shared a spool path: %r / %r" % (a[:1], b[:1]))
+        if a[1:2] != ["program-A"] or b[1:2] != ["program-B"]:
+            p.append("a concurrent pyin call ran the other call's program: %r / %r" % (a[1:2], b[1:2]))
+        if left:
+            p.append("pyin left spool entries behind: %r" % left)
+    # the merge lock: six writers, fifteen merges each, disjoint keys -> all ninety land
+    lk = tmp("uscha-pj-lock-")
+    stress = os.path.join(lk, "stress.py")
+    write(stress, "import sys" + NL + "sys.path.insert(0, sys.argv[1])" + NL
+          + "from _harness import sidecar" + NL + "for i in range(15):" + NL
+          + "    sidecar(sys.argv[2], " + DQ + ".lock-cases.json" + DQ
+          + ", {sys.argv[3] + str(i): True}, merge=True)" + NL)
+    procs = [subprocess.Popen([sys.executable, stress, os.path.join(kit, "tests"), lk, "w%d-" % k])
+             for k in range(6)]
+    codes = [pr.wait() for pr in procs]
+    side = os.path.join(lk, "reports", "junit", ".lock-cases.json")
+    got = json.loads(read(side)) if os.path.isfile(side) else {}
+    if codes != [0] * 6 or len(got) != 90:
+        p.append("concurrent sidecar merges lost keys: %d of 90 (exit codes %r)" % (len(got), codes))
+    if os.path.exists(side + ".lock"):
+        p.append("the merge lock was left behind")
+    res["AC-PJ-04"] = not p
+    why["AC-PJ-04"] = "; ".join(p[:3]) or "unique spool, locked merge"
+
+    # --- AC-PJ-05: RED PROBE -- drop ONE unit's result file and the tallies must diverge -------
+    p = []
+    anchor = "  for pid in " + D + "PJ_PIDS; do wait " + DQ + D + "pid" + DQ + " || :; done" + NL
+    lib = read(JOBS)
+    red = None
+    if lib.count(anchor) != 1:
+        p.append("the probe's anchor (the wait loop in pj_collect) is gone: update the probe")
+    else:
+        red_lib = os.path.join(W, "_jobs-red.sh")
+        write(red_lib, lib.replace(anchor, anchor + "  rm -f " + DQ + D + "PJ_DIR" + DQ
+                                   + "/*-U3.res" + NL))
+        red = mini(red_lib, {"USCHA_JOBS": "3"}, merged=True)
+    if red is not None and (jobs_of(red) or 0) < 2:
+        res["AC-PJ-05"] = None
+        why["AC-PJ-05"] = "one core reported: the parallel path cannot be exercised here"
+    else:
+        if red is not None:
+            if equivalent(ser, red):
+                p.append("the comparator stayed green with a unit's result dropped")
+            if tally(red["out"]) != ("3", "2"):
+                p.append("a dropped result was not counted as one FAIL: %r" % (tally(red["out"]),))
+            if "parallel unit U3 left no result" not in red["out"]:
+                p.append("the dropped unit was not named")
+        res["AC-PJ-05"] = not p
+        why["AC-PJ-05"] = "; ".join(p[:3]) or "red as designed"
+
+    # --- AC-PJ-06: SHIPPED PROBE -- v2.7.0 out of git has no USCHA_JOBS handling ---------------
+    g = subprocess.run(["git", "-C", root, "show", PREV_TAG + ":uscha-kit/tests/smoke-engine.sh"],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if g.returncode != 0 or not g.stdout:
+        res["AC-PJ-06"] = None
+        why["AC-PJ-06"] = "no git or %s not fetched: UNMEASURED" % PREV_TAG
+    else:
+        old = g.stdout.decode("utf-8", "replace")
+        lib_old = subprocess.run(["git", "-C", root, "cat-file", "-e",
+                                  PREV_TAG + ":uscha-kit/tests/_jobs.sh"],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = []
+        if "USCHA_JOBS" in old or "pj_unit" in old:
+            p.append("%s already handles USCHA_JOBS" % PREV_TAG)
+        if lib_old.returncode == 0:
+            p.append("%s already ships tests/_jobs.sh" % PREV_TAG)
+        ol = old.split(NL)
+        o0 = next((i for i, ln in enumerate(ol) if re.match(r"\s*pyin\(\) \{ local prog rc", ln)),
+                  None)
+        o1 = None if o0 is None else next(
+            (j for j in range(o0, len(ol)) if re.search(r"return " + re.escape(D) + r"rc; \}", ol[j])),
+            None)
+        if o0 is None or o1 is None:
+            p.append("%s has no coverage-mode pyin to run under the spool harness" % PREV_TAG)
+        else:
+            a, b, _left = spool_harness(NL.join(ol[o0:o1 + 1]))
+            if not (a and b and a[0] == b[0]):
+                p.append("the %s pyin did not collide: %r / %r" % (PREV_TAG, a[:1], b[:1]))
+        res["AC-PJ-06"] = not p
+        why["AC-PJ-06"] = "; ".join(p[:3]) or "%s had no parallel path" % PREV_TAG
+
+    # --- AC-PJ-07: the suite's wiring -- every unit is collected before a serial reader --------
+    def wiring(lines):
+        prob, open_units, defined = [], False, set()
+        readers = (("the first bench-cache consumer", lambda s: s.startswith("echo " + DQ + "== T128 ")),
+                   ("the serial tail", lambda s: s.startswith("echo " + DQ + "== T112 ")),
+                   ("the teardown", lambda s: s.startswith("cd / && rm -rf " + DQ + D + "SB" + DQ)),
+                   ("the acceptance emitter", lambda s: ("PYACC" + SQ) in s and LT + LT in s))
+        seen = set()
+        for n, ln in shell_lines(NL.join(lines)):
+            m = re.match(r"(\w+)\(\) \{", ln)
+            if m:
+                defined.add(m.group(1))
+            m = re.match(r"\s*pj_unit\s+(\S+)\s+(\w+)\s*$", ln)
+            if m:
+                open_units = True
+                if m.group(2) not in defined:
+                    prob.append("pj_unit %s calls %s before it is defined" % (m.group(1), m.group(2)))
+            if re.match(r"\s*pj_collect\s*$", ln):
+                open_units = False
+            for label, hit in readers:
+                if hit(ln):
+                    seen.add(label)
+                    if open_units:
+                        prob.append("units still running at %s (line %d)" % (label, n))
+        for label, _ in readers:
+            if label not in seen:
+                prob.append("%s not found" % label)
+        return prob
+    lines = read(SUITE).split(NL)
+    p = wiring(lines)
+    if sum(1 for ln in lines if ln == ". " + DQ + D + "KIT/tests/_jobs.sh" + DQ) != 1 \
+            or sum(1 for ln in lines if ln == "pj_init") != 1:
+        p.append("the suite does not source _jobs.sh and call pj_init exactly once")
+    if "_merge_lock(" not in read(os.path.join(kit, "tests", "_harness.py")):
+        p.append("_harness.sidecar merges without the lock")
+    # teeth: the same walk over a copy with the teardown barrier removed must go red
+    tear = next((i for i, ln in enumerate(lines)
+                 if ln.startswith("cd / && rm -rf " + DQ + D + "SB" + DQ)), None)
+    bar = max((i for i, ln in enumerate(lines[:tear or 0]) if ln.strip() == "pj_collect"),
+              default=None)
+    if bar is None or not wiring(lines[:bar] + lines[bar + 1:]):
+        p.append("the wiring walk stays green with the barrier before the teardown removed")
+    # the exit code reflects every counted failure: after the final RESULTADO and before the
+    # exit, FAIL raises a zero status (the status is frozen at the teardown)
+    def exit_raised(lines):
+        last = max((i for i, ln in enumerate(lines)
+                    if ln.startswith("printf " + SQ + "RESULTADO: ")), default=None)
+        tail = lines[last + 1:] if last is not None else []
+        ri = next((i for i, ln in enumerate(tail) if ln.startswith("if ")
+                   and (D + "FAIL") in ln and "-ne 0" in ln and "SMOKE_STATUS=1" in ln), None)
+        ei = next((i for i, ln in enumerate(tail)
+                   if ln == "exit " + DQ + D + "{SMOKE_STATUS:-0}" + DQ), None)
+        return ri is not None and ei is not None and ri < ei
+    if not exit_raised(lines):
+        p.append("the exit code does not reflect a FAIL counted after the teardown")
+    if exit_raised([ln for ln in lines if "SMOKE_STATUS=1" not in ln]):
+        p.append("the exit-code walk stays green with the FAIL raise removed")
+    units = sum(1 for ln in lines if re.match(r"\s*pj_unit\s", ln))
+    res["AC-PJ-07"] = not p
+    why["AC-PJ-07"] = "; ".join(p[:3]) or "%d units, every one collected" % units
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".pj-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T171" in
+  OK*) PASS=$((PASS+1)); echo "  ok   parallel suite opt-in and equivalent (AC-PJ-01..07): $T171";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T171";;
+esac
+}
+pj_unit T171 pj_t171
+
+# Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
+# and before RESULTADO is printed (ADR-053).
+pj_collect
+pj_finish
 
 # ---------------------------------------------------------------------------- #
 # ACCEPTANCE EMISSION (kit 1.44.0) — uscha applied to itself.
@@ -18789,6 +19406,12 @@ FAMILIES = (
     # never a silent pass. Every case runs under an isolated empty HOME with an empty PATH.
     (".ix-cases.json", "installer-extras", "T170",                    # ADR-052, 2.7.0
      _seq("AC-IX", 1, 10)),
+    # AC-PJ-05 is the RED PROBE (one unit's result file dropped -> the tallies diverge);
+    # AC-PJ-06 is the SHIPPED PROBE -- it reads the v2.7.0 suite out of git, so without git it
+    # reports None = UNMEASURED, never a silent pass. AC-PJ-02/05 need two cores to exercise the
+    # parallel path; on one they report UNMEASURED rather than a vacuous green.
+    (".pj-cases.json", "parallel-suite", "T171",                      # ADR-053, 2.8.0
+     _seq("AC-PJ", 1, 7)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:
@@ -18878,4 +19501,8 @@ PYACC
 
 echo ""
 printf 'RESULTADO: %s ok · %s fail\n' "$PASS" "$FAIL"
+# The exit code must reflect EVERY counted failure. SMOKE_STATUS is frozen at the teardown, so a
+# FAIL counted after it (T163 onward, and the parallel units collected before the acceptance
+# emitter) printed in RESULTADO yet left the process exit 0 -- and a CI job judges by exit code.
+if [ "$FAIL" -ne 0 ] && [ "${SMOKE_STATUS:-0}" -eq 0 ]; then SMOKE_STATUS=1; fi
 exit "${SMOKE_STATUS:-0}"
