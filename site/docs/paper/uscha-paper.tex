@@ -254,6 +254,21 @@ that part of the effect attributed to ``specifying first'' may be a
 reasoning effect rather than the specification, is stated as the source
 states it.
 
+Industry work on running many agents at once builds the agent ``factory'':
+orchestration, continuous integration, tracing, and access control. Cursor's
+report~\cite{lin2026selfdriving} is one instance, and Cloudflare's proposed
+Agent Development Lifecycle, as reported by Pop~\cite{cloudflare2026adlc}, is
+another, built from a workflow-orchestration layer, a CI layer, OpenTelemetry-compatible
+tracing of model calls, tool executions, and token use, and short-lived,
+task-bound credentials. The tracing layer --- a durable, replayable record of
+what the agent did --- is the same move as this paper's evidence ledger. What
+that line of work does not report is a measurement of whether the output is
+correct: the ADLC article itself gives no defect, coverage, or review-reduction
+data and describes its tools as early iterations. The contribution here is
+orthogonal to the factory: a measured quality contract for what a factory
+produces. The ADLC article is cited for positioning, not as validation of any
+measurement in this paper.
+
 \section{The Methodology}\label{sec:method}
 
 \subsection{Two specification fronts}
@@ -1005,6 +1020,11 @@ W.~Lin, ``Self-driving codebases,'' Cursor Research, February 2026.
 \bibitem{garg2026spec}
 N.~Garg, ``When Spec-Driven Development Pays Off,'' InfoQ, September 2026.
 \url{https://www.infoq.com/articles/when-spec-driven-development-pays-off/}
+
+\bibitem{cloudflare2026adlc}
+O.~Pop, ``Cloudflare Introduces the Agent Development Lifecycle Stack to Replace
+Traditional SDLC,'' InfoQ, 21 September 2026.
+\url{https://www.infoq.com/news/2026/09/cloudflare-adlc-agents/}
 
 \end{thebibliography}
 

@@ -286,6 +286,19 @@ not presented here as validation of it; the confound the source itself
 names, that part of the effect attributed to &ldquo;specifying first&rdquo;
 may be a reasoning effect rather than the specification, is stated as the
 source states it.</p>
+<p>Industry work on running many agents at once builds the agent &ldquo;factory&rdquo;:
+orchestration, continuous integration, tracing, and access control. Cursor&rsquo;s
+report [19] is one instance, and Cloudflare&rsquo;s proposed Agent Development Lifecycle,
+as reported by Pop [21], is another, built from a workflow-orchestration layer, a CI
+layer, OpenTelemetry-compatible tracing of model calls, tool executions, and token
+use, and short-lived, task-bound credentials. The tracing layer &mdash; a durable,
+replayable record of what the agent did &mdash; is the same move as this paper&rsquo;s
+evidence ledger. What that line of work does not report is a measurement of whether
+the output is correct: the ADLC article itself gives no defect, coverage, or
+review-reduction data and describes its tools as early iterations. The contribution
+here is orthogonal to the factory: a measured quality contract for what a factory
+produces. The ADLC article is cited for positioning, not as validation of any
+measurement in this paper.</p>
 
 <h2>3&nbsp;&nbsp;The Methodology</h2>
 
@@ -983,6 +996,8 @@ github.com/dpolivaev/spec-loop</p>
 cursor.com/blog/self-driving-codebases</p>
 <p>[20] N. Garg, &ldquo;When Spec-Driven Development Pays Off,&rdquo; InfoQ, September 2026.
 infoq.com/articles/when-spec-driven-development-pays-off/</p>
+<p>[21] O. Pop, &ldquo;Cloudflare Introduces the Agent Development Lifecycle Stack to Replace Traditional SDLC,&rdquo; InfoQ, 21 September 2026.
+infoq.com/news/2026/09/cloudflare-adlc-agents/</p>
 </div>
 
 </body>
