@@ -17863,6 +17863,607 @@ case "$T169" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T169";;
 esac
 
+echo "== T170 (2.7.0): the installer DETECTS AND TELLS -- QA tools and the optional engram are reported, never installed (ADR-052) =="
+# 2.6.0 made a declared-but-absent QA tool a FACT gate in the engine, yet a fresh install said
+# nothing: the nine kit skills landed and the user met MISSING only at qa-tools-check. Since 2.7.0
+# the installer reports, after the install transaction commits, how the engine's OWN resolver sees
+# the kit default order (code-review / judgment-day / improve) and whether the optional engram is
+# present -- and prints the commands a human may run. It installs nothing, prompts for nothing and
+# runs none of them. The output now depends on what the MACHINE has, so every case runs under an
+# isolated empty HOME/USERPROFILE with CLAUDE_CONFIG_DIR dropped and PATH at an empty directory:
+# this dev box HAS judgment-day, improve and engram, the exact blindness the isolation refuses.
+# AC-IX-06 pins the hard boundary (statically AND with claude/engram stand-ins on PATH), AC-IX-09
+# is the RED PROBE and AC-IX-10 the SHIPPED PROBE against the v2.6.0 installer out of git.
+T170=$(pyin "$KIT" "$ROOT" <<'PY'
+import ast, io, json, os, shutil, stat, subprocess, sys, tarfile, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+INSTALLER = os.path.join(kit, "install-uscha.py")
+NL = chr(10)
+# the release before this one: the SHIPPED PROBE (AC-IX-10) runs its installer out of git. Pin
+# the TAG, never HEAD -- in the release ritual HEAD becomes the NEW installer once X is committed.
+PREV_TAG = "v2.6.0"
+SKILLS = ("uscha-discovery", "uscha-adr-refine", "uscha-reverse-discovery", "uscha-characterize",
+          "uscha-devloop", "uscha-sysdoc", "uscha-rubric", "uscha-mirador", "uscha-status")
+ORDER_NOTE = "the kit default order; your project" + chr(39) + "s risk profile may need fewer"
+BUILTIN_ROW = "code-review    builtin-assumed -- assumed, harness-provided, not measured"
+ENGRAM_MISSING = "engram (optional -- uscha does not require it): missing"
+ENGRAM_PRESENT = "engram (optional -- uscha does not require it): present"
+COMMANDS = ("claude plugin marketplace add Gentleman-Programming/engram",
+            "claude plugin install engram",
+            "engram setup claude-code")
+BINARY_NOTE = "The engram binary itself is a separate download."
+NOT_WIRED = "binary found, not wired into Claude"
+CANNOT = "could not check extras"
+TMPS = []
+res, why = {}, {}
+
+
+def tmp(prefix="uscha-ix-"):
+    d = tempfile.mkdtemp(prefix=prefix)
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    dd = os.path.dirname(path)
+    if dd and not os.path.isdir(dd):
+        os.makedirs(dd)
+    with io.open(path, "w", encoding="utf-8", newline=NL) as fh:
+        fh.write(body)
+
+
+def read(path):
+    with io.open(path, encoding="utf-8", newline="") as fh:
+        return fh.read()
+
+
+def env_for(home, path_dir=None, config_dir=None):
+    """An ISOLATED environment: HOME/USERPROFILE at the case home, CLAUDE_CONFIG_DIR dropped (a
+    value inherited from the dev box would point the resolver back at the real machine) unless
+    the case sets it, and PATH at an empty directory so the engram binary probe is the CASE, not
+    the machine running the suite. The installer is run by absolute interpreter path."""
+    env = dict(os.environ, HOME=home, USERPROFILE=home, PYTHONIOENCODING="utf-8",
+               PATH=path_dir or tmp("uscha-ix-path-"))
+    env.pop("CLAUDE_CONFIG_DIR", None)
+    # a harness that sets it hides the Windows cwd lookup the AC-IX-08 binary case must exercise
+    # (os.environ upper-cases its keys on Windows, so the match ignores case)
+    for k in [k for k in env if k.upper() == "NODEFAULTCURRENTDIRECTORYINEXEPATH"]:
+        del env[k]
+    if config_dir:
+        env["CLAUDE_CONFIG_DIR"] = config_dir
+    return env
+
+
+def inst(argv, home, installer=None, path_dir=None, config_dir=None, cwd=None):
+    return subprocess.run([sys.executable, installer or INSTALLER] + list(argv),
+                          cwd=cwd or tmp("uscha-ix-cwd-"),
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          encoding="utf-8", errors="replace",
+                          env=env_for(home, path_dir, config_dir))
+
+
+def install(home, *extra, **kw):
+    return inst(["install", "--target", "claude", "--home", home] + list(extra), home, **kw)
+
+
+def as_json(proc):
+    try:
+        return json.loads(proc.stdout)
+    except ValueError:
+        return {}
+
+
+def lines_of(proc):
+    return [ln.strip() for ln in proc.stdout.splitlines()]
+
+
+def tool_row(proc, tool):
+    for ln in lines_of(proc):
+        if ln.startswith(tool + " "):
+            return ln
+    return ""
+
+
+def files_in_place(home):
+    sk = os.path.join(home, ".claude", "skills")
+    missing = [s for s in SKILLS if not os.path.isfile(os.path.join(sk, s, "SKILL.md"))]
+    if not os.path.isfile(os.path.join(home, ".claude", "uscha-install.json")):
+        missing.append("uscha-install.json")
+    return missing
+
+
+def empty_home_problems(proc, home):
+    """The AC-IX-01 contract over one install run on an EMPTY home. Shared with the RED PROBE
+    (AC-IX-09), which must find problems here when detection is forced to report present."""
+    p = []
+    ls = lines_of(proc)
+    if proc.returncode != 0:
+        p.append("exit %s, expected 0" % proc.returncode)
+    if not any(ORDER_NOTE in ln for ln in ls):
+        p.append("the kit-default-order note is absent")
+    for tool in ("judgment-day", "improve"):
+        row = tool_row(proc, tool)
+        if not row.endswith(" MISSING"):
+            p.append("%s row %r is not MISSING" % (tool, row))
+    if BUILTIN_ROW not in ls:
+        p.append("code-review is not reported builtin-assumed/not measured: %r"
+                 % tool_row(proc, "code-review"))
+    if ENGRAM_MISSING not in ls:
+        p.append("engram is not reported missing")
+    for c in COMMANDS:
+        if c not in ls:
+            p.append("command %r not printed" % c)
+    if BINARY_NOTE not in ls:
+        p.append("the separate-download note is absent")
+    if any(CANNOT in ln for ln in ls):
+        p.append("detection failed on a clean home: %r" % [ln for ln in ls if CANNOT in ln])
+    gone = files_in_place(home)
+    if gone:
+        p.append("install incomplete: %s" % gone)
+    sk = os.path.join(home, ".claude", "skills")
+    # every skill DIRECTORY (the kit also drops its .uscha-kit-VERSION file there)
+    landed = (set(n for n in os.listdir(sk) if os.path.isdir(os.path.join(sk, n)))
+              if os.path.isdir(sk) else set())
+    if landed != set(SKILLS):
+        p.append("skills/ is not exactly the nine kit skill dirs: extra %r, missing %r"
+                 % (sorted(landed - set(SKILLS)), sorted(set(SKILLS) - landed)))
+    return p
+
+
+def plant_engram_plugin(home, enabled=True, v1=False, mcp=True, stale=False):
+    """A fabricated installed engram plugin under an isolated home -- it NEVER references the
+    real machine's plugins. Ships the .mcp.json a real engram plugin carries. stale=True leaves
+    the registry naming an installPath that does not exist on disk."""
+    ip = os.path.join(home, ".claude", "plugins", "cache", "engram", "engram", "0.1.0")
+    if not stale:
+        os.makedirs(ip)
+    if mcp and not stale:
+        write(os.path.join(ip, ".mcp.json"),
+              json.dumps({"mcpServers": {"engram": {"command": "engram", "args": ["mcp"]}}}))
+    rec = {"scope": "user", "installPath": ip, "version": "0.1.0"}
+    write(os.path.join(home, ".claude", "plugins", "installed_plugins.json"),
+          json.dumps({"version": 1 if v1 else 2,
+                      "plugins": {"engram@engram": rec if v1 else [rec]}}))
+    write(os.path.join(home, ".claude", "settings.json"),
+          json.dumps({"enabledPlugins": {"engram@engram": bool(enabled)}}))
+
+
+def kit_copy(mutate=None):
+    """The working kit (tests excluded) copied to a temp dir, optionally with one file rewritten:
+    the injected-failure case and the RED PROBE run a COPY, never the tree under test."""
+    dest = os.path.join(tmp("uscha-ix-kit-"), "uscha-kit")
+    shutil.copytree(kit, dest, ignore=shutil.ignore_patterns("tests", "__pycache__", "reports"))
+    if mutate:
+        rel, old, new = mutate
+        path = os.path.join(dest, rel)
+        body = read(path)
+        if body.count(old) != 1:
+            return None
+        with io.open(path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(body.replace(old, new))
+    return os.path.join(dest, "install-uscha.py")
+
+
+def old_kit_installer():
+    """The kit as it shipped at PREV_TAG, via git archive. None (no git, a shallow clone, an
+    extracted kit) is UNMEASURED, never a silent pass."""
+    dest = tmp("uscha-ix-old-")
+    try:
+        proc = subprocess.run(["git", "-C", root, "archive", PREV_TAG, "uscha-kit"],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except OSError:
+        return None
+    if proc.returncode != 0 or not proc.stdout:
+        return None
+    try:
+        tf = tarfile.open(fileobj=io.BytesIO(proc.stdout))
+        try:
+            tf.extractall(dest, filter="data")
+        except TypeError:
+            tf.extractall(dest)   # Python < 3.12: no filter= kwarg
+    except (tarfile.TarError, OSError):
+        return None
+    old = os.path.join(dest, "uscha-kit", "install-uscha.py")
+    return old if os.path.isfile(old) else None
+
+
+def engram_signals(proc):
+    eg = (as_json(proc).get("extras") or {}).get("engram") or {}
+    return eg.get("present"), eg.get("signals") or {}
+
+
+def fake_bin(sentinel):
+    """claude and engram stand-ins that record ANY invocation: if the installer ever ran one of
+    the commands it prints, the sentinel would exist."""
+    d = tmp("uscha-ix-fakebin-")
+    for name in ("claude", "engram"):
+        sh = os.path.join(d, name)
+        write(sh, "#!/bin/sh" + NL + "echo " + name + " >> " + json.dumps(sentinel) + NL)
+        os.chmod(sh, os.stat(sh).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        write(os.path.join(d, name + ".cmd"),
+              "@echo " + name + ">> " + json.dumps(sentinel) + NL)
+    return d
+
+
+def tree(path):
+    out = []
+    for dp, dns, fns in os.walk(path):
+        for n in dns + fns:
+            out.append(os.path.relpath(os.path.join(dp, n), path))
+    return sorted(out)
+
+
+def measure():
+    # --- AC-IX-01: an EMPTY home -- judgment-day and improve MISSING, code-review
+    #     builtin-assumed (not measured), engram missing with the three commands, exit 0. ------
+    h = tmp("uscha-ix-home-")
+    r = install(h)
+    p1 = empty_home_problems(r, h)
+    rj = install(h, "--json")
+    ex = as_json(rj).get("extras") or {}
+    srcs = {t.get("tool"): t.get("source") for t in (ex.get("qa_tools") or {}).get("tools", [])}
+    if srcs != {"code-review": "builtin-assumed", "judgment-day": "MISSING", "improve": "MISSING"}:
+        p1.append("--json sources %r" % srcs)
+    if (ex.get("engram") or {}).get("present") is not False:
+        p1.append("--json engram.present is not false")
+    res["AC-IX-01"] = not p1
+    why["AC-IX-01"] = "; ".join(p1[:3]) or "empty home: MISSING x2, builtin-assumed, engram missing"
+
+    # --- AC-IX-02: a planted ~/.claude/skills/judgment-day/SKILL.md resolves global-skill
+    #     (root claude) with its path -- the engine resolver answering, not a second one. -------
+    h = tmp("uscha-ix-home-")
+    sk = os.path.join(h, ".claude", "skills", "judgment-day", "SKILL.md")
+    write(sk, "# judgment-day" + NL)
+    r = install(h, "--json")
+    rows = {t.get("tool"): t for t in ((as_json(r).get("extras") or {}).get("qa_tools") or {}).get("tools", [])}
+    jd = rows.get("judgment-day") or {}
+    p2 = []
+    if r.returncode != 0:
+        p2.append("exit %s" % r.returncode)
+    if jd.get("source") != "global-skill" or jd.get("root") != "claude":
+        p2.append("judgment-day source=%r root=%r" % (jd.get("source"), jd.get("root")))
+    if not jd.get("path") or os.path.realpath(jd["path"]) != os.path.realpath(sk):
+        p2.append("path %r is not the planted skill" % jd.get("path"))
+    if not (isinstance(jd.get("sha256"), str) and len(jd["sha256"]) == 64):
+        p2.append("no sha256")
+    if (rows.get("improve") or {}).get("source") != "MISSING":
+        p2.append("improve is not MISSING")
+    rt = install(h)
+    if not tool_row(rt, "judgment-day").startswith("judgment-day   global-skill -- (claude) "):
+        p2.append("text row %r" % tool_row(rt, "judgment-day"))
+    res["AC-IX-02"] = not p2
+    why["AC-IX-02"] = "; ".join(p2[:3]) or "planted claude-root skill -> global-skill with path+hash"
+
+    # --- AC-IX-03: a planted installed+enabled engram plugin -> present, plugin and MCP (its
+    #     own .mcp.json) yes, no commands; disabled -> missing; a version-1 registry -> present.
+    p3 = []
+    h = tmp("uscha-ix-home-")
+    plant_engram_plugin(h)
+    r = install(h)
+    ls = lines_of(r)
+    if r.returncode != 0:
+        p3.append("exit %s" % r.returncode)
+    if ENGRAM_PRESENT not in ls:
+        p3.append("engram not reported present")
+    if not any("plugin installed and enabled: yes" in ln and "MCP server in the Claude config: yes" in ln
+               for ln in ls):
+        p3.append("plugin/MCP signals not both yes")
+    if any(c in ls for c in COMMANDS):
+        p3.append("add commands printed although engram is present")
+    h = tmp("uscha-ix-home-")
+    plant_engram_plugin(h, enabled=False)
+    r = install(h, "--json")
+    eg = (as_json(r).get("extras") or {}).get("engram") or {}
+    if eg.get("present") is not False or (eg.get("signals") or {}).get("plugin") is not False:
+        p3.append("a DISABLED plugin counted: %r" % eg.get("signals"))
+    h = tmp("uscha-ix-home-")
+    plant_engram_plugin(h, v1=True, mcp=False)
+    r = install(h, "--json")
+    eg = (as_json(r).get("extras") or {}).get("engram") or {}
+    if eg.get("present") is not True or (eg.get("signals") or {}).get("plugin") is not True:
+        p3.append("a version-1 registry entry did not count: %r" % eg.get("signals"))
+    # binary-only: an engram on PATH that nothing wires into Claude is NOT usable -> missing,
+    # with the not-wired line and the commands
+    h = tmp("uscha-ix-home-")
+    fb3 = fake_bin(os.path.join(tmp("uscha-ix-sent-"), "invoked.txt"))
+    r = install(h, path_dir=fb3)
+    ls = lines_of(r)
+    if ENGRAM_MISSING not in ls or NOT_WIRED not in ls or not all(c in ls for c in COMMANDS):
+        p3.append("binary-only is not missing + not-wired + commands")
+    if not any("binary on PATH: yes" in ln for ln in ls):
+        p3.append("binary-only: the stand-in on PATH was not seen")
+    # a stale registry entry: enabled, but its installPath is gone -> missing
+    h = tmp("uscha-ix-home-")
+    plant_engram_plugin(h, stale=True)
+    pres, sig = engram_signals(install(h, "--json"))
+    if pres is not False or sig.get("plugin") is not False:
+        p3.append("a stale installPath counted: %r" % sig)
+    # a user-level MCP server named exactly engram -> present via mcp alone
+    h = tmp("uscha-ix-home-")
+    write(os.path.join(h, ".claude.json"),
+          json.dumps({"mcpServers": {"engram": {"command": "engram", "args": ["mcp"]}}}))
+    pres, sig = engram_signals(install(h, "--json"))
+    if pres is not True or sig.get("mcp") is not True or sig.get("plugin") is not False:
+        p3.append("a user-level engram MCP server did not count: %r" % sig)
+    # a name that merely CONTAINS engram is not the engram server -> missing
+    h = tmp("uscha-ix-home-")
+    write(os.path.join(h, ".claude.json"),
+          json.dumps({"mcpServers": {"not-an-engramatic-thing": {"command": "x"},
+                                     "engram-tools": {"command": "x"}}}))
+    pres, sig = engram_signals(install(h, "--json"))
+    if pres is not False or sig.get("mcp") is not False:
+        p3.append("a substring-only MCP name counted: %r" % sig)
+    res["AC-IX-03"] = not p3
+    why["AC-IX-03"] = "; ".join(p3[:3]) or ("enabled plugin present; disabled, stale, binary-only "
+                                              "and substring MCP missing; user MCP and v1 read")
+
+    # --- AC-IX-04: --dry-run writes nothing and LISTS the checks without resolving any. --------
+    p4 = []
+    base = tmp("uscha-ix-dry-")
+    h = os.path.join(base, "home")
+    r = install(h, "--dry-run")
+    ls = lines_of(r)
+    if r.returncode != 0:
+        p4.append("exit %s" % r.returncode)
+    if tree(base):
+        p4.append("dry-run wrote %r" % tree(base)[:3])
+    if not any(ln.startswith("Extras -- would be checked") for ln in ls):
+        p4.append("no would-check header")
+    if not any(ORDER_NOTE in ln and "code-review, judgment-day, improve" in ln for ln in ls):
+        p4.append("the QA tool order is not listed")
+    if not any(ln.startswith("engram (optional") and "binary on PATH" in ln for ln in ls):
+        p4.append("the engram checks are not listed")
+    if any(ln.endswith(" MISSING") or ln.startswith("To add it") for ln in ls):
+        p4.append("dry-run resolved or advised instead of listing")
+    rj = install(h, "--dry-run", "--json")
+    ex = as_json(rj).get("extras") or {}
+    if ex.get("checked") is not False or ex.get("planned") is not True or tree(base):
+        p4.append("--json dry-run extras %r" % ex)
+    res["AC-IX-04"] = not p4
+    why["AC-IX-04"] = "; ".join(p4[:3]) or "dry-run lists the checks and writes nothing"
+
+    # --- AC-IX-05: an injected detection failure (a copy whose engine raises on import) prints
+    #     "could not check extras", and the install still exits 0 with every file in place;
+    #     doctor prints it too and keeps its own exit code. ---------------------------------
+    p5 = []
+    bad = kit_copy((os.path.join(".claude", "skills", "uscha-devloop", "qa_ledger.py"),
+                    "import argparse" + NL,
+                    "raise RuntimeError(" + json.dumps("injected extras failure") + ")" + NL
+                    + "import argparse" + NL))
+    if bad is None:
+        p5.append("the injection anchor moved -- update the probe")
+    else:
+        h = tmp("uscha-ix-home-")
+        r = inst(["install", "--target", "claude", "--home", h], h, installer=bad)
+        if r.returncode != 0:
+            p5.append("install exit %s with detection failing" % r.returncode)
+        if not any(ln.startswith(CANNOT + ": ") and "injected extras failure" in ln
+                   for ln in lines_of(r)):
+            p5.append("no could-not-check line: %r" % r.stdout[-200:])
+        gone = files_in_place(h)
+        if gone:
+            p5.append("files missing after a failed detection: %s" % gone)
+        d = inst(["doctor", "--target", "claude", "--home", h], h, installer=bad)
+        if d.returncode != 0 or not any(ln.startswith(CANNOT) for ln in lines_of(d)):
+            p5.append("doctor exit %s / no could-not-check line" % d.returncode)
+        dj = inst(["doctor", "--target", "claude", "--home", h, "--json"], h, installer=bad)
+        dex = as_json(dj).get("extras") or {}
+        if dj.returncode != 0 or dex.get("checked") is not False or "injected" not in str(dex.get("error")):
+            p5.append("doctor --json exit %s extras %r" % (dj.returncode, dex))
+    res["AC-IX-05"] = not p5
+    why["AC-IX-05"] = "; ".join(p5[:3]) or "detection failure reported; install exit 0, files in place"
+
+    # --- AC-IX-06: the HARD BOUNDARY. Statically: no process-running call in the installer
+    #     carries a claude/engram string or the command table. Dynamically: claude and engram
+    #     stand-ins on PATH are never invoked by install or doctor. And the three commands ARE in
+    #     the source, so dropping them is a red, not a silent narrowing. ---------------------
+    p6 = []
+    src = read(INSTALLER)
+    tree_ = ast.parse(src)
+    runners = {"run", "call", "check_call", "check_output", "Popen", "system", "popen",
+               "spawnl", "spawnv", "spawnvp", "execv", "execvp", "execl", "execlp", "startfile"}
+    for node in ast.walk(tree_):
+        if not isinstance(node, ast.Call):
+            continue
+        f = node.func
+        name = f.attr if isinstance(f, ast.Attribute) else (f.id if isinstance(f, ast.Name) else "")
+        if name not in runners:
+            continue
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                word = sub.value
+            elif isinstance(sub, ast.Name):
+                word = sub.id
+            elif isinstance(sub, ast.Attribute):
+                word = sub.attr
+            else:
+                continue
+            low = word.lower()
+            if "engram" in low or "claude plugin" in low or "add_command" in low:
+                p6.append("line %s: a process call carries %r" % (node.lineno, word))
+    for node in ast.walk(tree_):
+        if not isinstance(node, ast.Call):
+            continue
+        f = node.func
+        name = f.attr if isinstance(f, ast.Attribute) else (f.id if isinstance(f, ast.Name) else "")
+        if name == "input":
+            p6.append("line %s: a call to input() -- the installer shows no prompt" % node.lineno)
+        if name == "add_argument":
+            for arg in node.args:
+                if (isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                        and (arg.value == "--with" or arg.value.startswith("--with-"))):
+                    p6.append("line %s: argparse registers %r -- the installer has no --with"
+                              % (node.lineno, arg.value))
+    for c in COMMANDS:
+        if src.count(json.dumps(c)) != 1:
+            p6.append("command %r is not in the installer source exactly once" % c)
+    sentinel = os.path.join(tmp("uscha-ix-sent-"), "invoked.txt")
+    fb = fake_bin(sentinel)
+    h = tmp("uscha-ix-home-")
+    r1 = install(h, path_dir=fb)
+    r2 = inst(["doctor", "--target", "claude", "--home", h], h, path_dir=fb)
+    if r1.returncode != 0 or r2.returncode != 0:
+        p6.append("install/doctor exit %s/%s with stand-ins on PATH" % (r1.returncode, r2.returncode))
+    if os.path.exists(sentinel):
+        p6.append("a claude/engram stand-in was INVOKED: %r" % read(sentinel)[:80])
+    if not any("binary on PATH: yes" in ln for ln in lines_of(r1)):
+        p6.append("the engram stand-in on PATH was not seen (the probe did not exercise PATH)")
+    if ENGRAM_MISSING not in lines_of(r1) or NOT_WIRED not in lines_of(r1):
+        p6.append("a bare engram binary on PATH read as present")
+    res["AC-IX-06"] = not p6
+    why["AC-IX-06"] = "; ".join(p6[:3]) or "no process call names claude/engram; no --with, no input(); stand-ins never run"
+
+    # --- AC-IX-07: exit codes are untouched and both callers share one path. -----------------
+    p7 = []
+    h = tmp("uscha-ix-home-")
+    for argv, want in ((["doctor", "--target", "claude", "--home", h], 1),
+                       (["doctor", "--target", "claude", "--home", h, "--json"], 1)):
+        d = inst(argv, h)
+        if d.returncode != want:
+            p7.append("unhealthy doctor %s exit %s, expected %s" % (argv[-1], d.returncode, want))
+        if "--json" in argv:
+            dj = as_json(d)
+            if dj.get("ok") is not False or not (dj.get("extras") or {}).get("checked"):
+                p7.append("unhealthy doctor --json ok/extras %r" % dj.get("ok"))
+        elif not any(ln.startswith("Extras -- reported only, never installed (advisory") for ln in lines_of(d)):
+            p7.append("unhealthy doctor printed no advisory extras block")
+    write(os.path.join(h, ".claude", "skills", "judgment-day", "SKILL.md"), "# jd" + NL)
+    plant_engram_plugin(h)
+    ij = install(h, "--json")
+    dj = inst(["doctor", "--target", "claude", "--home", h, "--json"], h)
+    if ij.returncode != 0 or dj.returncode != 0:
+        p7.append("healthy install/doctor exit %s/%s" % (ij.returncode, dj.returncode))
+    ie, de = as_json(ij).get("extras") or {}, as_json(dj).get("extras") or {}
+    if not ie.get("checked") or ie.get("qa_tools") != de.get("qa_tools") or ie.get("engram") != de.get("engram"):
+        p7.append("install and doctor disagree on the extras")
+    if as_json(dj).get("ok") is not True:
+        p7.append("healthy doctor ok is not true")
+    bh = tmp("uscha-ix-home-")
+    write(os.path.join(bh, ".agents", "plugins", "marketplace.json"), "{not json")
+    b = inst(["install", "--target", "codex", "--home", bh], bh)
+    if b.returncode != 1:
+        p7.append("a refused install exits %s, expected 1" % b.returncode)
+    if "Extras" in b.stdout or CANNOT in b.stdout:
+        p7.append("a refused install still reported extras")
+    res["AC-IX-07"] = not p7
+    why["AC-IX-07"] = "; ".join(p7[:3]) or "doctor 1/0 and install 1 unchanged; one detection path"
+
+    # --- AC-IX-08: the report describes the TARGET machine. A cwd carrying a project skill and
+    #     project settings does not leak in, an inherited CLAUDE_CONFIG_DIR is set aside for an
+    #     explicit --home, and honoured when the target IS this machine (no --home). ----------
+    p8 = []
+    cw = tmp("uscha-ix-proj-")
+    write(os.path.join(cw, ".claude", "skills", "judgment-day", "SKILL.md"), "# jd" + NL)
+    h = tmp("uscha-ix-home-")
+    plant_engram_plugin(h, enabled=False)
+    write(os.path.join(cw, ".claude", "settings.json"),
+          json.dumps({"enabledPlugins": {"engram@engram": True}}))
+    r = inst(["install", "--target", "claude", "--home", h, "--json"], h, cwd=cw)
+    ex = as_json(r).get("extras") or {}
+    jd = {t.get("tool"): t.get("source") for t in (ex.get("qa_tools") or {}).get("tools", [])}
+    if jd.get("judgment-day") != "MISSING":
+        p8.append("a cwd project skill leaked in: %r" % jd.get("judgment-day"))
+    if (ex.get("engram") or {}).get("present") is not False:
+        p8.append("cwd project settings enabled a plugin in the machine report")
+    cfg = tmp("uscha-ix-cfg-")
+    write(os.path.join(cfg, "skills", "improve", "SKILL.md"), "# improve" + NL)
+    h = tmp("uscha-ix-home-")
+    r = inst(["install", "--target", "claude", "--home", h, "--json"], h, config_dir=cfg)
+    src_ = {t.get("tool"): t.get("source") for t in (((as_json(r).get("extras") or {}).get("qa_tools") or {}).get("tools", []))}
+    if src_.get("improve") != "MISSING":
+        p8.append("an inherited CLAUDE_CONFIG_DIR leaked into an explicit --home: %r" % src_.get("improve"))
+    h = tmp("uscha-ix-home-")
+    r = inst(["doctor", "--target", "claude", "--json"], h, config_dir=cfg)
+    src_ = {t.get("tool"): t.get("source") for t in (((as_json(r).get("extras") or {}).get("qa_tools") or {}).get("tools", []))}
+    if src_.get("improve") != "global-skill":
+        p8.append("CLAUDE_CONFIG_DIR not honoured without --home: %r" % src_.get("improve"))
+    # an engram binary in the CWD (a Windows .cmd and an sh script), with PATH lacking it, is not
+    # on PATH -- py3.8 shutil.which on Windows found the .cmd
+    cw = tmp("uscha-ix-cwdbin-")
+    write(os.path.join(cw, "engram.cmd"), "@echo engram" + NL)
+    write(os.path.join(cw, "engram"), "#!/bin/sh" + NL + "echo engram" + NL)
+    os.chmod(os.path.join(cw, "engram"), 0o755)
+    h = tmp("uscha-ix-home-")
+    r = inst(["install", "--target", "claude", "--home", h], h, cwd=cw)
+    if not any(ln.startswith("binary on PATH: no") for ln in lines_of(r)):
+        p8.append("an engram in the cwd read as on PATH")
+    # an MCP server under ANOTHER project in .claude.json serves THAT project, not this machine
+    h = tmp("uscha-ix-home-")
+    write(os.path.join(h, ".claude.json"), json.dumps({"projects": {os.path.join(h, "other"): {
+        "mcpServers": {"engram": {"command": "engram", "args": ["mcp"]}}}}}))
+    pres, sig = engram_signals(install(h, "--json"))
+    if pres is not False or sig.get("mcp") is not False:
+        p8.append("another project" + chr(39) + "s MCP server counted: %r" % sig)
+    res["AC-IX-08"] = not p8
+    why["AC-IX-08"] = "; ".join(p8[:3]) or "machine scope: cwd, cwd binary, other-project MCP and inherited config dir do not leak"
+
+    # --- AC-IX-09: RED PROBE -- a copy whose detection reports EVERYTHING present makes the
+    #     AC-IX-01 contract go red on the same empty home. Proof the contract is load-bearing. ---
+    p9 = []
+    src_line = "        tools = [eng.resolve_qa_tool(t, (), project_root=scope, home=str(home)) for t in order]" + NL
+    forced = kit_copy(("install-uscha.py", src_line,
+                       "        tools = [dict(tool=t, source=" + json.dumps("global-skill")
+                       + ", root=" + json.dumps("claude") + ", path=None, sha256=None) for t in order]" + NL))
+    if forced is not None:
+        body = read(forced)
+        old = "\"present\": usable,"
+        if body.count(old) == 1:
+            with io.open(forced, "w", encoding="utf-8", newline="") as fh:
+                fh.write(body.replace(old, "\"present\": True,"))
+        else:
+            forced = None
+    if forced is None:
+        p9.append("the red-probe anchors moved -- update the probe")
+    else:
+        h = tmp("uscha-ix-home-")
+        rb = inst(["install", "--target", "claude", "--home", h], h, installer=forced)
+        probs = empty_home_problems(rb, h)
+        if not any("judgment-day row" in x for x in probs) or not any("engram is not reported missing" in x for x in probs):
+            p9.append("a forced-present installer still satisfies the empty-home contract: %r" % probs[:3])
+    res["AC-IX-09"] = not p9
+    why["AC-IX-09"] = "; ".join(p9[:3]) or "forced-present detection turns the empty-home case red"
+
+    # --- AC-IX-10: SHIPPED PROBE -- the v2.6.0 installer out of git prints no extras report
+    #     and carries no extras key. Without git: None = UNMEASURED, never a silent pass. ------
+    old = old_kit_installer()
+    if old is None:
+        res["AC-IX-10"] = None
+        why["AC-IX-10"] = "no git / no %s tag -- UNMEASURED" % PREV_TAG
+    else:
+        p10 = []
+        h = tmp("uscha-ix-home-")
+        r = inst(["install", "--target", "claude", "--home", h], h, installer=old)
+        rj = inst(["install", "--target", "claude", "--home", h, "--json"], h, installer=old)
+        if r.returncode != 0 or rj.returncode != 0:
+            p10.append("the %s installer failed: %s/%s" % (PREV_TAG, r.returncode, rj.returncode))
+        if "Extras" in r.stdout or "engram" in r.stdout:
+            p10.append("the %s installer already reports extras" % PREV_TAG)
+        if "extras" in as_json(rj):
+            p10.append("the %s installer already carries an extras key" % PREV_TAG)
+        res["AC-IX-10"] = not p10
+        why["AC-IX-10"] = "; ".join(p10[:3]) or "%s had no extras report" % PREV_TAG
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".ix-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T170" in
+  OK*) PASS=$((PASS+1)); echo "  ok   installer extras report (AC-IX-01..10): $T170";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T170";;
+esac
+
 # ---------------------------------------------------------------------------- #
 # ACCEPTANCE EMISSION (kit 1.44.0) — uscha applied to itself.
 # Runs the repo's own ACCEPTANCE.md criteria and writes the JUnit report the engine
@@ -18183,6 +18784,11 @@ FAMILIES = (
     # (2.6.0 fix pass: live config, every install root, one door) each carry their own red probe.
     (".qt-cases.json", "qa-tool-readiness", "T169",                   # ADR-051, 2.6.0
      _seq("AC-QT", 1, 13)),
+    # AC-IX-09 is the RED PROBE; AC-IX-10 is the SHIPPED PROBE -- it runs the v2.6.0 installer out
+    # of git, so without git (a shallow clone, an extracted kit) it reports None = UNMEASURED,
+    # never a silent pass. Every case runs under an isolated empty HOME with an empty PATH.
+    (".ix-cases.json", "installer-extras", "T170",                    # ADR-052, 2.7.0
+     _seq("AC-IX", 1, 10)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

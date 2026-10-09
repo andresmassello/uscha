@@ -2522,13 +2522,16 @@ def _sha256_file(path):
         return None
 
 
-def _enabled_plugins(home):
+def _enabled_plugins(home, cwd="."):
     """`<name>@<marketplace>` -> bool, merged from the SAME settings files doctor walks
     (user ~/.claude, project .claude, project-local; later wins per key). A missing or malformed
-    file is skipped, never raised: a broken settings file must not turn a real tool MISSING."""
+    file is skipped, never raised: a broken settings file must not turn a real tool MISSING.
+    The project files are read under `cwd` (the resolver's project root; "." for every engine
+    caller), so a machine-level caller -- the installer's extras report -- can keep the
+    directory it happens to run from out of the answer."""
     paths = [os.path.join(_claude_config_dir(home), "settings.json"),
-             os.path.join(".claude", "settings.json"),
-             os.path.join(".claude", "settings.local.json")]
+             os.path.join(cwd, ".claude", "settings.json"),
+             os.path.join(cwd, ".claude", "settings.local.json")]
     enabled = {}
     for p in paths:
         try:
@@ -2560,28 +2563,23 @@ def _installed_plugins(home):
     return plugins if isinstance(plugins, dict) else {}
 
 
-def _resolve_plugin_tool(name, home, cwd="."):
-    """Resolve `name` against INSTALLED-AND-ENABLED plugins. `name` is either bare (`review`) or
-    `<plugin>:<skill>` (the harness lists e.g. `open-code-review:review`). A plugin provides the
-    tool when `skills/<skill>/SKILL.md` or `commands/<skill>.md` exists under one of its install
-    paths (official code-review and open-code-review ship only `commands/`). Returns
-    (path, sha256) or None. A `scope: project` record is honored only when its projectPath
-    resolves to cwd (realpath BOTH sides -- the Windows 8.3 short-path gotcha); `scope: user`
-    always. Never raises on a broken registry."""
-    if ":" in name:
-        plugin_part, skill_part = name.split(":", 1)
-    else:
-        plugin_part, skill_part = "", name
-    if not skill_part:
-        return None
-    enabled = _enabled_plugins(home)
+def enabled_plugin_installs(home, cwd=".", plugin=None):
+    """[(`<name>@<marketplace>`, installPath)] for every plugin that is installed AND enabled --
+    the plugin-level half of the registry reader, shared by the QA-tool resolver below and the
+    installer's optional-extras report (ADR-052), which asks about a PLUGIN (engram), not a
+    skill, and must not push a plugin name through the skill resolver. `plugin` filters by the
+    name part before the `@`. A `scope: project` record counts only when its projectPath resolves
+    to `cwd` (realpath BOTH sides -- the Windows 8.3 short-path gotcha); `scope: user` always.
+    Both registry shapes are read (version 1 maps a key to ONE record). Never raises on a broken
+    registry: a malformed file reads as nothing installed."""
+    enabled = _enabled_plugins(home, cwd)
     installed = _installed_plugins(home)
     cwd_real = os.path.realpath(cwd)
+    out = []
     for key, records in installed.items():
         if not enabled.get(key):
             continue
-        pname = key.split("@", 1)[0]
-        if plugin_part and pname != plugin_part:
+        if plugin and key.split("@", 1)[0] != plugin:
             continue
         if isinstance(records, dict):
             records = [records]   # installed_plugins.json version 1: one record per key
@@ -2597,10 +2595,29 @@ def _resolve_plugin_tool(name, home, cwd="."):
             ipath = rec.get("installPath")
             if not ipath or not isinstance(ipath, str):
                 continue
-            for cand in (os.path.join(ipath, "skills", skill_part, "SKILL.md"),
-                         os.path.join(ipath, "commands", skill_part + ".md")):
-                if os.path.isfile(cand):
-                    return cand, _sha256_file(cand)
+            out.append((key, ipath))
+    return out
+
+
+def _resolve_plugin_tool(name, home, cwd="."):
+    """Resolve `name` against INSTALLED-AND-ENABLED plugins. `name` is either bare (`review`) or
+    `<plugin>:<skill>` (the harness lists e.g. `open-code-review:review`). A plugin provides the
+    tool when `skills/<skill>/SKILL.md` or `commands/<skill>.md` exists under one of its install
+    paths (official code-review and open-code-review ship only `commands/`). Returns
+    (path, sha256) or None. A `scope: project` record is honored only when its projectPath
+    resolves to cwd (realpath BOTH sides -- the Windows 8.3 short-path gotcha); `scope: user`
+    always. Never raises on a broken registry."""
+    if ":" in name:
+        plugin_part, skill_part = name.split(":", 1)
+    else:
+        plugin_part, skill_part = "", name
+    if not skill_part:
+        return None
+    for _key, ipath in enabled_plugin_installs(home, cwd=cwd, plugin=plugin_part or None):
+        for cand in (os.path.join(ipath, "skills", skill_part, "SKILL.md"),
+                     os.path.join(ipath, "commands", skill_part + ".md")):
+            if os.path.isfile(cand):
+                return cand, _sha256_file(cand)
     return None
 
 

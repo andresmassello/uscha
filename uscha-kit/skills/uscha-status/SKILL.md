@@ -58,7 +58,7 @@ that surface the warning cannot come from the skill itself. The `doctor` seam is
 that still works there — it runs from any kit checkout and reads the installs from outside.
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.6.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.7.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## Orientation markers (non-negotiable)
 

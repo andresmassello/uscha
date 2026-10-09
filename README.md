@@ -45,7 +45,18 @@ runtime dependencies). The npm package is a thin router; the canonical installer
 `uscha-kit/install-uscha.py`. `init` also writes a minimal, per-repo-type `.gitignore` when the
 project has none (kit 2.4.0) — it never lists `reports/`, the ledger's own evidence.
 
-**Kit v2.6.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+The kit declares no dependencies and installs none. Since kit 2.7.0 (ADR-052) `install` ends
+with an **extras report** and the installer's `doctor` repeats it as an advisory section: how
+the dev loop's QA tools (`code-review`, `judgment-day`, `improve`, the kit default order) resolve
+on the target machine — through the engine's own resolver, so `code-review` reads "assumed,
+harness-provided, not measured" — and whether the optional engram (uscha does not require it)
+is present, with the commands to add it. Present means usable from Claude: the engram plugin
+installed and enabled, or an MCP server named `engram` in the Claude configuration; a bare
+binary on PATH reads "binary found, not wired into Claude". The MCP check reads only the Claude
+configuration, for `--target codex` too. It only reports: it installs nothing, asks nothing and
+runs none of the commands it prints, and it never changes an exit code.
+
+**Kit v2.7.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 

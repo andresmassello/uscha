@@ -123,6 +123,13 @@ npx --yes @andresmassello/uscha@latest doctor --target both
 
 `doctor` exits 1 for any unhealthy target in either text or `--json` mode. It checks installed skill presence, manifest/marketplace or hook registration, marker, and version; it does not measure file-content integrity.
 
+`install` (after its transaction commits) and `doctor` (as an advisory section) also report the
+extras (ADR-052, kit 2.7.0): how the dev loop's QA tools resolve on the target machine and whether
+the optional engram is present, with the commands to add it. engram is present when it is usable
+from Claude (the plugin installed and enabled, or an `engram` MCP server in the Claude
+configuration); a bare binary on PATH reads "binary found, not wired into Claude". They only
+report: nothing is installed, no command is run, and neither exit code changes.
+
 If `npm view` returns `404` immediately after a new release, wait a few minutes:
 npm search/dist-tags can propagate before the package metadata endpoint used by
 `npx`. Do not republish the same version while propagation is in progress.

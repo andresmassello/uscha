@@ -40,6 +40,9 @@ el instalador canónico, `uscha-kit/install-uscha.py`. Reemplace `claude` por `c
 `copilot`, `gemini`, `cline`, `pi` o `all` para los otros targets.
 
 La instalación deja las nueve skills y el motor de medición bajo `~/.claude/skills/`.
+Desde 2.7.0 termina con un informe de extras: si están las herramientas de QA del dev loop
+(`code-review`, `judgment-day`, `improve`) y el engram opcional, con los comandos para agregar
+lo que falte. Solo informa; no instala ninguno.
 
 ## 2. Preparar el proyecto, una vez por repositorio
 

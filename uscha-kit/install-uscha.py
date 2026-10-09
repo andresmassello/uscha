@@ -618,16 +618,229 @@ def cmd_install(args):
         else:
             root = installers[target](home, args.mode, args.dry_run, operations)
         installed[target] = str(root)
-    emit({"status": "planned" if args.dry_run else "installed", "dry_run": args.dry_run, "source_version": source_version(), "home": str(home), "installed": installed, "operations": operations, "next": next_steps(args.target)}, args.json)
+    # ADR-052: the extras report runs only AFTER every install transaction above has committed
+    # (an install that raised never gets here, so its exit code is untouched), and it can only
+    # ever ADD lines -- a detection error is reported, never raised.
+    extras = extras_plan() if args.dry_run else detect_extras(home, explicit_home=bool(args.home))
+    emit({"status": "planned" if args.dry_run else "installed", "dry_run": args.dry_run, "source_version": source_version(), "home": str(home), "installed": installed, "operations": operations, "next": next_steps(args.target), "extras": extras}, args.json)
+    if not args.json:
+        print_extras(extras)
 
 
 def cmd_doctor(args):
     home = home_path(args)
     targets = {target: target_status(home, target) for target in selected_targets(args.target)}
     ok = all(status["healthy"] for status in targets.values())
-    emit({"ok": ok, "source_version": source_version(), "home": str(home), "python": sys.version.split()[0], "targets": targets}, args.json)
+    # Advisory, LIVE and stateless (ADR-052): re-detected on every run through the same functions
+    # the install summary uses, never read from the marker, and never part of `ok`.
+    extras = detect_extras(home, explicit_home=bool(args.home))
+    emit({"ok": ok, "source_version": source_version(), "home": str(home), "python": sys.version.split()[0], "targets": targets, "extras": extras}, args.json)
+    if not args.json:
+        print_extras(extras, advisory=True)
     if not ok:
         raise SystemExit(1)
+
+
+# --------------------------------------------------------------------------------------------- #
+# Optional extras (ADR-052, kit 2.7.0) -- DETECT AND TELL, never install.
+# The dev loop orchestrates QA tools the kit does not ship (code-review / judgment-day / improve)
+# and works with an optional memory plugin (engram). The installer REPORTS whether they are
+# present and prints the commands a human may choose to run. It installs nothing beyond the kit,
+# asks nothing, copies no QA skill and runs none of the commands it prints: the default install
+# stays dependency-free. Tool resolution is NOT reimplemented here -- the engine's own
+# resolve_qa_tool (ADR-051) answers, so `qa-tools-check` and this report cannot disagree.
+# --------------------------------------------------------------------------------------------- #
+EXTRAS_ENGINE = KIT_ROOT / ".claude" / "skills" / "uscha-devloop" / "qa_ledger.py"
+QA_ORDER_NOTE = "the kit default order; your project's risk profile may need fewer"
+QA_SOURCE_NOTES = {"builtin-assumed": "assumed, harness-provided, not measured"}
+ENGRAM_NOTE = "optional -- uscha does not require it"
+ENGRAM_CHECKS = (("binary", "binary on PATH"),
+                 ("plugin", "plugin installed and enabled"),
+                 ("mcp", "MCP server in the Claude config"))
+# Printed for a human to run; this installer never executes them (smoke T170 pins that).
+ENGRAM_ADD_COMMANDS = ("claude plugin marketplace add Gentleman-Programming/engram",
+                       "claude plugin install engram",
+                       "engram setup claude-code")
+ENGRAM_BINARY_NOTE = "The engram binary itself is a separate download."
+ENGRAM_NOT_WIRED = "binary found, not wired into Claude"
+# The MCP server name the engram plugin's own `.mcp.json` declares. Matched EXACTLY, never as a
+# substring: a server called `not-an-engramatic-thing` is not engram.
+ENGRAM_MCP_SERVER = "engram"
+# A directory that is never created: the resolver's PROJECT probes (./.claude/skills, the project
+# settings files) are pointed at it, so the report describes the MACHINE, not whatever directory
+# `npx` happened to be run from.
+MACHINE_SCOPE_DIR = ".uscha-machine-scope"
+
+
+def _extras_engine():
+    # the npm package's own engine, imported, never reimplemented; no bytecode is written into
+    # the package (the bench arms import it the same way)
+    sys.dont_write_bytecode = True
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("uscha_extras_engine", str(EXTRAS_ENGINE))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def kit_default_qa_order():
+    """The kit's default qa_tools_order, read from its reference config -- one list, not two."""
+    cfg = load_json(KIT_ROOT / "uscha.config.json", "kit reference config")
+    order = (cfg.get("defaults") or {}).get("qa_tools_order")
+    if not isinstance(order, list) or not order or not all(isinstance(t, str) for t in order):
+        raise InstallError("kit reference config has no qa_tools_order list")
+    return order
+
+
+def extras_plan():
+    """--dry-run: list what would be checked; check nothing, write nothing."""
+    try:
+        order = kit_default_qa_order()
+    except Exception as exc:
+        return {"checked": False, "error": "%s: %s" % (type(exc).__name__, exc)}
+    return {"checked": False, "planned": True,
+            "qa_tools": {"order": order, "order_source": QA_ORDER_NOTE},
+            "engram": {"note": ENGRAM_NOTE, "checks": [label for _, label in ENGRAM_CHECKS]}}
+
+
+def _mcp_names(data):
+    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    return [str(k) for k in servers] if isinstance(servers, dict) else []
+
+
+def _engram_mcp_wired(eng, home, installs):
+    """Is an engram MCP server wired into Claude at MACHINE level? Two sources only: the user-level
+    `mcpServers` of `.claude.json`, and the `.mcp.json` of an installed AND enabled engram plugin
+    whose installPath exists (that is how the plugin wires its server; `installs` arrives already
+    filtered). A `projects[<path>].mcpServers` entry serves one OTHER project, not this machine,
+    so it never counts. The Claude config is the only one read, whatever the install --target.
+    The name must equal ENGRAM_MCP_SERVER. A missing or malformed file reads as not wired."""
+    claude_json = (os.path.join(eng._claude_config_dir(str(home)), ".claude.json")
+                   if os.environ.get("CLAUDE_CONFIG_DIR")
+                   else os.path.join(str(home), ".claude.json"))
+    names = []
+    try:
+        with open(claude_json, encoding="utf-8") as fh:
+            names.extend(_mcp_names(json.load(fh)))
+    except (OSError, ValueError):
+        pass
+    for _key, ipath in installs:
+        try:
+            with open(os.path.join(ipath, ".mcp.json"), encoding="utf-8") as fh:
+                names.extend(_mcp_names(json.load(fh)))
+        except (OSError, ValueError):
+            pass
+    return ENGRAM_MCP_SERVER in names
+
+
+def _on_path(name):
+    """Is `name` an executable in a PATH entry? A manual walk, NOT shutil.which: on Windows
+    shutil.which also searches the CURRENT directory (Python 3.8 always; later versions unless
+    NoDefaultCurrentDirectoryInExePath is set), so an `engram.cmd` lying in the directory `npx`
+    ran from read as installed. The cwd is searched only when PATH itself names it: a literal `.`,
+    or (POSIX semantics) an empty entry -- an empty entry on Windows, a trailing `;`, is skipped.
+    On Windows the PATHEXT extensions are tried."""
+    if os.name == "nt":
+        pathext = os.environ.get("PATHEXT") or ".COM;.EXE;.BAT;.CMD"
+        exts = [e for e in pathext.split(os.pathsep) if e]
+        if os.path.splitext(name)[1].lower() in [e.lower() for e in exts]:
+            names = [name]
+        else:
+            names = [name + e for e in exts]
+    else:
+        names = [name]
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry:
+            if os.name == "nt":
+                continue
+            entry = os.curdir
+        for n in names:
+            cand = os.path.join(entry, n)
+            if os.path.isfile(cand) and (os.name == "nt" or os.access(cand, os.X_OK)):
+                return True
+    return False
+
+
+def detect_extras(home, explicit_home=False):
+    """The one detection path for the install summary AND doctor. Reads external state only and
+    never raises: any error becomes {"checked": False, "error": reason}."""
+    saved = os.environ.get("CLAUDE_CONFIG_DIR")
+    try:
+        # An explicit --home names the machine to describe; a CLAUDE_CONFIG_DIR inherited from
+        # the operator's own shell points at THEIR config, so it is set aside for the probe.
+        # Without --home the target IS this machine, and the variable is honoured, exactly as
+        # the harness and qa-tools-check honour it.
+        if explicit_home and saved is not None:
+            del os.environ["CLAUDE_CONFIG_DIR"]
+        order = kit_default_qa_order()
+        eng = _extras_engine()
+        scope = os.path.join(str(home), MACHINE_SCOPE_DIR)
+        tools = [eng.resolve_qa_tool(t, (), project_root=scope, home=str(home)) for t in order]
+        # an enabled record whose installPath is gone is a stale registry entry, not a plugin
+        # Claude can load (filtered here, not in the shared engine helper)
+        installs = [(k, p) for k, p in
+                    eng.enabled_plugin_installs(str(home), cwd=scope, plugin="engram")
+                    if os.path.isdir(p)]
+        signals = {"binary": _on_path("engram"),
+                   "plugin": bool(installs),
+                   "mcp": _engram_mcp_wired(eng, home, installs)}
+        # present = USABLE from Claude: the plugin or the MCP server. The binary alone is
+        # informational -- a binary nobody wired in gives Claude no engram.
+        usable = bool(signals["plugin"] or signals["mcp"])
+        return {"checked": True,
+                "claude_config_dir": eng._claude_config_dir(str(home)),
+                "qa_tools": {"order": order, "order_source": QA_ORDER_NOTE, "tools": tools},
+                "engram": {"note": ENGRAM_NOTE, "present": usable,
+                           "signals": signals,
+                           "add_commands": list(ENGRAM_ADD_COMMANDS),
+                           "binary_note": ENGRAM_BINARY_NOTE}}
+    except (Exception, SystemExit) as exc:
+        return {"checked": False, "error": "%s: %s" % (type(exc).__name__, exc)}
+    finally:
+        if explicit_home and saved is not None:
+            os.environ["CLAUDE_CONFIG_DIR"] = saved
+
+
+def extras_lines(extras, advisory=False):
+    if not extras.get("checked") and not extras.get("planned"):
+        return ["could not check extras: %s" % extras.get("error", "unknown error")]
+    qa, engram = extras["qa_tools"], extras["engram"]
+    if extras.get("planned"):
+        return ["Extras -- would be checked after the install (--dry-run checks nothing):",
+                "  QA tools for the dev loop (%s): %s" % (qa["order_source"], ", ".join(qa["order"])),
+                "  engram (%s): %s" % (engram["note"], ", ".join(engram["checks"]))]
+    lines = ["Extras -- reported only, never installed%s:"
+             % (" (advisory: not part of doctor's verdict)" if advisory else ""),
+             "  QA tools for the dev loop (%s):" % qa["order_source"]]
+    for row in qa["tools"]:
+        src = row.get("source")
+        where = ("(%s) " % row["root"] if row.get("root") else "") + (row.get("path") or "")
+        detail = QA_SOURCE_NOTES.get(src) or where.strip()
+        lines.append("    %-14s %s%s" % (row.get("tool"), src, (" -- " + detail) if detail else ""))
+    if any(row.get("source") == "MISSING" for row in qa["tools"]):
+        lines.append("    A MISSING tool blocks the dev loop (qa-tools-check): install it as a skill or "
+                     "plugin, or declare it in defaults.qa_tools_external.")
+    sig = engram["signals"]
+    lines.append("  engram (%s): %s" % (engram["note"], "present" if engram["present"] else "missing"))
+    lines.append("    " + " | ".join("%s: %s" % (label, "yes" if sig.get(key) else "no")
+                                     for key, label in ENGRAM_CHECKS))
+    if not engram["present"]:
+        if sig.get("binary"):
+            lines.append("    " + ENGRAM_NOT_WIRED)
+        lines.append("    To add it, run these yourself (this installer never runs them):")
+        lines.extend("      " + c for c in engram["add_commands"])
+    if not sig.get("binary"):
+        lines.append("    " + engram["binary_note"])
+    return lines
+
+
+def print_extras(extras, advisory=False):
+    try:
+        lines = extras_lines(extras, advisory)
+    except Exception as exc:   # a malformed report must not fail a finished install
+        lines = ["could not check extras: %s: %s" % (type(exc).__name__, exc)]
+    for line in lines:
+        print(line)
 
 
 # statusline wiring (kit 1.46.0): the progress statusline + its Stop-hook refresher, installed

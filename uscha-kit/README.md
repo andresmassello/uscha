@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.6.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.7.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -497,6 +497,21 @@ Claude Code's native plugin flow remains available for Claude-only users, but
 `npx` is the universal path and also covers Codex.
 
 
+
+**The extras report** (kit 2.7.0, ADR-052). After the install transaction commits, `install`
+reports — and only reports — how the dev loop's QA tools resolve on the target machine (the
+kit default order `code-review`, `judgment-day`, `improve`, through the engine's own
+`resolve_qa_tool`; `code-review` is "assumed, harness-provided, not measured") and whether the
+optional engram is present, printing the commands a human may run to add it. Present means
+usable from Claude: the plugin installed and enabled (its install path on disk), or an MCP server
+named exactly `engram` at machine level (the user-level `mcpServers` of `.claude.json` or the
+plugin's own `.mcp.json`, never another project's entry). The binary on PATH is reported but
+alone reads "binary found, not wired into Claude". The MCP check reads only the Claude
+configuration, for `--target codex` too. It installs nothing beyond the
+kit, shows no prompt, copies no QA skill and runs none of those commands; a detection error
+prints `could not check extras: <reason>` and the install still succeeds. `--dry-run` lists the
+checks without making them, and `install-uscha.py doctor` repeats the report, live, as an
+advisory section that never changes its exit code.
 
 **Verify the installation with `doctor`** (kit 1.22.0, in the spirit of flutter doctor —
 Windows and Linux, ASCII output, exit 1 only on errors):

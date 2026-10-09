@@ -40,6 +40,9 @@ installer, `uscha-kit/install-uscha.py`. Replace `claude` with `codex`, `cursor`
 `gemini`, `cline`, `pi`, or `all` for the other targets.
 
 The install puts the nine skills and the measurement engine under `~/.claude/skills/`.
+From 2.7.0 it ends with an extras report: whether the dev loop's QA tools (`code-review`,
+`judgment-day`, `improve`) and the optional engram are present, with the commands to add what
+is missing. It only reports; it installs none of them.
 
 ## 2. Prepare the project, once per repo
 

@@ -1647,3 +1647,57 @@ kit it reports UNMEASURED, never a silent pass.
 - [ ] AC-QT-13 - `log-gate --kind qa-tools --verdict pass` is refused by argparse with exit 2 and
   the ledger is byte-identical before and after: the gate has one door, `qa-tools-check`. RED
   PROBE: an engine copy with `qa-tools` back in the `--kind` choices accepts it (exit 0).
+
+## The installer reports its extras (ADR-052) - closes on green `AC-IX-nn` smoke assertions
+
+The gap: 2.6.0 made a declared QA tool that is not installed a FACT gate in the engine
+(`qa-tools-check`), yet a fresh `install` put the nine kit skills in place and said nothing about
+the dev loop's QA tools or the optional engram. Since 2.7.0 the installer DETECTS AND TELLS: after
+the install transaction commits it reports, through the engine's own `resolve_qa_tool`, how the
+kit default order (`code-review`, `judgment-day`, `improve`) resolves on the target machine, and
+whether engram is present - usable from Claude: the plugin installed and enabled with its
+installPath on disk, or an MCP server named exactly `engram` at machine level (the binary on PATH
+is reported, but alone reads "binary found, not wired into Claude") - printing the commands a
+human may run. It installs nothing, adds no flag, shows no prompt,
+copies no QA skill and runs none of the commands. Every case runs under an isolated empty
+HOME/USERPROFILE with `CLAUDE_CONFIG_DIR` dropped and PATH at an empty directory.
+
+- [ ] AC-IX-01 - `install --target claude` on an EMPTY home exits 0 with every kit file in place and
+  reports `judgment-day` and `improve` as MISSING, `code-review` as `builtin-assumed` ("assumed,
+  harness-provided, not measured"), the order as "the kit default order; your project's risk
+  profile may need fewer", and engram as missing with the three commands
+  (`claude plugin marketplace add Gentleman-Programming/engram`, `claude plugin install engram`,
+  `engram setup claude-code`) and the note that the binary is a separate download; `--json`
+  carries the same sources under `extras`; the target's `skills/` holds EXACTLY the nine kit skill
+  directories (set equality), so a copied QA skill is a red.
+- [ ] AC-IX-02 - a planted `~/.claude/skills/judgment-day/SKILL.md` resolves as `global-skill` with
+  `root: claude`, its path and a 64-char sha256, in `--json` and in the text row.
+- [ ] AC-IX-03 - a planted installed AND enabled engram plugin entry (with the `.mcp.json` the
+  plugin ships) is reported present, with no add commands printed; the same entry DISABLED is
+  reported missing; a version-1 registry entry (one record object) is read; an enabled entry whose
+  installPath is gone is missing; an `engram` binary alone on PATH is missing, with "binary found,
+  not wired into Claude" and the three commands; a user-level `mcpServers.engram` in
+  `.claude.json` is present (mcp yes, plugin no); MCP names that only CONTAIN `engram` are missing.
+- [ ] AC-IX-04 - `install --dry-run` writes nothing (the target directory stays empty) and lists
+  the QA tools and the engram checks it would make, resolving none of them.
+- [ ] AC-IX-05 - an injected detection failure (a kit copy whose engine raises on import) prints
+  "could not check extras: <reason>", and the install still exits 0 with every file in place;
+  `doctor` prints the same line and keeps its exit code.
+- [ ] AC-IX-06 - THE HARD BOUNDARY: no process-running call in the installer source carries a
+  `claude plugin`/`engram` string or the command table, the installer's argparse registers no
+  `--with` option and there is no call to `input` (static AST checks), the three commands appear
+  in the source exactly once each, and with `claude`/`engram` stand-ins on PATH neither `install`
+  nor `doctor` ever invokes them (and the bare stand-in binary reads missing, not wired).
+- [ ] AC-IX-07 - exit codes are unchanged: an unhealthy `doctor` still exits 1 (text and `--json`,
+  with the advisory extras section present), a healthy one 0, and a refused install still exits 1
+  and reports no extras; `install --json` and `doctor --json` report identical extras (one path).
+- [ ] AC-IX-08 - the report describes the TARGET machine: a project skill and project settings in
+  the current directory do not leak in, an `engram.cmd` / `engram` lying in the current directory
+  with PATH lacking it reads `binary on PATH: no`, an `engram` MCP server under another project's
+  `projects[<path>]` entry of `.claude.json` does not count, a `CLAUDE_CONFIG_DIR` inherited from
+  the shell is set aside for an explicit `--home`, and it is honoured when the target is this
+  machine (no `--home`).
+- [ ] AC-IX-09 - RED PROBE: a kit copy whose detection reports every QA tool and engram present
+  turns the AC-IX-01 contract red on the same empty home - proof the contract is load-bearing.
+- [ ] AC-IX-10 - SHIPPED PROBE: the v2.6.0 installer out of git prints no extras report and carries
+  no `extras` key; without git this reports UNMEASURED, never a silent pass.
