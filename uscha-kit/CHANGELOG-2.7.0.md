@@ -116,4 +116,4 @@ scope).
 `--with`, interactive prompts, copying QA skills and marker drift tracking — all pending the
 maintainer's decisions on redistribution and positioning.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 461 checks · 0 fail; acceptance 365/366.
