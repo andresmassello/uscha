@@ -27,7 +27,7 @@ artifacts; these can block) and **self-reported** agent counts (log-step — nar
 recorded for the retrospective; a measured red always overrides a narrated green).
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.5.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.6.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## First contact (show ONCE, then never again)
 
@@ -206,6 +206,34 @@ For migration/legacy (risk profile E) work, also wire the golden invariant once:
 install `hooks/block-approved-writes.py` as a `PreToolUse` hook in
 `settings.json`, and add `*.approved.* binary` to `.gitattributes` (ships in
 `templates/.gitattributes`) so line endings can't lie in the byte-compare.
+
+### QA-tool pre-flight (ADR-051; run BEFORE Phase 0a)
+
+Phase 3 runs QA tools the kit ORCHESTRATES but does not ship (`qa_tools_order`). Before any
+planning, verify they are actually installed — the devloop never assumed this before, and a loop
+must not converge trusting a QA tool that never ran:
+
+```bash
+python3 $QL qa-tools-check --repo <REPO>
+```
+
+Every tool resolves to a source — a project skill, a global skill under ANY agent root the
+installer knows (`~/.claude/skills` or `$CLAUDE_CONFIG_DIR/skills`, Codex `~/plugins/uscha/skills`,
+pi `~/.agents/skills`, cursor, copilot, gemini, cline — the row names the root that hit), an
+installed+enabled plugin, a harness built-in (`code-review`, assumed and reported honestly as
+*not measured*), a tool you declared in `defaults.qa_tools_external`, or **MISSING**. A MISSING
+tool exits 1 and persists `gate:qa-tools` (readiness cap ≤ 65, convergence blocked,
+`phase --require pr-ready` refuses naming it). If a tool is MISSING, **STOP** and tell the human
+the named tool: install it, enable the plugin that provides it, or declare it in
+`defaults.qa_tools_external` of the project's `uscha.config.json` if it is harness-provided, then
+re-run `qa-tools-check`. A LIVE config that declares this one key wins over the ledger's frozen
+copy (it is a fact about the machine, not a run parameter), so no re-init is needed; a live
+config that omits it leaves the frozen declaration standing, an explicit `[]` withdraws it, and
+a value that is not a list of unique nonempty strings is refused by name; `doctor` and the
+check print the same value and origin (`live-config` / `frozen` / `default`). The gate is written
+ONLY by `qa-tools-check` — `log-gate --kind qa-tools` does not exist. A step logged while its
+tool was MISSING stays `unverified` after the tool is installed: re-log it. With no
+`qa_tools_order` declared the check reports UNMEASURED and persists nothing.
 
 ## Phase 0a — Fast-path check (ADR-003; run FIRST, before planning ceremony)
 
@@ -388,6 +416,12 @@ config, so `qa_tools_order` is often absent there and resolves from `defaults.ri
 `effective.qa_tools_order` with its `origin`; the ledger froze the same value at `init`. A
 project on **profile A runs `code-review` only** — do NOT invoke judgment-day or improve there,
 and convergence must not wait for them.
+
+These tools are **resolved, not assumed** (ADR-051): the QA-tool pre-flight already proved each
+one is a project/global skill, an installed+enabled plugin, a harness built-in, or
+declared-external — and `log-step` stamps every step with its tool's resolved `source`. A step
+whose tool is MISSING is recorded `unverified` and cannot satisfy convergence, so this loop never
+closes on a QA pass from a tool that is not installed.
 
 After **each** tool pass:
 

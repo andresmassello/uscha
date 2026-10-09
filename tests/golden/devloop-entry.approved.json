@@ -10,7 +10,7 @@
     {
       "step": "log-step",
       "exit": 0,
-      "stdout": "[qa_ledger] step #1 logged: repo-x/code-review iter=1 reported=0 gated=0 fixed=0 tests_passed=True files_changed=0\n",
+      "stdout": "[qa_ledger] step #1 logged: repo-x/code-review iter=1 reported=0 gated=0 fixed=0 tests_passed=True files_changed=0 source=builtin-assumed\n",
       "stderr": ""
     },
     {

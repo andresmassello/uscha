@@ -45,7 +45,7 @@ runtime dependencies). The npm package is a thin router; the canonical installer
 `uscha-kit/install-uscha.py`. `init` also writes a minimal, per-repo-type `.gitignore` when the
 project has none (kit 2.4.0) — it never lists `reports/`, the ledger's own evidence.
 
-**Kit v2.5.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v2.6.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -81,7 +81,7 @@ and see which file, which test, and when.
 | `/uscha-mirador` | Bird's-eye HTML dashboard: readiness, trail, acceptance, loops |
 | `/uscha-status` | One-line progress readout, in chat |
 
-**A measurement engine** (`qa_ledger.py`, 56 subcommands, Python stdlib) that ingests
+**A measurement engine** (`qa_ledger.py`, 57 subcommands, Python stdlib) that ingests
 evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
 cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
 
@@ -185,7 +185,7 @@ automatic tool can perform: a human verdict.
    from the compiled code: 0.815 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (kit 1.96.0, 56 subcommands, all measured):**
+**What each arrow is, in the engine (57 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|

@@ -44,6 +44,14 @@ def normalize(text, workdir):
 
 def main():
     work = tempfile.mkdtemp(prefix="golden-entry-")
+    # Isolate HOME (and USERPROFILE on Windows, which ntpath.expanduser reads first) to an empty
+    # dir so the ADR-051 tool resolver sees no global skills and no plugins on ANY machine: the
+    # anchor's only logged tool is `code-review`, which must resolve to `builtin-assumed` on the
+    # dev box and on every CI cell alike. Without this the capture would depend on whatever
+    # ~/.claude holds -- the exact machine-dependence this golden exists to refuse.
+    iso_home = tempfile.mkdtemp(prefix="golden-home-")
+    env = dict(os.environ, HOME=iso_home, USERPROFILE=iso_home)
+    env.pop("CLAUDE_CONFIG_DIR", None)   # the resolver honours it; it would point back at ~
     repo = os.path.join(work, "repo-x")
     os.makedirs(repo)
     io.open(os.path.join(repo, "mod.py"), "w", encoding="utf-8", newline="\n").write(
@@ -69,7 +77,8 @@ def main():
                "steps": []}
     for name, args in steps:
         r = subprocess.run([sys.executable, ENGINE] + args, cwd=work,
-                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           env=env)
         capture["steps"].append({
             "step": name,
             "exit": r.returncode,

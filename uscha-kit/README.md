@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.5.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.6.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -170,6 +170,34 @@ engine's default and `true` on presets **C, D and E**:
 
 Nothing is graded. The engine can see that a `## Rollback` heading exists; whether the procedure
 under it is correct is yours.
+
+## QA-tool readiness — `qa-tools-check` (ADR-051)
+
+Phase 3 runs QA tools the kit ORCHESTRATES but does not ship (`qa_tools_order`, default
+`code-review → judgment-day → improve`). Nothing used to check they were installed — a loop could
+converge trusting a tool that never ran. Now each tool is RESOLVED to a source:
+
+```bash
+python3 $QL qa-tools-check --repo <name> [--json]   # exit 1 when a tool is MISSING
+```
+
+| Source | What it means |
+|---|---|
+| `project-skill` / `global-skill` | `./.claude/skills/<name>/SKILL.md`, or `<root>/<name>/SKILL.md` under any agent skills root the installer knows — `~/.claude/skills` (or `$CLAUDE_CONFIG_DIR/skills`), Codex `~/plugins/uscha/skills`, pi `~/.agents/skills`, cursor, copilot, gemini, cline (path + sha256 + the root that hit reported) |
+| `plugin` | an installed **and enabled** plugin provides it (skill or command), bare or `<plugin>:<name>` |
+| `builtin-assumed` | the name is a harness built-in (`code-review`) — assumed, reported honestly as *not measured*, never a false clean and never a block |
+| `declared-external` | you listed it in `defaults.qa_tools_external` (a human declaration, never profile-owned; precedence is per key: a LIVE `uscha.config.json` that declares it — an explicit `[]` included, which withdraws it — wins over the ledger's frozen copy, so declaring it after `init` needs no re-init, while a live file that omits it leaves the frozen declaration standing — origin `live-config` / `frozen` / `default`, the same in `doctor`; a live value of the wrong shape is refused by name) |
+| `MISSING` | none of the above |
+
+Only **MISSING** blocks, under **every** profile: a `missing` tool persists `gate:qa-tools` as a
+BLOCKER — readiness capped ≤ 65, convergence blocked, and `phase --require pr-ready` refuses
+**naming** the tool. "A declared tool is not installed" is a fact, not an opinion, so there is no
+profile knob; `qa-tools` is a FACT kind written only by `qa-tools-check` — there is no
+`log-gate --kind qa-tools` door (refused, exit 2), because the engine measures this fact itself.
+With no `qa_tools_order` declared there is nothing to resolve — UNMEASURED, never a pass.
+`log-step` stamps every step with its tool's resolved source; a MISSING step is recorded
+`unverified` and cannot satisfy convergence — and stays so after you install the tool: re-log it.
+Ledgers written before 2.6.0 carry no provenance and load unchanged.
 
 ## Evidence origin (ADR-007) - green, but green at *what*?
 
@@ -553,7 +581,10 @@ python3 ~/.claude/skills/uscha-devloop/qa_ledger.py doctor --json
 ```
 
   `origin` is `override` (you declared it), `profile <X>` (the preset supplied it), or
-  `default` (the engine's own value). An override that supersedes a profile is reported as
+  `default` (the engine's own value). The one exception is `qa_tools_external` (ADR-051): it is
+  never profile-owned, so its origin is `live-config` (the live `uscha.config.json` declares
+  it), `frozen` (only the ledger's frozen copy does) or `default` (declared nowhere) — or it is absent
+  from `effective`, with a warn naming why, when the live value cannot be resolved. An override that supersedes a profile is reported as
   information, not an error — declaring a knob by hand is how a preset is bent. Nothing is
   written back into your config: a knob nobody declared stays absent, which is what lets the
   engine keep telling a requirement apart from a default. With no profile and no
@@ -876,7 +907,7 @@ python3 $QL readiness
 
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (56 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (57 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

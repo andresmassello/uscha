@@ -199,6 +199,20 @@ enforcing the record is the engine's job. It is never resolved by "working aroun
   convergence blocked, and `phase --require pr-ready` refuses naming the missing check. A CI
   system this engine does not read is reported `unknown`, never green and never red. Release,
   reset and the RUNBOOK are part of done, not of the last week.
+- The **QA-tool readiness** invariant is measured by `qa_ledger.py qa-tools-check --repo R` (ADR-051):
+  every tool in the effective `qa_tools_order` is resolved to a SOURCE — a project skill, a global
+  skill (under any agent skills root the installer knows), an installed+enabled plugin, a harness
+  built-in (`code-review`, assumed and reported honestly as *not measured*), a tool the human
+  declared in `defaults.qa_tools_external` (per key: the LIVE project config wins over the
+  ledger's frozen copy when it declares the key, and falls back to it when it omits it), or
+  **MISSING**. A MISSING tool is a **BLOCKER** persisted as
+  `gate:qa-tools` — readiness cap ≤ 65, convergence blocked, and `phase --require pr-ready`
+  refuses naming the tool — under **every** profile: "a declared QA tool is not installed" is a
+  fact, not an opinion, so there is no profile knob. `qa-tools` is a FACT kind written only by
+  `qa-tools-check`: there is no `log-gate --kind qa-tools` door, because the engine measures this
+  fact itself and a typed pass would be a narrated one. With no `qa_tools_order` declared there
+  is nothing to resolve: UNMEASURED, never a pass. A loop can no longer converge trusting a QA
+  tool that never ran.
 - The **Golden (INV-GOLDEN-01)** invariant is measured by `qa_ledger.py golden-diff`: any `.received`
   that does not match its `.approved` (or is unapproved) = **DIVERGE**, cutting the chain before judgment-day.
   The agent does not touch `.approved` (ideally a `PreToolUse` hook makes it impossible).

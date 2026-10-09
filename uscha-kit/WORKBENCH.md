@@ -18,7 +18,7 @@ los linters del static gate, drivers) es el *adapter* del proyecto y vive en el
 | **Python 3.8+** | corre `qa_ledger.py` (stdlib pura, sin dependencias) | `python3` en PATH |
 | **git** | versionado | 2.x, con `user.name`/`user.email` |
 | **gh** (GitHub CLI) | crear repo / abrir PR | opcional pero recomendado |
-| **skills del kit (8)** | `uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`, `uscha-characterize`, `uscha-rubric`, `uscha-mirador` | instalados por `npx` en Codex y/o Claude Code |
+| **skills del kit (9)** | `uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`, `uscha-characterize`, `uscha-rubric`, `uscha-mirador`, `uscha-status` | instalados por `npx` en Codex y/o Claude Code |
 | **skills de QA** | `code-review`, `judgment-day`, `improve` | tus skills globales (el dev-loop los **orquesta**, no los trae) |
 
 ---

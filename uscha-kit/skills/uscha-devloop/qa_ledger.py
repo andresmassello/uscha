@@ -2001,10 +2001,20 @@ ENGINE_DEFAULTS = {
     # release + reset + RUNBOOK on every project would be the kit's opinion wearing an exit
     # code -- the same thing ADR-043 refused for the simplicity budget.
     "operability.gate": False,
+    # ADR-051. A HUMAN-declared list of QA tools that are harness built-ins or plugin-provided
+    # and should be treated as present by `qa-tools-check` / `log-step` / `doctor`. It is NOT
+    # profile-owned -- no risk profile supplies it, so `init` never writes it -- which is why it
+    # lives here (the reporting table, never materialized) and not in RISK_PROFILES. It is read
+    # through _effective_qa_external, PER KEY: a live config that declares it wins over the
+    # frozen copy, one that omits it falls back to the frozen copy; its origin is
+    # `live-config` / `frozen` / `default` (reported as "not declared" by doctor).
+    "qa_tools_external": None,
 }
 ENGINE_DEFAULT_NOTES = {
     "qa_tools_order": "not declared - convergence uses a window of --tools-per-cycle "
                       "agent steps",
+    "qa_tools_external": "not declared - every tool in qa_tools_order must resolve to a "
+                         "skill, a plugin or a harness built-in (ADR-051)",
 }
 
 
@@ -2045,6 +2055,14 @@ def _resolved_defaults(cfg):
         else:
             origin[key] = "default"
     return resolved, origin
+
+
+def _qa_external_shape_ok(ext):
+    """defaults.qa_tools_external's one shape rule -- unique nonempty strings, `[]` allowed --
+    shared by `init` and the live read (_effective_qa_external), so the two cannot drift."""
+    return (isinstance(ext, list)
+            and not any(not _has_text(tool) for tool in ext)
+            and len(set(ext)) == len(ext))
 
 
 def _validate_init_config(cfg):
@@ -2100,6 +2118,15 @@ def _validate_init_config(cfg):
                 or len(set(order)) != len(order)):
             raise SystemExit(
                 "[qa_ledger] invalid config: qa_tools_order must contain unique nonempty strings")
+
+    # ADR-051: a HUMAN declaration of harness/plugin-provided tools to treat as present. Same
+    # shape as qa_tools_order (unique nonempty strings), but NOT profile-owned: init never
+    # writes it, and declaring it is the documented escape from a MISSING qa-tools gate.
+    if "qa_tools_external" in defaults:
+        if not _qa_external_shape_ok(defaults["qa_tools_external"]):
+            raise SystemExit(
+                "[qa_ledger] invalid config: qa_tools_external must contain unique nonempty "
+                "strings")
 
     if "coverage_threshold" in defaults:
         value = defaults["coverage_threshold"]
@@ -2443,6 +2470,242 @@ def _to_bool(s):
     return str(s).strip().lower() in {"1", "true", "yes", "y", "ok", "pass", "passed"}
 
 
+# --------------------------------------------------------------------------- #
+# QA-tool resolver (ADR-051): "a declared QA tool is not installed" becomes a MEASURED fact.
+#
+# Phase 3 of the devloop runs QA tools (qa_tools_order) the kit ORCHESTRATES but does not ship.
+# Until 2.6.0 log-step accepted any tool name with no existence check and _converged only asked
+# whether a step was LOGGED -- so a loop could converge trusting a tool that never ran. The
+# resolver maps a tool name to a SOURCE; every source but MISSING counts as present.
+#
+# code-review is first in all five risk profiles and is a HARNESS BUILT-IN on a fresh Claude
+# Code machine (no skill dir, no plugin). The engine is a Python script and CANNOT introspect
+# what the harness provides, so a built-in is reported honestly as "assumed, harness-provided,
+# not measured" -- a DISTINCT source, never a false clean and never a FAIL. Without this a fresh
+# machine would have every loop blocked.
+HARNESS_BUILTINS = ("code-review",)
+
+
+def _claude_home(home=None):
+    return home if home is not None else os.path.expanduser("~")
+
+
+def _claude_config_dir(home):
+    """Claude Code's config directory: `CLAUDE_CONFIG_DIR` when the operator set it (the harness
+    then reads its skills, plugins and settings THERE instead of ~/.claude), else <home>/.claude.
+    Every Claude-side probe of the QA-tool resolver goes through here, so the env var is honoured
+    in one place."""
+    env = os.environ.get("CLAUDE_CONFIG_DIR")
+    return env if env else os.path.join(home, ".claude")
+
+
+def _global_skill_roots(home):
+    """(target, skills root) for every agent root the installer knows (SKILL_INSTALL_ROOTS -- the
+    one table, never retyped here): a Codex or pi machine keeps its skills in its OWN root, and
+    probing only ~/.claude/skills false-blocked it (2.6.0 fresh review, S2). The claude root
+    follows CLAUDE_CONFIG_DIR; the others sit under the home, exactly where the installer puts
+    them. Order is the table's, claude first."""
+    roots = []
+    for target, parts in SKILL_INSTALL_ROOTS:
+        if target == "claude":
+            roots.append((target, os.path.join(_claude_config_dir(home), "skills")))
+        else:
+            roots.append((target, os.path.join(home, *parts)))
+    return roots
+
+
+def _sha256_file(path):
+    try:
+        with open(path, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def _enabled_plugins(home):
+    """`<name>@<marketplace>` -> bool, merged from the SAME settings files doctor walks
+    (user ~/.claude, project .claude, project-local; later wins per key). A missing or malformed
+    file is skipped, never raised: a broken settings file must not turn a real tool MISSING."""
+    paths = [os.path.join(_claude_config_dir(home), "settings.json"),
+             os.path.join(".claude", "settings.json"),
+             os.path.join(".claude", "settings.local.json")]
+    enabled = {}
+    for p in paths:
+        try:
+            with open(p, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        ep = data.get("enabledPlugins") if isinstance(data, dict) else None
+        if isinstance(ep, dict):
+            for key, value in ep.items():
+                enabled[key] = bool(value)
+    return enabled
+
+
+def _installed_plugins(home):
+    """`<name>@<marketplace>` -> list of install records, from ~/.claude/plugins/
+    installed_plugins.json (shape: {"version": N, "plugins": {"<name>@<mkt>": [ {scope,
+    installPath, projectPath?, ...}, ... ]}}). Being in a marketplace CACHE is not being
+    installed -- only this file lists installs. Missing/malformed -> {}, never raises. A
+    version-1 registry maps each key to ONE record (a dict) instead of a list;
+    _resolve_plugin_tool accepts both shapes."""
+    p = os.path.join(_claude_config_dir(home), "plugins", "installed_plugins.json")
+    try:
+        with open(p, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    plugins = data.get("plugins") if isinstance(data, dict) else None
+    return plugins if isinstance(plugins, dict) else {}
+
+
+def _resolve_plugin_tool(name, home, cwd="."):
+    """Resolve `name` against INSTALLED-AND-ENABLED plugins. `name` is either bare (`review`) or
+    `<plugin>:<skill>` (the harness lists e.g. `open-code-review:review`). A plugin provides the
+    tool when `skills/<skill>/SKILL.md` or `commands/<skill>.md` exists under one of its install
+    paths (official code-review and open-code-review ship only `commands/`). Returns
+    (path, sha256) or None. A `scope: project` record is honored only when its projectPath
+    resolves to cwd (realpath BOTH sides -- the Windows 8.3 short-path gotcha); `scope: user`
+    always. Never raises on a broken registry."""
+    if ":" in name:
+        plugin_part, skill_part = name.split(":", 1)
+    else:
+        plugin_part, skill_part = "", name
+    if not skill_part:
+        return None
+    enabled = _enabled_plugins(home)
+    installed = _installed_plugins(home)
+    cwd_real = os.path.realpath(cwd)
+    for key, records in installed.items():
+        if not enabled.get(key):
+            continue
+        pname = key.split("@", 1)[0]
+        if plugin_part and pname != plugin_part:
+            continue
+        if isinstance(records, dict):
+            records = [records]   # installed_plugins.json version 1: one record per key
+        if not isinstance(records, list):
+            continue
+        for rec in records:
+            if not isinstance(rec, dict):
+                continue
+            if rec.get("scope") == "project":
+                pp = rec.get("projectPath")
+                if not pp or os.path.realpath(pp) != cwd_real:
+                    continue
+            ipath = rec.get("installPath")
+            if not ipath or not isinstance(ipath, str):
+                continue
+            for cand in (os.path.join(ipath, "skills", skill_part, "SKILL.md"),
+                         os.path.join(ipath, "commands", skill_part + ".md")):
+                if os.path.isfile(cand):
+                    return cand, _sha256_file(cand)
+    return None
+
+
+def resolve_qa_tool(name, declared_external=(), project_root=".", home=None):
+    """Map a QA tool name to a SOURCE. Six kinds; only MISSING blocks a loop. Resolution order
+    is project > global > plugin > declared-external > builtin-assumed > MISSING (ADR-051):
+
+      project-skill      ./.claude/skills/<name>/SKILL.md
+      global-skill       <root>/<name>/SKILL.md under ANY agent root the installer knows
+                         (SKILL_INSTALL_ROOTS: claude -- honouring CLAUDE_CONFIG_DIR --, codex,
+                         pi, cursor, copilot, gemini, cline); the row names the `root` that hit
+      plugin             an installed+enabled plugin (bare or <plugin>:<name>)
+      builtin-assumed    name in HARNESS_BUILTINS -- assumed, harness-provided, NOT measured
+      declared-external  the human listed it in defaults.qa_tools_external
+      MISSING            none of the above
+
+    For project/global/plugin the SKILL.md (or plugin command) path and its sha256 are returned;
+    builtin-assumed / declared-external / MISSING carry neither (nothing was measured). Tool
+    matching is LITERAL -- `review` and `open-code-review:review` are different names."""
+    home = _claude_home(home)
+    external = set(declared_external or ())
+    ps = os.path.join(project_root, ".claude", "skills", name, "SKILL.md")
+    if os.path.isfile(ps):
+        return {"tool": name, "source": "project-skill", "path": ps,
+                "sha256": _sha256_file(ps)}
+    for target, root in _global_skill_roots(home):
+        gs = os.path.join(root, name, "SKILL.md")
+        if os.path.isfile(gs):
+            return {"tool": name, "source": "global-skill", "root": target, "path": gs,
+                    "sha256": _sha256_file(gs)}
+    plug = _resolve_plugin_tool(name, home, cwd=project_root)
+    if plug is not None:
+        return {"tool": name, "source": "plugin", "path": plug[0], "sha256": plug[1]}
+    if name in external:
+        return {"tool": name, "source": "declared-external", "path": None, "sha256": None}
+    if name in HARNESS_BUILTINS:
+        return {"tool": name, "source": "builtin-assumed", "path": None, "sha256": None}
+    return {"tool": name, "source": "MISSING", "path": None, "sha256": None}
+
+
+QA_LIVE_CONFIG = "uscha.config.json"
+
+
+def _live_project_config(config, ledger_path):
+    """The LIVE project config to read, or None: `config` in the cwd, then beside the ledger --
+    the 1.98.0 `_config_beside_ledger` order. The kit's own REFERENCE uscha.config.json is never
+    a project's live config (the 2.0.0 bug class: every knob in it would arrive as a human
+    declaration), so a candidate that IS that file is skipped."""
+    kit = _kit_root()
+    ref = os.path.realpath(os.path.join(kit, QA_LIVE_CONFIG)) if kit else None
+    cands = [config]
+    if ledger_path and not os.path.isabs(config):
+        cands.append(os.path.join(os.path.dirname(os.path.abspath(ledger_path)), config))
+    for cand in cands:
+        if os.path.isfile(cand) and os.path.realpath(cand) != ref:
+            return cand
+    return None
+
+
+def _effective_qa_external(frozen_cfg, ledger_path, config=QA_LIVE_CONFIG):
+    """The effective defaults.qa_tools_external -- ONE function for `qa-tools-check`, `log-step`
+    provenance and `doctor` (2.6.0 fresh review, S1: the gate read only the frozen copy while
+    doctor reported the live file, so the two disagreed and the gate's own remediation was a
+    dead end on any initialised ledger).
+
+    The list is a fact about the MACHINE -- which tools are installed -- not a run parameter, so
+    a LIVE declaration wins over the ledger's frozen copy: declaring a tool after `init` takes
+    effect without re-init, and nothing writes the ledger (its integrity hash is untouched).
+    Both copies go through the same `_resolved_defaults` machinery doctor uses. Only this key
+    moves: qa_tools_order stays the frozen run parameter.
+
+    Precedence is PER KEY (2.6.0 review): a live file that DECLARES the key -- an explicit `[]`
+    included, a deliberate withdrawal -- wins; a live file that OMITS it falls back to the frozen
+    copy, then to the default. Strict-live (any live file wins) read an unrelated live config as
+    "nothing declared" and silently discarded the frozen declaration -- a false MISSING block.
+
+    Returns {"value": [...], "origin": "live-config" | "frozen" | "default", "path": file|None}.
+    `default` means declared nowhere; `path` is the live file only when it is the declaring one.
+    A live file that EXISTS but cannot be read or resolved, or that declares the key with the
+    wrong shape, refuses, naming it -- answering "none declared" or falling back to the frozen
+    copy would answer from something other than what the human wrote."""
+    live = _live_project_config(config, ledger_path)
+    if live is not None:
+        cfg = _load(live, what="config", flag="--config")
+        try:
+            resolved, live_origin = _resolved_defaults(cfg)
+        except SystemExit as exc:
+            raise SystemExit("[qa_ledger] %s: cannot resolve defaults.qa_tools_external: %s"
+                             % (live, exc))
+        live_declares = live_origin.get("qa_tools_external") == "override"
+        ext = resolved.get("qa_tools_external")
+        if live_declares and not _qa_external_shape_ok(ext):
+            raise SystemExit("[qa_ledger] %s: invalid defaults.qa_tools_external (got %s): it "
+                             "must be a list of unique nonempty strings -- refusing rather than "
+                             "reading it as none declared" % (live, ascii(ext)))
+        if live_declares:
+            return {"value": list(ext), "origin": "live-config", "path": live}
+        # the live file omits the key: the frozen declaration (or the default) stands
+    resolved, origin = _resolved_defaults(frozen_cfg or {})
+    ext = resolved.get("qa_tools_external")
+    declared = origin.get("qa_tools_external") == "override"
+    return {"value": list(ext) if isinstance(ext, list) else [],
+            "origin": "frozen" if declared else "default", "path": None}
+
+
 def cmd_log_step(args):
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
@@ -2454,6 +2717,16 @@ def cmd_log_step(args):
     if args.fingerprint:
         ids = sorted(x.strip() for x in args.fingerprint.split(",") if x.strip())
         fp = hashlib.sha1(("|".join(ids)).encode()).hexdigest()[:12] if ids else None
+    # ADR-051: stamp the step with the resolved SOURCE of its tool (and the SKILL.md / plugin
+    # hash where one was measured). A tool that resolves to MISSING is recorded unverified and
+    # does NOT count toward convergence -- a loop can no longer converge trusting a QA tool that
+    # is not installed. Steps written before 2.6.0 carry no `source`/`unverified`: they still
+    # load and are treated exactly as today (a verified step). The stamp is taken at LOG time: a
+    # step logged while its tool was MISSING stays unverified after the tool is installed --
+    # re-log it. The declared-external list is the LIVE config's when it declares one (S1), and a
+    # declared-external step records which copy declared it.
+    ext = _effective_qa_external(ledger.get("config") or {}, args.ledger)
+    res = resolve_qa_tool(args.tool, ext["value"], project_root=".")
     record = {
         "n": ledger["step_counter"],
         "at": _now(),
@@ -2470,7 +2743,16 @@ def cmd_log_step(args):
         "fingerprint": fp,
         "finding_ids": ids,
         "note": args.note,
+        "source": res["source"],
     }
+    if res["sha256"]:
+        record["source_sha256"] = res["sha256"]
+    if res.get("root"):
+        record["source_root"] = res["root"]
+    if res["source"] == "declared-external":
+        record["source_origin"] = ext["origin"]
+    if res["source"] == "MISSING":
+        record["unverified"] = True
     node["iterations"].append(record)
     ledger["steps"].append({"n": record["n"], "at": record["at"], "kind": "qa-step",
                             "repo": args.repo, "tool": args.tool,
@@ -2479,7 +2761,10 @@ def cmd_log_step(args):
     print(f"[qa_ledger] step #{record['n']} logged: {args.repo}/{args.tool} "
           f"iter={args.iteration} reported={args.reported} "
           f"gated={args.gated_reported} fixed={args.fixed} "
-          f"tests_passed={record['tests_passed']} files_changed={args.files_changed}")
+          f"tests_passed={record['tests_passed']} files_changed={args.files_changed} "
+          f"source={res['source']}"
+          + ("" if res["source"] != "MISSING" else
+             " (unverified: tool not installed -- does not count toward convergence)"))
 
 
 def cmd_ingest_gate(args):
@@ -3634,13 +3919,25 @@ def _converged(node, k, qa_order=None):
     reasons = []
     k = max(1, k)
     if qa_order:
-        latest_agent = {}
-        for s in agent:
-            latest_agent[s["tool"]] = s   # iteration order preserved -> last wins
-        missing = [t for t in qa_order if t not in latest_agent]
-        if missing:
-            reasons.append(f"agent tools never ran: {','.join(missing)}")
-        cycle = [latest_agent[t] for t in qa_order if t in latest_agent]
+        # ADR-051: a listed tool is satisfied only by a step that both EXISTS and RESOLVED. A
+        # step whose tool was MISSING at log time (unverified) ran a QA tool that is not
+        # installed, so it can no longer stand in for the tool -- it is reported on its own line,
+        # distinct from "never ran". Steps written before 2.6.0 have no `unverified` key, so
+        # `.get` is falsy and they are verified exactly as today (old-ledger compatibility).
+        latest_seen, latest_verified = {}, {}
+        for s in agent:                   # iteration order preserved -> last wins
+            latest_seen[s["tool"]] = s
+            if s.get("unverified") is not True:
+                latest_verified[s["tool"]] = s
+        never = [t for t in qa_order if t not in latest_seen]
+        unverified = [t for t in qa_order
+                      if t in latest_seen and t not in latest_verified]
+        if never:
+            reasons.append(f"agent tools never ran: {','.join(never)}")
+        if unverified:
+            reasons.append("agent tools ran unverified (tool MISSING at log time): "
+                           f"{','.join(unverified)}")
+        cycle = [latest_verified[t] for t in qa_order if t in latest_verified]
         if not agent:
             return False, ["no agent steps measured"]
     else:
@@ -3782,6 +4079,17 @@ def _derive_phase(ledger, name, node, k, qa_order):
         reasons.append("operability: %s -- release, reset and the RUNBOOK are part of done, "
                        "not of the last week (ADR-048)"
                        % (_op.get("note") or "checks missing"))
+    # qa-tools gate (ADR-051). NAMING only: a failing gate:qa-tools record is already a BLOCKER
+    # through _gate_open_and_sev and already vetoes convergence, so nothing new is gated here.
+    # What is added is WHICH declared QA tool is not installed -- "static-gate gated=1
+    # (gate:qa-tools:1)" tells a human the gate is red without telling them which tool, and
+    # `phase --require pr-ready` is where that answer is needed.
+    _qt = _latest_static_by_tool(node).get("gate:qa-tools")
+    if _qt and (_qt.get("gated_reported") or 0) > 0:
+        reasons.append("qa tools: %s -- a declared QA tool is not installed; install it or "
+                       "declare it in defaults.qa_tools_external, then re-run "
+                       "qa-tools-check (ADR-051)"
+                       % (_qt.get("note") or "tool(s) missing"))
     _cr = _cr_cfg(ledger)
     if _cr and _cr.get("mode") == "final":
         _head = None
@@ -4727,6 +5035,82 @@ def cmd_operability(args):
                                      "profile C/D/E) to make it a gate" if not gate else
                                      "; a check this engine cannot read is UNMEASURED, "
                                      "never a green")))
+    sys.exit(0)
+
+
+# --------------------------------------------------------------------------- #
+# qa-tools-check  (ADR-051: a declared QA tool that is not installed is a MEASURED fact)
+# --------------------------------------------------------------------------- #
+def cmd_qa_tools_check(args):
+    """Resolve every tool in the EFFECTIVE qa_tools_order and persist gate:qa-tools.
+
+    Unlike `operability` (always exit 0, the gate is the profile's), this check exits 1 when a
+    tool is MISSING: "a declared tool is not installed" is a fact under EVERY profile (ADR-043:
+    a fact blocks, an opinion does not), so there is no profile knob here. A MISSING tool makes
+    the record a FAIL -- caps readiness <=65 and blocks convergence through the same plumbing
+    every other FACT gate uses. builtin-assumed and declared-external count as present and are
+    reported honestly. With no qa_tools_order declared there is nothing to resolve: UNMEASURED,
+    exit 0, persist nothing -- a list is never synthesized."""
+    ledger = _load(args.ledger)
+    node = _repo_node(ledger, args.repo)
+    resolved, _origin = _resolved_defaults(ledger.get("config") or {})
+    qa_order = resolved.get("qa_tools_order")
+
+    if not qa_order:
+        # NO-ORDER: window convergence, no list. Nothing to resolve.
+        report = {"repo": args.repo, "qa_tools_order": None, "verdict": "unmeasured",
+                  "tools": [], "missing": [],
+                  "note": "no qa_tools_order declared -- convergence uses a window of agent "
+                          "steps; there is no QA-tool list to resolve (UNMEASURED, not a pass)"}
+        if args.json:
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+        else:
+            print("QA-TOOLS %s: UNMEASURED -- no qa_tools_order declared; nothing to resolve "
+                  "(a list is never synthesized)" % args.repo)
+        sys.exit(0)
+
+    ext = _effective_qa_external(ledger.get("config") or {}, args.ledger)
+    results = [resolve_qa_tool(t, ext["value"], project_root=".") for t in qa_order]
+    missing = [r["tool"] for r in results if r["source"] == "MISSING"]
+    note = "; ".join("%s=%s" % (r["tool"], r["source"]) for r in results)
+    rec = _append_gate_record(ledger, node, args.repo, "gate:qa-tools", args.iteration,
+                              bool(missing), len(missing) or 1, note, advisory=False)
+    _save(args.ledger, ledger)
+
+    report = {"repo": args.repo, "qa_tools_order": list(qa_order),
+              "verdict": "fail" if missing else "pass", "missing": missing,
+              "tools": results, "note": note, "step": rec["n"],
+              "qa_tools_external": ext}
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        sys.exit(1 if missing else 0)
+
+    print("QA-TOOLS %s" % args.repo)
+    print("  qa_tools_external = %s (origin: %s%s)"
+          % (", ".join(ext["value"]) or "none declared", ext["origin"],
+             (" " + ext["path"]) if ext["path"] else ""))
+    for r in results:
+        mark = "!!" if r["source"] == "MISSING" else "ok"
+        if r["source"] in ("project-skill", "global-skill", "plugin") and r.get("path"):
+            detail = " -> %s (%s)" % (r["path"], (r["sha256"] or "")[:12])
+            if r.get("root"):
+                detail += " [%s root]" % r["root"]
+        elif r["source"] == "builtin-assumed":
+            detail = " (assumed, harness-provided, not measured)"
+        elif r["source"] == "declared-external":
+            detail = " (declared in defaults.qa_tools_external, %s)" % ext["origin"]
+        else:
+            detail = ""
+        print("  %s %s: %s%s" % (mark, r["tool"], r["source"], detail))
+    if missing:
+        where = ext["path"] or QA_LIVE_CONFIG
+        print("  -- FAIL: %s not installed -- caps readiness <=65 and blocks convergence until "
+              "resolved: install the tool, or, if it is harness-provided, declare it in "
+              "defaults.qa_tools_external of %s and re-run this check (a live declaration wins "
+              "over the ledger's frozen copy; no re-init)" % (", ".join(missing), where))
+        sys.exit(1)
+    print("  -- PASS: every declared QA tool resolves (builtin-assumed / declared-external "
+          "count as present, reported honestly)")
     sys.exit(0)
 
 
@@ -14241,8 +14625,25 @@ def cmd_doctor(args):
 
     # --- proyecto (si hay config aca) ---------------------------------------
     qa_order = ["code-review", "judgment-day", "improve"]   # default del kit
+    qa_external = []                                          # ADR-051, declared by the human
     effective, risk_profile = None, None
     cfg_path = args.config or "uscha.config.json"
+    # ADR-051 / S1: qa_tools_external through the SAME function the gate and log-step use --
+    # a live declaration wins over the ledger's frozen copy, per key -- so doctor and
+    # `qa-tools-check` can never report a different value or origin for it.
+    frozen_cfg = None
+    if os.path.isfile(args.ledger):
+        try:
+            frozen_cfg = _load(args.ledger).get("config") or {}
+        except SystemExit:
+            frozen_cfg = None   # reported by the ledger check below
+    try:
+        qa_ext_info = _effective_qa_external(frozen_cfg, args.ledger, config=cfg_path)
+    except SystemExit as exc:
+        qa_ext_info = None
+        warn("qa_tools_external not resolvable", str(exc))
+    if qa_ext_info is not None:
+        qa_external = qa_ext_info["value"]
     if os.path.isfile(cfg_path):
         try:
             cfg = _load(cfg_path)
@@ -14289,17 +14690,30 @@ def cmd_doctor(args):
             if origin is not None:
                 effective = {k: {"value": resolved.get(k), "origin": origin[k]}
                              for k in ENGINE_DEFAULTS}
+                if qa_ext_info is not None:
+                    # the one key read through _effective_qa_external (S1): its origin axis is
+                    # live-config / frozen / default, exactly what `qa-tools-check` reports
+                    effective["qa_tools_external"] = {"value": qa_ext_info["value"],
+                                                      "origin": qa_ext_info["origin"]}
+                else:
+                    # unresolvable (warned above, naming why): ABSENT, never the raw value under
+                    # an `override` origin its live-config / frozen / default axis does not have
+                    effective.pop("qa_tools_external", None)
                 ok("risk profile: %s" % (risk_profile or "none declared"),
                    "effective settings below - precedence: override > profile > default")
                 for key in ENGINE_DEFAULTS:
-                    value = resolved.get(key)
-                    if isinstance(value, list):
+                    if key not in effective:
+                        continue
+                    value = effective[key]["value"]
+                    if isinstance(value, list) and value:
                         shown = ", ".join(value)
-                    elif value is None:
+                    elif value is None or value == []:
                         shown = ENGINE_DEFAULT_NOTES.get(key, "not declared")
                     else:
                         shown = value
-                    detail = "origin: " + origin[key]
+                    detail = "origin: " + effective[key]["origin"]
+                    if key == "qa_tools_external" and qa_ext_info and qa_ext_info["path"]:
+                        detail += " " + qa_ext_info["path"]
                     if (origin[key] == "override" and risk_profile
                             and key in RISK_PROFILES.get(risk_profile, {})):
                         detail += (" - this override supersedes profile %s (information: an "
@@ -14355,17 +14769,22 @@ def cmd_doctor(args):
              "as amended) - only needed to RUN the loop here")
 
     # --- skills de QA del loop (externas al kit, se orquestan sin traerlas) --
-    # sin ellas la fase 3 (QA loop) no corre; chequeables con o sin config.
-    missing_qa = [t for t in qa_order
-                  if not os.path.isdir(os.path.join(".claude", "skills", t))
-                  and not os.path.isdir(os.path.join(home_skills, t))]
+    # sin ellas la fase 3 (QA loop) no corre; chequeables con o sin config. ADR-051: resolved
+    # through the SAME six-source resolver `qa-tools-check` uses, so a plugin/builtin-assumed/
+    # declared-external tool no longer false-warns here (code-review used to). doctor stays a
+    # WARN-only lens (exit code unchanged): the blocking gate is `qa-tools-check`. A MISSING
+    # tool is a warn naming it and pointing at that subcommand.
+    qa_res = [resolve_qa_tool(t, qa_external, project_root=".") for t in qa_order]
+    missing_qa = [r["tool"] for r in qa_res if r["source"] == "MISSING"]
     if not missing_qa:
-        ok(f"skills de QA del loop instaladas: {', '.join(qa_order)}")
+        shown = ", ".join("%s (%s)" % (r["tool"], r["source"]) for r in qa_res)
+        ok(f"QA tools del loop resueltas: {shown}")
     else:
-        warn(f"skills de QA no encontradas como archivo: {', '.join(missing_qa)}",
-             "install your QA skills in ~/.claude/skills/ or declare others in "
-             "config.defaults.qa_tools_order; if it is a harness built-in "
-             "(e.g. code-review), ignore this notice")
+        warn(f"QA tools no instaladas: {', '.join(missing_qa)}",
+             "install them in your agent's skills root (~/.claude/skills/, ~/.agents/skills/, "
+             "... or a project .claude/skills/), enable a plugin that provides them, or "
+             "declare them in config.defaults.qa_tools_external if they are harness-provided "
+             "-- `qa-tools-check` is the gate that BLOCKS on this fact")
 
     # --- veredicto ----------------------------------------------------------
     n_ok = sum(1 for lv, _, _ in checks if lv == "ok")
@@ -14806,6 +15225,15 @@ def build_parser():
     pop.add_argument("--iteration", type=int, default=1)
     pop.add_argument("--json", action="store_true")
     pop.set_defaults(func=cmd_operability)
+    pqt = sub.add_parser("qa-tools-check",
+                         help="resolve every tool in the EFFECTIVE qa_tools_order and persist "
+                              "gate:qa-tools (ADR-051); exit 1 when a declared QA tool is not "
+                              "installed -- a fact that blocks under every profile")
+    add_ledger(pqt)
+    pqt.add_argument("--repo", required=True)
+    pqt.add_argument("--iteration", type=int, default=1)
+    pqt.add_argument("--json", action="store_true")
+    pqt.set_defaults(func=cmd_qa_tools_check)
     pre = sub.add_parser("resolve-escalation",
                          help="close open escalations for a repo (recorded event; "
                               "lifts the readiness cap)")
@@ -14832,7 +15260,9 @@ def build_parser():
                           "it. smoke (ADR-047) is the same door for a smoke run measured "
                           "elsewhere -- a FACT kind, so advisory is refused on it. "
                           "operability (ADR-048) is accepted for parity with the "
-                          "`operability` subcommand, which is what normally writes it")
+                          "`operability` subcommand, which is what normally writes it. "
+                          "gate:qa-tools (ADR-051) has NO door here: the engine measures it "
+                          "itself, and only `qa-tools-check` writes it")
     plg.add_argument("--verdict", required=True,
                      choices=["pass", "fail", "advisory", "not-run"],
                      help="advisory (ADR-043) records a measured, non-gating run: it never "

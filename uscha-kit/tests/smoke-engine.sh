@@ -379,6 +379,7 @@ cat > uscha.config.json <<'EOF'
   "defaults": { "coverage_threshold": 60, "tools_per_cycle": 3,
     "severity_gate": ["BLOCKER","CRITICAL","HIGH"],
     "qa_tools_order": ["code-review","judgment-day","improve"],
+    "qa_tools_external": ["judgment-day","improve"],
     "acceptance_file": "ACCEPTANCE.md" },
   "repos": [ {"name":"repo-a","path":"repo-a","type":"maven"},
              {"name":"repo-b","path":"repo-b","type":"flutter"},
@@ -989,7 +990,7 @@ run readiness 2>/dev/null | grep -q "stall: repo-a" \
   && { FAIL=$((FAIL+1)); echo "  FAIL stall con serie bajando (5->3->1 es progreso)"; } \
   || { PASS=$((PASS+1)); echo "  ok   serie bajando (5->3->1) no dispara stall"; }
 # (c) stop-signal: repo unico convergido, cero facts bloqueantes -> candidato a PR
-printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"] },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > c-solo.json
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"], "qa_tools_external": ["judgment-day","improve"] },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > c-solo.json
 run init --config c-solo.json --out L-solo.json >/dev/null 2>&1
 for t in code-review judgment-day improve; do
   run log-step --ledger L-solo.json --repo solo --tool $t --iteration 1 \
@@ -1116,7 +1117,7 @@ mkdir -p repo-x/reports
 cat > repo-x/reports/junit.xml <<'EOF'
 <testsuite tests="1" failures="0" errors="0" skipped="0"/>
 EOF
-printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"] },\n  "repos": [ {"name":"fsm","path":"repo-x","type":"go"} ], "integration": {"enabled": false} }\n' > c-fsm.json
+printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"], "qa_tools_external": ["judgment-day","improve"] },\n  "repos": [ {"name":"fsm","path":"repo-x","type":"go"} ], "integration": {"enabled": false} }\n' > c-fsm.json
 run init --config c-fsm.json --out L-fsm.json >/dev/null 2>&1
 chk "ledger virgen -> plan" 0 run phase --ledger L-fsm.json --repo fsm --require plan
 run snapshot --ledger L-fsm.json --repo fsm >/dev/null 2>&1
@@ -3067,7 +3068,7 @@ sys.exit(0 if ('golden_missing' not in d['by_repo']['solo']['facts']
 echo "== T87 (1.45.0): golden_required caps readiness to 49 when the approved golden is ABSENT =="
 # pesos aislados en static+convergence (=1.0) -> base agregada 100, para ver morder el cap
 t87() { # $1 = extra defaults ; $2 = 'golden' para loguear golden aprobado ; imprime score|source
-  printf '{ "defaults": { "acceptance_file": "t86-acc.md", "readiness_weights": {"acceptance":0,"adr":0,"coverage":0,"static_gate":50,"convergence":50} %s },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' "$1" > t87.json
+  printf '{ "defaults": { "acceptance_file": "t86-acc.md", "readiness_weights": {"acceptance":0,"adr":0,"coverage":0,"static_gate":50,"convergence":50}, "qa_tools_external": ["judgment-day","improve"] %s },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' "$1" > t87.json
   run init --config t87.json --out L-t87.json >/dev/null 2>&1
   for tl in code-review judgment-day improve; do run log-step --repo solo --tool "$tl" --iteration 1 --tests-passed true --ledger L-t87.json >/dev/null 2>&1; done
   run ingest-gate --repo solo --tool code-review --iteration 1 --json-report /dev/null --ledger L-t87.json >/dev/null 2>&1
@@ -4175,7 +4176,8 @@ def eng(*a):
 
 def cfg(mode):
     d = {"defaults": {"acceptance_file": "ACCEPTANCE.md",
-                      "qa_tools_order": ["code-review", "judgment-day", "improve"]},
+                      "qa_tools_order": ["code-review", "judgment-day", "improve"],
+                      "qa_tools_external": ["judgment-day", "improve"]},
          "repos": [{"name": "r", "path": "r", "type": "go"}],
          "integration": {"enabled": False}}
     if mode is not None:
@@ -4297,7 +4299,8 @@ io.open(os.path.join(repo, "reports", "junit.xml"), "w").write(
 
 io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
     "defaults": {"acceptance_file": "ACCEPTANCE.md",
-                 "qa_tools_order": ["code-review", "judgment-day", "improve"]},
+                 "qa_tools_order": ["code-review", "judgment-day", "improve"],
+                 "qa_tools_external": ["judgment-day", "improve"]},
     "repos": [{"name": "r", "path": "r", "type": "go"}],
     "integration": {"enabled": False}}))
 eng("init", "--config", "c.json", "--out", "L.json")
@@ -4634,7 +4637,8 @@ io.open(os.path.join(repo, "reports", "junit.xml"), "w").write(
 
 io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
     "defaults": {"acceptance_file": "ACCEPTANCE.md",
-                 "qa_tools_order": ["code-review", "judgment-day", "improve"]},
+                 "qa_tools_order": ["code-review", "judgment-day", "improve"],
+                 "qa_tools_external": ["judgment-day", "improve"]},
     "repos": [{"name": "r", "path": "r", "type": "python"}],
     "integration": {"enabled": False}}))
 eng("init", "--config", "c.json", "--out", "L.json")
@@ -17329,6 +17333,536 @@ case "$T168" in
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T168";;
 esac
 
+echo "== T169 (2.6.0): QA-tool readiness is MEASURED -- a declared tool that is not installed blocks (ADR-051) =="
+# The hole, reproduced rather than described: Phase 3 runs QA tools the kit ORCHESTRATES but does
+# not ship (qa_tools_order). log-step took any name with no existence check and _converged only
+# asked whether a step was LOGGED -- so a loop could converge trusting a tool that never ran. The
+# six-source resolver turns "a declared tool is not installed" into a fact: project/global skill,
+# installed+enabled plugin, harness built-in (code-review, assumed not measured), declared-external,
+# or MISSING. Only MISSING blocks, under EVERY profile. HOME is isolated per case so the resolver
+# is machine-independent (judgment-day/improve are absent on a clean machine; present on this dev
+# box -- the exact nondeterminism the isolation refuses). AC-QT-09 is the RED PROBE and AC-QT-10
+# the SHIPPED PROBE against the v2.5.0 engine out of git. AC-QT-11..13 pin the fix pass: the live
+# config wins for qa_tools_external PER KEY (doctor agrees), every known install root is probed, and
+# log-gate has no qa-tools door -- each with a red probe on a sabotaged engine copy.
+T169=$(pyin "$KIT" "$ROOT" <<'PY'
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
+kit, root = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+spec = importlib.util.spec_from_file_location("qlqt", ENG)
+QL = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(QL)   # for _integrity_hash: re-seal a legacy-shaped ledger (AC-QT-05)
+NL = chr(10)
+# the release before this one: the SHIPPED PROBE (AC-QT-10) runs its engine out of git. Pin the
+# TAG, never HEAD -- in the release ritual HEAD becomes the NEW engine the moment X is committed,
+# and a HEAD-pinned probe would then read the feature as shipped and go red at step 4 (I4).
+PREV_TAG = "v2.5.0"
+TMPS = []
+res, why = {}, {}
+
+
+def tmp(prefix="uscha-qt-"):
+    d = tempfile.mkdtemp(prefix=prefix)
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    dd = os.path.dirname(path)
+    if dd and not os.path.isdir(dd):
+        os.makedirs(dd)
+    with io.open(path, "w", encoding="utf-8", newline=NL) as fh:
+        fh.write(body)
+
+
+def read_json(path):
+    with io.open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def eng(argv, cwd, home, engine=None):
+    env = dict(os.environ, HOME=home, USERPROFILE=home, PYTHONIOENCODING="utf-8")
+    # the resolver honours CLAUDE_CONFIG_DIR (S2): a value inherited from the dev box would point
+    # it back at the real machine, so the isolation drops it
+    env.pop("CLAUDE_CONFIG_DIR", None)
+    return subprocess.run([sys.executable, engine or ENG] + list(argv), cwd=cwd,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          encoding="utf-8", errors="replace", env=env)
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def empty_home():
+    h = tmp("uscha-qt-home-")
+    os.makedirs(os.path.join(h, ".claude", "skills"))
+    return h
+
+
+def plugin_home(toolname):
+    """An isolated home with ONE installed-and-enabled plugin that provides commands/<tool>.md.
+    Fabricated end to end -- it NEVER references the real machine's plugins."""
+    h = tmp("uscha-qt-plug-")
+    os.makedirs(os.path.join(h, ".claude", "skills"))
+    ip = os.path.join(h, ".claude", "plugins", "cache", "x", "x", "1.0.0")
+    os.makedirs(os.path.join(ip, "commands"))
+    write(os.path.join(ip, "commands", toolname + ".md"), "# " + toolname + NL)
+    write(os.path.join(h, ".claude", "plugins", "installed_plugins.json"),
+          json.dumps({"version": 2, "plugins": {"x@m": [
+              {"scope": "user", "installPath": ip, "version": "1.0.0"}]}}))
+    write(os.path.join(h, ".claude", "settings.json"),
+          json.dumps({"enabledPlugins": {"x@m": True}}))
+    return h
+
+
+def project(home, profile=None, order=None, external=None):
+    d = tmp()
+    os.makedirs(os.path.join(d, "repo"))
+    defaults = {"acceptance_file": "ACCEPTANCE.md"}
+    if profile:
+        defaults["risk_profile"] = profile
+    if order is not None:
+        defaults["qa_tools_order"] = order
+    if external is not None:
+        defaults["qa_tools_external"] = external
+    cfg = {"version": "1.0", "defaults": defaults,
+           "repos": [{"name": "app", "path": "repo", "type": "python"}],
+           "integration": {"enabled": False}}
+    write(os.path.join(d, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    write(os.path.join(d, "ACCEPTANCE.md"), "# ACCEPTANCE" + NL + NL + "- [ ] AC-01 one" + NL)
+    write(os.path.join(d, "repo", ".keep"), "")
+    eng(["init", "--config", "uscha.config.json", "--out", "QA-LEDGER.json"], d, home)
+    return d
+
+
+def qtc(d, home, engine=None):
+    return eng(["qa-tools-check", "--repo", "app", "--iteration", "1",
+                "--ledger", "QA-LEDGER.json", "--json"], d, home, engine=engine)
+
+
+def as_json(r):
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+
+def sources(j):
+    return {t["tool"]: t for t in (j.get("tools") or [])}
+
+
+def gate_row(d, home):
+    r = eng(["readiness", "--ledger", "QA-LEDGER.json", "--acceptance", "ACCEPTANCE.md",
+             "--json"], d, home)
+    try:
+        rows = json.loads(r.stdout).get("gates") or []
+    except ValueError:
+        return None
+    for g in rows:
+        if g.get("tool") == "gate:qa-tools":
+            return g
+    return None
+
+
+def measure():
+    # --- AC-QT-01: profile C, judgment-day absent -> exit 1 naming it; readiness capped;
+    #     phase --require pr-ready refuses, by name ---------------------------------------------
+    h = empty_home()
+    d = project(h, profile="C")
+    r = qtc(d, h)
+    j = as_json(r)
+    g = gate_row(d, h)
+    ph = eng(["phase", "--repo", "app", "--require", "pr-ready", "--ledger", "QA-LEDGER.json"],
+             d, h)
+    p1 = []
+    if r.returncode != 1:
+        p1.append("qa-tools-check exit %s, expected 1" % r.returncode)
+    if j.get("verdict") != "fail" or "judgment-day" not in (j.get("missing") or []):
+        p1.append("verdict=%r missing=%r" % (j.get("verdict"), j.get("missing")))
+    if not g or g.get("blocking") is not True or g.get("advisory") is not False:
+        p1.append("readiness rollup row=%r, expected blocking and not advisory" % (g,))
+    if ph.returncode == 0 or "qa tools" not in ph.stdout or "judgment-day" not in ph.stdout:
+        p1.append("pr-ready not refused by name: rc=%s %r" % (ph.returncode, ph.stdout[-160:]))
+    res["AC-QT-01"] = not p1
+    why["AC-QT-01"] = "; ".join(p1[:3]) or "missing judgment-day blocks under C, named"
+
+    # --- AC-QT-02: log-step of a MISSING tool is recorded unverified and does NOT converge -----
+    h = empty_home()
+    d = project(h, profile="C")
+    eng(["log-step", "--repo", "app", "--tool", "code-review", "--iteration", "1",
+         "--tests-passed", "true", "--ledger", "QA-LEDGER.json"], d, h)
+    ls = eng(["log-step", "--repo", "app", "--tool", "judgment-day", "--iteration", "1",
+              "--tests-passed", "true", "--ledger", "QA-LEDGER.json"], d, h)
+    eng(["log-step", "--repo", "app", "--tool", "improve", "--iteration", "1",
+         "--tests-passed", "true", "--ledger", "QA-LEDGER.json"], d, h)
+    cv = eng(["converged", "--repo", "app", "--ledger", "QA-LEDGER.json"], d, h)
+    jd = [s for s in read_json(os.path.join(d, "QA-LEDGER.json"))["repos"]["app"]["iterations"]
+          if s.get("tool") == "judgment-day"]
+    p2 = []
+    if "source=MISSING" not in ls.stdout:
+        p2.append("log-step did not stamp source=MISSING: %r" % ls.stdout[-120:])
+    if not jd or jd[-1].get("unverified") is not True:
+        p2.append("step not recorded unverified: %r" % (jd[-1] if jd else None))
+    if cv.returncode == 0:
+        p2.append("the repo converged with judgment-day MISSING")
+    res["AC-QT-02"] = not p2
+    why["AC-QT-02"] = "; ".join(p2[:3]) or "an unverified step does not let the repo converge"
+
+    # --- AC-QT-03: tools declared in qa_tools_external -> all pass, origin recorded -------------
+    h = empty_home()
+    d = project(h, profile="C", external=["judgment-day", "improve"])
+    r = qtc(d, h)
+    j = as_json(r)
+    src = sources(j)
+    p3 = []
+    if r.returncode != 0 or j.get("verdict") != "pass":
+        p3.append("exit %s verdict %r, expected 0/pass" % (r.returncode, j.get("verdict")))
+    if (src.get("judgment-day") or {}).get("source") != "declared-external" or \
+       (src.get("improve") or {}).get("source") != "declared-external":
+        p3.append("origin not declared-external: %r" % {k: v.get("source")
+                                                        for k, v in src.items()})
+    res["AC-QT-03"] = not p3
+    why["AC-QT-03"] = "; ".join(p3[:3]) or "declared-external tools pass, origin recorded"
+
+    # --- AC-QT-04: profile A never asks for judgment-day/improve -------------------------------
+    h = empty_home()
+    d = project(h, profile="A")
+    r = qtc(d, h)
+    j = as_json(r)
+    p4 = []
+    if j.get("qa_tools_order") != ["code-review"]:
+        p4.append("order=%r, expected [code-review]" % (j.get("qa_tools_order"),))
+    if r.returncode != 0 or j.get("verdict") != "pass":
+        p4.append("exit %s verdict %r" % (r.returncode, j.get("verdict")))
+    res["AC-QT-04"] = not p4
+    why["AC-QT-04"] = "; ".join(p4[:3]) or "profile A asks only for code-review"
+
+    # --- AC-QT-05: a pre-change ledger (steps WITHOUT provenance) loads and converges as before.
+    #     Built with the current engine, then stripped of the new fields and RE-SEALED with the
+    #     engine's own integrity hash, so the legacy-shaped file loads clean -- no git needed. ---
+    h = empty_home()
+    d = project(h, profile="A")
+    eng(["log-step", "--repo", "app", "--tool", "code-review", "--iteration", "1",
+         "--tests-passed", "true", "--ledger", "QA-LEDGER.json"], d, h)
+    lp = os.path.join(d, "QA-LEDGER.json")
+    led = read_json(lp)
+    had_source = any("source" in s for s in led["repos"]["app"]["iterations"])
+    for s in led["repos"]["app"]["iterations"]:
+        for key in ("source", "source_sha256", "unverified"):
+            s.pop(key, None)
+    led.pop("integrity", None)
+    led["integrity"] = {"sha256": QL._integrity_hash(led)}
+    write(lp, json.dumps(led, indent=2) + NL)
+    cv = eng(["converged", "--repo", "app", "--ledger", "QA-LEDGER.json"], d, h)
+    legacy_step = read_json(lp)["repos"]["app"]["iterations"][0]
+    p5 = []
+    if not had_source:
+        p5.append("the engine did not stamp source to begin with (the test is vacuous)")
+    if "source" in legacy_step:
+        p5.append("source survived the strip (legacy emulation failed)")
+    if cv.returncode != 0:
+        p5.append("a pre-change ledger does not converge: rc=%s %r"
+                  % (cv.returncode, cv.stdout[-120:]))
+    res["AC-QT-05"] = not p5
+    why["AC-QT-05"] = "; ".join(p5[:3]) or "a pre-2.6.0 ledger loads and converges unchanged"
+
+    # --- AC-QT-06: code-review with no dir/plugin/declaration -> builtin-assumed, exit 0 --------
+    h = empty_home()
+    d = project(h, profile="A")
+    r = qtc(d, h)
+    j = as_json(r)
+    p6 = []
+    if (sources(j).get("code-review") or {}).get("source") != "builtin-assumed":
+        p6.append("code-review source=%r, expected builtin-assumed"
+                  % (sources(j).get("code-review") or {}).get("source"))
+    if r.returncode != 0:
+        p6.append("exit %s, expected 0 (a harness built-in must never block)" % r.returncode)
+    res["AC-QT-06"] = not p6
+    why["AC-QT-06"] = "; ".join(p6[:3]) or "code-review is builtin-assumed, never a block"
+
+    # --- AC-QT-07: a plugin-resolved tool reports source plugin + a sha256 ----------------------
+    h = plugin_home("review")
+    d = project(h, order=["review"])
+    r = qtc(d, h)
+    rv = sources(as_json(r)).get("review") or {}
+    p7 = []
+    if rv.get("source") != "plugin":
+        p7.append("review source=%r, expected plugin" % rv.get("source"))
+    if not (isinstance(rv.get("sha256"), str) and len(rv.get("sha256") or "") == 64):
+        p7.append("no sha256 on the plugin row: %r" % rv.get("sha256"))
+    if r.returncode != 0:
+        p7.append("exit %s, expected 0" % r.returncode)
+    res["AC-QT-07"] = not p7
+    why["AC-QT-07"] = "; ".join(p7[:3]) or "a plugin tool resolves with source=plugin + hash"
+
+    # --- AC-QT-08: no qa_tools_order -> UNMEASURED, exit 0, persist nothing ---------------------
+    h = empty_home()
+    d = project(h)
+    lp = os.path.join(d, "QA-LEDGER.json")
+    before = read_json(lp)
+    r = qtc(d, h)
+    j = as_json(r)
+    after = read_json(lp)
+    p8 = []
+    if r.returncode != 0 or j.get("verdict") != "unmeasured":
+        p8.append("exit %s verdict %r, expected 0/unmeasured" % (r.returncode, j.get("verdict")))
+    if before != after:
+        p8.append("the ledger changed on a no-order run (it must persist nothing)")
+    res["AC-QT-08"] = not p8
+    why["AC-QT-08"] = "; ".join(p8[:3]) or "no order -> UNMEASURED, exit 0, nothing persisted"
+
+    # --- AC-QT-09: RED PROBE -- neutralise the resolver's MISSING return; the profile-C run that
+    #     AC-QT-01 proved RED must now go green. If the sabotage does not flip it, the MISSING
+    #     gate is not load-bearing and this criterion is red. ------------------------------------
+    src_text = io.open(ENG, encoding="utf-8").read()
+    broken = src_text.replace('"source": "MISSING"', '"source": "builtin-assumed"')
+    p9 = []
+    if broken == src_text:
+        p9.append("the sabotage matched nothing -- the MISSING return moved; update the probe")
+    else:
+        be = os.path.join(tmp(), "broken_engine.py")
+        write(be, broken)
+        h = empty_home()
+        d = project(h, profile="C")
+        rb = qtc(d, h, engine=be)
+        if rb.returncode != 0:
+            p9.append("the sabotaged resolver still exits %s -- the MISSING gate is not "
+                      "load-bearing" % rb.returncode)
+    res["AC-QT-09"] = not p9
+    why["AC-QT-09"] = "; ".join(p9[:3]) or "breaking MISSING flips the C case green -- gate is real"
+
+    # --- AC-QT-10: SHIPPED PROBE -- the v2.5.0 engine out of git had no qa-tools-check, no
+    #     gate:qa-tools and no step provenance. Without git -> None = UNMEASURED, never a pass. --
+    old = git_show(PREV_TAG + ":uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py")
+    if old is None:
+        res["AC-QT-10"] = None
+    else:
+        oe = os.path.join(tmp(), "old_engine.py")
+        write(oe, old)
+        h = empty_home()
+        d = project(h, profile="C")
+        oc = qtc(d, h, engine=oe)
+        ols = eng(["log-step", "--repo", "app", "--tool", "code-review", "--iteration", "1",
+                   "--tests-passed", "true", "--ledger", "QA-LEDGER.json"], d, h, engine=oe)
+        p10 = []
+        if oc.returncode == 0:
+            p10.append("the shipped engine accepted qa-tools-check (it must not exist there)")
+        if "source=" in ols.stdout:
+            p10.append("the shipped engine stamped step provenance: %r" % ols.stdout[-120:])
+        res["AC-QT-10"] = not p10
+        why["AC-QT-10"] = "; ".join(p10[:3]) or "the v2.5.0 engine has neither the subcommand " \
+                                                "nor step provenance"
+
+    src_text = io.open(ENG, encoding="utf-8").read()
+
+    def sabotaged(old, new):
+        """A temp copy of the engine with ONE exact substitution, or None when the anchor is not
+        there exactly once (the probe must then go red: the fix moved)."""
+        if src_text.count(old) != 1:
+            return None
+        be = os.path.join(tmp(), "sabotaged_engine.py")
+        write(be, src_text.replace(old, new))
+        return be
+
+    def declare_live(d, tools):
+        cfgp = os.path.join(d, "uscha.config.json")
+        live = read_json(cfgp)
+        live["defaults"]["qa_tools_external"] = list(tools)
+        write(cfgp, json.dumps(live, indent=2) + NL)
+
+    # --- AC-QT-11 (S1): declared in the LIVE config after init -> passes with no re-init, and
+    #     doctor and the gate report the SAME value and origin. RED PROBE: a frozen-only copy. ---
+    h = empty_home()
+    d = project(h, profile="C")
+    r0 = qtc(d, h)
+    declare_live(d, ["judgment-day", "improve"])
+    r1 = qtc(d, h)
+    j1 = as_json(r1)
+    jdoc = as_json(eng(["doctor", "--json"], d, h))
+    gate_ext = j1.get("qa_tools_external") or {}
+    doc_ext = (jdoc.get("effective") or {}).get("qa_tools_external") or {}
+    frozen = (read_json(os.path.join(d, "QA-LEDGER.json")).get("config") or {}).get("defaults") or {}
+    p11 = []
+    if r0.returncode != 1:
+        p11.append("before the declaration the check exited %s, expected 1" % r0.returncode)
+    if r1.returncode != 0 or j1.get("verdict") != "pass":
+        p11.append("after the live declaration: exit %s verdict %r, expected 0/pass"
+                   % (r1.returncode, j1.get("verdict")))
+    if "qa_tools_external" in frozen:
+        p11.append("the frozen config declares it -- the pass did not come from the live file")
+    if gate_ext.get("origin") != "live-config":
+        p11.append("gate origin %r, expected live-config" % gate_ext.get("origin"))
+    if (gate_ext.get("value"), gate_ext.get("origin")) != (doc_ext.get("value"),
+                                                           doc_ext.get("origin")):
+        p11.append("gate %r != doctor %r" % (gate_ext, doc_ext))
+    be = sabotaged("    live = _live_project_config(config, ledger_path)" + NL,
+                   "    live = None" + NL)
+    if be is None:
+        p11.append("the S1 sabotage anchor moved -- update the probe")
+    else:
+        h = empty_home()
+        d = project(h, profile="C")
+        declare_live(d, ["judgment-day", "improve"])
+        rb = qtc(d, h, engine=be)
+        if rb.returncode != 1:
+            p11.append("a frozen-only engine still exits %s -- the live read is not "
+                       "load-bearing" % rb.returncode)
+
+    # PER-KEY precedence (2.6.0 review): (a) a live file that OMITS the key leaves the frozen
+    # declaration standing -- no false block; (b) an explicit live [] is a withdrawal; (c) a live
+    # value of the wrong shape refuses loudly, naming the key. RED PROBE: strict-live (any live
+    # file wins, an omitted key reads as none declared) turns (a) back into a false MISSING.
+    def omit_live(d):
+        cfgp = os.path.join(d, "uscha.config.json")
+        live = read_json(cfgp)
+        live["defaults"].pop("qa_tools_external", None)
+        write(cfgp, json.dumps(live, indent=2) + NL)
+
+    h = empty_home()
+    d = project(h, profile="C", external=["judgment-day", "improve"])
+    omit_live(d)
+    ra = qtc(d, h)
+    ja = as_json(ra)
+    ea = ja.get("qa_tools_external") or {}
+    if ra.returncode != 0 or ja.get("verdict") != "pass":
+        p11.append("(a) live file omits the key: exit %s verdict %r, expected 0/pass -- the "
+                   "frozen declaration was discarded" % (ra.returncode, ja.get("verdict")))
+    if ea.get("origin") != "frozen" or \
+       (sources(ja).get("judgment-day") or {}).get("source") != "declared-external":
+        p11.append("(a) origin %r source %r, expected frozen/declared-external"
+                   % (ea.get("origin"), (sources(ja).get("judgment-day") or {}).get("source")))
+    la = eng(["log-step", "--repo", "app", "--tool", "improve", "--iteration", "1",
+              "--tests-passed", "true", "--ledger", "QA-LEDGER.json"], d, h)
+    if "source=declared-external" not in la.stdout:
+        p11.append("(a) log-step did not stamp declared-external: %r" % la.stdout[-120:])
+    declare_live(d, [])
+    rw = qtc(d, h)
+    jw = as_json(rw)
+    if rw.returncode != 1 or "judgment-day" not in (jw.get("missing") or []) or \
+       (jw.get("qa_tools_external") or {}).get("origin") != "live-config":
+        p11.append("(b) an explicit live [] did not withdraw it: exit %s missing %r origin %r"
+                   % (rw.returncode, jw.get("missing"),
+                      (jw.get("qa_tools_external") or {}).get("origin")))
+    cfgp = os.path.join(d, "uscha.config.json")
+    live = read_json(cfgp)
+    live["defaults"]["qa_tools_external"] = "improve"
+    write(cfgp, json.dumps(live, indent=2) + NL)
+    rs = qtc(d, h)
+    if rs.returncode == 0 or as_json(rs) or "qa_tools_external" not in rs.stderr or \
+       "uscha.config.json" not in rs.stderr:
+        p11.append("(c) a live string value was not refused loudly by name: exit %s %r"
+                   % (rs.returncode, rs.stderr[-160:]))
+    jds = as_json(eng(["doctor", "--json"], d, h))
+    if "qa_tools_external" in (jds.get("effective") or {}):
+        p11.append("(c) doctor still reports an effective qa_tools_external for an unresolvable "
+                   "live value: %r" % (jds.get("effective") or {}).get("qa_tools_external"))
+    be = sabotaged('        if live_declares:' + NL
+                   + '            return {"value": list(ext), "origin": "live-config", '
+                     '"path": live}' + NL,
+                   '        if True:' + NL
+                   + '            return {"value": list(ext) if isinstance(ext, list) else [], '
+                     '"origin": "live-config", "path": live}' + NL)
+    if be is None:
+        p11.append("the per-key sabotage anchor moved -- update the probe")
+    else:
+        h = empty_home()
+        d = project(h, profile="C", external=["judgment-day", "improve"])
+        omit_live(d)
+        rb = qtc(d, h, engine=be)
+        if rb.returncode != 1:
+            p11.append("a strict-live engine still exits %s on an omitted live key -- the "
+                       "per-key fallback is not load-bearing" % rb.returncode)
+    res["AC-QT-11"] = not p11
+    why["AC-QT-11"] = "; ".join(p11[:3]) or "live declaration passes with no re-init; doctor " \
+                                            "agrees; per-key: omitted -> frozen, [] withdraws, " \
+                                            "a string refuses"
+
+    # --- AC-QT-12 (S2): a skill ONLY under the pi root resolves with root, path and hash.
+    #     RED PROBE: a copy that probes only the claude root resolves it MISSING. ---------------
+    h = empty_home()
+    sk = os.path.join(h, ".agents", "skills", "judgment-day", "SKILL.md")
+    write(sk, "# judgment-day" + NL)
+    d = project(h, order=["judgment-day"])
+    r = qtc(d, h)
+    row = sources(as_json(r)).get("judgment-day") or {}
+    p12 = []
+    if row.get("source") != "global-skill" or row.get("root") != "pi":
+        p12.append("source=%r root=%r, expected global-skill/pi" % (row.get("source"),
+                                                                   row.get("root")))
+    if not row.get("path") or os.path.realpath(row.get("path")) != os.path.realpath(sk):
+        p12.append("path %r is not the pi-root skill" % row.get("path"))
+    if not (isinstance(row.get("sha256"), str) and len(row.get("sha256")) == 64):
+        p12.append("no sha256: %r" % row.get("sha256"))
+    if r.returncode != 0:
+        p12.append("exit %s, expected 0" % r.returncode)
+    be = sabotaged("    for target, parts in SKILL_INSTALL_ROOTS:" + NL,
+                   "    for target, parts in SKILL_INSTALL_ROOTS[:1]:" + NL)
+    if be is None:
+        p12.append("the S2 sabotage anchor moved -- update the probe")
+    else:
+        rb = qtc(d, h, engine=be)
+        rbrow = sources(as_json(rb)).get("judgment-day") or {}
+        if rb.returncode != 1 or rbrow.get("source") != "MISSING":
+            p12.append("a claude-root-only engine gave exit %s source %r -- the extra roots are "
+                       "not load-bearing" % (rb.returncode, rbrow.get("source")))
+    res["AC-QT-12"] = not p12
+    why["AC-QT-12"] = "; ".join(p12[:3]) or "a pi-root skill resolves with root, path and hash"
+
+    # --- AC-QT-13 (S3): log-gate --kind qa-tools is refused (exit 2), the ledger untouched.
+    #     RED PROBE: a copy with qa-tools back in the --kind choices accepts it. ----------------
+    h = empty_home()
+    d = project(h, profile="A")
+    lp = os.path.join(d, "QA-LEDGER.json")
+    lg_argv = ["log-gate", "--repo", "app", "--iteration", "1", "--kind", "qa-tools",
+               "--verdict", "pass", "--ledger", "QA-LEDGER.json"]
+    with io.open(lp, "rb") as fh:
+        b0 = fh.read()
+    lg = eng(lg_argv, d, h)
+    with io.open(lp, "rb") as fh:
+        b1 = fh.read()
+    p13 = []
+    if lg.returncode != 2:
+        p13.append("log-gate --kind qa-tools exited %s, expected 2" % lg.returncode)
+    if b0 != b1:
+        p13.append("the ledger changed on a refused log-gate")
+    be = sabotaged('"operability"],', '"operability", "qa-tools"],')
+    if be is None:
+        p13.append("the S3 sabotage anchor moved -- update the probe")
+    else:
+        rb = eng(lg_argv, d, h, engine=be)
+        if rb.returncode != 0:
+            p13.append("with the door re-opened log-gate still exits %s -- the refusal is not "
+                       "the choices list" % rb.returncode)
+    res["AC-QT-13"] = not p13
+    why["AC-QT-13"] = "; ".join(p13[:3]) or "log-gate --kind qa-tools refused, ledger unchanged"
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".qt-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T169" in
+  OK*) PASS=$((PASS+1)); echo "  ok   QA-tool readiness measured (AC-QT-01..13): $T169";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T169";;
+esac
+
 # ---------------------------------------------------------------------------- #
 # ACCEPTANCE EMISSION (kit 1.44.0) — uscha applied to itself.
 # Runs the repo's own ACCEPTANCE.md criteria and writes the JUnit report the engine
@@ -17643,6 +18177,12 @@ FAMILIES = (
     # never a silent pass (AC-CA-05 measures the fixture and the bench cache, so it still runs).
     (".ca-cases.json", "anthropic-arm", "T168",                       # ADR-050, 2.5.0
      _seq("AC-CA", 1, 6)),
+    # AC-QT-09 is the RED PROBE; AC-QT-10 is the SHIPPED PROBE -- it runs the v2.5.0 engine out of
+    # git, so without git (a shallow clone, an extracted kit) it reports None = UNMEASURED, never
+    # a silent pass. The other eleven run entirely under isolated HOMEs on any machine; AC-QT-11..13
+    # (2.6.0 fix pass: live config, every install root, one door) each carry their own red probe.
+    (".qt-cases.json", "qa-tool-readiness", "T169",                   # ADR-051, 2.6.0
+     _seq("AC-QT", 1, 13)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

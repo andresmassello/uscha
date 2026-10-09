@@ -1591,3 +1591,59 @@ read the repo-root dispatcher report UNMEASURED from an extracted kit, never a s
   reached a tool cannot stage a compilation; and `build_command` carries the isolation posture
   (`--restricted`, `--tools ""`, `--strict-mcp-config`, `--permission-prompts none`,
   `--json-schema`, `--max-budget-usd`).
+
+## QA-tool readiness (ADR-051) - feature acceptance, closes on green `AC-QT-nn` smoke assertions
+
+The hole: Phase 3 runs QA tools (`qa_tools_order`) the kit orchestrates but does not ship, and
+nothing checked they were installed - a loop could converge trusting a tool that never ran. The
+six-source resolver (`resolve_qa_tool`) turns "a declared tool is not installed" into a fact that
+blocks under every profile; `code-review` is a harness built-in, assumed and reported honestly as
+not measured, so a fresh machine is not blocked. T169 runs every case under an ISOLATED HOME so
+the resolver is machine-independent. AC-QT-10 runs the v2.5.0 engine out of git - from an extracted
+kit it reports UNMEASURED, never a silent pass.
+
+- [ ] AC-QT-01 - profile C with `judgment-day` absent (empty home) -> `qa-tools-check` exits 1
+  naming it, `verdict: fail`; the readiness rollup carries a `gate:qa-tools` row that is blocking
+  and not advisory (the ≤ 65 cap); and `phase --require pr-ready` refuses, naming "qa tools" and
+  `judgment-day`.
+- [ ] AC-QT-02 - `log-step --tool judgment-day` on that machine stamps `source=MISSING`, records
+  the step `unverified: true`, and the repo does NOT converge: an unverified step cannot satisfy a
+  listed tool.
+- [ ] AC-QT-03 - the same two tools declared in `defaults.qa_tools_external` -> `qa-tools-check`
+  exits 0, `verdict: pass`, and each resolves with source `declared-external` (origin recorded).
+- [ ] AC-QT-04 - profile A never asks for `judgment-day`/`improve`: the effective
+  `qa_tools_order` is `["code-review"]` only, and the run passes (exit 0).
+- [ ] AC-QT-05 - a pre-change ledger (steps with no `source`/`unverified`, re-sealed with the
+  engine's own integrity hash) loads clean and converges exactly as before - old-ledger
+  compatibility is pinned.
+- [ ] AC-QT-06 - `code-review` with no skill dir, no plugin and no declaration resolves to
+  `builtin-assumed` and exits 0: a harness built-in is never a block and never a false clean.
+- [ ] AC-QT-07 - a tool provided by an installed+enabled plugin (fabricated `installed_plugins.json`
+  + `enabledPlugins` + `commands/<tool>.md` under an isolated home) resolves with source `plugin`
+  and a 64-char sha256.
+- [ ] AC-QT-08 - no `qa_tools_order` declared -> `qa-tools-check` reports UNMEASURED, exits 0 and
+  persists nothing (the ledger is byte-identical before and after); a list is never synthesized.
+- [ ] AC-QT-09 - RED PROBE: a copy of the engine with the resolver's MISSING return neutralised
+  turns the profile-C case green (exit 0) where the real engine refuses (exit 1) - proof the
+  MISSING gate is load-bearing.
+- [ ] AC-QT-10 - SHIPPED PROBE: the v2.5.0 engine out of git has no `qa-tools-check` subcommand,
+  no `gate:qa-tools` and no step provenance (`log-step` prints no `source=`); without git this
+  reports UNMEASURED, never a silent pass.
+- [ ] AC-QT-11 - a ledger initialised WITHOUT `qa_tools_external` (profile C, empty home, so
+  `qa-tools-check` exits 1) -> the human declares `judgment-day`/`improve` in the LIVE
+  `uscha.config.json` after `init` -> `qa-tools-check` exits 0 with no re-init, the ledger's frozen
+  config still does not declare it, and `doctor --json` (`effective.qa_tools_external`) and
+  `qa-tools-check --json` (`qa_tools_external`) report the SAME value and the same origin
+  `live-config`. RED PROBE: an engine copy that reads only the frozen copy stays at exit 1.
+  Precedence is PER KEY: with the frozen config declaring them, a live file that OMITS the key
+  keeps them `declared-external` with origin `frozen` (exit 0, `log-step` stamps
+  `source=declared-external` -- no false block); a live explicit `[]` withdraws them (exit 1,
+  `judgment-day` MISSING, origin `live-config`); a live string value is refused loudly, naming
+  `qa_tools_external` and the file. RED PROBE: a strict-live engine copy (any live file wins, an
+  omitted key reads as none declared) turns the omitted-key case into exit 1.
+- [ ] AC-QT-12 - a QA skill placed ONLY under the pi root `~/.agents/skills/<name>/SKILL.md` of an
+  isolated home resolves as `global-skill` with `root: pi`, its path and a 64-char sha256, and the
+  check exits 0. RED PROBE: an engine copy that probes only the claude root resolves it MISSING.
+- [ ] AC-QT-13 - `log-gate --kind qa-tools --verdict pass` is refused by argparse with exit 2 and
+  the ledger is byte-identical before and after: the gate has one door, `qa-tools-check`. RED
+  PROBE: an engine copy with `qa-tools` back in the `--kind` choices accepts it (exit 0).

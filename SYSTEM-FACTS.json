@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 56,
+    "count": 57,
     "list": [
       "bench",
       "bench-curate",
@@ -70,6 +70,7 @@
       "pit-check",
       "production-finding",
       "promote",
+      "qa-tools-check",
       "readiness",
       "rebuild",
       "regression-check",
@@ -88,5 +89,5 @@
       "waste-check"
     ]
   },
-  "version": "2.5.0"
+  "version": "2.6.0"
 }
