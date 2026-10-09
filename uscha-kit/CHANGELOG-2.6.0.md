@@ -123,4 +123,4 @@ AC-FA-03 / AC-FR-06 and the additive-key contract AC-RP-04 are untouched.
 Part A is ENGINE-ONLY plus the two doc spots. The installer is untouched (the "detect and tell"
 half of QA-tool readiness is a separate follow-up); no QA skill is bundled or copied.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 460 checks · 0 fail; acceptance 355/356.
