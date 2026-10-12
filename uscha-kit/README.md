@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.7.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.8.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -938,6 +938,23 @@ never counts as an `ok` gate) and is accepted ONLY for `simplicity|waste` — ev
 refuses it. `--kind ci` (2.2.0) records what the pipeline did, with `--ref <run URL or id>`
 stored on the record as the receipt; a `ci` fail caps and blocks exactly like `gate-check`. A CONSTITUTION violation is recorded with `flag-blocker` (same
 effect, until `--resolve`).
+
+## Testing the kit — the smoke suite, serial or parallel (ADR-053)
+
+The kit's own regression suite lives in the source repo (`uscha-kit/tests/`, not in the npm
+package). Run it from the repo root:
+
+```bash
+bash uscha-kit/tests/smoke-engine.sh                 # serial: what the release ritual and CI run
+USCHA_JOBS=8 bash uscha-kit/tests/smoke-engine.sh    # parallel: same checks, same output, faster
+```
+
+`USCHA_JOBS=N` (N > 1, capped at the cores the machine reports) runs the suite's self-contained
+blocks as background units and replays their output in the original order, so the log and the
+`RESULTADO` / `ACCEPTANCE` lines read the same as a serial run. Unset or `1` is the serial suite,
+`USCHA_COVERAGE=1` forces serial, and the release ritual pins `USCHA_JOBS=1`: the parallel path is a
+convenience for local iteration, never the measurement of record. The gain depends on the cores —
+a 2–4-core CI runner gains much less than a workstation.
 
 ## Notes
 

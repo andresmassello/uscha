@@ -1701,3 +1701,44 @@ HOME/USERPROFILE with `CLAUDE_CONFIG_DIR` dropped and PATH at an empty directory
   turns the AC-IX-01 contract red on the same empty home - proof the contract is load-bearing.
 - [ ] AC-IX-10 - SHIPPED PROBE: the v2.6.0 installer out of git prints no extras report and carries
   no `extras` key; without git this reports UNMEASURED, never a silent pass.
+
+## The parallel smoke suite is opt-in and equivalent (ADR-053) - closes on green `AC-PJ-nn` smoke assertions
+
+The gap: the smoke suite is the instrument every release is measured with, and it ran ~18 minutes
+serial on a 16-core machine, several times per release. Since 2.8.0 `USCHA_JOBS=N` (N>1) runs its
+self-contained blocks as background units through `uscha-kit/tests/_jobs.sh`: the three
+diamond-bench cache passes overlap the serial prefix, T128-T162 and T163-T171 run as units, each
+buffered and replayed in the original order at a barrier, and the counters are summed from one
+result file per unit. The criterion is EQUIVALENCE, not speed: unset or 1 is today's serial suite,
+the ritual and CI stay serial, and a parallel run counts, prints and records what the serial run
+does. The full-suite serial-vs-parallel diff is release evidence; these criteria pin the library
+and the wiring.
+
+- [ ] AC-PJ-01 - `USCHA_JOBS` unset, `1`, `0`, a non-number, and `8` under `USCHA_COVERAGE=1` all
+  resolve to one job, create no scratch directory, run the units in launch order with a unit's
+  stderr reaching stderr directly, and print byte-identical stdout and stderr; `tools/release.py`
+  pins `USCHA_JOBS="1"` for the ritual's suite run and no workflow under `.github/workflows` sets it.
+- [ ] AC-PJ-02 - the same units at `USCHA_JOBS=3` finish in a different order than they launch and
+  still produce the identical log, identical PASS/FAIL tallies and the identical merged sidecar
+  (two units merging into one file through `_harness.sidecar`) as the serial run; a request above
+  the core count is capped at the cores. One core reported reads UNMEASURED.
+- [ ] AC-PJ-03 - a static scan of the suite's and the library's shell-level lines (heredoc bodies
+  and comments excluded) finds no bash-4-only construct (`wait -n`, associative arrays, namerefs,
+  `mapfile`, `readarray`, `coproc`, case-modifying expansions, `&>>`, `|&`), and the scanner flags
+  each construct in a synthetic sample.
+- [ ] AC-PJ-04 - two concurrent calls of the suite's coverage-mode `pyin` spool to different paths,
+  each runs its own program and nothing is left behind; six processes merging fifteen disjoint
+  keys each into one sidecar land all ninety, and the merge lock is not left behind.
+- [ ] AC-PJ-05 - RED PROBE: a copy of `_jobs.sh` whose barrier deletes one unit's result file turns
+  the serial-vs-parallel comparator red: that unit is counted as one FAIL naming it and the tallies
+  diverge (3 ok / 2 fail against 5 ok / 1 fail).
+- [ ] AC-PJ-06 - SHIPPED PROBE: the v2.7.0 suite out of git handles no `USCHA_JOBS`, ships no
+  `tests/_jobs.sh`, and its coverage-mode `pyin`, run under the AC-PJ-04 harness, sends both
+  concurrent calls to the same fixed `pyin.py`; without git this reports UNMEASURED, never a silent
+  pass.
+- [ ] AC-PJ-07 - the suite sources `_jobs.sh` and calls `pj_init` once, every `pj_unit` names a
+  function defined before it, and no unit is still running at the first bench-cache consumer, the
+  serial tail, the teardown or the acceptance emitter; the same walk over a copy with the barrier
+  before the teardown removed goes red, and `_harness.sidecar` merges under its lock. The suite's
+  exit code reflects every counted failure: after the final `RESULTADO` and before the `exit`, a
+  non-zero `FAIL` raises a zero status; the same walk with that line removed goes red.

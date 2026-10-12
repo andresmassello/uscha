@@ -32,6 +32,7 @@ import io
 import json
 import os
 import subprocess
+import time
 
 
 # --------------------------------------------------------------------------- #
@@ -91,16 +92,52 @@ def sidecar(kit, name, res, merge=False):
     side = os.path.join(kit, "reports", "junit")
     os.makedirs(side, exist_ok=True)
     path = os.path.join(side, name)
-    out = res
-    if merge:
+    if not merge:
+        with io.open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(res))
+        return
+    # A merge is read-modify-write. Serial, nothing can interleave; with USCHA_JOBS (ADR-053)
+    # T137/T138/T141/T145 can merge .top-cases.json at the same moment and one block's keys
+    # would vanish -- UNMEASURED in the report, from a race rather than from the code. The lock
+    # serializes the merges; their keys are disjoint, so the result does not depend on order.
+    with _merge_lock(path + ".lock"):
         try:
             with io.open(path, encoding="utf-8") as fh:
                 out = json.load(fh)
         except (OSError, ValueError):
             out = {}
         out.update(res)
-    with io.open(path, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps(out))
+        with io.open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(out))
+
+
+class _merge_lock(object):
+    """A directory lock: `os.mkdir` is atomic on every platform the suite runs on. Fail-closed:
+    a lock that cannot be taken in `timeout` seconds raises, the block dies with a traceback and
+    its shell verdict is FAIL -- a merge is never written without it."""
+
+    def __init__(self, path, timeout=120.0):
+        self.path, self.timeout = path, timeout
+
+    def __enter__(self):
+        deadline = time.time() + self.timeout
+        while True:
+            try:
+                os.mkdir(self.path)
+                return self
+            except (FileExistsError, PermissionError):
+                # PermissionError: Windows answers it for a directory another process is
+                # still removing (a pending delete), which is the same "busy" as exists.
+                if time.time() > deadline:
+                    raise RuntimeError("sidecar merge lock held too long: %s" % self.path)
+                time.sleep(0.05)
+
+    def __exit__(self, *exc):
+        try:
+            os.rmdir(self.path)
+        except OSError:
+            pass
+        return False
 
 
 # --------------------------------------------------------------------------- #

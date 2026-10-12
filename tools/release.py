@@ -498,8 +498,10 @@ def step4(args, dry, state):
     r = subprocess.run(cmd, cwd=REPO, shell=True, stdout=subprocess.PIPE,
                        stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                        errors="replace",
+                       # USCHA_JOBS pinned to 1 (ADR-053): the ritual measures with the serial
+                       # suite even when the shell that runs it exported a parallel job count.
                        env=dict(os.environ, PYTHON=sys.executable,
-                                PYTHONIOENCODING="utf-8"))
+                                PYTHONIOENCODING="utf-8", USCHA_JOBS="1"))
     tail = "\n".join(r.stdout.splitlines()[-15:])
     if r.returncode != 0:
         refuse("I4", "the suite exited %d. A red suite is a refusal, never a note.\n%s"
