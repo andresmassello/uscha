@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="366" failures="0" errors="0" skipped="1">
+<testsuite name="uscha-acceptance" tests="373" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -730,7 +730,20 @@
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-IX-10_installer-extras">
   </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-01_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-02_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-03_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-04_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-05_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-06_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-07_parallel-suite">
+  </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
-    <skipped message="shallow clone or no git: ancestry unmeasurable"/>
   </testcase>
 </testsuite>

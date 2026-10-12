@@ -97,4 +97,4 @@ the exit code alone, so a red check there could have passed a cell. Pre-existing
 because this release is the one about the instrument, and pinned by AC-PJ-07. Green runs are
 unaffected.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 462 checks · 0 fail; acceptance 373/373.
