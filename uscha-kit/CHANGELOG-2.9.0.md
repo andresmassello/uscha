@@ -65,4 +65,4 @@ unmeasured. The two Windows cells, which lost nine criteria to the race before t
 them. If a later run is red, `USCHA_JOBS=1` is the way back and the finding is about state shared
 between units.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 463 checks · 0 fail; acceptance 385/385.

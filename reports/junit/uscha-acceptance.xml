@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="375" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="385" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -747,6 +747,26 @@
   <testcase classname="uscha.acceptance" name="AC-PJ-08_parallel-suite">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-PJ-09_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-01_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-02_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-03_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-04_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-05_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-06_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-07_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-08_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-09_parallel-default">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PD-10_parallel-default">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
   </testcase>
