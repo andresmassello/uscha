@@ -26,4 +26,4 @@ without the liveness check hangs and is killed by the bound; a copy without the 
 scratch directory and live units behind. The serial default runs the same commands as 2.8.0 and
 installs no trap (AC-PJ-09 reads `trap -p`).
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 462 checks · 0 fail; acceptance 375/375.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="373" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="375" failures="0" errors="0" skipped="0">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -743,6 +743,10 @@
   <testcase classname="uscha.acceptance" name="AC-PJ-06_parallel-suite">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-PJ-07_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-08_parallel-suite">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-PJ-09_parallel-suite">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
   </testcase>
