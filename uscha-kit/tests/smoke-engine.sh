@@ -18649,10 +18649,12 @@ echo "== T171 (ADR-053): the parallel suite is OPT-IN and EQUIVALENT -- USCHA_JO
 # unique under concurrency, and carries a RED probe (one unit's result file dropped) and a SHIPPED
 # probe (v2.7.0 has no USCHA_JOBS at all). The FULL-suite serial-vs-parallel diff is release
 # evidence (CHANGELOG-2.8.0), not something a suite can do to itself.
+# 2.8.1 adds AC-PJ-08 (a unit killed from outside never stalls the throttle) and AC-PJ-09 (a
+# SIGTERM to a parallel run cleans up after itself; serial installs no trap), each with teeth.
 # The bash under test is the bash running this suite -- on the macOS cell that is bash 3.2.
 T171_BASH="$(cygpath -m "$BASH" 2>/dev/null || printf '%s' "$BASH")"
 T171=$(pyin "$KIT" "$ROOT" "$T171_BASH" <<'PY'
-import io, json, os, re, shutil, subprocess, sys, tempfile
+import io, json, os, re, shutil, signal, subprocess, sys, tempfile, time
 kit, root, bash = sys.argv[1], sys.argv[2], sys.argv[3]
 sys.path.insert(0, os.path.join(kit, "tests"))
 import _harness
@@ -18686,7 +18688,14 @@ def write(p, text):
         fh.write(text)
 
 
-def sh(script, args, env_extra, merged):
+def dfl_int():
+    # A unit of a parallel run is a background child, so this program starts with SIGINT
+    # ignored on POSIX, and bash cannot trap a signal that was ignored on entry. Children get
+    # the default back, so the INT trap probe and the no-trap serial check mean what they say.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
+def sh(script, args, env_extra, merged, bound=180):
     env = dict(os.environ)
     for k in ("USCHA_JOBS", "USCHA_COVERAGE"):
         env.pop(k, None)
@@ -18696,7 +18705,8 @@ def sh(script, args, env_extra, merged):
                               stdout=subprocess.PIPE,
                               stderr=(subprocess.STDOUT if merged else subprocess.PIPE),
                               env=env, text=True, encoding="utf-8", errors="replace",
-                              timeout=180)
+                              timeout=bound,
+                              preexec_fn=(dfl_int if os.name != "nt" else None))
     except subprocess.TimeoutExpired as exc:
         # a library that hangs is a red, never a hung suite
         return subprocess.CompletedProcess(exc.cmd, 124, stdout="TIMEOUT", stderr="")
@@ -19055,6 +19065,239 @@ def measure():
     res["AC-PJ-07"] = not p
     why["AC-PJ-07"] = "; ".join(p[:3]) or "%d units, every one collected" % units
 
+    # --- AC-PJ-08 and AC-PJ-09 (2.8.1): a unit killed from outside, and an interrupted run -----
+    # Shell text below uses the at-sign where a dollar belongs (shtext swaps them): the heredoc
+    # that carries this program must never show bash a dollar-brace, a backtick or a bracketed
+    # quote (CLAUDE.md, known gotchas). Every run is bounded by a Python timeout; no timeout
+    # binary is needed (macOS has none).
+    def shtext(t):
+        return t.replace(chr(64), D)
+
+    def eff_jobs(lib):
+        c = subprocess.run([bash, "-c", ". " + DQ + D + "1" + DQ + "; pj_resolve_jobs", "x",
+                            fwd(lib)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                           text=True, env=dict(os.environ, USCHA_JOBS="3"))
+        g = c.stdout.strip()
+        return int(g) if g.isdigit() else 0
+
+    def run_dir(prefix, name, text):
+        d = tmp(prefix)
+        script = os.path.join(d, name)
+        write(script, shtext(text))
+        return d, script
+
+    def free(d):
+        # let any orphaned test unit see its release file and stop on its own
+        write(os.path.join(d, "release"), "go" + NL)
+
+    HOLD = (
+        'hold() { local i=0; : > "@OUT/@1.started"; '
+        'while [ ! -f "@OUT/release" ] && [ "@i" -lt 600 ]; do sleep 0.1; i=@((i+1)); done; }')
+    HEAD = NL.join([
+        "set -u",
+        '. "@1"',
+        'OUT="@2"',
+        'export TMPDIR="@OUT/tmp"',
+        'mkdir -p "@TMPDIR"',
+        "PASS=0; FAIL=0"])
+    # K is killed with SIGKILL from outside before it can write its marker; B is held until the
+    # main shell releases it; C is the unit launched AFTER the kill. With the old throttle K
+    # counts as running forever, B waits for a release that only comes once C has launched, and
+    # pj_unit C never returns.
+    MINI08 = NL.join([
+        HEAD,
+        "pj_init",
+        'echo "@PJ_JOBS" > "@OUT/jobs.txt"',
+        'if [ "@PJ_JOBS" -lt 2 ]; then pj_finish; exit 0; fi',
+        HOLD,
+        "k() { hold K; exit 0; }",
+        'b() { hold B; PASS=@((PASS+1)); echo "  ok   b"; }',
+        'c() { PASS=@((PASS+1)); echo "  ok   c"; }',
+        "pj_unit K k",
+        'kpid="@{PJ_PIDS# }"',
+        'i=0; while [ ! -f "@OUT/K.started" ] && [ "@i" -lt 100 ]; do sleep 0.1; i=@((i+1)); done',
+        'kill -9 "@kpid" 2>/dev/null || :',
+        'i=0; while kill -0 "@kpid" 2>/dev/null && [ "@i" -lt 100 ]; do sleep 0.05; i=@((i+1)); done',
+        "pj_unit B b",
+        "pj_unit C c",
+        'echo reached > "@OUT/launched.txt"',
+        'echo go > "@OUT/release"',
+        "pj_collect",
+        'echo "RESULTADO: @PASS ok @FAIL fail"',
+        "pj_finish", ""])
+
+    def run08(lib, bound):
+        # the output goes to a file, never a pipe: a hung run leaves orphans holding the pipe
+        # open, and reading it back would wait for them long after the bound
+        d, script = run_dir("uscha-pj-kill-", "mini08.sh", MINI08)
+        env = dict(os.environ, USCHA_JOBS="2")
+        env.pop("USCHA_COVERAGE", None)
+        logf = os.path.join(d, "run.log")
+        rc = 124
+        with open(logf, "w") as lg:
+            try:
+                rc = subprocess.run([bash, fwd(script), fwd(lib), fwd(d)], stdout=lg,
+                                    stderr=subprocess.STDOUT, env=env, timeout=bound).returncode
+            except subprocess.TimeoutExpired:
+                rc = 124
+        free(d)
+        txt = read(logf) if rc != 124 else "TIMEOUT"
+        r = subprocess.CompletedProcess([], rc, stdout=txt, stderr="")
+        jf = os.path.join(d, "jobs.txt")
+        j = read(jf).strip() if os.path.isfile(jf) else ""
+        return r, d, (int(j) if j.isdigit() else None)
+
+    p = []
+    if eff_jobs(JOBS) < 2:
+        res["AC-PJ-08"] = None
+        why["AC-PJ-08"] = "one core reported: the parallel path cannot be exercised here"
+    else:
+        r, d, j = run08(JOBS, 60)
+        if r.returncode != 0 or r.stdout == "TIMEOUT":
+            p.append("a unit killed from outside stalled the next pj_unit (rc %s)" % r.returncode)
+        elif tally(r.stdout) != ("2", "1"):
+            p.append("the killed unit was not counted as one FAIL: %r" % (tally(r.stdout),))
+        if r.stdout != "TIMEOUT" and "parallel unit K left no result" not in r.stdout:
+            p.append("the killed unit was not named")
+        if not os.path.isfile(os.path.join(d, "launched.txt")):
+            p.append("pj_unit never returned for the unit launched after the kill")
+        # teeth: the same driver over a copy whose liveness check always answers alive must hang
+        gate = "if kill -0 " + DQ + D + "{e#*:}" + DQ + " 2>/dev/null; then PJ_RUNNING"
+        lib = read(JOBS)
+        if lib.count(gate) != 1:
+            p.append("the probe anchor (the liveness check in pj__count_running) is gone")
+        else:
+            blind = os.path.join(W, "_jobs-blind.sh")
+            write(blind, lib.replace(gate, "if true; then PJ_RUNNING"))
+            r2, d2, _j2 = run08(blind, 8)
+            if r2.stdout != "TIMEOUT":
+                p.append("without the liveness check the throttle still returned (rc %s)"
+                         % r2.returncode)
+        res["AC-PJ-08"] = not p
+        why["AC-PJ-08"] = "; ".join(p[:3]) or "a killed unit is a finished unit, and the teeth hang"
+
+    # AC-PJ-09 drives a real SIGTERM. SIGTERM, not SIGINT: a background child of a script
+    # ignores SIGINT, Python cannot deliver either signal to a git-bash process on Windows
+    # (terminate() is a hard kill that never runs a trap), and only the shell kill builtin
+    # reaches a bash trap on Linux, macOS and git-bash alike. So an outer bash script starts the
+    # mini-suite in the background, waits until its units are demonstrably running (each one
+    # appends to a heartbeat file), sends the TERM and records the exit status.
+    MINI09 = NL.join([
+        HEAD,
+        'trap "echo ran > @OUT/exit-trap.txt" EXIT',
+        "pj_init",
+        'echo "@PJ_JOBS" > "@OUT/jobs.txt"',
+        'trap -p INT TERM > "@OUT/traps.txt"',
+        'if [ "@PJ_JOBS" -lt 2 ]; then pj_finish; exit 0; fi',
+        'beat() { local i=0; while [ ! -f "@OUT/release" ] && [ "@i" -lt 600 ]; do '
+        'echo x >> "@OUT/@1.beat"; sleep 0.1; i=@((i+1)); done; }',
+        "h1() { beat H1; }",
+        "h2() { beat H2; }",
+        "pj_unit H1 h1",
+        "pj_unit H2 h2",
+        'echo go > "@OUT/ready"',
+        "pj_collect",
+        'echo "RESULTADO: @PASS ok @FAIL fail" > "@OUT/result.txt"',
+        "pj_finish", ""])
+    OUTER09 = NL.join([
+        "set -u",
+        'LIB="@1"; OUT="@2"; MINI="@3"; BASHBIN="@4"',
+        '"@BASHBIN" "@MINI" "@LIB" "@OUT" > "@OUT/main.out" 2>&1 &',
+        "mp=@!",
+        "i=0",
+        'while [ "@i" -lt 300 ]; do',
+        '  if [ -f "@OUT/ready" ] && [ -f "@OUT/H1.beat" ] && [ -f "@OUT/H2.beat" ]; then break; fi',
+        "  sleep 0.1; i=@((i+1))",
+        "done",
+        'if [ "@i" -ge 300 ]; then kill -9 "@mp" 2>/dev/null; echo NOTREADY > "@OUT/rc.txt"; exit 0; fi',
+        'kill -TERM "@mp"',
+        'wait "@mp"',
+        'echo "@?" > "@OUT/rc.txt"', ""])
+
+    def beats(d):
+        n = 0
+        for u in ("H1", "H2"):
+            f = os.path.join(d, u + ".beat")
+            n += os.path.getsize(f) if os.path.isfile(f) else 0
+        return n
+
+    def run09(lib):
+        d, mini9 = run_dir("uscha-pj-term-", "mini09.sh", MINI09)
+        outer = os.path.join(d, "outer09.sh")
+        write(outer, shtext(OUTER09))
+        out = {}
+        try:
+            sh(outer, [lib, d, mini9, bash], {"USCHA_JOBS": "3"}, True, 90)
+            rf = os.path.join(d, "rc.txt")
+            out["rc"] = read(rf).strip() if os.path.isfile(rf) else "none"
+            tdir = os.path.join(d, "tmp")
+            out["left"] = os.listdir(tdir) if os.path.isdir(tdir) else ["no scratch root"]
+            out["exit_trap"] = os.path.isfile(os.path.join(d, "exit-trap.txt"))
+            tf = os.path.join(d, "traps.txt")
+            out["traps"] = read(tf) if os.path.isfile(tf) else ""
+            time.sleep(0.5)
+            a = beats(d)
+            time.sleep(0.8)
+            out["alive"] = beats(d) > a
+        finally:
+            free(d)
+        return out
+
+    p = []
+    if eff_jobs(JOBS) < 2:
+        res["AC-PJ-09"] = None
+        why["AC-PJ-09"] = "one core reported: the parallel path cannot be exercised here"
+    else:
+        o = run09(JOBS)
+        if o["rc"] != "143":
+            p.append("a SIGTERM to a parallel run exited %s, not 143" % o["rc"])
+        if o["left"]:
+            p.append("the scratch directory was left behind: %r" % (o["left"],))
+        if o["alive"]:
+            p.append("a unit was still running after the interrupt")
+        if not o["exit_trap"]:
+            p.append("the suite EXIT trap did not run after the interrupt")
+        if "pj__abort 143" not in o["traps"]:
+            p.append("the interrupted run had no TERM cleanup trap: %r" % o["traps"])
+        # INT is ignored when a shell is started in the background, and bash cannot trap an
+        # ignored signal, so the INT handler is read from a direct run of the library
+        dp = tmp("uscha-pj-trap-")
+        probe = os.path.join(dp, "probe.sh")
+        write(probe, shtext(NL.join([
+            "set -u", '. "@1"', "pj_init", 'trap -p INT TERM > "@2/on.txt"',
+            "pj_finish", 'trap -p INT TERM > "@2/off.txt"', ""])))
+        sh(probe, [JOBS, dp], {"USCHA_JOBS": "3"}, True, 60)
+        on = read(os.path.join(dp, "on.txt")) if os.path.isfile(os.path.join(dp, "on.txt")) else ""
+        off = read(os.path.join(dp, "off.txt")) if os.path.isfile(os.path.join(dp, "off.txt")) else "x"
+        if "pj__abort 130" not in on or "pj__abort 143" not in on:
+            p.append("pj_init did not install the INT and TERM traps: %r" % on)
+        # the claim is "no pj__abort handler left", not "an empty trap table": bash also lists a
+        # signal ignored on entry (an empty-string handler for SIGINT): the state of the runner,
+        # not of the library
+        if "pj__abort" in off:
+            p.append("pj_finish left a trap behind: %r" % off)
+        # serial: no trap at all
+        ds, mini_s = run_dir("uscha-pj-ser-", "mini09.sh", MINI09)
+        rs = sh(mini_s, [JOBS, ds], {}, True, 60)
+        tf = os.path.join(ds, "traps.txt")
+        trapped = read(tf).strip() if os.path.isfile(tf) else "no traps.txt pj__abort"
+        if rs.returncode != 0 or "pj__abort" in trapped:
+            p.append("the serial path installed a trap or failed: rc %s, %r" % (rs.returncode, trapped))
+        # teeth: the same driver over a copy without the two trap lines must leave the mess
+        t_int = "    trap " + SQ + "pj__abort 130" + SQ + " INT" + NL
+        t_term = "    trap " + SQ + "pj__abort 143" + SQ + " TERM" + NL
+        lib = read(JOBS)
+        if lib.count(t_int) != 1 or lib.count(t_term) != 1:
+            p.append("the probe anchor (the INT/TERM trap lines in pj_init) is gone")
+        else:
+            bare = os.path.join(W, "_jobs-bare.sh")
+            write(bare, lib.replace(t_int, "").replace(t_term, ""))
+            o2 = run09(bare)
+            if not o2["left"] and not o2["alive"]:
+                p.append("without the traps the interrupt left no scratch dir and no live unit")
+        res["AC-PJ-09"] = not p
+        why["AC-PJ-09"] = "; ".join(p[:3]) or "TERM cleans up in parallel, serial has no trap, teeth red"
+
 
 try:
     measure()
@@ -19070,7 +19313,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T171" in
-  OK*) PASS=$((PASS+1)); echo "  ok   parallel suite opt-in and equivalent (AC-PJ-01..07): $T171";;
+  OK*) PASS=$((PASS+1)); echo "  ok   parallel suite opt-in and equivalent (AC-PJ-01..09): $T171";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T171";;
 esac
 }
@@ -19409,9 +19652,12 @@ FAMILIES = (
     # AC-PJ-05 is the RED PROBE (one unit's result file dropped -> the tallies diverge);
     # AC-PJ-06 is the SHIPPED PROBE -- it reads the v2.7.0 suite out of git, so without git it
     # reports None = UNMEASURED, never a silent pass. AC-PJ-02/05 need two cores to exercise the
-    # parallel path; on one they report UNMEASURED rather than a vacuous green.
+    # parallel path; on one they report UNMEASURED rather than a vacuous green. AC-PJ-08/09
+    # (2.8.1) carry their own teeth -- a library copy without the liveness check hangs (bounded),
+    # one without the INT/TERM traps leaves the scratch directory and live units -- and read
+    # UNMEASURED on one core as well.
     (".pj-cases.json", "parallel-suite", "T171",                      # ADR-053, 2.8.0
-     _seq("AC-PJ", 1, 7)),
+     _seq("AC-PJ", 1, 9)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

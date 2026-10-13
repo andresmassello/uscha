@@ -14,10 +14,12 @@
 # silently shorter sum.
 #
 # bash 3.2 only (the macOS CI cell): no `wait -n`, no associative arrays, no mapfile/readarray,
-# no case-modifying expansions. The running set is counted from per-unit `.done` markers, and
-# lists are space-separated strings, never arrays (an empty "${a[@]}" is unbound under set -u
-# before bash 4.4). The functions also survive `set -e`, which the suite turns on at P0-A and
-# never turns off: no bare test is ever the last word of a function here.
+# no case-modifying expansions. The running set is counted from per-unit `.done` markers AND
+# the launch pid: a unit whose `.done` is missing but whose wrapper process is gone (SIGKILL,
+# OOM) counts as finished, so the throttle can never spin on a corpse (2.8.1). Lists are
+# space-separated strings, never arrays (an empty "${a[@]}" is unbound under set -u before
+# bash 4.4); a pending entry is "TAG:PID". The functions also survive `set -e`, which the suite
+# turns on at P0-A and never turns off: no bare test is ever the last word of a function here.
 #
 # Test-only, like _harness.py: package.json excludes uscha-kit/tests/ from the npm package.
 
@@ -47,22 +49,55 @@ pj_resolve_jobs() {
   return 0
 }
 
+# The cleanup path of an interrupted parallel run (2.8.1): kill every pending unit -- the
+# wrapper and the unit subshell it recorded in TAG.upid -- drop the scratch directory and leave
+# with the shell's own code for the signal (130 INT, 143 TERM). It runs as a trap handler, so
+# the suite's EXIT trap still fires after it. A unit's own children (a running python) are not
+# tracked: a terminal Ctrl-C reaches them through the process group, a bare SIGTERM does not.
+# bash defers a trap until the foreground command ends, so the handler runs at once only while
+# the shell sits in a builtin (wait, read) -- in pj_collect and in the throttle's polling.
+pj__abort() {
+  local code="$1" e tag pid
+  trap '' INT TERM
+  for e in $PJ_PENDING; do
+    tag="${e%%:*}"
+    # a finished unit's pids may already belong to someone else: signal only the unfinished
+    if [ -f "$PJ_DIR/$tag.done" ]; then continue; fi
+    kill "${e#*:}" 2>/dev/null || :
+    pid=""
+    if [ -f "$PJ_DIR/$tag.upid" ]; then read -r pid < "$PJ_DIR/$tag.upid" || :; fi
+    case "$pid" in ''|*[!0-9]*) :;; *) kill "$pid" 2>/dev/null || :;; esac
+  done
+  # a unit holds its log open until it is gone: give it a moment, retry once (Windows)
+  if [ -n "$PJ_DIR" ]; then rm -rf "$PJ_DIR" 2>/dev/null || { sleep 0.3; rm -rf "$PJ_DIR" || :; }; fi
+  exit "$code"
+}
+
+# Parallel mode only: INT and TERM clean up after themselves. Serial installs no trap, and
+# nothing here touches EXIT -- the suite owns that one (P0-A removes its own scratch with it).
 pj_init() {
   PJ_JOBS="$(pj_resolve_jobs)"
   if [ "$PJ_JOBS" -gt 1 ]; then
     PJ_DIR="$(mktemp -d 2>/dev/null || echo "${TMP:-/tmp}/uscha-pj-$$")"
     mkdir -p "$PJ_DIR"
+    trap 'pj__abort 130' INT
+    trap 'pj__abort 143' TERM
   fi
   return 0
 }
 
-# How many launched units have not written their .done marker yet -> PJ_RUNNING. A global,
-# not a command substitution: the throttle polls it, and a fork per poll is real time on Windows.
+# How many launched units are still running -> PJ_RUNNING. A unit is finished when its .done
+# marker exists OR its wrapper process is gone: a wrapper killed from outside never writes the
+# marker, and counting it forever would spin the throttle until the CI timeout (2.8.1).
+# `kill -0` is a builtin: no fork per poll. A global, not a command substitution: the throttle
+# polls it, and a fork per poll is real time on Windows.
 pj__count_running() {
-  local t
+  local e t
   PJ_RUNNING=0
-  for t in $PJ_PENDING; do
-    if [ ! -f "$PJ_DIR/$t.done" ]; then PJ_RUNNING=$((PJ_RUNNING + 1)); fi
+  for e in $PJ_PENDING; do
+    t="${e%%:*}"
+    if [ -f "$PJ_DIR/$t.done" ]; then continue; fi
+    if kill -0 "${e#*:}" 2>/dev/null; then PJ_RUNNING=$((PJ_RUNNING + 1)); fi
   done
   return 0
 }
@@ -85,6 +120,8 @@ pj_unit() {
   # so the .done marker is written however the unit ends (a unit that dies leaves no result
   # file and is counted red at collection, but it must never stall the throttle).
   flags="$-"
+  # The unit is itself a background child of the wrapper, so its pid is known (TAG.upid) and an
+  # interrupted run can kill the unit, not only the wrapper around it.
   {
     set +e
     (
@@ -92,21 +129,24 @@ pj_unit() {
       PASS=0; FAIL=0
       "$fn"
       printf '%s %s\n' "$PASS" "$FAIL" > "$PJ_DIR/$tag.res"
-    ) > "$PJ_DIR/$tag.out" 2>&1
+    ) > "$PJ_DIR/$tag.out" 2>&1 &
+    echo "$!" > "$PJ_DIR/$tag.upid"
+    wait "$!"
     : > "$PJ_DIR/$tag.done"
   } &
   PJ_PIDS="$PJ_PIDS $!"
-  PJ_PENDING="$PJ_PENDING $tag"
+  PJ_PENDING="$PJ_PENDING $tag:$!"
   return 0
 }
 
 # pj_collect -- the barrier. Waits for every unit launched since the last barrier, replays
 # their logs in launch order and adds their deltas to PASS/FAIL. A no-op when serial.
 pj_collect() {
-  local pid tag p f
+  local pid e tag p f
   if [ "$PJ_JOBS" -le 1 ]; then return 0; fi
   for pid in $PJ_PIDS; do wait "$pid" || :; done
-  for tag in $PJ_PENDING; do
+  for e in $PJ_PENDING; do
+    tag="${e%%:*}"
     if [ -f "$PJ_DIR/$tag.out" ]; then cat "$PJ_DIR/$tag.out"; fi
     p=""; f=""
     if [ -f "$PJ_DIR/$tag.res" ]; then read -r p f < "$PJ_DIR/$tag.res" || :; fi
@@ -125,6 +165,6 @@ pj_collect() {
 
 # pj_finish -- drop the scratch directory once the last barrier has been crossed.
 pj_finish() {
-  if [ -n "$PJ_DIR" ]; then rm -rf "$PJ_DIR"; fi
+  if [ -n "$PJ_DIR" ]; then trap - INT TERM; rm -rf "$PJ_DIR"; fi
   return 0
 }

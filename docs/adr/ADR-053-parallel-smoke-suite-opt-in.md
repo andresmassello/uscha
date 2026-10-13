@@ -7,7 +7,7 @@ governs:
 ---
 # ADR-053: The smoke suite runs in parallel only when asked — USCHA_JOBS changes the wall time, never the measurement
 
-## Status: Accepted (2.8.0)
+## Status: Accepted (2.8.0); amended 2.8.1
 
 ## Context
 
@@ -68,6 +68,25 @@ the ritual or CI with it, is a separate decision that needs CI evidence of equiv
 
 ## Acceptance
 
-`AC-PJ-01..07` (smoke T171). AC-PJ-05 is the red probe (a barrier that deletes one unit's result
+`AC-PJ-01..09` (smoke T171). AC-PJ-05 is the red probe (a barrier that deletes one unit's result
 file turns the comparator red and counts that unit as one FAIL); AC-PJ-06 is the shipped probe
 against the v2.7.0 suite. AC-PJ-02 and AC-PJ-05 read UNMEASURED on a machine that reports one core.
+
+## Amendment (2.8.1)
+
+The fresh review of 2.8.0 left two defects on the opt-in parallel path; the serial default is not
+touched and runs the same commands.
+
+- **Liveness in the throttle.** A unit counted as running until its `.done` marker existed, so a
+  unit whose wrapper was killed from outside (SIGKILL, OOM) was running forever and the next
+  `pj_unit` spun until the CI timeout. A pending entry is now `TAG:PID`, and a unit whose `.done`
+  is missing but whose wrapper pid no longer answers `kill -0` counts as finished. Collection is
+  unchanged and still fail-closed: no result file is one FAIL naming the unit. AC-PJ-08.
+- **Cleanup on INT and TERM.** In parallel mode only, `pj_init` installs INT and TERM traps that
+  kill the pending units (the wrapper and the unit subshell it records in `TAG.upid`), remove the
+  scratch directory and exit 130 or 143; `pj_finish` removes them. There is no EXIT trap: the
+  suite owns that one (P0-A) and it still runs after the handler. Serial installs no trap. A
+  unit's own children (a running python) are not tracked, and bash runs a trap only when the
+  foreground command ends: the handler runs at once in `pj_collect` (the `wait` builtin) and within
+  one 0.1 s poll in the throttle (`sleep` is an external command), but not while the main shell is
+  inside any other external command. AC-PJ-09.

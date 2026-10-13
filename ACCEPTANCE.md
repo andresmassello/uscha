@@ -1742,3 +1742,14 @@ and the wiring.
   before the teardown removed goes red, and `_harness.sidecar` merges under its lock. The suite's
   exit code reflects every counted failure: after the final `RESULTADO` and before the `exit`, a
   non-zero `FAIL` raises a zero status; the same walk with that line removed goes red.
+- [ ] AC-PJ-08 - a parallel unit killed with SIGKILL from outside, before it writes its `.done`
+  marker, does not stall the throttle: the next `pj_unit` and `pj_collect` return within a bound
+  and that unit is counted as one FAIL naming it (2 ok / 1 fail beside two passing units); a copy
+  of `_jobs.sh` whose liveness check always answers alive never returns (killed by the bound) and
+  turns it red. One core reported reads UNMEASURED.
+- [ ] AC-PJ-09 - a SIGTERM sent to a parallel mini-suite while its units run exits 143, leaves no
+  scratch directory and no unit still running, and still runs the suite's EXIT trap; `pj_init`
+  installs the INT and TERM traps (read from a direct run, since a shell started in the background
+  ignores INT) and `pj_finish` removes them; a serial mini-suite installs no trap at all; a copy
+  of `_jobs.sh` without the two trap lines leaves the scratch directory and live units behind and
+  turns it red. One core reported reads UNMEASURED.
