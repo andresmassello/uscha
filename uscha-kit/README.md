@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.8.1 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.9.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -939,22 +939,26 @@ refuses it. `--kind ci` (2.2.0) records what the pipeline did, with `--ref <run 
 stored on the record as the receipt; a `ci` fail caps and blocks exactly like `gate-check`. A CONSTITUTION violation is recorded with `flag-blocker` (same
 effect, until `--resolve`).
 
-## Testing the kit — the smoke suite, serial or parallel (ADR-053)
+## Testing the kit — the smoke suite, parallel by default (ADR-053, ADR-054)
 
 The kit's own regression suite lives in the source repo (`uscha-kit/tests/`, not in the npm
 package). Run it from the repo root:
 
 ```bash
-bash uscha-kit/tests/smoke-engine.sh                 # serial: what the release ritual and CI run
-USCHA_JOBS=8 bash uscha-kit/tests/smoke-engine.sh    # parallel: same checks, same output, faster
+bash uscha-kit/tests/smoke-engine.sh                 # parallel by default: min(cores, 8) jobs
+USCHA_JOBS=1 bash uscha-kit/tests/smoke-engine.sh    # the serial escape hatch: the same checks, one at a time
 ```
 
-`USCHA_JOBS=N` (N > 1, capped at the cores the machine reports) runs the suite's self-contained
-blocks as background units and replays their output in the original order, so the log and the
-`RESULTADO` / `ACCEPTANCE` lines read the same as a serial run. Unset or `1` is the serial suite,
-`USCHA_COVERAGE=1` forces serial, and the release ritual pins `USCHA_JOBS=1`: the parallel path is a
-convenience for local iteration, never the measurement of record. The gain depends on the cores —
-a 2–4-core CI runner gains much less than a workstation.
+The suite runs its self-contained blocks as background units and replays their output in the
+original order, so the log and the `RESULTADO` / `ACCEPTANCE` lines read the same as a serial run.
+It prints `suite mode: ...` once, on stderr, saying which one it ran and, when serial, why (a
+merged `2>&1` log differs between modes by that one line). With
+`USCHA_JOBS` unset or empty the job count is `min(cores, 8)` and a machine that reports one core is
+serial; an explicit `USCHA_JOBS=N` is capped at the cores; `USCHA_JOBS=1`, `0`, a non-number and
+`USCHA_COVERAGE=1` are the serial suite. The release ritual and CI run the default (one CI cell,
+ubuntu/py3.8 of the six-cell grid, sets `USCHA_JOBS=1`, so the serial path is measured on every
+tag and manual dispatch). The gain depends on the
+cores — a 2–4-core CI runner gains much less than a workstation.
 
 ## Notes
 

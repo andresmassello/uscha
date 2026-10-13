@@ -1702,22 +1702,23 @@ HOME/USERPROFILE with `CLAUDE_CONFIG_DIR` dropped and PATH at an empty directory
 - [ ] AC-IX-10 - SHIPPED PROBE: the v2.6.0 installer out of git prints no extras report and carries
   no `extras` key; without git this reports UNMEASURED, never a silent pass.
 
-## The parallel smoke suite is opt-in and equivalent (ADR-053) - closes on green `AC-PJ-nn` smoke assertions
+## The parallel smoke suite is equivalent to the serial one (ADR-053) - closes on green `AC-PJ-nn` smoke assertions
 
 The gap: the smoke suite is the instrument every release is measured with, and it ran ~18 minutes
 serial on a 16-core machine, several times per release. Since 2.8.0 `USCHA_JOBS=N` (N>1) runs its
 self-contained blocks as background units through `uscha-kit/tests/_jobs.sh`: the three
 diamond-bench cache passes overlap the serial prefix, T128-T162 and T163-T171 run as units, each
 buffered and replayed in the original order at a barrier, and the counters are summed from one
-result file per unit. The criterion is EQUIVALENCE, not speed: unset or 1 is today's serial suite,
-the ritual and CI stay serial, and a parallel run counts, prints and records what the serial run
-does. The full-suite serial-vs-parallel diff is release evidence; these criteria pin the library
-and the wiring.
+result file per unit. The criterion is EQUIVALENCE, not speed: `USCHA_JOBS=1` is the serial suite
+and a parallel run counts, prints and records what the serial run does (since 2.9.0 unset is the
+parallel default: ADR-054, `AC-PD-nn`, so the serial cases below say `USCHA_JOBS=1` out loud). The
+full-suite serial-vs-parallel diff is release evidence; these criteria pin the library and the
+wiring.
 
-- [ ] AC-PJ-01 - `USCHA_JOBS` unset, `1`, `0`, a non-number, and `8` under `USCHA_COVERAGE=1` all
+- [ ] AC-PJ-01 - `USCHA_JOBS` `1`, `0`, a non-number, and `8` under `USCHA_COVERAGE=1` all
   resolve to one job, create no scratch directory, run the units in launch order with a unit's
-  stderr reaching stderr directly, and print byte-identical stdout and stderr; `tools/release.py`
-  pins `USCHA_JOBS="1"` for the ritual's suite run and no workflow under `.github/workflows` sets it.
+  stderr reaching stderr directly, and print byte-identical stdout and stderr. (The ritual and
+  workflow claims this criterion carried in 2.8.x moved to AC-PD-04 and AC-PD-05.)
 - [ ] AC-PJ-02 - the same units at `USCHA_JOBS=3` finish in a different order than they launch and
   still produce the identical log, identical PASS/FAIL tallies and the identical merged sidecar
   (two units merging into one file through `_harness.sidecar`) as the serial run; a request above
@@ -1753,3 +1754,62 @@ and the wiring.
   ignores INT) and `pj_finish` removes them; a serial mini-suite installs no trap at all; a copy
   of `_jobs.sh` without the two trap lines leaves the scratch directory and live units behind and
   turns it red. One core reported reads UNMEASURED.
+
+## The parallel smoke suite is the default (ADR-054) - closes on green `AC-PD-nn` smoke assertions
+
+The gap: ADR-053 made the parallel suite opt-in and left the ritual and CI serial until there was
+evidence. With that evidence, 2.9.0 makes it the default: `USCHA_JOBS` unset or empty runs
+`min(cores, 8)` jobs, `USCHA_JOBS=1` is the serial escape hatch, the ritual passes the environment
+through, CI runs the default in every cell but one, and the suite says which mode it ran. The
+criteria pin the resolve table, the default path, the escape hatch, the ritual, the workflow, the
+mode line, a probe against v2.8.1 and the docs that describe all of it.
+
+- [ ] AC-PD-01 - `pj_resolve_jobs`, driven over simulated core counts (1, 2, 4, 16; the machine
+  answer is swapped by redefining `pj__cores` after sourcing, so the production path has no test
+  branch), resolves unset and empty to `min(cores, 8)`, `1`, `0`, a non-number and `-2` to 1, `3`
+  and `64` to `min(N, cores)`, and `USCHA_COVERAGE=1` to 1 whatever else is set; twelve literal
+  spot values agree; a copy of `_jobs.sh` whose default is one job turns the same table red.
+- [ ] AC-PD-02 - with `USCHA_JOBS` unset, and with it empty, the shipped library runs a mini-suite
+  as 2 to 8 parallel jobs (never above the cores), its units finish in an order other than the
+  launch order, and the merged log and the tallies equal the `USCHA_JOBS=1` run; a copy whose
+  default is one job fails the parallel predicate. One core reported reads UNMEASURED.
+- [ ] AC-PD-03 - `USCHA_JOBS` `1`, `0`, a non-number and `8` under `USCHA_COVERAGE=1` are each the
+  serial path: one job, no scratch directory, launch order, stderr reaching stderr directly, no
+  INT or TERM trap installed, output equal to `USCHA_JOBS=1`; the same predicate is red on the
+  default parallel run.
+- [ ] AC-PD-04 - `tools/release.py`, parsed as Python, names `USCHA_JOBS` in no keyword and no
+  string, and runs the suite with `env=dict(os.environ, ...)`; a copy with `USCHA_JOBS="1"` added
+  to that environment is caught by the same walk. Without the script (an extracted kit) this reads
+  UNMEASURED.
+- [ ] AC-PD-05 - the full grid of `.github/workflows/smoke.yml` (parsed from its embedded JSON)
+  has six cells and exactly one carries a `jobs` field, ubuntu-latest/py3.8 with `"1"`; the
+  reduced grid keeps three cells with only `os` and `python`; the suite step takes the value from
+  `matrix.jobs` and exports `USCHA_JOBS` only when it is non-empty; no other workflow sets
+  `USCHA_JOBS`; copies with the pin removed and with a second cell pinned both go red. Without the
+  workflow this reads UNMEASURED.
+- [ ] AC-PD-06 - the suite prints `suite mode: ` followed by `pj_mode` exactly once, to stderr,
+  between `pj_init` and the first test header; the library prints it in neither mode of a
+  mini-suite; `pj_mode` reads `parallel, N jobs`, `serial (1 core reported)`,
+  `serial (USCHA_JOBS=1)`, `serial (USCHA_JOBS=abc is not a number)` or
+  `serial (USCHA_COVERAGE=1)` as the case may be.
+- [ ] AC-PD-07 - SHIPPED PROBE: the v2.8.1 library out of git resolves an unset `USCHA_JOBS` to one
+  job and fails the AC-PD-01 table, v2.8.1 `tools/release.py` still names `USCHA_JOBS`, its
+  workflow has no serial cell, and the mini-suite under `USCHA_JOBS=1` on the shipped library is
+  byte-identical (stdout, stderr, order, scratch) to the v2.8.1 serial run; without git this reads
+  UNMEASURED, never a silent pass.
+- [ ] AC-PD-08 - `CLAUDE.md`, `uscha-kit/README.md` and the `_jobs.sh` header carry none of the
+  stale 2.8.x claims (the ritual or CI staying serial, the ritual pinning `USCHA_JOBS=1`, the
+  parallel path as an opt-in or a convenience) and the first two name `USCHA_JOBS=1` and
+  ADR-054; those two, ADR-054 and CHANGELOG-2.9.0 do not claim that stdout is byte-identical
+  between modes; the scanner flags a synthetic stale sample and passes a true one.
+- [ ] AC-PD-09 - no sidecar file is written by two blocks unless every writer passes `merge=True`:
+  a static scan of every `sidecar(` call in the suite, grouped by file name, finds none that shares
+  a file with a plain overwrite (the first parallel CI run lost nine `.top-cases.json` criteria
+  because T137 overwrote what T138 merged: 374 of 383, cell green), sees at least four writers of
+  `.top-cases.json`, and goes red on a copy with one shared writer reverted to a plain overwrite;
+  on the shipped harness a plain write after a merge drops the merged keys and two merges keep both.
+- [ ] AC-PD-10 - `tools/release.py` exposes `suite_notes`, which step 4 prints: a complete run
+  yields only the suite's `suite mode:` line, an `ACCEPTANCE` that is not n/n or carries
+  `SIN MEDIR` adds a WARNING naming the criteria, a suite that states no mode is flagged, and
+  the function never refuses (UNMEASURED is legitimate at X); a copy whose `suite_notes` returns
+  nothing goes red. Without the script (an extracted kit) this reads UNMEASURED.

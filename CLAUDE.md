@@ -110,17 +110,26 @@ itself.
    therefore drifts all 18 regions: `tools/release.py` re-renders them in step 2, right after the
    six surfaces move and before the facts gate, and `--check` stays red until it has.
 
-## Running the suite fast (2.8.0, ADR-053)
+## Running the suite fast (2.8.0, ADR-053; parallel by default since 2.9.0, ADR-054)
 
-- `USCHA_JOBS=8 bash uscha-kit/tests/smoke-engine.sh` runs the self-contained blocks as background
-  units (`uscha-kit/tests/_jobs.sh`): the three bench-cache passes overlap the serial prefix, and
-  T128–T162 and T163–T171 run as units whose output is replayed in the original order at a
-  barrier. Measured on this 16-core Windows box: 17.7 min serial -> 7.5 min with `USCHA_JOBS=8`
-  (logs byte-identical); a 2–4-core CI runner gains much less. The serial prefix (T1–T127,
-  ~4 min) now bounds it.
-- **The ritual stays serial**: `tools/release.py` pins `USCHA_JOBS=1` for step 4, CI does not set
-  it, and `USCHA_COVERAGE=1` forces serial. Use the parallel run to iterate, never as the
-  measurement of record.
+- `bash uscha-kit/tests/smoke-engine.sh` runs the self-contained blocks as `min(cores, 8)`
+  background units (`uscha-kit/tests/_jobs.sh`): the three bench-cache passes overlap the serial
+  prefix, and T128–T162 and T163–T172 run as units whose output is replayed in the original order
+  at a barrier. `USCHA_JOBS=1` is the serial escape hatch (so are `0`, a non-number and
+  `USCHA_COVERAGE=1`; a one-core machine is serial by itself); an explicit `USCHA_JOBS=N` is
+  capped at the cores. The suite prints `suite mode: ...` once, on stderr: a merged `2>&1` log
+  differs between modes by that one line (a unit's stderr lands in its log in parallel and goes
+  straight to stderr in serial). Measured with 8 jobs on this
+  16-core Windows box: 17.7 min serial -> 7.5 min; a 2–4-core CI runner gains much less. The
+  serial prefix (T1–T127, ~4 min) now bounds it.
+- **The ritual runs the default**: `tools/release.py` passes the environment through and sets no
+  `USCHA_JOBS` (export `USCHA_JOBS=1` first for a serial ritual). CI runs the default in every
+  cell except ubuntu/py3.8 of the six-cell grid, whose `jobs` matrix field sets `USCHA_JOBS=1`, so
+  the escape hatch is measured on every tag. A red that shows only in parallel is a finding about
+  state shared between units: reproduce it with `USCHA_JOBS=1`, then fix the sharing. Two blocks
+  that write the same `.xxx-cases.json` must BOTH pass `merge=True` to `sidecar()` (T137 did not,
+  and a 4-job CI run lost 9 criteria while staying green; AC-PD-09 scans for it). The ritual warns
+  when `ACCEPTANCE` is not n/n; read that line.
 - A block becomes a unit by wrapping it, body untouched, as `pj_tNNN() { ... }` +
   `pj_unit TNNN pj_tNNN`, ONLY if it shares no file with a concurrent unit: its own temp dirs, its
   own sidecar (a merged sidecar goes through `_harness.sidecar(merge=True)`, which locks), nothing

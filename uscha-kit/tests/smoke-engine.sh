@@ -377,11 +377,16 @@ else
   runpy() { local script="$1"; shift; PYTHONIOENCODING=utf-8 "$PY" "$script" "$@"; }
   pyin() { PYTHONIOENCODING=utf-8 "$PY" - "$@"; }
 fi
-# Opt-in parallel units (ADR-053). USCHA_JOBS=N (N>1) runs the self-contained blocks marked
-# pj_unit as background units and pj_collect is their barrier; unset or 1 -- the ritual and CI
-# -- every pj_unit is a plain function call in this shell and pj_collect does nothing.
+# Parallel units (ADR-053, default flipped by ADR-054). With USCHA_JOBS unset the self-contained
+# blocks marked pj_unit run as min(cores, 8) background units and pj_collect is their barrier;
+# USCHA_JOBS=1 (or 0, a non-number, USCHA_COVERAGE=1, or one core) is the serial escape hatch:
+# every pj_unit is a plain function call in this shell and pj_collect does nothing.
 . "$KIT/tests/_jobs.sh"
 pj_init
+# The mode goes to STDERR, once: stdout stays byte-identical between modes, and a merged log
+# (2>&1) differs by exactly this line. The library never prints it, so the mini-suites that
+# T171 compares serial against parallel stay comparable.
+echo "suite mode: $(pj_mode)" >&2
 
 cat > uscha.config.json <<'EOF'
 { "version": "1.3.0",
@@ -5470,7 +5475,7 @@ esac
 # different measurement and still runs in its own block; T128 keeps its scoped `guard`-only
 # --fidelity re-run as the determinism probe.
 # 2.8.0 (ADR-053): the three passes are functions defined after the sandbox init. Serial, they
-# run HERE, in this order, exactly as before. With USCHA_JOBS they were launched as three
+# run HERE, in this order, exactly as before. In parallel mode they were launched as three
 # background units right after that init, overlapping the serial prefix; this barrier waits
 # for them before the first consumer reads the cache.
 if [ "$PJ_JOBS" -gt 1 ]; then
@@ -7632,7 +7637,7 @@ except ValueError:
     ok = False
 res["AC-T-11"] = bool(ok)
 
-sidecar(kit, ".top-cases.json", res)
+sidecar(kit, ".top-cases.json", res, merge=True)
 bad = [k for k, v in res.items() if not v]
 print("OK %d cases" % len(res) if not bad else "BAD " + ",".join(sorted(bad)))
 PY
@@ -14640,7 +14645,10 @@ pj_unit T162 pj_t162
 # Barrier (ADR-053): every unit from T128 on has counted before the serial tail below,
 # and long before the teardown removes the sandbox, which several of them read. The
 # .top-cases.json merge shared by T137/T138/T141/T145 is serialized by a lock in
-# _harness.sidecar, and T142+T143 share one unit (T143 reads what T142 wrote).
+# _harness.sidecar, and T142+T143 share one unit (T143 reads what T142 wrote). T137 wrote
+# that file with a plain overwrite until 2.9.0: a parallel run in which T138 merged first lost
+# T138 criteria (CI run, windows/py3.8: 374 of 383, cell green). AC-PD-09 now scans every
+# sidecar call and refuses a shared file with a plain write.
 pj_collect
 
 echo "== T112 (1.56.1): XML reports are parsed behind a size ceiling =="
@@ -18640,17 +18648,19 @@ esac
 pj_unit T170 pj_t170
 
 pj_t171() {
-echo "== T171 (ADR-053): the parallel suite is OPT-IN and EQUIVALENT -- USCHA_JOBS changes the wall time, never the measurement =="
+echo "== T171 (ADR-053): the parallel suite is EQUIVALENT to the serial one -- USCHA_JOBS changes the wall time, never the measurement =="
 # USCHA_JOBS=N runs the self-contained blocks as background units (tests/_jobs.sh). The suite is
-# the ruler every release is measured with, so the criterion is EQUIVALENCE, not speed: unset or
-# 1 must be today's serial path, and a parallel run must count, print and record exactly what the
-# serial run does. This block drives the SHIPPED library (never a re-implementation of it) through
+# the ruler every release is measured with, so the criterion is EQUIVALENCE, not speed: 1 must be
+# the serial path, and a parallel run must count, print and record exactly what the serial run
+# does. Since 2.9.0 (ADR-054) unset is the parallel path, so every serial run below says
+# USCHA_JOBS=1 out loud instead of leaning on a default; T172 pins the default itself. This block drives the SHIPPED library (never a re-implementation of it) through
 # a small mini-suite both ways, pins the bash-3.2 floor statically, proves the coverage spool is
 # unique under concurrency, and carries a RED probe (one unit's result file dropped) and a SHIPPED
 # probe (v2.7.0 has no USCHA_JOBS at all). The FULL-suite serial-vs-parallel diff is release
 # evidence (CHANGELOG-2.8.0), not something a suite can do to itself.
 # 2.8.1 adds AC-PJ-08 (a unit killed from outside never stalls the throttle) and AC-PJ-09 (a
 # SIGTERM to a parallel run cleans up after itself; serial installs no trap), each with teeth.
+# 2.9.0 moved the ritual and CI claims out of AC-PJ-01 into T172 (AC-PD-04 and AC-PD-05).
 # The bash under test is the bash running this suite -- on the macOS cell that is bash 3.2.
 T171_BASH="$(cygpath -m "$BASH" 2>/dev/null || printf '%s' "$BASH")"
 T171=$(pyin "$KIT" "$ROOT" "$T171_BASH" <<'PY'
@@ -18788,43 +18798,31 @@ def jobs_of(r):
 
 
 def measure():
-    # --- AC-PJ-01: unset, 1, 0, a non-number, and coverage mode are ALL today's serial path ----
-    base = mini(JOBS, {}, merged=False)
+    # --- AC-PJ-01: 1, 0, a non-number, and coverage mode are ALL the serial path ---------------
+    base = mini(JOBS, {"USCHA_JOBS": "1"}, merged=False)
     p = []
     if tally(base["out"]) != ("5", "1") or base["rc"] != 0:
         p.append("the serial mini-suite did not count 5 ok / 1 fail: %r rc=%s"
                  % (tally(base["out"]), base["rc"]))
     if base["meta"] != "1|":
-        p.append("unset resolved to %r (want 1 job, no scratch dir)" % base["meta"])
+        p.append("USCHA_JOBS=1 resolved to %r (want 1 job, no scratch dir)" % base["meta"])
     if base["order"] != ["U1", "U2", "U3", "U4"]:
         p.append("serial units did not run in launch order: %r" % base["order"])
     if "u1 on stderr" in base["out"] or "u1 on stderr" not in base["err"]:
         p.append("serial buffered a unit: its stderr did not reach stderr directly")
-    for label, extra in (("USCHA_JOBS=1", {"USCHA_JOBS": "1"}), ("USCHA_JOBS=0", {"USCHA_JOBS": "0"}),
+    for label, extra in (("USCHA_JOBS=0", {"USCHA_JOBS": "0"}),
                          ("USCHA_JOBS=abc", {"USCHA_JOBS": "abc"}),
                          ("USCHA_JOBS=8 under USCHA_COVERAGE=1",
                           {"USCHA_JOBS": "8", "USCHA_COVERAGE": "1"})):
         r = mini(JOBS, extra, merged=False)
         if (r["out"], r["err"], r["meta"], r["order"]) != (base["out"], base["err"], base["meta"],
                                                            base["order"]):
-            p.append("%s is not byte-identical to unset (meta %r)" % (label, r["meta"]))
-    rel = os.path.join(root, "tools", "release.py")
-    wfd = os.path.join(root, ".github", "workflows")
-    if not os.path.isfile(rel):
-        res["AC-PJ-01"] = None
-        why["AC-PJ-01"] = "tools/release.py absent (extracted kit): the ritual pin is unmeasurable"
-    else:
-        if "USCHA_JOBS=" + DQ + "1" + DQ not in read(rel):
-            p.append("tools/release.py does not pin USCHA_JOBS to 1 for the ritual's suite run")
-        if os.path.isdir(wfd):
-            for f in sorted(os.listdir(wfd)):
-                if "USCHA_JOBS" in read(os.path.join(wfd, f)):
-                    p.append("workflow %s sets USCHA_JOBS: CI must stay serial" % f)
-        res["AC-PJ-01"] = not p
-        why["AC-PJ-01"] = "; ".join(p[:3]) or "serial path is the default"
+            p.append("%s is not byte-identical to USCHA_JOBS=1 (meta %r)" % (label, r["meta"]))
+    res["AC-PJ-01"] = not p
+    why["AC-PJ-01"] = "; ".join(p[:3]) or "the serial path is one path"
 
     # --- AC-PJ-02: a parallel run of the same units is EQUIVALENT to the serial one -----------
-    ser = mini(JOBS, {}, merged=True)
+    ser = mini(JOBS, {"USCHA_JOBS": "1"}, merged=True)
     par = mini(JOBS, {"USCHA_JOBS": "3"}, merged=True)
     p = []
     jp = jobs_of(par)
@@ -19278,7 +19276,7 @@ def measure():
             p.append("pj_finish left a trap behind: %r" % off)
         # serial: no trap at all
         ds, mini_s = run_dir("uscha-pj-ser-", "mini09.sh", MINI09)
-        rs = sh(mini_s, [JOBS, ds], {}, True, 60)
+        rs = sh(mini_s, [JOBS, ds], {"USCHA_JOBS": "1"}, True, 60)
         tf = os.path.join(ds, "traps.txt")
         trapped = read(tf).strip() if os.path.isfile(tf) else "no traps.txt pj__abort"
         if rs.returncode != 0 or "pj__abort" in trapped:
@@ -19313,11 +19311,650 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T171" in
-  OK*) PASS=$((PASS+1)); echo "  ok   parallel suite opt-in and equivalent (AC-PJ-01..09): $T171";;
+  OK*) PASS=$((PASS+1)); echo "  ok   parallel suite equivalent to serial (AC-PJ-01..09): $T171";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T171";;
 esac
 }
 pj_unit T171 pj_t171
+
+pj_t172() {
+echo "== T172 (ADR-054): the parallel suite is the DEFAULT -- unset USCHA_JOBS is min(cores, 8) jobs, USCHA_JOBS=1 is the serial escape hatch =="
+# 2.9.0 flips ADR-053 default. This block pins the flip: the resolve table over simulated core
+# counts (the machine answer is swapped by redefining pj__cores after sourcing the library, so the
+# production path has no test-only branch), the default parallel path equivalent to serial, the
+# escape hatch, the ritual passing the environment through, exactly one serial CI cell, the mode
+# line on stderr, a SHIPPED probe against v2.8.1 and a truth-pass over the docs that describe it.
+# Every probe is bounded by a Python timeout; no timeout binary is needed (macOS has none).
+T172_BASH="$(cygpath -m "$BASH" 2>/dev/null || printf '%s' "$BASH")"
+T172=$(pyin "$KIT" "$ROOT" "$T172_BASH" <<'PY'
+import ast, io, json, os, re, shutil, subprocess, sys, tempfile
+kit, root, bash = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+SUITE = os.path.join(kit, "tests", "smoke-engine.sh")
+JOBS = os.path.join(kit, "tests", "_jobs.sh")
+PREV_TAG = "v2.8.1"
+NL, D, BS = chr(10), chr(36), chr(92)
+SQ, DQ = chr(39), chr(34)
+TMPS = []
+res, why = {}, {}
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix=prefix)
+    TMPS.append(d)
+    return d
+
+
+def fwd(p):
+    return p.replace(BS, "/")
+
+
+def read(p):
+    with io.open(p, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def write(p, text):
+    with io.open(p, "w", encoding="utf-8", newline=NL) as fh:
+        fh.write(text)
+
+
+def shtext(t):
+    # shell text below uses the at-sign where a dollar belongs, so the heredoc that carries
+    # this program never shows bash a dollar-brace or a backtick
+    return t.replace(chr(64), D)
+
+
+def clean_env(extra):
+    env = dict(os.environ)
+    for k in ("USCHA_JOBS", "USCHA_COVERAGE"):
+        env.pop(k, None)
+    env.update(extra)
+    return env
+
+
+def sh(script, args, env_extra, stdin=None, bound=120, merged=False):
+    try:
+        return subprocess.run([bash, fwd(script)] + [fwd(a) for a in args], input=stdin,
+                              stdout=subprocess.PIPE,
+                              stderr=(subprocess.STDOUT if merged else subprocess.PIPE),
+                              env=clean_env(env_extra), text=True, encoding="utf-8",
+                              errors="replace", timeout=bound)
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(exc.cmd, 124, stdout="TIMEOUT", stderr="")
+
+
+def gitshow(rel):
+    g = subprocess.run(["git", "-C", root, "show", PREV_TAG + ":" + rel],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if g.returncode != 0 or not g.stdout:
+        return None
+    return g.stdout.decode("utf-8", "replace")
+
+
+W = tmp("uscha-pd-")
+
+# --- the table driver: ONE bash process, the library sourced, the core count SIMULATED ---------
+# pj__cores is the library own function for "how many cores does this machine report". The
+# driver redefines it after sourcing, so the production code has no test-only branch: the same
+# resolve function runs, only the machine answer is swapped. A library without that function
+# (v2.8.1) ignores the redefinition and asks the real machine, which is the point of the probe.
+TABLE = os.path.join(W, "table.sh")
+write(TABLE, shtext(NL.join([
+    "set -u",
+    '. "@1"',
+    "pj__cores() { echo \"@SIM_CORES\"; }",
+    "while IFS=" + SQ + "|" + SQ + " read -r SIM_CORES want cov; do",
+    '  case "@want" in',
+    "    UNSET) unset USCHA_JOBS;;",
+    '    EMPTY) export USCHA_JOBS="";;',
+    '    *) export USCHA_JOBS="@want";;',
+    "  esac",
+    '  if [ "@cov" = "1" ]; then export USCHA_COVERAGE=1; else unset USCHA_COVERAGE; fi',
+    '  got="@(pj_resolve_jobs)"',
+    "  PJ_JOBS=@got",
+    '  echo "@SIM_CORES|@want|@cov|@got|@(pj_mode 2>/dev/null)"',
+    'done < "@2"',
+    ""])))
+
+CASES = []
+for cores in (1, 2, 4, 16):
+    for want in ("UNSET", "EMPTY", "1", "0", "abc", "-2", "3", "64"):
+        CASES.append((cores, want, 0))
+for want in ("UNSET", "8"):
+    CASES.append((4, want, 1))
+
+
+def expect(cores, want, cov):
+    if cov:
+        return 1
+    if want in ("UNSET", "EMPTY"):
+        n = 8
+    elif not want.isdigit():
+        return 1
+    else:
+        n = int(want)
+    return 1 if n <= 1 else min(n, cores)
+
+
+def drive(lib):
+    cases = os.path.join(W, "cases.txt")
+    write(cases, NL.join("%d|%s|%d" % c for c in CASES) + NL)
+    r = sh(TABLE, [lib, cases], {})
+    rows = {}
+    for ln in r.stdout.split(NL):
+        f = ln.split("|")
+        if len(f) >= 5:
+            rows[(int(f[0]), f[1], int(f[2]))] = (f[3], f[4])
+    return rows
+
+
+def table_problems(lib):
+    rows = drive(lib)
+    out = []
+    for c in CASES:
+        want = str(expect(*c))
+        got = rows.get(c, ("none", ""))[0]
+        if got != want:
+            out.append("cores=%d USCHA_JOBS=%s coverage=%d: got %s want %s" % (c + (got, want)))
+    return out, rows
+
+
+# literal spot checks of the decision, independent of the oracle formula above
+SPOT = {(4, "UNSET", 0): "4", (16, "UNSET", 0): "8", (1, "UNSET", 0): "1", (2, "EMPTY", 0): "2",
+        (16, "64", 0): "16", (16, "3", 0): "3", (2, "3", 0): "2", (16, "1", 0): "1",
+        (16, "0", 0): "1", (16, "abc", 0): "1", (4, "8", 1): "1", (4, "UNSET", 1): "1"}
+
+
+# --- a small mini-suite: four units, uneven durations, both streams, one failing ----------------
+MINI = os.path.join(W, "mini.sh")
+
+
+def unit(name, body):
+    return name.lower() + "() { echo " + DQ + "== " + name + DQ + "; " + body + " echo " + name \
+        + " >> " + DQ + D + "OUT/order.txt" + DQ + "; }"
+
+
+INC = D + "((PASS+1))"
+write(MINI, NL.join([
+    "set -u",
+    ". " + DQ + D + "1" + DQ,
+    "OUT=" + DQ + D + "2" + DQ,
+    "PASS=0; FAIL=0",
+    "pj_init",
+    "trap -p INT TERM > " + DQ + D + "OUT/traps.txt" + DQ,
+    unit("U1", "sleep 0.6; PASS=" + INC + "; echo " + DQ + "  ok   u1" + DQ + "; echo "
+         + DQ + "u1 on stderr" + DQ + " >&2;"),
+    unit("U2", "PASS=" + INC + "; FAIL=" + D + "((FAIL+1)); echo " + DQ + "  FAIL u2 deliberate"
+         + DQ + ";"),
+    unit("U3", "sleep 0.3; PASS=" + D + "((PASS+2)); echo " + DQ + "  ok   u3" + DQ + ";"),
+    unit("U4", "PASS=" + INC + "; echo " + DQ + "  ok   u4" + DQ + ";"),
+    "pj_unit U1 u1", "pj_unit U2 u2", "pj_unit U3 u3", "pj_unit U4 u4",
+    "pj_collect",
+    "echo " + DQ + "RESULTADO: " + D + "PASS ok " + D + "FAIL fail" + DQ,
+    "printf " + SQ + "%s|%s" + SQ + " " + DQ + D + "PJ_JOBS" + DQ + " " + DQ + D + "PJ_DIR" + DQ
+    + " > " + DQ + D + "OUT/meta.txt" + DQ,
+    "pj_finish", ""]))
+
+
+def mini(lib, env_extra, merged=False):
+    d = tmp("uscha-pd-run-")
+    r = sh(MINI, [lib, d], env_extra, merged=merged)
+
+    def opt(name):
+        p = os.path.join(d, name)
+        return read(p) if os.path.isfile(p) else ""
+    return {"rc": r.returncode, "out": r.stdout, "err": r.stderr or "",
+            "order": opt("order.txt").split(), "meta": opt("meta.txt"),
+            "traps": opt("traps.txt")}
+
+
+def jobs_of(r):
+    head = r["meta"].split("|")[0]
+    return int(head) if head.isdigit() else None
+
+
+def tally(out):
+    m = re.search(r"RESULTADO: (\d+) ok (\d+) fail", out)
+    return m.groups() if m else None
+
+
+LAUNCH = ["U1", "U2", "U3", "U4"]
+
+
+def is_serial(r):
+    return (r["rc"] == 0 and r["meta"] == "1|" and r["order"] == LAUNCH
+            and "u1 on stderr" in r["err"] and "u1 on stderr" not in r["out"]
+            and "pj__abort" not in r["traps"] and tally(r["out"]) == ("5", "1"))
+
+
+def is_parallel(r):
+    return (r["rc"] == 0 and (jobs_of(r) or 0) >= 2 and r["order"] != LAUNCH
+            and sorted(r["order"]) == LAUNCH and tally(r["out"]) == ("5", "1"))
+
+
+def same_log(a, b):
+    return tally(a["out"]) is not None and a["out"] == b["out"]
+
+
+def real_cores():
+    # the library own answer for this machine, asked with a request far above any core count
+    c = subprocess.run([bash, "-c", ". " + DQ + D + "1" + DQ + "; pj_resolve_jobs", "x", fwd(JOBS)],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                       env=clean_env({"USCHA_JOBS": "9999"}))
+    g = c.stdout.strip()
+    return int(g) if g.isdigit() else 1
+
+
+# --- workflow and release.py judges (each takes TEXT, so a mutated copy can be judged too) ------
+def grid(text, name):
+    m = re.search(name + "=" + SQ + r"(\{.*?\})" + SQ, text)
+    try:
+        return json.loads(m.group(1)) if m else None
+    except ValueError:
+        return None
+
+
+def workflow_problems(text):
+    out = []
+    six, three = grid(text, "SIX"), grid(text, "THREE")
+    if six is None or three is None:
+        return ["the SIX or THREE grid is missing or is not valid JSON"]
+    inc6, inc3 = six.get("include", []), three.get("include", [])
+    if len(inc6) != 6:
+        out.append("the full grid has %d cells, not 6" % len(inc6))
+    pinned = [e for e in inc6 if "jobs" in e]
+    if pinned != [{"os": "ubuntu-latest", "python": "3.8", "jobs": "1"}]:
+        out.append("the serial cell is not exactly ubuntu-latest/py3.8 with jobs 1: %r" % (pinned,))
+    if [(e.get("os"), e.get("python")) for e in inc3] != [
+            ("ubuntu-latest", "3.13"), ("macos-latest", "3.13"), ("windows-latest", "3.8")]:
+        out.append("the reduced grid changed shape")
+    if any(set(e) != {"os", "python"} for e in inc3):
+        out.append("the reduced grid carries a jobs field")
+    if "MATRIX_JOBS: " + D + "{{ matrix.jobs }}" not in text:
+        out.append("the suite step does not take the job count from the matrix")
+    if not re.search(r"if \[ -n " + DQ + re.escape(D) + r"MATRIX_JOBS" + DQ + r" \]; then export USCHA_JOBS=", text):
+        out.append("USCHA_JOBS is not exported only when the cell sets one")
+    return out
+
+
+def pins_jobs(src):
+    # AST, not a substring: a comment may talk about the variable, code may not set it
+    tree = ast.parse(src)
+    hits = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.keyword) and node.arg == "USCHA_JOBS":
+            hits += 1
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) \
+                and "USCHA_JOBS" in node.value:
+            hits += 1
+    return hits
+
+
+def passes_environ(src):
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Call):
+            for kw in node.keywords:
+                v = kw.value
+                if kw.arg == "env" and isinstance(v, ast.Call) \
+                        and getattr(v.func, "id", None) == "dict" and v.args \
+                        and isinstance(v.args[0], ast.Attribute) and v.args[0].attr == "environ" \
+                        and any(k.arg == "PYTHON" for k in v.keywords):
+                    return True
+    return False
+
+
+DOC_FORBIDDEN = [r"ritual stays serial", r"CI stays serial", r"pins\s+.?USCHA_JOBS=1",
+                 r"opt-in parallel", r"Parallelism is OFF unless",
+                 r"never the measurement of record", r"convenience for local iteration",
+                 r"CI does not set it"]
+
+
+CLAIM_FORBIDDEN = [r"stdout (is|stays) byte-identical"]
+
+
+def doc_problems(label, text, patterns=DOC_FORBIDDEN):
+    return ["%s says: %s" % (label, p) for p in patterns
+            if re.search(p, text, re.IGNORECASE)]
+
+
+def measure():
+    lib = read(JOBS)
+    cores = real_cores()
+
+    # --- AC-PD-01: the resolve table, with the core count simulated ----------------------------
+    probs, rows = table_problems(JOBS)
+    for c, want in sorted(SPOT.items()):
+        got = rows.get(c, ("none", ""))[0]
+        if got != want:
+            probs.append("spot %r: got %s want %s" % (c, got, want))
+    fn = lib.split("pj_resolve_jobs() {")
+    body = fn[1].split(NL + "}" + NL)[0] if len(fn) == 2 else ""
+    if len(lib.split("pj__cores() {")) != 2 or "pj__cores" not in body:
+        probs.append("pj__cores must be defined once and called by pj_resolve_jobs")
+    # teeth: a copy whose default is one job must fail the same table
+    anchor = "PJ_DEFAULT_JOBS=8" + NL
+    if lib.count(anchor) != 1:
+        probs.append("the probe anchor (the default job count) is gone: update the probe")
+    else:
+        red = os.path.join(W, "_jobs-default1.sh")
+        write(red, lib.replace(anchor, "PJ_DEFAULT_JOBS=1" + NL))
+        if not table_problems(red)[0]:
+            probs.append("the table stays green with the default job count set to 1")
+    res["AC-PD-01"] = not probs
+    why["AC-PD-01"] = "; ".join(probs[:3]) or "table of %d cases holds" % len(CASES)
+
+    # --- AC-PD-02: unset (and empty) IS the parallel path, and equivalent to serial -----------
+    ser = mini(JOBS, {"USCHA_JOBS": "1"})
+    ser_m = mini(JOBS, {"USCHA_JOBS": "1"}, merged=True)
+    dfl = mini(JOBS, {})
+    dfl_m = mini(JOBS, {}, merged=True)
+    emp_m = mini(JOBS, {"USCHA_JOBS": ""}, merged=True)
+    probs = []
+    if cores < 2:
+        res["AC-PD-02"] = None
+        why["AC-PD-02"] = "one core reported: the parallel default cannot be exercised here"
+    else:
+        for label, r in (("unset", dfl_m), ("empty", emp_m)):
+            if not is_parallel(r):
+                probs.append("%s was not the parallel path: jobs %r order %r rc %s"
+                             % (label, jobs_of(r), r["order"], r["rc"]))
+            elif not same_log(ser_m, r):
+                probs.append("%s log differs from the serial log" % label)
+            elif jobs_of(r) > 8 or jobs_of(r) > max(os.cpu_count() or 1, 1):
+                probs.append("%s used %s jobs, above min(cores, 8)" % (label, jobs_of(r)))
+        # teeth: with the default set to one job, the same predicate must say serial
+        anchor = "PJ_DEFAULT_JOBS=8" + NL
+        if lib.count(anchor) == 1:
+            red = os.path.join(W, "_jobs-default1b.sh")
+            write(red, lib.replace(anchor, "PJ_DEFAULT_JOBS=1" + NL))
+            if is_parallel(mini(red, {})):
+                probs.append("the parallel predicate stays green with the default set to 1")
+        else:
+            probs.append("the probe anchor (the default job count) is gone: update the probe")
+        res["AC-PD-02"] = not probs
+        why["AC-PD-02"] = "; ".join(probs[:3]) or "default parallel, same log as serial"
+
+    # --- AC-PD-03: USCHA_JOBS=1 is the serial escape hatch ---------------------------------------
+    probs = []
+    for label, env in (("1", {"USCHA_JOBS": "1"}), ("0", {"USCHA_JOBS": "0"}),
+                       ("abc", {"USCHA_JOBS": "abc"}),
+                       ("8 under coverage", {"USCHA_JOBS": "8", "USCHA_COVERAGE": "1"})):
+        r = mini(JOBS, env)
+        if not is_serial(r):
+            probs.append("USCHA_JOBS=%s is not the serial path: meta %r order %r traps %r"
+                         % (label, r["meta"], r["order"], r["traps"][:40]))
+        elif (r["out"], r["err"]) != (ser["out"], ser["err"]):
+            probs.append("USCHA_JOBS=%s differs from USCHA_JOBS=1" % label)
+    if cores >= 2 and is_serial(dfl):
+        probs.append("the serial predicate stays green on the default parallel run")
+    res["AC-PD-03"] = not probs
+    why["AC-PD-03"] = "; ".join(probs[:3]) or "1, 0, a non-number and coverage are serial, no trap"
+
+    # --- AC-PD-04: the ritual passes the environment through --------------------------------------
+    rel = os.path.join(root, "tools", "release.py")
+    if not os.path.isfile(rel):
+        res["AC-PD-04"] = None
+        why["AC-PD-04"] = "tools/release.py absent (extracted kit): the ritual is unmeasurable"
+    else:
+        src = read(rel)
+        probs = []
+        if pins_jobs(src):
+            probs.append("tools/release.py still sets or names USCHA_JOBS in code")
+        if not passes_environ(src):
+            probs.append("tools/release.py does not run the suite with env=dict(os.environ, ...)")
+        pin = "PYTHON=sys.executable"
+        if src.count(pin) != 1:
+            probs.append("the probe anchor (the suite env) is gone: update the probe")
+        else:
+            bad = src.replace(pin, "USCHA_JOBS=" + DQ + "1" + DQ + ", " + pin)
+            if not pins_jobs(bad):
+                probs.append("the AST walk misses a pinned USCHA_JOBS")
+        res["AC-PD-04"] = not probs
+        why["AC-PD-04"] = "; ".join(probs[:3]) or "no pin, environment passed through"
+
+    # --- AC-PD-05: only ubuntu/py3.8 runs serial in CI -------------------------------------------
+    wfd = os.path.join(root, ".github", "workflows")
+    smoke_yml = os.path.join(wfd, "smoke.yml")
+    if not os.path.isfile(smoke_yml):
+        res["AC-PD-05"] = None
+        why["AC-PD-05"] = ".github/workflows/smoke.yml absent (extracted kit): CI is unmeasurable"
+    else:
+        text = read(smoke_yml)
+        probs = workflow_problems(text)
+        for f in sorted(os.listdir(wfd)):
+            if f != "smoke.yml" and "USCHA_JOBS" in read(os.path.join(wfd, f)):
+                probs.append("workflow %s sets USCHA_JOBS" % f)
+        # teeth: drop the pin, then pin a second cell, then pin the reduced grid
+        pinned_cell = DQ + "jobs" + DQ + ":" + DQ + "1" + DQ
+        if text.count(pinned_cell) != 1:
+            probs.append("the probe anchor (the jobs field) is gone: update the probe")
+        else:
+            muts = {"unpinned": text.replace("," + pinned_cell, ""),
+                    "second cell pinned": text.replace(
+                        DQ + "os" + DQ + ":" + DQ + "macos-latest" + DQ + "," + DQ + "python" + DQ
+                        + ":" + DQ + "3.13" + DQ,
+                        DQ + "os" + DQ + ":" + DQ + "macos-latest" + DQ + "," + DQ + "python" + DQ
+                        + ":" + DQ + "3.13" + DQ + "," + pinned_cell, 1)}
+            for label, mut in muts.items():
+                if mut == text or not workflow_problems(mut):
+                    probs.append("the workflow judge stays green on a copy: %s" % label)
+        res["AC-PD-05"] = not probs
+        why["AC-PD-05"] = "; ".join(probs[:3]) or "only ubuntu/py3.8 pins USCHA_JOBS=1"
+
+    # --- AC-PD-06: the suite states its mode on stderr, once, and the library never does --------
+    probs = []
+    lines = read(SUITE).split(NL)
+    emit = "echo " + DQ + "suite mode: " + D + "(pj_mode)" + DQ + " >&2"
+    at = [i for i, ln in enumerate(lines) if ln == emit]
+    init = [i for i, ln in enumerate(lines) if ln == "pj_init"]
+    first = [i for i, ln in enumerate(lines) if ln.startswith("echo " + DQ + "== T1 ")]
+    if len(at) != 1 or len(init) != 1 or len(first) < 1:
+        probs.append("the suite must print its mode exactly once, to stderr, after pj_init")
+    elif not init[0] < at[0] < first[0]:
+        probs.append("the mode line is not between pj_init and the first test header")
+    if sum(1 for ln in lines if re.match(r"\s*echo\s.*suite mode:", ln)) != 1:
+        probs.append("another line of the suite prints a suite mode")
+    for label, r in (("serial", ser_m), ("default", dfl_m)):
+        if "suite mode" in r["out"] or "suite mode" in r["err"]:
+            probs.append("the library printed the mode in a %s mini-suite" % label)
+    wanted = {(4, "UNSET", 0): "parallel, 4 jobs", (1, "UNSET", 0): "serial (1 core reported)",
+              (16, "EMPTY", 0): "parallel, 8 jobs", (16, "3", 0): "parallel, 3 jobs",
+              (16, "64", 0): "parallel, 16 jobs", (16, "1", 0): "serial (USCHA_JOBS=1)",
+              (16, "0", 0): "serial (USCHA_JOBS=0)",
+              (16, "abc", 0): "serial (USCHA_JOBS=abc is not a number)",
+              (4, "8", 1): "serial (USCHA_COVERAGE=1)"}
+    got_rows = drive(JOBS)
+    for c, text in sorted(wanted.items()):
+        if c not in got_rows:
+            probs.append("case %r was not driven" % (c,))
+        elif got_rows[c][1] != text:
+            probs.append("mode for %r is %r, want %r" % (c, got_rows[c][1], text))
+    res["AC-PD-06"] = not probs
+    why["AC-PD-06"] = "; ".join(probs[:3]) or "mode on stderr, once; library silent"
+
+    # --- AC-PD-07: SHIPPED PROBE against v2.8.1 -------------------------------------------------
+    old_lib = gitshow("uscha-kit/tests/_jobs.sh")
+    old_rel = gitshow("tools/release.py")
+    old_yml = gitshow(".github/workflows/smoke.yml")
+    if old_lib is None or old_rel is None or old_yml is None:
+        res["AC-PD-07"] = None
+        why["AC-PD-07"] = "no git or %s not fetched: UNMEASURED" % PREV_TAG
+    else:
+        probs = []
+        olib = os.path.join(W, "_jobs-v281.sh")
+        write(olib, old_lib)
+        # the same driver, same simulated machine: 2.8.1 answers 1 for an unset variable
+        old_rows = drive(olib)
+        if old_rows.get((4, "UNSET", 0), ("none",))[0] != "1":
+            probs.append("%s did not resolve an unset USCHA_JOBS to one job" % PREV_TAG)
+        if not table_problems(olib)[0]:
+            probs.append("the table did not fail against %s" % PREV_TAG)
+        if not pins_jobs(old_rel):
+            probs.append("%s tools/release.py no longer pins USCHA_JOBS: the probe is blind" % PREV_TAG)
+        if not workflow_problems(old_yml):
+            probs.append("%s smoke.yml already had the serial cell" % PREV_TAG)
+        # the escape hatch is the 2.8.1 serial path: byte-identical mini-suite, both streams
+        r_old = mini(olib, {})
+        r_new = mini(JOBS, {"USCHA_JOBS": "1"})
+        if (r_old["out"], r_old["err"], r_old["order"], r_old["meta"]) != (
+                r_new["out"], r_new["err"], r_new["order"], r_new["meta"]):
+            probs.append("USCHA_JOBS=1 differs from the %s serial run" % PREV_TAG)
+        res["AC-PD-07"] = not probs
+        why["AC-PD-07"] = "; ".join(probs[:3]) or "%s was serial by default, 1 is that path" % PREV_TAG
+
+    # --- AC-PD-08: the docs say what the code does ---------------------------------------------
+    probs = []
+    seen = 0
+    targets = (("CLAUDE.md", os.path.join(root, "CLAUDE.md")),
+               ("uscha-kit/README.md", os.path.join(kit, "README.md")))
+    for label, path in targets:
+        if os.path.isfile(path):
+            seen += 1
+            text = read(path)
+            probs += doc_problems(label, text, DOC_FORBIDDEN + CLAIM_FORBIDDEN)
+            if "USCHA_JOBS=1" not in text or "ADR-054" not in text:
+                probs.append("%s does not state the USCHA_JOBS=1 escape hatch and ADR-054" % label)
+    for label, path in (("docs/adr/ADR-054", os.path.join(root, "docs", "adr",
+                                                         "ADR-054-parallel-smoke-suite-by-default.md")),
+                        ("uscha-kit/CHANGELOG-2.9.0.md", os.path.join(kit, "CHANGELOG-2.9.0.md"))):
+        if os.path.isfile(path):
+            probs += doc_problems(label, read(path), CLAIM_FORBIDDEN)
+    head = NL.join(lib.split(NL)[:30])
+    probs += doc_problems("tests/_jobs.sh header", head)
+    if "ADR-054" not in head:
+        probs.append("the _jobs.sh header does not cite ADR-054")
+    if not doc_problems("sample", "stdout is byte-identical between modes", CLAIM_FORBIDDEN):
+        probs.append("the doc scanner misses the stdout claim")
+    if not doc_problems("sample", "The ritual stays serial and the parallel path is opt-in parallel"):
+        probs.append("the doc scanner misses a stale claim")
+    if doc_problems("sample", "USCHA_JOBS=1 forces the serial suite (ADR-054)"):
+        probs.append("the doc scanner flags a true claim")
+    res["AC-PD-08"] = None if seen == 0 else not probs
+    why["AC-PD-08"] = ("no CLAUDE.md or README in this tree: UNMEASURED" if seen == 0
+                       else "; ".join(probs[:3]) or "no stale serial or opt-in claim")
+
+    # --- AC-PD-09: no sidecar file is written by two blocks unless every writer merges ---------
+    # The CI run that exposed this: T137 wrote .top-cases.json with a plain overwrite while T138,
+    # T141 and T145 merge into it. Serial, T137 always came first. Parallel, T138 could land
+    # first and T137 replaced the file, so 9 criteria read UNMEASURED and the cell stayed green.
+    # The guard is static, because the failure is a schedule: it scans every sidecar call of the
+    # suite, groups them by file name and refuses a shared name with a plain writer.
+    site = re.compile(r"sidecar\(" + r"\s*[A-Za-z_]+\s*,\s*" + DQ + r"(\.[A-Za-z0-9_.-]+\.json)" + DQ
+                      + r"([^)]*)\)")
+
+    def sidecar_problems(text):
+        sites = {}
+        for ln in text.split(NL):
+            if ln.lstrip().startswith("#"):
+                continue
+            m = site.search(ln)
+            if m:
+                sites.setdefault(m.group(1), []).append("merge=True" in m.group(2))
+        out = ["%s has %d writers and %d of them overwrite" % (k, len(v), v.count(False))
+               for k, v in sorted(sites.items()) if len(v) > 1 and not all(v)]
+        if len(sites) < 40 or len(sites.get(".top-cases.json", [])) < 4:
+            out.append("the scan is blind: %d files, %d writers of .top-cases.json"
+                       % (len(sites), len(sites.get(".top-cases.json", []))))
+        return out
+    suite_text = read(SUITE)
+    probs = sidecar_problems(suite_text)
+    needle = DQ + ".top-cases.json" + DQ + ", res, merge=True)"
+    if suite_text.count(needle) < 3:
+        probs.append("the probe anchor (the merging .top-cases.json writers) is gone")
+    else:
+        # teeth: one of the shared writers reverted to a plain overwrite must go red
+        plain = suite_text.replace(needle, DQ + ".top-cases.json" + DQ + ", res)", 1)
+        if not sidecar_problems(plain):
+            probs.append("the guard stays green with a shared sidecar written by a plain overwrite")
+    # the reason, measured on the shipped harness: a plain write after a merge drops the keys
+    dd = tmp("uscha-pd-side-")
+    race, safe = ".race-cases.json", ".safe-cases.json"
+    sidecar(dd, race, {"t138": True}, merge=True)
+    sidecar(dd, race, {"t137": True})
+    lost = json.loads(read(os.path.join(dd, "reports", "junit", race)))
+    sidecar(dd, safe, {"t138": True}, merge=True)
+    sidecar(dd, safe, {"t137": True}, merge=True)
+    kept = json.loads(read(os.path.join(dd, "reports", "junit", safe)))
+    if lost != {"t137": True} or kept != {"t138": True, "t137": True}:
+        probs.append("the harness no longer behaves as the guard assumes: %r / %r" % (lost, kept))
+    res["AC-PD-09"] = not probs
+    why["AC-PD-09"] = "; ".join(probs[:3]) or "every shared sidecar is written with merge=True"
+
+    # --- AC-PD-10: the ritual echoes the suite mode and warns on an unmeasured acceptance -------
+    # UNMEASURED is legitimate at X (AC-DF-01 when X touches the engine, AC-GM-08 without
+    # coverage.py), so the ritual WARNS and never refuses on n/m; it must not stay silent either:
+    # CI showed a green exit with 374 of 383 criteria measured.
+    rel10 = os.path.join(root, "tools", "release.py")
+    if not os.path.isfile(rel10):
+        res["AC-PD-10"] = None
+        why["AC-PD-10"] = "tools/release.py absent (extracted kit): the ritual is unmeasurable"
+    else:
+        import importlib.util
+
+        def judge_release(path):
+            spec = importlib.util.spec_from_file_location("uscha_release_probe", path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            src = read(path)
+            out = []
+            if not hasattr(mod, "suite_notes"):
+                return ["tools/release.py has no suite_notes"], src
+            dot = "\u00b7"
+            good = ("suite mode: parallel, 4 jobs" + NL + "ACCEPTANCE: 383/383 criterios medidos en verde"
+                    + NL)
+            short = ("suite mode: serial (USCHA_JOBS=1)" + NL + "ACCEPTANCE: 374/383 criterios medidos en verde "
+                     + dot + " SIN MEDIR: AC-T-07, AC-T-08" + NL)
+            n_good, n_short = mod.suite_notes(good), mod.suite_notes(short)
+            n_none = mod.suite_notes("ACCEPTANCE: 383/383 criterios" + NL)
+            if n_good != ["suite mode: parallel, 4 jobs"]:
+                out.append("a complete run produced %r" % (n_good,))
+            if not (n_short and n_short[0] == "suite mode: serial (USCHA_JOBS=1)"
+                    and any("WARNING" in n and "AC-T-07" in n for n in n_short[1:])):
+                out.append("an unmeasured acceptance was not warned about: %r" % (n_short,))
+            if not n_none or "not reported" not in n_none[0]:
+                out.append("a suite that states no mode was not flagged: %r" % (n_none,))
+            tree = ast.parse(src)
+            fns = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+            calls = lambda fn, name: [c for c in ast.walk(fns[fn]) if isinstance(c, ast.Call)
+                                      and getattr(c.func, "id", None) == name]
+            if "step4" not in fns or not calls("step4", "suite_notes"):
+                out.append("step4 does not print suite_notes")
+            if "suite_notes" in fns and calls("suite_notes", "refuse"):
+                out.append("suite_notes refuses: UNMEASURED must warn, not refuse")
+            return out, src
+        probs, src10 = judge_release(rel10)
+        if src10.count("    return notes" + NL) != 1:
+            probs.append("the probe anchor (suite_notes return) is gone")
+        else:
+            bad10 = os.path.join(W, "release-silent.py")
+            write(bad10, src10.replace("    return notes" + NL, "    return []" + NL))
+            if not judge_release(bad10)[0]:
+                probs.append("the ritual judge stays green with suite_notes silenced")
+        res["AC-PD-10"] = not probs
+        why["AC-PD-10"] = "; ".join(probs[:3]) or "mode echoed, unmeasured acceptance warned, never refused"
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".pd-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T172" in
+  OK*) PASS=$((PASS+1)); echo "  ok   parallel suite by default (AC-PD-01..10): $T172";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T172";;
+esac
+}
+pj_unit T172 pj_t172
 
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
@@ -19658,6 +20295,13 @@ FAMILIES = (
     # UNMEASURED on one core as well.
     (".pj-cases.json", "parallel-suite", "T171",                      # ADR-053, 2.8.0
      _seq("AC-PJ", 1, 9)),
+    # AC-PD-07 is the SHIPPED PROBE -- it reads the v2.8.1 library, ritual script and workflow out
+    # of git, so without git it reports None = UNMEASURED, never a silent pass. AC-PD-02 needs two
+    # cores to exercise the parallel default and reads UNMEASURED on one; AC-PD-04, AC-PD-05 and
+    # AC-PD-10 read the repo-root ritual script and workflow, so from an extracted kit they report
+    # None. AC-PD-09 scans the suite for sidecar writers that overwrite a shared file.
+    (".pd-cases.json", "parallel-default", "T172",                    # ADR-054, 2.9.0
+     _seq("AC-PD", 1, 10)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

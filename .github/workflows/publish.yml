@@ -27,7 +27,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     # Poll (up to 40 min for the matrix to finish) plus, in the worst case, the fallback
-    # suite (~30 min on one cell). 20 minutes could not fit either.
+    # suite (it runs the default, parallel; ~30 min was its serial time on one cell). 20
+    # minutes could not fit either.
     timeout-minutes: 80
     steps:
       # fetch-depth: 0 is REQUIRED, not tidiness -- the same reason smoke.yml gives:

@@ -7,7 +7,7 @@ governs:
 ---
 # ADR-053: The smoke suite runs in parallel only when asked — USCHA_JOBS changes the wall time, never the measurement
 
-## Status: Accepted (2.8.0); amended 2.8.1
+## Status: Accepted (2.8.0); amended 2.8.1; default flipped by ADR-054 (2.9.0)
 
 ## Context
 
@@ -23,7 +23,7 @@ worth having only if the measurement is provably unchanged.
 
 ## Decision
 
-- **Opt-in.** `USCHA_JOBS=N` (N > 1) enables parallel units; unset, `1`, `0` or a non-number is the
+- **Opt-in** *(2.9.0: the default was flipped by ADR-054; see the last amendment)*. `USCHA_JOBS=N` (N > 1) enables parallel units; unset, `1`, `0` or a non-number is the
   serial suite. `USCHA_COVERAGE=1` forces serial (one coverage data set, one writer). The job count
   is capped at the cores the machine reports (`nproc`, `getconf`, `NUMBER_OF_PROCESSORS`, then 1).
   `tools/release.py` pins `USCHA_JOBS=1` for the ritual's suite run, and CI does not set it.
@@ -57,14 +57,14 @@ worth having only if the measurement is provably unchanged.
 
 It changes how the measuring instrument runs. Making the parallel path the default, or running
 the ritual or CI with it, is a separate decision that needs CI evidence of equivalence on the
-2–4-core runners first.
+2–4-core runners first. *(That decision was taken in 2.9.0: ADR-054.)*
 
 ## Out of scope
 
 - A block-level pool over the serial prefix (T1–T127): ~125 small blocks sharing one sandbox and
   one ledger, ~250 s that now bounds the parallel wall time. It needs a block-by-block dependency
   analysis that this release did not do.
-- Flipping the default, or enabling `USCHA_JOBS` in `release.py` or CI.
+- Flipping the default, or enabling `USCHA_JOBS` in `release.py` or CI. *(Done by ADR-054 in 2.9.0.)*
 
 ## Acceptance
 
@@ -90,3 +90,13 @@ touched and runs the same commands.
   foreground command ends: the handler runs at once in `pj_collect` (the `wait` builtin) and within
   one 0.1 s poll in the throttle (`sleep` is an external command), but not while the main shell is
   inside any other external command. AC-PJ-09.
+
+## Amendment (2.9.0)
+
+ADR-054 flips the default; the library, the units and the barrier are unchanged. What stops being
+true above: "unset is the serial suite", "`tools/release.py` pins `USCHA_JOBS=1`" and "CI does not
+set it". What stays true: `USCHA_JOBS=1`, `0`, a non-number and `USCHA_COVERAGE=1` are the serial
+suite (the 2.8.1 commands, no trap), the job count is capped at the cores the machine reports, and
+the criterion is equivalence. `pj_resolve_jobs` gained one function, `pj__cores`, and `pj_mode`
+describes the mode; T171 now says `USCHA_JOBS=1` wherever it means serial, and its ritual and
+workflow claims moved to T172 (AC-PD-04, AC-PD-05).

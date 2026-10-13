@@ -1,10 +1,14 @@
-# _jobs.sh -- opt-in parallel units for smoke-engine.sh (ADR-053). Sourced, never executed.
+# _jobs.sh -- parallel units for smoke-engine.sh (ADR-053, default flipped by ADR-054). Sourced,
+# never executed.
 #
 # The suite is the ruler every release is measured with, so this file has one job: make it
-# faster WITHOUT changing what it measures. Parallelism is OFF unless USCHA_JOBS=N (N>1) asks
-# for it. Off, `pj_unit NAME FN` calls FN in the current shell -- no subshell, no buffering, no
-# background process -- so the suite runs exactly the commands it ran before this file existed,
-# in the same order, with the same output. The ritual (tools/release.py) and CI stay serial.
+# faster WITHOUT changing what it measures. Since 2.9.0 parallelism is ON by default: with
+# USCHA_JOBS unset or empty the suite runs min(cores, 8) jobs, and a machine that reports one
+# core is serial. USCHA_JOBS=1 (or 0, or a non-number, or USCHA_COVERAGE=1) is the serial escape
+# hatch: `pj_unit NAME FN` then calls FN in the current shell -- no subshell, no buffering, no
+# background process, no trap -- so the suite runs exactly the commands it ran before this file
+# existed, in the same order, with the same output. The ritual (tools/release.py) passes the
+# environment through and CI runs the default in every cell but one (ubuntu/py3.8: USCHA_JOBS=1).
 #
 # On, a unit runs in a background subshell with its counters reset to zero; it writes its
 # delta ("PASS FAIL") to its own result file and its stdout+stderr to its own log, and
@@ -24,28 +28,57 @@
 # Test-only, like _harness.py: package.json excludes uscha-kit/tests/ from the npm package.
 
 PJ_JOBS=1
+PJ_DEFAULT_JOBS=8
 PJ_DIR=""
 PJ_PIDS=""
 PJ_PENDING=""
 PJ_SEQ=0
 
-# The effective job count, printed. 1 unless USCHA_JOBS is an integer above 1 AND coverage is
-# off (USCHA_COVERAGE=1 forces serial: one coverage data set, one writer). Capped at the cores
-# this machine reports -- nproc, then getconf (macOS has no nproc), then NUMBER_OF_PROCESSORS
-# (git-bash), then 1 -- and never above what was asked for.
-pj_resolve_jobs() {
-  local want cores
-  want="${USCHA_JOBS:-1}"
-  case "$want" in ''|*[!0-9]*) echo 1; return 0;; esac
-  want=$((10#$want))
-  if [ "$want" -le 1 ] || [ "${USCHA_COVERAGE:-0}" = "1" ]; then echo 1; return 0; fi
+# How many cores this machine reports: nproc, then getconf (macOS has no nproc), then
+# NUMBER_OF_PROCESSORS (git-bash), then 1. A function of its own so the table test can swap the
+# machine answer after sourcing this file; the production code path is the same either way.
+pj__cores() {
+  local cores
   cores="$(nproc 2>/dev/null)" || cores=""
   case "$cores" in ''|*[!0-9]*) cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null)" || cores="";; esac
   case "$cores" in ''|*[!0-9]*) cores="${NUMBER_OF_PROCESSORS:-}";; esac
   case "$cores" in ''|*[!0-9]*) cores=1;; esac
   cores=$((10#$cores))
   if [ "$cores" -lt 1 ]; then cores=1; fi
+  echo "$cores"
+  return 0
+}
+
+# The effective job count, printed. USCHA_COVERAGE=1 forces 1 (one coverage data set, one writer).
+# USCHA_JOBS unset or empty asks for PJ_DEFAULT_JOBS (8, the measured setting); an explicit
+# integer asks for that many; a non-number is 1 (fail safe: a typo never starts a parallel run).
+# 0 and 1 are 1. Anything above 1 is capped at the cores the machine reports, so a machine that
+# reports one core is serial and an explicit 64 on 16 cores is 16.
+pj_resolve_jobs() {
+  local want cores
+  if [ "${USCHA_COVERAGE:-0}" = "1" ]; then echo 1; return 0; fi
+  want="${USCHA_JOBS-}"
+  case "$want" in
+    '') want="$PJ_DEFAULT_JOBS";;
+    *[!0-9]*) echo 1; return 0;;
+    *) want=$((10#$want));;
+  esac
+  if [ "$want" -le 1 ]; then echo 1; return 0; fi
+  cores="$(pj__cores)"
   if [ "$want" -gt "$cores" ]; then echo "$cores"; else echo "$want"; fi
+  return 0
+}
+
+# One line saying which mode PJ_JOBS (set by pj_init) resolved to and, when serial, why: the
+# suite prints it once to stderr, so a log says what was run and a typo in USCHA_JOBS is seen.
+pj_mode() {
+  if [ "$PJ_JOBS" -gt 1 ]; then echo "parallel, $PJ_JOBS jobs"; return 0; fi
+  if [ "${USCHA_COVERAGE:-0}" = "1" ]; then echo "serial (USCHA_COVERAGE=1)"; return 0; fi
+  case "${USCHA_JOBS-}" in
+    '') echo "serial (1 core reported)";;
+    *[!0-9]*) echo "serial (USCHA_JOBS=${USCHA_JOBS} is not a number)";;
+    *) if [ "$((10#${USCHA_JOBS}))" -le 1 ]; then echo "serial (USCHA_JOBS=${USCHA_JOBS})"; else echo "serial (1 core reported)"; fi;;
+  esac
   return 0
 }
 

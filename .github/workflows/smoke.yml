@@ -19,8 +19,10 @@ name: smoke
 # 3.2 trap: macOS ships that bash whatever Python is installed) and windows/3.8 (the path trap
 # AND the floor interpreter, and the slowest cell, so wall time barely moves).
 # What the reduced grid does NOT measure is stated rather than implied: ubuntu/3.8, macos/3.8 and
-# windows/3.13. A tag runs all six before anything is published -- `publish.yml` gates on the
-# TAG's run, not on the branch push's.
+# windows/3.13 -- and the serial suite, which only the ubuntu/3.8 cell runs (USCHA_JOBS=1,
+# ADR-054), so it is measured on tags and manual dispatches, not on a branch push. A tag runs
+# all six before anything is published -- `publish.yml` gates on the TAG's run, not on the
+# branch push's.
 on:
   push:
     branches: [main]
@@ -54,7 +56,7 @@ jobs:
           FULL: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
         run: |
           set -e
-          SIX='{"include":[{"os":"ubuntu-latest","python":"3.8"},{"os":"ubuntu-latest","python":"3.13"},{"os":"macos-latest","python":"3.8"},{"os":"macos-latest","python":"3.13"},{"os":"windows-latest","python":"3.8"},{"os":"windows-latest","python":"3.13"}]}'
+          SIX='{"include":[{"os":"ubuntu-latest","python":"3.8","jobs":"1"},{"os":"ubuntu-latest","python":"3.13"},{"os":"macos-latest","python":"3.8"},{"os":"macos-latest","python":"3.13"},{"os":"windows-latest","python":"3.8"},{"os":"windows-latest","python":"3.13"}]}'
           THREE='{"include":[{"os":"ubuntu-latest","python":"3.13"},{"os":"macos-latest","python":"3.13"},{"os":"windows-latest","python":"3.8"}]}'
           if [ "$FULL" = "true" ]; then
             echo "full grid: 6 cells (tag or manual dispatch)"
@@ -111,9 +113,17 @@ jobs:
 
       # shell: bash forces Git-Bash on Windows and the native shell on Linux/macOS, so the
       # ONE suite runs on all three. The engine is Python; only the harness is bash.
+      # The suite runs its default, min(cores, 8) parallel jobs (ADR-054), in every cell but one:
+      # ubuntu/py3.8 carries a jobs field set to 1 in the six-cell grid, so the serial escape hatch stays
+      # measured on every tag and manual dispatch. USCHA_JOBS is exported only when the cell sets
+      # one, and the suite prints its mode ("suite mode: ...") at the top of this step's log.
       - name: Run the smoke suite
         shell: bash
-        run: bash uscha-kit/tests/smoke-engine.sh
+        env:
+          MATRIX_JOBS: ${{ matrix.jobs }}
+        run: |
+          if [ -n "$MATRIX_JOBS" ]; then export USCHA_JOBS="$MATRIX_JOBS"; fi
+          bash uscha-kit/tests/smoke-engine.sh
 
       # The smoke exercises the installer with synthetic fixtures; this runs the REAL
       # installer end-to-end (install all three targets into a temp home, then doctor them)

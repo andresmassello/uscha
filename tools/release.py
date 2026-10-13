@@ -88,6 +88,8 @@ SURFACES = (
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 RESULTADO = re.compile(r"^RESULTADO:\s*(\d+)\s+ok\s*.\s*(\d+)\s+fail", re.M)
 ACCEPTANCE = re.compile(r"^ACCEPTANCE:\s*(\d+/\d+)", re.M)
+SUITE_MODE = re.compile(r"^suite mode: .*$", re.M)
+UNMEASURED_LINE = re.compile(r"^ACCEPTANCE:.*SIN MEDIR: .*$", re.M)
 
 
 class Refused(Exception):
@@ -173,6 +175,24 @@ def write(path, body):
 def say(*parts):
     print(" ".join(str(p) for p in parts))
     sys.stdout.flush()
+
+
+def suite_notes(out):
+    """What the ritual prints about HOW the suite ran: the mode it states (ADR-054) and, loudly,
+    any acceptance criterion it could not measure. UNMEASURED is legitimate at X (AC-DF-01 when X
+    touches the engine, AC-GM-08 without coverage.py), so this WARNS and never refuses: a
+    green exit with fewer criteria than the tree declares must not pass unseen."""
+    notes = []
+    m = SUITE_MODE.search(out)
+    notes.append(m.group(0) if m else "suite mode: not reported by this suite")
+    u = UNMEASURED_LINE.search(out)
+    acc = ACCEPTANCE.search(out)
+    n_m = acc.group(1).split("/") if acc else []
+    short = len(n_m) == 2 and n_m[0] != n_m[1]
+    if u or short:
+        notes.append("WARNING: acceptance is not n/n -- criteria are UNMEASURED in this run: "
+                     + (u.group(0) if u else acc.group(0)))
+    return notes
 
 
 def load_state():
@@ -498,10 +518,11 @@ def step4(args, dry, state):
     r = subprocess.run(cmd, cwd=REPO, shell=True, stdout=subprocess.PIPE,
                        stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                        errors="replace",
-                       # USCHA_JOBS pinned to 1 (ADR-053): the ritual measures with the serial
-                       # suite even when the shell that runs it exported a parallel job count.
+                       # The environment passes through (ADR-054): the ritual measures with the
+                       # suite as it runs by default, min(cores, 8) parallel jobs. A human who
+                       # wants the serial suite exports USCHA_JOBS=1 before running this script.
                        env=dict(os.environ, PYTHON=sys.executable,
-                                PYTHONIOENCODING="utf-8", USCHA_JOBS="1"))
+                                PYTHONIOENCODING="utf-8"))
     tail = "\n".join(r.stdout.splitlines()[-15:])
     if r.returncode != 0:
         refuse("I4", "the suite exited %d. A red suite is a refusal, never a note.\n%s"
@@ -514,6 +535,8 @@ def step4(args, dry, state):
     if fails:
         refuse("I4", "the suite reports %d failing check(s)" % fails)
     say("    RESULTADO: %d ok, %d fail; ACCEPTANCE: %s" % (checks, fails, acc))
+    for note in suite_notes(r.stdout):
+        say("    " + note)
     return {"suite": {"checks": checks, "fails": fails, "acceptance": acc}}
 
 
