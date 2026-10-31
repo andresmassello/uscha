@@ -1,0 +1,38 @@
+---
+title: "ADR-056 R2 as specified: the gated-finding debt, one QA tool"
+---
+stateDiagram-v2
+  state "Legend" as legend {
+    lg0: bug
+    lg1: fixed
+    lg2: Breaks NoFlaggedBugShips
+    lg3: Path to the NoFlaggedBugShips bug
+  }
+  class lg0 orange
+  class lg1 teal
+  class lg2 breaks
+  class lg3 bugPath
+  s0: Code has the bug, nothing logged
+  s1: Code fixed, nothing logged
+  s2: Code fixed, gated finding logged
+  s3: Code fixed, clean pass logged
+  s4: Code has the bug, clean pass logged
+  [*] --> s0
+  s0 --> s0: test-run measures the code or the QA tool reviews the code
+  s0 --> s1: the agent fixes the code
+  s1 --> s2: the agent logs what the tool found
+  s2 --> s2: the QA tool reviews the code
+  s2 --> s3: the agent logs what the tool found
+  s3 --> s4: the agent reverts to the buggy code
+  classDef breaks fill:#ffecee,stroke:#e72e3b,stroke-width:2.5px,color:#cd2834
+  class s0 orange
+  class s0 bugPath
+  class s1 teal
+  class s1 bugPath
+  class s2 teal
+  class s2 bugPath
+  class s3 teal
+  class s3 bugPath
+  class s4 orange
+  class s4 breaks
+  class s4 bugPath
