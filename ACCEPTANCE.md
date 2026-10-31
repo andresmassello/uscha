@@ -1782,7 +1782,7 @@ mode line, a probe against v2.8.1 and the docs that describe all of it.
   to that environment is caught by the same walk. Without the script (an extracted kit) this reads
   UNMEASURED.
 - [ ] AC-PD-05 - the full grid of `.github/workflows/smoke.yml` (parsed from its embedded JSON)
-  has six cells and exactly one carries a `jobs` field, ubuntu-latest/py3.8 with `"1"`; the
+  has six cells and exactly one carries a `jobs` field, ubuntu-22.04/py3.8 with `"1"` (pinned in 2.10.1: `ubuntu-latest` became 26.04, which has no Python 3.8 build); the
   reduced grid keeps three cells with only `os` and `python`; the suite step takes the value from
   `matrix.jobs` and exports `USCHA_JOBS` only when it is non-empty; no other workflow sets
   `USCHA_JOBS`; copies with the pin removed and with a second cell pinned both go red. Without the

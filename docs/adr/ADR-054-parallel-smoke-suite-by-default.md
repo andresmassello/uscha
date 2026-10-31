@@ -42,7 +42,8 @@ flip is an ADR, and the way back stays one environment variable.
 - **The ritual runs the default.** `tools/release.py` no longer sets `USCHA_JOBS`; the environment
   passes through, so a human who wants the serial suite exports `USCHA_JOBS=1` first.
 - **CI runs the default in every cell but one.** In the six-cell grid (tag or manual dispatch) the
-  `ubuntu-latest`/py3.8 entry carries `"jobs":"1"`; the suite step exports `USCHA_JOBS` from it only
+  `ubuntu-latest`/py3.8 entry carries `"jobs":"1"` (that cell is `ubuntu-22.04` since 2.10.1:
+  `ubuntu-latest` became 26.04, which has no Python 3.8 build); the suite step exports `USCHA_JOBS` from it only
   when the cell sets one (`MATRIX_JOBS`), so the escape hatch is measured on every tag and the
   reduced grid keeps its shape. `publish.yml`, whose suite step runs only when no smoke run exists
   for the exact bytes, takes the default like any other run.

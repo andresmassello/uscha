@@ -19673,8 +19673,10 @@ def workflow_problems(text):
     if len(inc6) != 6:
         out.append("the full grid has %d cells, not 6" % len(inc6))
     pinned = [e for e in inc6 if "jobs" in e]
-    if pinned != [{"os": "ubuntu-latest", "python": "3.8", "jobs": "1"}]:
-        out.append("the serial cell is not exactly ubuntu-latest/py3.8 with jobs 1: %r" % (pinned,))
+    # ubuntu-22.04, not -latest (2.10.1): ubuntu-latest became 26.04, which has no Python 3.8
+    # build, and the cell died in setup-python before the suite ran
+    if pinned != [{"os": "ubuntu-22.04", "python": "3.8", "jobs": "1"}]:
+        out.append("the serial cell is not exactly ubuntu-22.04/py3.8 with jobs 1: %r" % (pinned,))
     if [(e.get("os"), e.get("python")) for e in inc3] != [
             ("ubuntu-latest", "3.13"), ("macos-latest", "3.13"), ("windows-latest", "3.8")]:
         out.append("the reduced grid changed shape")
@@ -20193,7 +20195,7 @@ TEST_MOD = NL.join([
 
 
 def base_py(prefix, repos=("backend-api",), command="list", qa_order=True, external=TOOLS,
-            tests=True, extra_repo=None):
+            tests=True, extra_repo=None, commit=True):
     """FIXTURES.md base-py: a real temp git repo the ENGINE drives. COMMAND is the declared
     test command's form: "list" (argv), "string" (platform shell) or None (nothing declared)."""
     d = tmp(prefix)
@@ -20222,9 +20224,10 @@ def base_py(prefix, repos=("backend-api",), command="list", qa_order=True, exter
           + "- [ ] AC-02 - y" + NL)
     write(os.path.join(d, ".gitignore"), "reports/" + NL + "__pycache__/" + NL)
     for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
-                 ["git", "config", "user.name", "t"], ["git", "add", "-A"],
-                 ["git", "commit", "-qm", "base"]):
+                 ["git", "config", "user.name", "t"]):
         sh(d, *argv)
+    if commit:
+        commit_all(d, "base")
     q(d, "init", "--config", "uscha.config.json")
     return d
 
@@ -20665,13 +20668,9 @@ def measure():
     commit_all(dl, "evidence")
     ph_d = phase(dl)
     ct_d = q(dl, "check-terminado")
-    nt = tmp("nulltree")
-    shutil.rmtree(nt)
-    shutil.copytree(base_py("nulltree-src"), nt)
-    shutil.rmtree(os.path.join(nt, ".git"))
-    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
-                 ["git", "config", "user.name", "t"]):
-        sh(nt, *argv)                            # git, but no commit: the run records no tree
+    # git, but no commit yet: the run records no tree. Built without a commit rather than by
+    # deleting a .git -- git objects are read-only on Windows and rmtree refuses them (2.10.1)
+    nt = base_py("nulltree", commit=False)
     q(nt, "test-run", "--repo", "backend-api")
     tree_n = (ledger(nt).get("test_runs") or [{}])[-1].get("tree")
     commit_all(nt, "everything")
@@ -20738,10 +20737,12 @@ def measure():
     by = jq(t, "readiness", "--json").get("by_repo") or {}
     m_f = (by.get("mobile-app") or {}).get("facts") or {}
     b_f = (by.get("backend-api") or {}).get("facts") or {}
+    # what readiness must agree on is the WITNESS verdict (evidence_unattested); the separate
+    # convergence flag also reads ADR-039 clock freshness, whose 1 s tolerance a fast machine
+    # lands inside -- asserting it made the case depend on timing (macOS cells, 2.10.1)
     res["AC-GI-31"] = bool(before == (0, 0) and pm.returncode == 1 and pb.returncode == 0
                            and "mobile-app/mod.py" in pm.stdout
-                           and m_f.get("evidence_unattested") and not b_f.get("evidence_unattested")
-                           and m_f.get("converged") is False)
+                           and m_f.get("evidence_unattested") and not b_f.get("evidence_unattested"))
     why["AC-GI-31"] = "before=%r mobile rc=%s backend rc=%s facts=%r" % (
         before, pm.returncode, pb.returncode, m_f.get("evidence_unattested"))
 
