@@ -27,4 +27,4 @@ See `CHANGELOG-2.10.0.md` for the release content (witnessed evidence, ADR-055).
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 464 checks · 0 fail; acceptance 408/409.
