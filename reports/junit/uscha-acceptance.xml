@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="385" failures="0" errors="0" skipped="0">
+<testsuite name="uscha-acceptance" tests="409" failures="0" errors="0" skipped="1" timestamp="2026-10-31T18:46:14.822547Z">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -768,6 +768,55 @@
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-PD-10_parallel-default">
   </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-01_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-02_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-03_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-04_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-05_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-06_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-07_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-08_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-09_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-10_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-11_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-12_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-13_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-14_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-15_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-16_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-17_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-18_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-19_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-20_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-21_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-22_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-31_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-47_witnessed-evidence">
+  </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
+    <skipped message="shallow clone or no git: ancestry unmeasurable"/>
   </testcase>
 </testsuite>

@@ -169,4 +169,4 @@ criterion unmeasured is AC-DF-01, by design at a commit that touches the engine 
 measured at the ledger commit X+1). T173 was also run against the pre-fix engine and against the
 v2.9.0 engine to confirm its red cases fail there. The six-cell CI run is the owner's to dispatch.
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 464 checks · 0 fail; acceptance 408/409.
