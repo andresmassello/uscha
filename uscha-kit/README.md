@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.9.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.10.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -198,6 +198,28 @@ With no `qa_tools_order` declared there is nothing to resolve — UNMEASURED, ne
 `log-step` stamps every step with its tool's resolved source; a MISSING step is recorded
 `unverified` and cannot satisfy convergence — and stays so after you install the tool: re-log it.
 Ledgers written before 2.6.0 carry no provenance and load unchanged.
+
+## Witnessed test evidence (ADR-055, 2.10.0) - who wrote this report?
+
+Until 2.10.0 the engine read JUnit and coverage reports BY PATH and could not tell who wrote a
+file: two hand-typed XML files over a module that raises on every call reached `pr-ready`, 100%
+acceptance and SEALED. Now the engine is the witness. `qa_ledger.py test-run --repo R` runs the
+test command the project DECLARED (`repos[].test_command`, else `defaults.test_command_<type>`;
+the live `uscha.config.json` wins over the ledger's frozen copy), hashes the report files before
+and after, records the run in `test_runs` (command, shell, commit, source-tree stamp, exit code,
+the reports it wrote) and ingests them in the same call. There is no `--run` flag, and nothing
+declared is exit 2 -- the kit never guesses a command.
+
+`phase`, the acceptance count and the seal honor only a report born of a recorded run whose
+source tree is still the tree now (committing exactly that tree is not a change; a source edit
+is, at read time, without a new snapshot). A report written, copied or edited by anything else is
+listed as unattested and its criterion reads UNMEASURED. A run that exited non-zero while its
+reports read green blocks. Coverage is witnessed the same way. Ledgers from before 2.10.0 load
+unchanged, but their evidence is refused until one `test-run` per repo. A suite that only runs in
+CI declares `test_site: "ci"`: CI runs the same `test-run` + `phase --require pr-ready` against
+the committed ledger. What stays trusted is the declared command: provenance proves "this command
+ran at this tree and wrote these bytes", never that the command tests anything -- it is a config
+line a reviewer reads, and a `tests > 0` with `test_loc == 0` contradiction is flagged (advisory).
 
 ## Evidence origin (ADR-007) - green, but green at *what*?
 
@@ -682,16 +704,17 @@ python3 $QL init --config uscha.config.json      # creates QA-LEDGER.json
 # it never rebuilds the ledger (2.2.0):
 python3 $QL init --add-repo web-app --path web-app --type node --test-command "npm test"
 
-# run your build with the reports, then:
-python3 $QL snapshot      --repo backend-api --phase pre
+# run the DECLARED test command, witness the reports it writes, ingest them (2.10.0):
+python3 $QL test-run      --repo backend-api
 python3 $QL check-coverage --repo backend-api       # exit 0 = OK, 1 = below threshold
 python3 $QL ingest-gate   --repo backend-api --iteration 1
 python3 $QL summary                                 # human summary
 python3 $QL summary --json                          # includes post_merge_calibration
 ```
 
-If `snapshot`/`ingest-gate` say "no report found", it's because the build hasn't generated
-the XML yet — run `mvn test` with the plugins active first.
+If `test-run`/`ingest-gate` say "no report found", it's because the build hasn't generated
+the XML yet — make sure the declared test command (`mvn test` with the plugins active) writes it.
+`test-run` exits 2 when no test command is declared: the kit never guesses one.
 
 ## Readiness KPI (when finishing any task)
 
@@ -922,7 +945,7 @@ python3 $QL readiness
 
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - top - waste-check` - the exact current `qa_ledger.py` parser surface (57 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (58 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

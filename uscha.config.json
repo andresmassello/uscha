@@ -25,7 +25,8 @@
     {
       "name": "uscha",
       "path": ".",
-      "type": "python"
+      "type": "python",
+      "test_command": "bash uscha-kit/tests/smoke-engine.sh"
     }
   ],
   "integration": {

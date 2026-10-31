@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-039: Evidence freshness is decided by CONTENT and COMMIT, not by the clock alone — a report is current when no source changed since the run that produced it, whatever the files' mtimes say; and the seal tolerates commits that touch no source
 
-## Status: Accepted (1.93.0; approved as written by the maintainer 2026-08-19)
+## Status: Accepted (1.93.0; approved as written by the maintainer 2026-08-19) — **amended 2.10.0 by ADR-055: rule (c), run-anchored freshness, for attested gate reads**
 
 ## Context
 The freshness rule (1.31.0) discards a JUnit report older than the newest source file of its repo

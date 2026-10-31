@@ -6,7 +6,7 @@ governs:
 ---
 # ADR-037: `o` rerun in `uscha top` — the TUI may TRIGGER the engine with a command the human supplied at launch; it never decides what to run and never writes the ledger itself (proposal for phase 2, M4)
 
-## Status: Accepted (phase 2 shipped in 1.91.0; option B chosen by the maintainer 2026-08-18)
+## Status: Accepted (phase 2 shipped in 1.91.0; option B chosen by the maintainer 2026-08-18) — **amended 2.10.0 by ADR-055: `o` runs the engine's `test-run`; `--rerun-cmd` is accepted and ignored**
 
 ## Context
 `uscha top` v0.1 (ADR-031..034, shipped 1.86.0–1.89.0) reads everything and writes exactly one
@@ -35,6 +35,12 @@ does, at every pass close), the engine ingests as it always does (`snapshot`), a
 catches the change on the next poll tick (M2). Zero new writes, zero new authority. Cost: the
 "rerun" moment leaves the terminal the human is already in; the round trip *verdict → rerun →
 DONE moves* is not visible as one motion.
+
+> **Amended 2.10.0 (ADR-055).** `o` no longer runs a command typed at launch: it runs the
+> engine's `test-run` for the first configured repo, which executes the test command the PROJECT
+> declared in `uscha.config.json` and ingests the reports that run wrote, in one engine process per
+> keypress. `--rerun-cmd` is accepted and ignored with a notice for one release. The text below is
+> the decision as taken in 1.91.0, kept as history.
 
 **B — `o` triggers a command the human supplied at launch, then the engine ingests.**
 `uscha top --rerun-cmd "<shell>"` (explicit, per session, ADR-008 style — never read from config,

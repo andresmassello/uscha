@@ -48,8 +48,10 @@ itself.
        python tools/release.py X.Y.Z --message-file <msg> --tag
 
    which performs the six steps -- preflight; bump the six surfaces + regenerate
-   `SYSTEM-FACTS.json`; commit **the working tree AND the bump together** as X; run the suite;
-   `snapshot` + `readiness --record` and commit the evidence as X+1; seal, push and tag -- and
+   `SYSTEM-FACTS.json`; commit **the working tree AND the bump together** as X; run the suite as
+   `qa_ledger.py test-run --repo uscha` (2.10.0, ADR-055: the engine runs the command the root
+   `uscha.config.json` declares and ingests what that run wrote -- the snapshot happens inside it);
+   `readiness --record` and commit the evidence as X+1; seal, push and tag -- and
    REFUSES, naming the invariant:
 
    - **I1** the branch is ahead of `origin/main` only, with no merge in progress and no unmerged
@@ -153,7 +155,10 @@ itself.
   Build it as `chr(36) + "{..."`. Note what is NOT the trap: a bare `$"` is fine (a `$` regex
   anchor before a closing quote has shipped green for many releases) — the opener `${` is.
   General rule for these heredocs: the shell must never see `${` or a backtick, and a bracket
-  expression must never contain a quote. A text scanner for this is NOT worth writing — the
+  expression must never contain a quote. One more, paid for on 2026-10-29 and NOT a 3.2-only trap
+  (bash 5.2 does it too): inside `$(... <<'PY' ... )`, a body line that merely STARTS with the
+  delimiter word (`PYX = ...`) ends the heredoc there. Never begin a line with `PY` in those
+  blocks; `bash -n` catches it. A text scanner for this is NOT worth writing — the
   obvious one flags every `d["key"]` subscript in the suite (211 false positives when tried);
   the macOS cell is the measurement.
 

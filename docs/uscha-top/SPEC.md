@@ -67,10 +67,12 @@ conflict is named. The definitive AC ids are assigned here, not by the handoff.
   and records its own verdicts; `d` is a projection of the last real run, with that run's timestamp
   on screen so an old measurement cannot pass for a fresh one.
 
-### `o` — rerun *(shipped 1.91.0, ADR-037 option B)*
-- Inert without `--rerun-cmd`, and it says so. With it: the human's shell string runs in the first
-  configured repo's directory (named on screen), synchronously, verdict keys locked; then the
-  engine's own `snapshot --repo <r>` ingests — **on a red run too** — and the board re-reads.
+### `o` — rerun *(shipped 1.91.0, ADR-037 option B; amended 2.10.0, ADR-055)*
+- Since 2.10.0: one keypress runs the engine's `test-run --repo <first configured repo>`
+  (named on screen), synchronously, verdict keys locked: the engine executes the test command
+  the PROJECT declared and ingests what that run wrote — **on a red run too** — and the board
+  re-reads. `--rerun-cmd` is accepted and ignored with a notice for one release. (1.91.0-2.9.0:
+  the human's `--rerun-cmd` shell string ran, then `snapshot` ingested; `o` was inert without it.)
 - Refused under `--state` (a frozen snapshot is not a live ledger) and with no configured repo.
   Same drain + 250 ms cooldown as a verdict: one keypress, one run.
 

@@ -248,18 +248,23 @@ def test_AC_01_rejects_a_percentage_outside_the_range():
         apply_discount(1000, 150)
 ```
 
-The test's name carries `AC_01`. Run the project's test command — the one `init` wrote into
-`defaults.test_command_python` — then let the engine ingest what it produced:
+The test's name carries `AC_01`. Let the engine run the project's test command — the one `init`
+wrote into `defaults.test_command_python` — and ingest what that run wrote (`test-run`, 2.10.0: a
+report you produce yourself and then hand to the engine is not evidence):
 
 ```bash
-python -m pytest --cov --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
-python "$QL" snapshot --repo backend-api --phase post
+python "$QL" test-run --repo backend-api
 python "$QL" readiness
 ```
 
 ```text
-[qa_ledger] snapshot backend-api (post): coverage=100.0% (found=True), tests=2 (found=True),
-    freshness=fresh, origin=d090593b/dirty, prod_loc=248, test_loc=7
+[qa_ledger] test-run backend-api: running (live-config) pytest --cov
+    --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml  [cwd .]
+...
+[qa_ledger] test-run backend-api: TR-1 PASSED exit=0 wall=1.9s shell=sh reports born=2
+    unchanged=0 provenance=attested
+[qa_ledger] snapshot backend-api: coverage=100.0% tests=2 origin=d090593b/dirty prod_loc=248
+    test_loc=7
 
 READINESS: 45.0/100 — NOT READY
   acceptance medido: 100.0% (1/1 criteria closed by a green test — measured, does not gate)
@@ -271,7 +276,7 @@ READINESS: 45.0/100 — NOT READY
 
 That is a normal result, and it is the sentence the whole kit exists to print: **measured but
 unticked**. The engine found a green test case named after `AC-01`, in a report it did not
-write, produced by a run whose evidence is `fresh` against the current code state. It closed
+write, produced by a run it recorded and whose source is still the current code state. It closed
 the criterion on its own — and it will not tick your checkbox for you.
 
 The score is 45.0 and not higher because other dimensions are still **UNMEASURED**: no static
@@ -321,13 +326,13 @@ READINESS: 45.0/100 — NOT READY
     success
 ```
 
-*Next action:* write a test whose name carries the id, run the test command, re-run `snapshot`.
+*Next action:* write a test whose name carries the id, then `test-run` again.
 Or untick the box. Do not argue with the ledger.
 
 **`UNMEASURED` — nothing ran, so nothing is known.** A dimension with no report is scored
 UNMEASURED, never as a passed 0%.
 
-*Next action:* instrument it (run the tool, produce the report, `snapshot` again), or **declare
+*Next action:* instrument it (make the declared command produce the report, `test-run` again), or **declare
 the exemption** in the config — the advisory line names the exact key. A dimension you decide
 not to measure is a decision you write down, not a silence.
 

@@ -56,7 +56,7 @@ binary on PATH reads "binary found, not wired into Claude". The MCP check reads 
 configuration, for `--target codex` too. It only reports: it installs nothing, asks nothing and
 runs none of the commands it prints, and it never changes an exit code.
 
-**Kit v2.9.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v2.10.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
@@ -69,7 +69,10 @@ right — and when it is wrong, you find out in production.
 
 Uscha refuses to take the agent's word for anything. Every claim that matters has to be
 backed by a report the agent did not write: a JUnit file, a coverage report, a linter's
-output. **Facts block; guesses advise.** A checkbox ticked by hand is recorded as
+output. For tests that is enforced, not hoped for (2.10.0): the engine runs the test command
+your project DECLARED (`test-run`), records the run, and its gates honor only the JUnit and
+coverage files that run wrote — a report written, copied or edited by anyone else is not
+evidence. What stays trusted is the declared command itself: a config line a reviewer reads. **Facts block; guesses advise.** A checkbox ticked by hand is recorded as
 `narrated` and does not close a criterion. A test named after that criterion, green, in an
 ingested report — that closes it.
 
@@ -92,7 +95,7 @@ and see which file, which test, and when.
 | `/uscha-mirador` | Bird's-eye HTML dashboard: readiness, trail, acceptance, loops |
 | `/uscha-status` | One-line progress readout, in chat |
 
-**A measurement engine** (`qa_ledger.py`, 57 subcommands, Python stdlib) that ingests
+**A measurement engine** (`qa_ledger.py`, 58 subcommands, Python stdlib) that ingests
 evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
 cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
 
@@ -128,8 +131,10 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
    the spec package. No code until the package exists.
 2. **Build.** `/uscha-devloop` implements against the SPEC, with tests as a guardrail.
 3. **QA loop.** Independent review passes (maker ≠ checker) run until the change
-   **converges** — findings at or above the severity gate are fixed, the rest go to
-   `ISSUES-DEFERRED.md` with their evidence. Converge, don't chase zero.
+   **converges** — findings at or above the severity gate are to be fixed, the rest go to
+   `ISSUES-DEFERRED.md` with their evidence (the gate reads each pass's own report of its
+   gated findings; measuring that a gated finding left only by a fix or a deferral is
+   proposed, ADR-056). Converge, don't chase zero.
 4. **Readiness.** One score, one screen: acceptance (measured) 30 · static gate 20 ·
    ADR 15 · coverage 15 · convergence 10 · integration 10, with hard caps that say *why*
    they bit and whether the threshold was your requirement or the kit's default.
@@ -138,8 +143,9 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
 ## What makes it different
 
 - **Measured beats narrated.** An acceptance criterion closes on a green test that carries
-  its name — never on a checkbox. Stale evidence (a report older than the code) is
-  discarded, not honored.
+  its name — never on a checkbox. Stale evidence (a report whose run measured a different
+  source tree) and unwitnessed evidence (a report no recorded `test-run` wrote) are
+  discarded, not honored — re-derived every time a gate reads them.
 - **Absence is not success.** A gate that never ran scores `UNMEASURED`, which is
   deliberately *not* the same as a measured zero — and it is not silently forgiven either.
 - **Receipts.** Every number in the dashboard traces to its evidence: which testcase, which
@@ -153,7 +159,8 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
   real command and persists the percentage as a fact — advisory until the project
   declares a budget, a blocking gate once it does (ADR-046).
 - **Evidence is executed, not narrated.** The smoke run is a report the project's tool
-  writes, not a paragraph an agent types: `smoke-ingest` reads `{"checks": [{"name",
+  writes, not a paragraph an agent types (unlike test reports, a smoke report is still read
+  by path — not yet witnessed by a recorded run, ADR-055): `smoke-ingest` reads `{"checks": [{"name",
   "ok", ...}]}`, a failed check blocks like any fact gate, and an empty or malformed
   report is refused rather than scored (ADR-047).
 
@@ -196,7 +203,7 @@ automatic tool can perform: a human verdict.
    from the compiled code: 0.815 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (57 subcommands, all measured):**
+**What each arrow is, in the engine (58 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|

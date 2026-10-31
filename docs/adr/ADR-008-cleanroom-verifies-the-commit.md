@@ -6,7 +6,7 @@ governs:
 ---
 # ADR-008: The clean-room verifies the COMMIT, and the engine never decides what to run
 
-## Status: Accepted
+## Status: Accepted — **amended 2.10.0 by ADR-055: `test-run` runs the project's DECLARED test command (the rejection of option A is lifted for that one subcommand)**
 
 ## Context
 ADR-007 bound evidence to a commit and a tree state, and deferred the worktree clean-room the

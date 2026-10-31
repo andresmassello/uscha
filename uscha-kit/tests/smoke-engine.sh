@@ -252,6 +252,13 @@ chk() { # $1 = descripción, $2 = exit esperado, $3.. = comando
   if [ "$got" -eq "$want" ]; then PASS=$((PASS+1)); echo "  ok   $desc"
   else FAIL=$((FAIL+1)); echo "  FAIL $desc (exit $got, esperado $want)"; fi
 }
+# wrun LEDGER REPO -- since 2.10.0 (ADR-055) the gates honor only reports BORN of a recorded
+# `test-run`. A block that places its report fixtures by hand calls this instead of `snapshot`:
+# _witness.py stashes the hand-placed reports and (when the repo declares none) declares a test
+# command that restores them, so the engine's own before/after hash sees them born of the run.
+wrun() {
+  "$PY" "$KIT/tests/_witness.py" prepare "$QL" "$1" "$2" && run test-run --ledger "$1" --repo "$2"
+}
 # Coverage of the engine is OPT-IN (USCHA_COVERAGE=1). The engine is exercised through
 # ~370 subprocess calls, so measuring it means wrapping the ONE choke point they all pass
 # through -- not instrumenting the suite. Off by default: the normal smoke stays fast and
@@ -847,6 +854,8 @@ cat > repo-c/reports/junit.xml <<'EOF'
 <testcase classname="tests.test_misc" name="test_sin_criterio"/>
 </testsuite></testsuites>
 EOF
+# 2.10.0 (ADR-055): the report is evidence only once a recorded test-run wrote it
+wrun QA-LEDGER.json repo-c >/dev/null 2>&1
 RDY=$(run readiness --json 2>/dev/null)
 echo "$RDY" | "$PY" -c "
 import json, sys
@@ -1161,7 +1170,7 @@ EOF
 printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"], "qa_tools_external": ["judgment-day","improve"] },\n  "repos": [ {"name":"fsm","path":"repo-x","type":"go"} ], "integration": {"enabled": false} }\n' > c-fsm.json
 run init --config c-fsm.json --out L-fsm.json >/dev/null 2>&1
 chk "ledger virgen -> plan" 0 run phase --ledger L-fsm.json --repo fsm --require plan
-run snapshot --ledger L-fsm.json --repo fsm >/dev/null 2>&1
+wrun L-fsm.json fsm >/dev/null 2>&1
 chk "snapshot medido sin QA -> build" 0 run phase --ledger L-fsm.json --repo fsm --require build
 run log-step --ledger L-fsm.json --repo fsm --tool code-review --iteration 1 \
   --reported 2 --gated-reported 2 --tests-passed true >/dev/null 2>&1
@@ -1568,6 +1577,7 @@ cat > covrepo/coverage.xml <<'EOF'
 <coverage lines-valid="20" lines-covered="17" line-rate="0.85" version="7.4"></coverage>
 EOF
 run init --config cc-cfg.json --out L-cc.json >/dev/null
+wrun L-cc.json cov >/dev/null 2>&1   # 2.10.0: coverage counts only when born of a test-run
 chk "coverage 85% >= threshold 60 -> OK exit 0" 0 run check-coverage --repo cov --threshold 60 --ledger L-cc.json
 chk "coverage 85% < threshold 90 -> BELOW exit 1" 1 run check-coverage --repo cov --threshold 90 --ledger L-cc.json
 chk "sin report de coverage -> UNMEASURED exit 2 (nunca un BELOW inventado)" 2 run check-coverage --repo nocov --threshold 60 --ledger L-cc.json
@@ -1646,6 +1656,7 @@ EOF
 printf -- "# ACCEPTANCE\n\n- [x] AC-01 alta\n" > acc-fresh.md
 printf '{ "defaults": { "acceptance_file": "acc-fresh.md" },\n  "repos": [ {"name":"fresh","path":"repo-fresh","type":"python"} ], "integration": {"enabled": false} }\n' > fresh.json
 run init --config fresh.json --out L-fresh.json >/dev/null 2>&1
+wrun L-fresh.json fresh >/dev/null 2>&1   # 2.10.0: born of a recorded test-run
 # FRESCO: reporte mas nuevo que la fuente -> AC-1 cierra medido, sin stale
 touch -t 202601010800 repo-fresh/alta.py
 touch -t 202601010900 repo-fresh/reports/junit.xml
@@ -2353,7 +2364,7 @@ cat > repo-zero-tests/reports/junit.xml <<'EOF'
 EOF
 printf '{ "defaults": {"qa_tools_order":["code-review"]},\n  "repos": [ {"name":"zero-tests","path":"repo-zero-tests","type":"python"} ], "integration": {"enabled": false} }\n' > c-zero-tests.json
 run init --config c-zero-tests.json --out L-zero-tests.json >/dev/null 2>&1
-run snapshot --ledger L-zero-tests.json --repo zero-tests >/dev/null 2>&1
+wrun L-zero-tests.json zero-tests >/dev/null 2>&1
 run log-step --ledger L-zero-tests.json --repo zero-tests --tool code-review \
   --iteration 1 --gated-reported 0 --files-changed 0 >/dev/null 2>&1
 chk "zero executed tests cannot satisfy pr-ready" 1 \
@@ -2978,6 +2989,7 @@ mkdir -p t82-sin t82-con/target/site/jacoco
 printf '<?xml version="1.0" encoding="UTF-8"?>\n<report name="r"><counter type="LINE" missed="10" covered="0"/></report>\n' > t82-con/target/site/jacoco/jacoco.xml
 printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" },\n  "repos": [ {"name":"t82sin","path":"t82-sin","type":"maven"}, {"name":"t82con","path":"t82-con","type":"maven"} ], "integration": {"enabled": false} }\n' > t82-cfg.json
 run init --config t82-cfg.json --out L-t82.json >/dev/null 2>&1
+wrun L-t82.json t82con >/dev/null 2>&1   # 2.10.0: the measured 0% must be born of a test-run
 run readiness --ledger L-t82.json --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin); by = d['by_repo']
@@ -3200,7 +3212,7 @@ T90="$(mktemp -d)"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="acc" tests="1" failures="0" errors="0" skipped="0">\n  <testcase classname="acc" name="AC-01_first"/>\n</testsuite>\n' > reports/junit/TEST.xml
   printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
   run init --config uscha.config.json --out QA-LEDGER.json >/dev/null 2>&1
-  run snapshot --ledger QA-LEDGER.json --repo p >/dev/null 2>&1
+  wrun QA-LEDGER.json p >/dev/null 2>&1
   # BEFORE record: no measured summary -> falls back to checkbox (0/2)
   CLAUDE_PROJECT_DIR="$(pwd)" runpy "$KIT/templates/scripts/uscha_progress.py"
   before=$("$PY" -c "import json;s=json.load(open('.claude/uscha-progress.json'));print('%s/%s'%(s['done'],s['total']))")
@@ -3353,7 +3365,7 @@ T95="$(mktemp -d)"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="acc" tests="1" failures="0" errors="0" skipped="0">\n  <testcase classname="acc" name="AC-01_green"/>\n</testsuite>\n' > reports/junit/TEST.xml
   printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
   run init --config uscha.config.json --out L.json >/dev/null 2>&1
-  run snapshot --ledger L.json --repo p >/dev/null 2>&1
+  wrun L.json p >/dev/null 2>&1
   run log-step --ledger L.json --repo p --tool code-review --iteration 1 --reported 3 --gated-reported 2 --fixed 1 >/dev/null 2>&1
   run log-step --ledger L.json --repo p --tool code-review --iteration 2 --reported 1 --gated-reported 1 --fixed 1 >/dev/null 2>&1
   # a static-gate ingest in cycle 2 with a below-gate LOW: must NOT enter the series
@@ -3392,7 +3404,7 @@ T96="$(mktemp -d)"
   printf -- "# ADR-001 First decision\n\nStatus: accepted\n" > docs/adr/ADR-001.md
   printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
   run init --config uscha.config.json --out L.json >/dev/null 2>&1
-  run snapshot --ledger L.json --repo p >/dev/null 2>&1
+  wrun L.json p >/dev/null 2>&1
   run dashboard --ledger L.json --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
@@ -4207,6 +4219,7 @@ import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(os.path.join(repo, "reports"))
@@ -4242,7 +4255,7 @@ RUN = '"%s" check.py' % sys.executable
 def make_ledger(name, mode):
     cfg(mode)
     eng("init", "--config", "c.json", "--out", name)
-    eng("snapshot", "--ledger", name, "--repo", "r")
+    witness(ENG, w, name, "r")   # 2.10.0: born of a recorded test-run
     for it, tool in ((1, "code-review"), (1, "judgment-day"), (1, "improve")):
         eng("log-step", "--ledger", name, "--repo", "r", "--tool", tool,
             "--iteration", str(it), "--gated-reported", "0", "--files-changed", "0",
@@ -4322,6 +4335,7 @@ import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -4348,7 +4362,7 @@ io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
     "repos": [{"name": "r", "path": "r", "type": "go"}],
     "integration": {"enabled": False}}))
 eng("init", "--config", "c.json", "--out", "L.json")
-eng("snapshot", "--ledger", "L.json", "--repo", "r")
+witness(ENG, w, "L.json", "r")   # 2.10.0: born of a recorded test-run
 for tool in ("code-review", "judgment-day", "improve"):
     eng("log-step", "--ledger", "L.json", "--repo", "r", "--tool", tool,
         "--iteration", "1", "--gated-reported", "0", "--files-changed", "0",
@@ -4653,6 +4667,7 @@ import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -4686,7 +4701,7 @@ io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
     "repos": [{"name": "r", "path": "r", "type": "python"}],
     "integration": {"enabled": False}}))
 eng("init", "--config", "c.json", "--out", "L.json")
-eng("snapshot", "--ledger", "L.json", "--repo", "r")
+witness(ENG, w, "L.json", "r")   # 2.10.0: born of a recorded test-run
 for tool in ("code-review", "judgment-day", "improve"):
     eng("log-step", "--ledger", "L.json", "--repo", "r", "--tool", tool,
         "--iteration", "1", "--gated-reported", "0", "--files-changed", "0",
@@ -7195,7 +7210,8 @@ T137=$(pyin "$KIT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
-from _harness import sidecar
+from _harness import sidecar, fixture_tmp
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
 NAMES = ("healthy", "stale-quarantine", "honesty-negative")
@@ -7203,8 +7219,14 @@ LADDER = ("UNMEASURED", "TRACED", "TAGGED", "MEASURED_PASS", "MEASURED_FAIL", "Q
 res = {}
 
 
+_COPIES = {}
+
+
 def top(name):
-    d = os.path.join(FIX, "fixture-" + name)
+    # a copy outside git (2.10.0): see _harness.fixture_tmp
+    if name not in _COPIES:
+        _COPIES[name] = fixture_tmp(os.path.join(FIX, "fixture-" + name))
+    d = _COPIES[name]
     r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
                        cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                        text=True, encoding="utf-8", errors="replace")
@@ -7385,7 +7407,8 @@ if (q.get("medians") or {}).get("loop_min") != 40:
 if (states.get("healthy") or {}).get("medians", {}).get("loop_min") is not None:
     ok = False
 # read-only: the subcommand must not touch the ledger it reads
-lp = os.path.join(FIX, "fixture-healthy", "QA-LEDGER.json")
+top("healthy")
+lp = os.path.join(_COPIES["healthy"], "QA-LEDGER.json")
 before = io.open(lp, "rb").read()
 top("healthy")
 if io.open(lp, "rb").read() != before:
@@ -7437,6 +7460,7 @@ _led = {"schema": "dev-loop/qa-ledger@1", "run_id": "t137-both", "started_at": "
        "steps": [], "escalations": [], "production_findings": [], "spec_doubts": [],
        "spec_change_requests": [], "readiness_history": [], "curation": []}
 io.open(os.path.join(tmp_both, "QA-LEDGER.json"), "w", encoding="utf-8").write(json.dumps(_led))
+witness(ENG, tmp_both, "QA-LEDGER.json", "both-repo")   # 2.10.0: the green must be born of a run
 r = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
                    cwd=tmp_both, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    text=True, encoding="utf-8", errors="replace")
@@ -7658,7 +7682,7 @@ T138=$(pyin "$KIT" <<'PY'
 import ast, io, json, os, subprocess, sys, tempfile, unicodedata
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
-from _harness import sidecar
+from _harness import sidecar, fixture_tmp
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 TUI = os.path.join(SKILL, "uscha_top.py")
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
@@ -7895,7 +7919,7 @@ for node in ast.walk(tree):
     elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
         imported.add(node.module.split(".")[0])
 ok = imported <= STDLIB
-d = os.path.join(FIX, "fixture-honesty-negative")
+d = fixture_tmp(os.path.join(FIX, "fixture-honesty-negative"))   # outside git (2.10.0)
 r = subprocess.run([sys.executable, "-m", "uscha_top", "--ledger", "QA-LEDGER.json",
                     "--once", "--cols", "100", "--rows", "32"],
                    cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -8006,7 +8030,7 @@ if uscha_top.MIN_REFRESH != 0.5:
 
 # the other half of the same criterion: one --once frame over a fixture WITH steps carries
 # the feed the engine derived -- timestamp, level letter, text -- and not one escape byte.
-d2 = os.path.join(FIX, "fixture-stale-quarantine")
+d2 = fixture_tmp(os.path.join(FIX, "fixture-stale-quarantine"))   # outside git (2.10.0)
 r = subprocess.run([sys.executable, TUI, "--ledger", "QA-LEDGER.json", "--once",
                     "--cols", "100", "--rows", "32"],
                    cwd=d2, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -8230,7 +8254,8 @@ T140=$("$PY" - "$KIT" "$ROOT" <<'PY'
 import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
 sys.path.insert(0, os.path.join(kit, "tests"))
-from _harness import sidecar
+from _harness import sidecar, fixture_tmp
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 _spec = importlib.util.spec_from_file_location("ql140", ENG)
 q = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(q)
@@ -8290,7 +8315,8 @@ res["AC-FA-02"] = bool(
 # POLICY: this anchor tag is re-pointed at a later release ONLY through a changelog line that
 # says so -- moving it silently retires the pin without anyone deciding to (audit 1.94.1).
 # 2.2.0: the anchor STAYS at v1.86.1. ONE readiness line moved and it is named below.
-FIX = os.path.join(kit, "tests", "fixtures", "uscha-top", "fixture-honesty-negative")
+FIX = fixture_tmp(os.path.join(kit, "tests", "fixtures", "uscha-top",
+                              "fixture-honesty-negative"))   # outside git (2.10.0)
 gsh = subprocess.run(["git", "show",
                       "v1.86.1:uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"],
                      cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -8381,6 +8407,7 @@ io.open(os.path.join(td, "repo", "reports", "junit.xml"), "w", encoding="utf-8")
     '</testsuite></testsuites>')
 io.open(os.path.join(td, "QA-LEDGER.json"), "w", encoding="utf-8").write(
     json.dumps(_led("repo")))
+witness(ENG, td, "QA-LEDGER.json", "r")   # 2.10.0: the board counts only reports a run wrote
 r5 = subprocess.run([sys.executable, ENG, "top", "--json", "--ledger", "QA-LEDGER.json"],
                     cwd=td, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     text=True, encoding="utf-8", errors="replace")
@@ -9154,6 +9181,8 @@ kit = sys.argv[1]
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
 sys.path.insert(0, SKILL)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import fixture_tmp
 import uscha_top
 bad = []
 
@@ -9223,7 +9252,7 @@ except RuntimeError as exc:
     if "top failed" not in str(exc):
         bad.append("a silent engine failure had no fallback message: %r" % str(exc))
 real = uscha_top.load_state(
-    None, os.path.join(FIX, "fixture-healthy", "QA-LEDGER.json"),
+    None, os.path.join(fixture_tmp(os.path.join(FIX, "fixture-healthy")), "QA-LEDGER.json"),
     engine=os.path.join(SKILL, "qa_ledger.py"))
 if (real.get("schema") or "").split("/")[0] != "uscha-top":
     bad.append("the live read did not return a top projection: %s" % real.get("schema"))
@@ -9364,14 +9393,9 @@ class Args(object):
 spawns = []
 
 
-def fake_rerun(cmd, cwd):
-    spawns.append(("rerun", cmd, cwd))
+def fake_test_run(engine, ledger, repo):
+    spawns.append(("test-run", engine, ledger, repo))
     return 0
-
-
-def fake_snapshot(engine, ledger, repo):
-    spawns.append(("snapshot", engine, ledger, repo))
-    return 0, "[qa_ledger] snapshot backend-api (post): tests=5 (found=True)"
 
 
 def fake_reload(state, args):
@@ -9379,37 +9403,34 @@ def fake_reload(state, args):
     return {"reloaded": True}
 
 
-real_rerun, real_snapshot, real_reload = (uscha_top._rerun_call, uscha_top._snapshot_call,
-                                          uscha_top._reload)
+real_test_run, real_reload = uscha_top._test_run_call, uscha_top._reload
 
-# --- AC-T-25: without the flag the key is INERT, and it stays inert for the two other
-# reasons a rerun cannot honestly happen: a frozen --state snapshot (the ledger on disk is not
-# the one on screen) and a ledger with no configured repo (no cwd to run in, no repo to ingest
-# for). Each says why, spawns nothing, and leaves the ledger byte-identical.
+# --- AC-T-25: the key is INERT for the two reasons a rerun cannot honestly happen: a frozen
+# --state snapshot (the ledger on disk is not the one on screen) and a ledger with no configured
+# repo (nothing to run for). Each says why, spawns nothing, and leaves the ledger byte-identical.
+# Since 2.10.0 (ADR-055) a missing --rerun-cmd is NOT a refusal any more: `o` runs the engine's
+# test-run, which executes the command the PROJECT declared.
 d25 = fixture_copy("inert")
 s25 = top(d25)
 before25 = ledger_bytes(d25)
 spawns[:] = []
-uscha_top._rerun_call, uscha_top._snapshot_call = fake_rerun, fake_snapshot
+uscha_top._test_run_call = fake_test_run
 os.chdir(d25)
 try:
     ok = True
-    ran, msg = uscha_top.run_rerun(s25, Args())
-    if ran or msg != uscha_top.RERUN_MISSING_MSG:
-        ok = False
-    ran, msg = uscha_top.run_rerun(s25, Args("pytest -q", state="state-frozen.json"))
+    ran, msg = uscha_top.run_rerun(s25, Args(state="state-frozen.json"))
     if ran or "frozen snapshot" not in msg:
         ok = False
     no_repo = json.loads(json.dumps(s25))
     no_repo["repos"] = []
-    ran, msg = uscha_top.run_rerun(no_repo, Args("pytest -q"))
+    ran, msg = uscha_top.run_rerun(no_repo, Args())
     if ran or "no repo configured" not in msg:
         ok = False
 finally:
     os.chdir(HOME)
-    uscha_top._rerun_call, uscha_top._snapshot_call = real_rerun, real_snapshot
+    uscha_top._test_run_call = real_test_run
 if spawns:
-    ok = False                     # a refusal spawns NOTHING -- not the command, not the ingest
+    ok = False                     # a refusal spawns NOTHING
 if ledger_bytes(d25) != before25:
     ok = False                     # and writes nothing either
 # the contract the refusals read from: the engine names the repos, the TUI only takes the head
@@ -9426,35 +9447,31 @@ if uscha_top.dispatch_mode("o", "board", 2, 8) != ("board", 2, False, False, Non
     ok = False
 res["AC-T-25"] = bool(ok)
 
-# --- AC-T-26: one keypress -> ONE command in the first configured repo's directory -> ONE
-# engine snapshot -> a re-read, in that order. Both boundaries are replaced, so what is
-# measured is the calls the dispatch makes and not the processes behind them (that is
-# AC-T-28). A HELD key yields one run, the same guard a held verdict key gets.
+# --- AC-T-26: one keypress -> ONE engine test-run for the first configured repo -> a re-read,
+# in that order. The boundary is replaced, so what is measured is the call the dispatch makes
+# and not the process behind it (that is AC-T-28). A HELD key yields one run. A --rerun-cmd
+# given at launch is NOT run (ADR-055): the status line says it was ignored.
 d26 = fixture_copy("rerun")
 s26 = top(d26)
 spawns[:] = []
-uscha_top._rerun_call, uscha_top._snapshot_call = fake_rerun, fake_snapshot
+uscha_top._test_run_call = fake_test_run
 uscha_top._reload = fake_reload
 os.chdir(d26)
 try:
     ok = bool(uscha_top.is_rerun_key("o", "board"))
-    a26 = Args("pytest -q")
+    a26 = Args()
     st26, status26 = uscha_top._rerun_and_reload(s26, a26)
-    if [s[0] for s in spawns] != ["rerun", "snapshot", "reload"]:
-        # run, ingest, re-read -- in that order and once each. Checked FIRST and the detail
+    if [s[0] for s in spawns] != ["test-run", "reload"]:
+        # run+ingest, then re-read -- in that order and once each. Checked FIRST and the detail
         # checks skipped when it does not hold: a missing or doubled spawn must report a red
         # criterion, not an IndexError the reader has to decode.
         ok = False
     else:
-        if spawns[0][1] != "pytest -q":
-            ok = False             # the human's string, unmodified
-        if os.path.realpath(spawns[0][2]) != os.path.realpath(os.path.join(d26, "repo")):
-            ok = False             # in the tracked repo's directory (realpath BOTH sides)
-        if spawns[1][2:] != ("QA-LEDGER.json", "backend-api"):
+        if spawns[0][2:] != ("QA-LEDGER.json", "backend-api"):
             ok = False
-        if os.path.realpath(spawns[1][1]) != os.path.realpath(ENG):
+        if os.path.realpath(spawns[0][1]) != os.path.realpath(ENG):
             ok = False
-    if st26 != {"reloaded": True} or "exit 0" not in status26:
+    if st26 != {"reloaded": True} or "exit 0" not in status26 or "ingested" not in status26:
         ok = False
     # a HELD key: the loop arms the same 250 ms cooldown a verdict arms, so repeats 2 and 3
     # are refused before any boundary is reached -- one press, one run.
@@ -9464,46 +9481,49 @@ try:
         if uscha_top.is_rerun_key(_key, "board", cooling=cooling):
             uscha_top._rerun_and_reload(s26, a26)
             cooling = True
-    if len([s for s in spawns if s[0] == "rerun"]) != 1:
+    if len([s for s in spawns if s[0] == "test-run"]) != 1:
         ok = False
-    # a RED run is ingested too: the report is what it is, and refusing to ingest it would
-    # leave the board showing the previous, greener measurement.
+    # a RED run is ingested too (test-run ingests whatever the run wrote); the line says both
     spawns[:] = []
 
-    def red_rerun(cmd, cwd):
-        spawns.append(("rerun", cmd, cwd))
-        return 7
+    def red_test_run(engine, ledger, repo):
+        spawns.append(("test-run", engine, ledger, repo))
+        return 1
 
-    uscha_top._rerun_call = red_rerun
+    uscha_top._test_run_call = red_test_run
     _st, status_red = uscha_top._rerun_and_reload(s26, a26)
-    if [s[0] for s in spawns] != ["rerun", "snapshot", "reload"]:
+    if [s[0] for s in spawns] != ["test-run", "reload"]:
         ok = False
-    if "exit 7" not in status_red or "ingested" not in status_red:
+    if "exit 1" not in status_red or "ingested" not in status_red:
         ok = False
-    # a FAILING ingest says so instead of implying the board moved
+    # nothing born of the run / no declared command says so instead of implying the board moved
+    def none_test_run(engine, ledger, repo):
+        spawns.append(("test-run", engine, ledger, repo))
+        return 2
+
+    uscha_top._test_run_call = none_test_run
+    _st, status_none = uscha_top._rerun_and_reload(s26, a26)
+    if "UNMEASURED" not in status_none or "ingested" in status_none:
+        ok = False
+    # --rerun-cmd given: accepted, never run, and the line says so
     spawns[:] = []
-
-    def bad_snapshot(engine, ledger, repo):
-        spawns.append(("snapshot", engine, ledger, repo))
-        return 2, "[qa_ledger] snapshot: unknown repo"
-
-    uscha_top._snapshot_call = bad_snapshot
-    _st, status_bad = uscha_top._rerun_and_reload(s26, a26)
-    if "snapshot FAILED" not in status_bad or "nothing was ingested" not in status_bad:
+    uscha_top._test_run_call = fake_test_run
+    _st, status_ign = uscha_top._rerun_and_reload(s26, Args("pytest -q"))
+    if [s[0] for s in spawns] != ["test-run", "reload"] or "ignored" not in status_ign:
+        ok = False
+    if any("pytest -q" in str(x) for x in spawns):
         ok = False
 finally:
     os.chdir(HOME)
-    uscha_top._rerun_call, uscha_top._snapshot_call = real_rerun, real_snapshot
+    uscha_top._test_run_call = real_test_run
     uscha_top._reload = real_reload
 
-# the two argv shapes themselves, with the subprocess boundary replaced so nothing runs
+# the argv shape itself, with the subprocess boundary replaced so nothing runs
 seen = []
 
 
 class FakeProc(object):
     returncode = 0
-    stdout = b"[qa_ledger] snapshot backend-api (post)\n"
-    stderr = b""
 
 
 class FakeSub(object):
@@ -9518,20 +9538,16 @@ class FakeSub(object):
 real_sub = uscha_top.subprocess
 uscha_top.subprocess = FakeSub
 try:
-    code = uscha_top._rerun_call("pytest -q", os.path.join(d26, "repo"))
-    rc, said = uscha_top._snapshot_call(ENG, "QA-LEDGER.json", "backend-api")
+    code = uscha_top._test_run_call(ENG, "QA-LEDGER.json", "backend-api")
 finally:
     uscha_top.subprocess = real_sub
-if len(seen) != 2 or code != 0 or (rc, said) != (0, "[qa_ledger] snapshot backend-api (post)"):
+if len(seen) != 1 or code != 0:
     ok = False
-if seen[0][0] != "pytest -q" or seen[0][1].get("shell") is not True:
-    ok = False                     # the human passed a SHELL string; it is run as one (ADR-008)
-if os.path.realpath(seen[0][1].get("cwd") or ".") != os.path.realpath(
-        os.path.join(d26, "repo")):
-    ok = False
-if seen[1][0] != [sys.executable, ENG, "snapshot", "--ledger", "QA-LEDGER.json",
-                  "--repo", "backend-api"]:
-    ok = False
+elif seen[0][0] != [sys.executable, ENG, "test-run", "--ledger", "QA-LEDGER.json",
+                    "--repo", "backend-api"] or seen[0][1].get("shell"):
+    ok = False                     # an argv list, no shell, nothing the human typed
+elif os.path.realpath(seen[0][1].get("cwd") or "") != os.path.realpath(os.getcwd()):
+    ok = False                     # run FROM the ledger's directory (here: the cwd that holds it)
 res["AC-T-26"] = bool(ok)
 
 # --- AC-T-27: while a rerun is in flight the queue on screen was read BEFORE the ingest, so a
@@ -9560,44 +9576,66 @@ if spawns:
     ok = False
 # the human is TOLD why the key did nothing -- a keypress that vanishes reads as a dropped
 # input, and the next reflex is to press it again.
-banner = uscha_top.rerun_banner("pytest -q", "backend-api")
-if "verdict keys locked" not in banner or "pytest -q" not in banner:
+banner = uscha_top.rerun_banner("backend-api")
+if "verdict keys locked" not in banner or "test-run" not in banner:
     ok = False
 if "backend-api" not in banner or "first configured repo" not in banner:
     ok = False
 res["AC-T-27"] = bool(ok)
 
 # --- AC-T-28 (INV-TOP-03, the other half): a verdict never moves DONE (AC-T-16) and this is
-# the path that does. The fixture's red case is replaced by a green report and the REAL
-# _snapshot_call runs. Stated precisely, because the honest claim is narrower than the
-# obvious one: the AC recount reads the ingested REPORT (_ac_tags reads the file), so DONE
-# moves as soon as the report does -- what the snapshot adds, and what the TUI could not
-# fabricate, is the LEDGER RECORD of that measurement plus the feed event that names it. That
-# record is asserted equal to a manual qa_ledger.py snapshot call's, member for member.
+# the path that does. Since 2.10.0 (ADR-055) the only report that counts is one BORN of a
+# recorded test-run: each copy DECLARES a test command (the live uscha.config.json beside the
+# ledger) that writes a green report, and the REAL _test_run_call runs it. DONE does not move
+# when the green bytes merely appear on disk (a hand-placed report is not evidence any more); it
+# moves when the run that wrote them is recorded. The TUI's record is asserted equal to a manual
+# qa_ledger.py test-run call's, member for member, clocks aside.
 d_tui, d_man = fixture_copy("ingest-tui"), fixture_copy("ingest-man")
-before28 = top(d_tui)
+orig28 = top(d_tui)
 green = io.open(os.path.join(d_tui, "repo", "reports", "junit.xml"),
                 encoding="utf-8").read().replace("<failure message=\x22red\x22/>", "")
 for _d in (d_tui, d_man):
-    io.open(os.path.join(_d, "repo", "reports", "junit.xml"), "w",
-            encoding="utf-8").write(green)
+    io.open(os.path.join(_d, "green.xml"), "w", encoding="utf-8").write(green)
+    _cfg = json.loads(io.open(os.path.join(_d, "uscha.config.json"), encoding="utf-8").read())
+    io.open(os.path.join(_d, "emit.py"), "w", encoding="utf-8").write(
+        "import shutil" + chr(10)
+        + "shutil.copyfile(" + chr(34) + "../green.xml" + chr(34) + ", " + chr(34)
+        + "reports/junit.xml" + chr(34) + ")" + chr(10))
+    _cfg["repos"][0]["test_command"] = [sys.executable.replace(chr(92), "/"), "../emit.py"]
+    io.open(os.path.join(_d, "uscha.config.json"), "w", encoding="utf-8").write(
+        json.dumps(_cfg, indent=2))
+# declaring a different command retires the fixture's own run (TR-1 ran another command), so
+# the board reads what it can vouch for NOW; that is the "before" of this case
+before28 = top(d_tui)
+# the green bytes on disk WITHOUT a run: the recount must not move
+shutil.copyfile(os.path.join(d_tui, "green.xml"), os.path.join(d_tui, "repo", "reports", "x.xml"))
 mid28 = top(d_tui)
+os.remove(os.path.join(d_tui, "repo", "reports", "x.xml"))
 os.chdir(d_tui)
+# the real call streams the run to the terminal it inherits -- here, the stdout this block's
+# verdict is read from -- so fd 1 points at the null device for exactly that call
+sys.stdout.flush()
+_fd_saved, _fd_null = os.dup(1), os.open(os.devnull, os.O_WRONLY)
+os.dup2(_fd_null, 1)
 try:
-    rc28, said28 = uscha_top._snapshot_call(ENG, "QA-LEDGER.json", "backend-api")
+    rc28 = uscha_top._test_run_call(ENG, "QA-LEDGER.json", "backend-api")
 finally:
+    os.dup2(_fd_saved, 1)
+    os.close(_fd_null)
+    os.close(_fd_saved)
     os.chdir(HOME)
 after28 = top(d_tui)
-man = subprocess.run([sys.executable, ENG, "snapshot", "--ledger", "QA-LEDGER.json",
+man = subprocess.run([sys.executable, ENG, "test-run", "--ledger", "QA-LEDGER.json",
                       "--repo", "backend-api"], cwd=d_man, stdout=subprocess.PIPE,
                      stderr=subprocess.PIPE)
 ok = rc28 == 0 and man.returncode == 0
-if mid28.get("terminado", {}).get("done") != before28.get("terminado", {}).get("done") + 1:
-    ok = False                     # the report moved the recount -- named, not implied
-if after28.get("terminado", {}).get("done") != mid28.get("terminado", {}).get("done"):
-    ok = False                     # and the ingest did not move it a second time
-if after28.get("debtors", {}).get("machine") != before28.get("debtors", {}).get("machine") - 1:
-    ok = False
+_done = lambda st: (st.get("terminado") or {}).get("done")
+if _done(mid28) != _done(before28):
+    ok = False                     # hand-placed green bytes moved nothing
+if _done(before28) >= _done(orig28):
+    ok = False                     # a run of a command no longer declared does not count
+if _done(after28) != _done(orig28) + 1:
+    ok = False                     # the witnessed run moved the recount -- named, not implied
 feed28 = after28.get("events_tail") or []
 if not feed28 or not (feed28[0].get("text") or "").startswith("snapshot backend-api"):
     ok = False                     # the newest event is the ingest that just happened
@@ -9608,12 +9646,13 @@ snap_b = led_b["repos"]["backend-api"]["snapshots"][-1]
 
 
 def strip_clocks(rec):
-    """The wall clocks a subprocess reads for itself: the record's own `at` and the mtime of
-    the report file, which is the moment the copy was made. Everything else -- the test
-    counts, the coverage block, the LOC block, the freshness verdict, the origin -- must be
-    equal, and IS what makes the two calls the same call."""
+    """The wall clocks a subprocess reads for itself: the record's own `at`, the run's start,
+    end and duration, and the mtime of the report file. Everything else -- the test counts, the
+    provenance stamps, the coverage block, the LOC block, the freshness verdict, the origin, the
+    run's command and born reports -- must be equal, and IS what makes the two calls one call."""
     out = json.loads(json.dumps(rec))
-    out.pop("at", None)
+    for k in ("at", "started_at", "ended_at", "wall_ms"):
+        out.pop(k, None)
     for rep in ((out.get("tests") or {}).get("reports") or []):
         rep.pop("mtime_ns", None)
         rep.pop("mtime", None)
@@ -9623,15 +9662,19 @@ def strip_clocks(rec):
 if json.dumps(strip_clocks(snap_a), sort_keys=True) != \
         json.dumps(strip_clocks(snap_b), sort_keys=True):
     ok = False
-for _snap in (snap_a, snap_b):
-    if not isinstance(_snap.get("at"), str):
-        ok = False
-    if not (_snap.get("tests") or {}).get("reports"):
-        ok = False                 # the stripped members were really there
+# the fixture ledger carries its own recorded run (TR-1); the keypress adds exactly one
+runs_a, runs_b = led_a.get("test_runs") or [], led_b.get("test_runs") or []
+if len(runs_a) != 2 or len(runs_b) != 2 or runs_a[-1].get("status") != "PASSED":
+    ok = False
+elif json.dumps(strip_clocks(runs_a[-1]), sort_keys=True) != \
+        json.dumps(strip_clocks(runs_b[-1]), sort_keys=True):
+    ok = False
+if ((snap_a.get("tests") or {}).get("provenance") or {}).get("status") != "attested":
+    ok = False
 step_a, step_b = dict(led_a["steps"][-1]), dict(led_b["steps"][-1])
 step_a.pop("at", None)
 step_b.pop("at", None)
-if step_a != step_b or step_a.get("kind") != "snapshot":
+if step_a != step_b or step_a.get("kind") != "snapshot" or step_a.get("via") != "test-run":
     ok = False
 res["AC-T-28"] = bool(ok)
 
@@ -9651,28 +9694,31 @@ def calls_to(node, name):
 
 
 ok = True
-for _name in ("_curate_call", "_snapshot_call", "_rerun_call", "run_rerun"):
+for _name in ("_curate_call", "_test_run_call", "run_rerun"):
     if len(calls_to(tree, _name)) != 1:
-        ok = False                 # one call site each: curate, snapshot, the human's command
+        ok = False                 # one call site each: curate, the witnessed run
 for nd in ast.walk(tree):
     if isinstance(nd, (ast.For, ast.While, ast.AsyncFor)):
-        for _name in ("_curate_call", "_snapshot_call", "_rerun_call", "run_rerun"):
+        for _name in ("_curate_call", "_test_run_call", "run_rerun"):
             if calls_to(nd, _name):
                 ok = False         # and none of them under a loop
-if src.count(chr(34) + "snapshot" + chr(34)) != 1:
-    ok = False                     # exactly ONE place builds a snapshot call
-# ...and the claim itself is counted, not just its three named halves. The module spawns FOUR
-# times: the three ADR-037/033 boundaries above plus the ONE read-only top --json read in
+if src.count(chr(34) + "test-run" + chr(34)) != 1:
+    ok = False                     # exactly ONE place builds a test-run call
+if src.count(chr(34) + "snapshot" + chr(34)) != 0:
+    ok = False                     # and the TUI no longer ingests by path (ADR-055)
+# ...and the claim itself is counted, not just its named halves. The module spawns THREE
+# times since 2.10.0 (it was four: the human's command and the snapshot became one test-run):
+# the two ADR-037/033 boundaries above plus the ONE read-only top --json read in
 # load_state (ADR-032). The docs used to say "three spawns exist in uscha_top.py" full stop,
 # which anyone grepping the module could falsify in one command (1.91.0 blind review) -- so the
-# sentence now counts from the read boundary and the suite pins the total. A FIFTH inlined
+# sentence now counts from the read boundary and the suite pins the total. A FOURTH inlined
 # spawn goes red here whichever side of the boundary it lands on.
 _spawn_sites = [c for c in ast.walk(tree)
                 if isinstance(c, ast.Call)
                 and getattr(c.func, "attr", None) in ("run", "Popen", "call")
                 and getattr(getattr(c.func, "value", None), "id", None) == "subprocess"]
-if len(_spawn_sites) != 4:
-    ok = False                     # three beyond the read boundary, plus the boundary itself
+if len(_spawn_sites) != 3:
+    ok = False                     # two beyond the read boundary, plus the boundary itself
 # the pane: byte-identical against its golden frames, and no escape on the plain path
 st_drift = json.load(io.open(os.path.join(FIX, "state", "state-drift.json"),
                              encoding="utf-8"))
@@ -9862,6 +9908,7 @@ import io, json, os, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import witness
 SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
 ENG = os.path.join(SKILL, "qa_ledger.py")
 FIX = os.path.join(kit, "tests", "fixtures", "uscha-top")
@@ -9916,7 +9963,7 @@ def fixture(report_rel="reports/junit.xml"):
     sh(d, "git", "commit", "-m", "v2")
     write(os.path.join(d, report_rel), JUNIT)
     eng(d, "init", "--config", "c.json", "--out", "L.json")
-    eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+    witness(ENG, d, "L.json", "app")   # 2.10.0: born of a recorded test-run
     return d
 
 
@@ -9984,7 +10031,7 @@ dirty_named = any(r.startswith("repo subtree dirty")
 # a snapshot taken ON the dirty subtree does NOT launder it: ADR-007 records `dirty: true`
 # and the seal keeps refusing with the same reason. The snapshot is evidence of when the
 # measurement happened, never a pardon for the state it happened in.
-eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+witness(ENG, d, "L.json", "app")   # 2.10.0: born of a recorded test-run
 snap2 = (json.load(io.open(os.path.join(d, "L.json"), encoding="utf-8"))
          ["repos"]["app"]["snapshots"][-1])
 rc2b, _out2b = check(d)
@@ -9993,7 +10040,7 @@ res["AC-CT-02"] = bool(rc == 1 and s.get("sealed", {}).get("ok") is False and di
                        and rc2b == 1
                        and any(r.startswith("repo subtree dirty") for r in reasons(seal(d))))
 sh(d, "git", "checkout", "--", "src/main.py")
-eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+witness(ENG, d, "L.json", "app")   # 2.10.0: born of a recorded test-run
 
 # the report's mtime is bumped (content untouched, so its hash is the same one the snapshot
 # recorded): the FRESHNESS gate is a different mechanism -- restoring a source file above made
@@ -10018,7 +10065,7 @@ codes.add(rc)
 sr = reasons(seal(d))
 res["AC-CT-04"] = bool(rc == 1 and any(r.startswith("stale seal") for r in sr))
 
-eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+witness(ENG, d, "L.json", "app")   # 2.10.0: born of a recorded test-run
 rc, out = check(d)
 codes.add(rc)
 res["AC-CT-05"] = bool(rc == 0 and seal(d).get("ok") is True)
@@ -10035,7 +10082,7 @@ codes.add(rc)
 sr = reasons(seal(d))
 res["AC-CT-07"] = bool(rc == 1 and sr == ["evidence missing: reports/junit.xml"])
 write(RP, JUNIT)
-eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+witness(ENG, d, "L.json", "app")   # 2.10.0: born of a recorded test-run
 
 nogit = tempfile.mkdtemp(prefix="uscha-ct-nogit-")
 shutil.copy(os.path.join(d, "L.json"), os.path.join(nogit, "L.json"))
@@ -10157,7 +10204,8 @@ T147=$(pyin "$KIT" "$ROOT" <<'PY'
 import io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
 sys.path.insert(0, os.path.join(kit, "tests"))
-from _harness import sidecar
+from _harness import sidecar, fixture_tmp
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 
@@ -10214,7 +10262,7 @@ def fixture(git=True, with_report=True):
     if not with_report:
         return d
     eng(d, "init", "--config", "c.json", "--out", "L.json")
-    eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+    witness(ENG, d, "L.json", "app")   # 2.10.0: born of a recorded test-run
     return d
 
 
@@ -10306,7 +10354,8 @@ res["AC-FR-05"] = bool(mc == [] and stale == 1)
 gsh = subprocess.run(["git", "show",
                       "v1.92.0:uscha-kit/.claude/skills/uscha-devloop/qa_ledger.py"],
                      cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-FIX = os.path.join(kit, "tests", "fixtures", "uscha-top", "fixture-honesty-negative")
+FIX = fixture_tmp(os.path.join(kit, "tests", "fixtures", "uscha-top",
+                              "fixture-honesty-negative"))   # outside git (2.10.0)
 if gsh.returncode != 0 or not gsh.stdout or not os.path.isdir(FIX):
     res["AC-FR-06"] = None
 else:
@@ -10345,11 +10394,22 @@ else:
         narrated-only is still red, and every other line is still byte-compared.
         """
         head = "  ! narrated-only: "
+        acc_head = "  acceptance medido: "
         out = []
         for ln in s.split("\n"):
             if ln.startswith(head):
                 ids = ln[len(head):].split(" " + chr(8212) + " ", 1)[0]
                 ln = head + ids + " <prose normalised: 2.2.0>"
+            # 2.10.0 (ADR-055), named in CHANGELOG-2.10.0.md: with EVERY report discarded the
+            # line says UNMEASURED instead of a measured-looking 0.0%. The count it carries is
+            # still compared; only the word that replaced "0.0%" is normalised.
+            elif ln.startswith(acc_head + "UNMEASURED (0/"):
+                ln = acc_head + "0.0% (0/" + ln[len(acc_head + "UNMEASURED (0/"):].split(" ", 1)[0]
+            elif ln.startswith(acc_head + "0.0% (0/"):
+                ln = acc_head + "0.0% (0/" + ln[len(acc_head + "0.0% (0/"):].split("/", 1)[0].split(" ", 1)[0]
+            # 2.10.0: the advisory contradiction line is new and advisory; it is dropped here
+            elif ": advisory contradiction: " in ln:
+                continue
             out.append(ln)
         return "\n".join(out)
 
@@ -10428,7 +10488,7 @@ res["AC-FR-08"] = bool(snap8["tests"]["freshness"]["status"] == "stale"
 d9 = fixture(with_report=False)
 write(os.path.join(d9, "reports", "junit.xml"), JUNIT)
 eng(d9, "init", "--config", "c.json", "--out", "L.json")
-eng(d9, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+witness(ENG, d9, "L.json", "app")   # 2.10.0: born of a recorded test-run
 sh(d9, "git", "add", "-A")
 sh(d9, "git", "commit", "-m", "release: ledger + evidence")
 c9 = tempfile.mkdtemp(prefix="uscha-fr-clone-")
@@ -10476,7 +10536,7 @@ def _eol_case(recorded_crlf):
     with io.open(os.path.join(d, "reports", "junit.xml"), "wb") as fh:
         fh.write(body.encode("utf-8"))
     eng(d, "init", "--config", "c.json", "--out", "L.json")
-    eng(d, "snapshot", "--ledger", "L.json", "--repo", "app", "--phase", "post")
+    witness(ENG, d, "L.json", "app")   # 2.10.0: born of a recorded test-run
     sh(d, "git", "add", "-A")
     sh(d, "git", "commit", "-m", "release: ledger + evidence")
     other = JUNIT if recorded_crlf else JUNIT.replace(chr(10), chr(13) + chr(10))
@@ -10776,6 +10836,7 @@ import io, json, os, re, shutil, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 SUITE = os.path.join(kit, "tests", "smoke-engine.sh")
 res = {}
@@ -10865,6 +10926,7 @@ def measure():
     jacoco(d3, "m1", 0, 100)
     jacoco(d3, "m2", 100, 0)
     init(d3, MVN_CFG)
+    witness(ENG, d3, "L.json", "app")   # 2.10.0: coverage counts only when born of a test-run
     r3a = eng(d3, "check-coverage", "--ledger", "L.json", "--repo", "app")
     write(os.path.join(d3, "m2", "target", "site", "jacoco", "jacoco.xml"), "<report")
     r3b = eng(d3, "check-coverage", "--ledger", "L.json", "--repo", "app")
@@ -11192,9 +11254,13 @@ def fixture():
     sh(d, sys.executable, os.path.join(d, "tools", "gen-skill-blocks.py"))
     write(d, "uscha-kit/CHANGELOG-1.0.1.md",
           "# uscha-kit 1.0.1" + NL * 2 + "prose." + NL * 2 + PLACEHOLDER + NL)
+    # 2.10.0 (ADR-055): step 4 is the engine test-run, so the fixture DECLARES its suite --
+    # a stand-in that prints the two count lines and writes a JUnit report whose bytes change
+    # every run (a timestamp), the way the real acceptance emitter does
     write(d, "uscha.config.json", json.dumps({
         "project": "rl", "defaults": {"acceptance_file": "ACCEPTANCE.md"},
-        "repos": [{"name": "uscha", "path": ".", "type": "python"}],
+        "repos": [{"name": "uscha", "path": ".", "type": "python",
+                   "test_command": [sys.executable.replace(chr(92), "/"), "fake-suite.py"]}],
         "integration": {"enabled": False}}, indent=2) + NL)
     write(d, "ACCEPTANCE.md", "# A" + NL * 2 + "- [x] AC-01 - a" + NL + "- [ ] AC-02 - b" + NL)
     write(d, "README.md", "A repo." + NL)
@@ -11207,7 +11273,13 @@ def fixture():
     write(d, "tools/facts-gated-files.txt",
           "# canonical" + NL + "README.md" + NL + NL + "# deployed" + NL)
     write(d, "fake-suite.py",
-          "print('RESULTADO: 7 ok " + DOT + " 0 fail')" + NL
+          "import os, time" + NL
+          + "os.makedirs(os.path.join('reports', 'junit'), exist_ok=True)" + NL
+          + "open(os.path.join('reports', 'junit', 'TEST-fake.xml'), 'w').write("
+          + "'<testsuite tests=" + chr(34) + "1" + chr(34) + " timestamp=" + chr(34)
+          + "%r" + chr(34) + "><testcase name=" + chr(34) + "t" + chr(34)
+          + "/></testsuite>' % time.time())" + NL
+          + "print('RESULTADO: 7 ok " + DOT + " 0 fail')" + NL
           + "print('ACCEPTANCE: 5/5 criterios medidos en verde')" + NL)
     sh(d, sys.executable, os.path.join(d, "uscha-kit", ".claude", "skills", "uscha-devloop",
                                        "qa_ledger.py"),
@@ -11249,7 +11321,6 @@ def committed_check(d, version, mutate):
 
 
 def measure():
-    SUITE = chr(34) + sys.executable + chr(34) + " fake-suite.py"
     base = fixture()
     CL_BODY = read(base, "uscha-kit/CHANGELOG-1.0.1.md")
 
@@ -11309,11 +11380,11 @@ def measure():
     # the uncommitted "feature" X must carry alongside the bump
     write(base, "src/app.py", "x = 1" + NL + "# the feature this release ships" + NL)
     pristine = fork("uscha-rl-wt-", base)   # AC-RL-06 needs a repo no release has run on yet
-    r14 = rel_run(base, "1.0.1", "--message-file", "msg.txt", "--suite-cmd", SUITE, "--to-step", "4")
+    r14 = rel_run(base, "1.0.1", "--message-file", "msg.txt", "--to-step", "4")
 
 
     ok = fork("uscha-rl-ok-", base)
-    r5 = rel_run(ok, "1.0.1", "--suite-cmd", SUITE, "--from-step", "5", "--to-step", "5")
+    r5 = rel_run(ok, "1.0.1", "--from-step", "5", "--to-step", "5")
     x_paths, x1_paths = touched(ok, "HEAD~1"), touched(ok, "HEAD")
     cl_after = read(ok, "uscha-kit/CHANGELOG-1.0.1.md")
     # X = the six surfaces + the re-rendered orientation blocks + the regenerated facts +
@@ -11328,7 +11399,8 @@ def measure():
         and x_paths == sorted(list(SURFACES) + ["SYSTEM-FACTS.json", "src/app.py"]
                               + list(FX_SKILLS_MD))
         and all("uscha kit: 1.0.1" in body for body in stamped)
-        and x1_paths == ["QA-LEDGER.json", "uscha-kit/CHANGELOG-1.0.1.md"]
+        and x1_paths == ["QA-LEDGER.json", "reports/junit/TEST-fake.xml",
+                         "uscha-kit/CHANGELOG-1.0.1.md"]
         and PLACEHOLDER not in cl_after and FILLED in cl_after)
     why["AC-RL-03"] = "rc=(%s,%s) X=%s X+1=%s stamped=%s" % (
         r14.returncode, r5.returncode, x_paths, x1_paths,
@@ -11346,7 +11418,7 @@ def measure():
     x_before = sh(am, "git", "rev-parse", "HEAD").stdout.strip()
     sh(am, "git", "commit", "--amend", "--no-edit", "-q", "--date=2001-02-03T04:05:06+00:00")
     x_after = sh(am, "git", "rev-parse", "HEAD").stdout.strip()
-    r_am = rel_run(am, "1.0.1", "--suite-cmd", SUITE, "--from-step", "5", "--to-step", "5")
+    r_am = rel_run(am, "1.0.1", "--from-step", "5", "--to-step", "5")
     res["AC-RL-04"] = bool(x_before and x_after and x_before != x_after
                            and r_am.returncode == 2 and "REFUSED -- I5" in r_am.stdout)
     why["AC-RL-04"] = "amend %s->%s rc=%s out=%r" % (
@@ -11354,7 +11426,7 @@ def measure():
 
     sc = fork("uscha-rl-src-", base)
     write(sc, "src/app.py", "x = 2" + NL)
-    r_sc = rel_run(sc, "1.0.1", "--suite-cmd", SUITE, "--from-step", "5", "--to-step", "5")
+    r_sc = rel_run(sc, "1.0.1", "--from-step", "5", "--to-step", "5")
     res["AC-RL-05"] = bool(
         r_sc.returncode == 2 and "REFUSED -- I6" in r_sc.stdout and "src/app.py" in r_sc.stdout
         and PLACEHOLDER in read(sc, "uscha-kit/CHANGELOG-1.0.1.md"))
@@ -11371,7 +11443,7 @@ def measure():
     shutil.rmtree(wt)
     sh(pristine, "git", "worktree", "add", "-q", wt, "wip/1.0.1")
     write(wt, "src/app.py", "x = 1" + NL + "# the feature, released from a worktree" + NL)
-    r6 = rel_run(wt, "1.0.1", "--message-file", "msg.txt", "--suite-cmd", SUITE)
+    r6 = rel_run(wt, "1.0.1", "--message-file", "msg.txt")
     x1 = sh(wt, "git", "rev-parse", "HEAD").stdout.strip()
     pushed = sh(bare, "git", "rev-parse", "main").stdout.strip()
     local_main = sh(pristine, "git", "rev-parse", "main").stdout.strip()
@@ -13114,6 +13186,13 @@ def measure():
         # a full clean agent cycle first, so convergence is otherwise SATISFIED: without it
         # converged short-circuits on "0 agent steps" and the gate half of the comparison
         # below would be measuring the fixture instead of the mechanism.
+        # judgment-day and improve are declared external first: since 2.10.0 (ADR-056 R1) an
+        # UNVERIFIED step (tool MISSING) never counts toward convergence in the window either,
+        # and this cycle must be a real clean one for the gate half to measure the mechanism.
+        _cfg_p = os.path.join(d, "uscha.config.json")
+        _cfg = json.loads(io.open(_cfg_p, encoding="utf-8").read())
+        _cfg["defaults"]["qa_tools_external"] = ["judgment-day", "improve"]
+        io.open(_cfg_p, "w", encoding="utf-8").write(json.dumps(_cfg))
         for _tool in ("code-review", "judgment-day", "improve"):
             run([ENG, "log-step", "--repo", "app", "--tool", _tool, "--iteration", "1",
                  "--tests-passed", "true"], cwd=d)
@@ -13989,6 +14068,13 @@ def measure():
     # against a literal: the claim is that ci gates like the gate it was modelled on.
     def loaded(kind, extra=None):
         d = monorepo()
+        # the three placeholder tools are DECLARED external in the live config: since 2.10.0
+        # (ADR-056 R1) an unverified step (tool MISSING) never counts toward convergence, and
+        # this parity case needs a cycle that is otherwise clean
+        _cp = os.path.join(d, "uscha.config.json")
+        _c = json.loads(io.open(_cp, encoding="utf-8").read())
+        _c["defaults"]["qa_tools_external"] = ["t1", "t2", "t3"]
+        io.open(_cp, "w", encoding="utf-8").write(json.dumps(_c, indent=2) + chr(10))
         for repo in ("backend-api", "mobile-app"):
             for i in (1, 2, 3):
                 eng(d, ["log-step", "--ledger", "L.json", "--repo", repo, "--tool", "t%d" % i,
@@ -15279,6 +15365,18 @@ def run(*args):
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
 
 
+# 2.10.0 (ADR-055): a report becomes evidence only when a recorded test-run wrote it. The kit's
+# tests/_witness.py stashes the hand-placed report and declares a command that restores it, so the
+# engine's own before/after hash sees it born of the run.
+sys.path.insert(0, str(engine.parents[3] / "tests"))
+from _witness import prepare as _witness_prepare
+
+
+def witnessed(ledger, name):
+    _witness_prepare(str(engine), str(ledger), name)
+    return run("test-run", "--ledger", ledger, "--repo", name)
+
+
 def check_layout(root, name, repo_type, source_rel, report_rel):
     repo = root / name
     source = repo / source_rel
@@ -15304,7 +15402,7 @@ def check_layout(root, name, repo_type, source_rel, report_rel):
 
     result = run("init", "--config", config, "--out", ledger)
     assert result.returncode == 0, (name, "init", result.stdout, result.stderr)
-    result = run("snapshot", "--ledger", ledger, "--repo", name)
+    result = witnessed(ledger, name)
     assert result.returncode == 0, (name, "fresh snapshot", result.stdout, result.stderr)
     result = run("log-step", "--ledger", ledger, "--repo", name,
                  "--tool", "code-review", "--iteration", "1",
@@ -15355,9 +15453,11 @@ def check_report_only_compatibility(root):
         "repos": [{"name": name, "path": str(repo), "type": "python"}],
         "integration": {"enabled": False},
     }), encoding="utf-8")
+    result = run("init", "--config", config, "--out", ledger)
+    assert result.returncode == 0, (name, "init", result.stdout, result.stderr)
+    _witness_prepare(str(engine), str(ledger), name)
     for args in (
-        ("init", "--config", config, "--out", ledger),
-        ("snapshot", "--ledger", ledger, "--repo", name),
+        ("test-run", "--ledger", ledger, "--repo", name),
         ("log-step", "--ledger", ledger, "--repo", name, "--tool", "code-review",
          "--iteration", "1", "--gated-reported", "0", "--files-changed", "0"),
     ):
@@ -15476,6 +15576,7 @@ import io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 # the release before corpus-run: its engine must show the absence (AC-CO-09).
 PREV_TAG = "v2.1.0"
@@ -15875,6 +15976,7 @@ def measure():
               '<testsuites><testsuite name="s">'
               '<testcase classname="C" name="AC-FIELD-01_ok"/>'
               '</testsuite></testsuites>')
+        witness(ENG, w, "L.json", "backend-api")   # 2.10.0: born of a recorded test-run
         return w
 
     d = with_junit()
@@ -16797,6 +16899,10 @@ def measure():
     for c in cmds:
         if c.startswith("QL="):
             excluded.append(c + "   [variable binding; rebound to the kit under test]")
+        elif " test-run " in c:
+            # 2.10.0 (ADR-055): test-run EXECUTES the project's declared test command -- pytest
+            # here, which is out of scope for the same reason the pytest line was
+            excluded.append(c + "   [runs the project's declared test command (pytest)]")
         elif ('"$QL"' in c) or ("install-uscha.py" in c):
             in_scope.append(c)
         elif c.startswith("/uscha-"):
@@ -16962,6 +17068,7 @@ import io, json, os, re, subprocess, sys, tarfile, tempfile
 kit, root = sys.argv[1], sys.argv[2]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import witness
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 INSTALLER = os.path.join(kit, "install-uscha.py")
 GEN_BLOCKS = os.path.join(root, "tools", "gen-skill-blocks.py")
@@ -17041,6 +17148,7 @@ def measure():
         p1.append("no-report message does not read UNMEASURED: %r" % none_text[-160:])
     write(os.path.join(repo1, "coverage.xml"),
          '<coverage lines-covered="1" lines-valid="10"></coverage>' + chr(10))
+    witness(ENG, repo1, "L.json", "backend-api")   # 2.10.0: a report counts once a run wrote it
     low_out = run([ENG, "check-coverage", "--ledger", os.path.join(repo1, "L.json"),
                   "--repo", "backend-api", "--threshold", "60"], cwd=repo1)
     if low_out.returncode != 1:
@@ -19956,6 +20064,721 @@ esac
 }
 pj_unit T172 pj_t172
 
+pj_t173() {
+echo "== T173 (ADR-055/056/057/058, 2.10.0): test evidence is WITNESSED -- only a report born of a recorded test-run counts, read at read time =="
+# The v2.9.0 audit made the engine lie: two hand-typed XML files over a module that raises on
+# every call reached pr-ready, 100% acceptance and SEALED (A-F1); an unverified newest step was
+# replaced by an older verified one (B-F1) or counted in the window (B-F2); phase read the
+# freshness stored at snapshot time (A-F3). Every row below is a real temp git repo the ENGINE
+# drives under an isolated HOME. AC-GI-16 is the SHIPPED PROBE (the v2.9.0 engine reaches
+# pr-ready on the A-F1 tree, the current one refuses); AC-GI-14 drives a ledger the v2.9.0 engine
+# wrote. Both read the tag out of git -- without it they report None = UNMEASURED.
+T173=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+SKILL = os.path.join(kit, ".claude", "skills", "uscha-devloop")
+ENG = os.path.join(SKILL, "qa_ledger.py")
+PREV_TAG = "v2.9.0"
+NL, DQ = chr(10), chr(34)
+TOOLS = ["code-review", "judgment-day", "improve"]
+TMPS = []
+res, why = {}, {}
+HOME_ISO = tempfile.mkdtemp(prefix="uscha-gi-home-")
+TMPS.append(HOME_ISO)
+ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
+for _k in ("CLAUDECODE", "USCHA_JOBS"):
+    ENV.pop(_k, None)
+XPY = sys.executable.replace(chr(92), "/")
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix="uscha-gi-" + prefix + "-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def readb(path):
+    with io.open(path, "rb") as fh:
+        return fh.read()
+
+
+def sh(d, *argv):
+    return subprocess.run(list(argv), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, encoding="utf-8", errors="replace", env=ENV)
+
+
+def q(d, *argv, **kw):
+    eng = kw.get("eng", ENG)
+    return subprocess.run([sys.executable, eng] + list(argv), cwd=d, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                          errors="replace", env=ENV)
+
+
+def jq(d, *argv):
+    r = q(d, *argv)
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+# The real run every GREEN row uses (FIXTURES.md, base-py): stdlib unittest over real test
+# cases; the JUnit it writes names the real outcomes and carries a run timestamp, the coverage
+# report a fixed reading. Nothing here is a hand-placed report.
+RUN_TESTS = NL.join([
+    "import os, sys, time, unittest",
+    "sys.path.insert(0, os.getcwd())",
+    "suite = unittest.defaultTestLoader.discover(os.getcwd(), pattern=" + DQ + "test_*.py" + DQ + ")",
+    "names = []",
+    "def walk(s):",
+    "    for t in s:",
+    "        if isinstance(t, unittest.TestSuite):",
+    "            walk(t)",
+    "        else:",
+    "            names.append(t)",
+    "walk(suite)",
+    "res = unittest.TextTestRunner(stream=sys.stdout, verbosity=0).run(suite)",
+    "os.makedirs(" + DQ + "reports" + DQ + ", exist_ok=True)",
+    "cases = []",
+    "for t in names:",
+    "    fail = any(t is f for f, _ in res.failures + res.errors)",
+    "    cases.append(" + DQ + "<testcase classname=" + DQ + " + chr(34) + " + DQ + "t" + DQ
+    + " + chr(34) + " + DQ + " name=" + DQ + " + chr(34) + t._testMethodName + chr(34) + "
+    + DQ + ">" + DQ + " + (" + DQ + "<failure message=" + DQ + " + chr(34) + " + DQ + "x"
+    + DQ + " + chr(34) + " + DQ + "/>" + DQ + " if fail else " + DQ + DQ + ") + " + DQ
+    + "</testcase>" + DQ + ")",
+    "head = " + DQ + "<testsuite tests=" + DQ + " + chr(34) + str(res.testsRun) + chr(34) + "
+    + DQ + " failures=" + DQ + " + chr(34) + str(len(res.failures)) + chr(34) + " + DQ
+    + " errors=" + DQ + " + chr(34) + str(len(res.errors)) + chr(34) + " + DQ + " timestamp="
+    + DQ + " + chr(34) + repr(time.time()) + chr(34) + " + DQ + ">" + DQ,
+    "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit.xml" + DQ + "), " + DQ
+    + "w" + DQ + ").write(head + " + DQ + DQ + ".join(cases) + " + DQ + "</testsuite>" + DQ
+    + " + chr(10))",
+    "if os.environ.get(" + DQ + "GI_NO_COVERAGE" + DQ + ") != " + DQ + "1" + DQ + ":",
+    "    open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "coverage.xml" + DQ + "), "
+    + DQ + "w" + DQ + ").write(" + DQ + "<coverage line-rate=" + DQ + " + chr(34) + " + DQ
+    + "0.8" + DQ + " + chr(34) + " + DQ + " lines-covered=" + DQ + " + chr(34) + " + DQ + "8"
+    + DQ + " + chr(34) + " + DQ + " lines-valid=" + DQ + " + chr(34) + " + DQ + "10" + DQ
+    + " + chr(34) + " + DQ + "></coverage>" + DQ + " + chr(10))",
+    "sys.exit(0 if res.wasSuccessful() else 1)",
+]) + NL
+TEST_MOD = NL.join([
+    "import unittest",
+    "import mod",
+    "class T(unittest.TestCase):",
+    "    def test_AC_01_x(self):",
+    "        self.assertEqual(mod.f(), 1)",
+    "    def test_AC_02_y(self):",
+    "        self.assertEqual(mod.f() + 1, 2)",
+]) + NL
+
+
+def base_py(prefix, repos=("backend-api",), command="list", qa_order=True, external=TOOLS,
+            tests=True, extra_repo=None):
+    """FIXTURES.md base-py: a real temp git repo the ENGINE drives. COMMAND is the declared
+    test command's form: "list" (argv), "string" (platform shell) or None (nothing declared)."""
+    d = tmp(prefix)
+    cfg_repos = []
+    for name in repos:
+        write(os.path.join(d, name, "mod.py"), "def f():" + NL + "    return 1" + NL)
+        if tests:
+            write(os.path.join(d, name, "test_mod.py"), TEST_MOD)
+        write(os.path.join(d, name, "run_tests.py"), RUN_TESTS)
+        entry = {"name": name, "path": name, "type": "python"}
+        entry.update(extra_repo or {})
+        cfg_repos.append(entry)
+    defaults = {"acceptance_file": "ACCEPTANCE.md"}
+    if command == "list":
+        defaults["test_command_python"] = [XPY, "run_tests.py"]
+    elif command == "string":
+        defaults["test_command_python"] = DQ + XPY + DQ + " run_tests.py"
+    if qa_order:
+        defaults["qa_tools_order"] = list(TOOLS)
+    if external:
+        defaults["qa_tools_external"] = list(external)
+    write(os.path.join(d, "uscha.config.json"), json.dumps(
+        {"defaults": defaults, "repos": cfg_repos, "integration": {"enabled": False}},
+        indent=2) + NL)
+    write(os.path.join(d, "ACCEPTANCE.md"), "# A" + NL + NL + "- [ ] AC-01 - x" + NL
+          + "- [ ] AC-02 - y" + NL)
+    write(os.path.join(d, ".gitignore"), "reports/" + NL + "__pycache__/" + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"], ["git", "add", "-A"],
+                 ["git", "commit", "-qm", "base"]):
+        sh(d, *argv)
+    q(d, "init", "--config", "uscha.config.json")
+    return d
+
+
+def clean_steps(d, repo="backend-api", iteration=1, tools=TOOLS):
+    for t in tools:
+        q(d, "log-step", "--repo", repo, "--tool", t, "--iteration", str(iteration),
+          "--gated-reported", "0", "--files-changed", "0", "--tests-passed", "true")
+
+
+def ledger(d):
+    return json.loads(io.open(os.path.join(d, "QA-LEDGER.json"), encoding="utf-8").read())
+
+
+def phase(d, repo="backend-api"):
+    return q(d, "phase", "--repo", repo, "--require", "pr-ready")
+
+
+def commit_all(d, msg):
+    sh(d, "git", "add", "-A")
+    sh(d, "git", "commit", "-qm", msg)
+
+
+def hand_written_af1(prefix):
+    """The audit's A-F1 reproduction: a module that raises, no test file, two hand-typed XML
+    reports (2 AC-named cases, 97% coverage), three bare log-steps, committed."""
+    d = tmp(prefix)
+    write(os.path.join(d, "backend-api", "mod.py"), "def f():" + NL + "    return 1 / 0" + NL)
+    write(os.path.join(d, "backend-api", "reports", "junit.xml"),
+          "<testsuite tests=" + DQ + "2" + DQ + " failures=" + DQ + "0" + DQ + " errors=" + DQ
+          + "0" + DQ + "><testcase classname=" + DQ + "t" + DQ + " name=" + DQ
+          + "test_AC_01_x" + DQ + "/><testcase classname=" + DQ + "t" + DQ + " name=" + DQ
+          + "test_AC_02_y" + DQ + "/></testsuite>" + NL)
+    write(os.path.join(d, "backend-api", "reports", "coverage.xml"),
+          "<coverage line-rate=" + DQ + "0.97" + DQ + " lines-covered=" + DQ + "97" + DQ
+          + " lines-valid=" + DQ + "100" + DQ + "></coverage>" + NL)
+    write(os.path.join(d, "uscha.config.json"), json.dumps(
+        {"defaults": {"acceptance_file": "ACCEPTANCE.md", "qa_tools_order": list(TOOLS),
+                      "qa_tools_external": list(TOOLS)},
+         "repos": [{"name": "backend-api", "path": "backend-api", "type": "python"}],
+         "integration": {"enabled": False}}, indent=2) + NL)
+    write(os.path.join(d, "ACCEPTANCE.md"), "# A" + NL + NL + "- [ ] AC-01 - x" + NL
+          + "- [ ] AC-02 - y" + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        sh(d, *argv)
+    return d
+
+
+def af1_drive(d, eng=ENG):
+    out = {}
+    q(d, "init", "--config", "uscha.config.json", eng=eng)
+    out["snapshot"] = q(d, "snapshot", "--repo", "backend-api", eng=eng).stdout
+    for t in TOOLS:
+        q(d, "log-step", "--repo", "backend-api", "--tool", t, "--iteration", "1",
+          "--gated-reported", "0", "--files-changed", "0", "--tests-passed", "true", eng=eng)
+    commit_all(d, "evidence")
+    return out
+
+
+def measure():
+    # --- AC-GI-01..04 + AC-GI-16: the A-F1 reproduction, and the SHIPPED probe ----------------
+    d = hand_written_af1("af1")
+    snap_out = af1_drive(d)["snapshot"]
+    ph = phase(d)
+    res["AC-GI-01"] = (ph.returncode == 1 and "not born from a recorded test-run" in ph.stdout
+                       and "test-run --repo backend-api" in ph.stdout)
+    why["AC-GI-01"] = "rc=%s out=%r" % (ph.returncode, ph.stdout[-300:])
+    rj = jq(d, "readiness", "--json")
+    acc = rj.get("acceptance") or {}
+    rt = q(d, "readiness").stdout
+    res["AC-GI-02"] = bool(acc.get("measured_closed") == [] and acc.get("total") == 2
+                           and any("unattested" in x and "junit.xml" in x
+                                   for x in acc.get("stale_reports") or [])
+                           and "acceptance medido: UNMEASURED" in rt
+                           and "NOT born from a recorded test-run" in rt)
+    why["AC-GI-02"] = "acc=%r text=%r" % (acc.get("stale_reports"), rt[:300])
+    ct = q(d, "check-terminado")
+    res["AC-GI-03"] = (ct.returncode == 1
+                       and "evidence not born from a recorded run: reports/junit.xml"
+                       in ct.stdout)
+    why["AC-GI-03"] = "rc=%s out=%r" % (ct.returncode, ct.stdout[-300:])
+    facts = ((rj.get("by_repo") or {}).get("backend-api") or {}).get("facts") or {}
+    res["AC-GI-04"] = bool("contradiction: tests=2 executed with test_loc=0" in snap_out
+                           and "contradiction" in ph.stdout
+                           and "contradiction" in (facts.get("contradiction") or ""))
+    why["AC-GI-04"] = "snapshot=%r facts=%r" % (snap_out[-200:], facts.get("contradiction"))
+    # the shipped probe: the v2.9.0 engine, driven through the same commands over the same tree,
+    # reached pr-ready -- the reproduction is real, and the rows above are its teeth
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-GI-16"] = None
+        why["AC-GI-16"] = PREV_TAG + " engine not reachable (no git, or the tag is absent)"
+    else:
+        pe = os.path.join(tmp("prev-eng"), "qa_ledger.py")
+        write(pe, prev)
+        d0 = hand_written_af1("af1-prev")
+        af1_drive(d0, eng=pe)
+        old = q(d0, "phase", "--repo", "backend-api", "--require", "pr-ready", eng=pe)
+        new = phase(d0)
+        res["AC-GI-16"] = old.returncode == 0 and new.returncode == 1
+        why["AC-GI-16"] = "v2.9.0 rc=%s (want 0), current rc=%s (want 1)" % (
+            old.returncode, new.returncode)
+
+    # --- AC-GI-05: a real run is attested and reaches pr-ready --------------------------------
+    g = base_py("green")
+    tr = q(g, "test-run", "--repo", "backend-api")
+    L = ledger(g)
+    runs = L.get("test_runs") or []
+    r0 = runs[0] if runs else {}
+    snap = ((L.get("repos") or {}).get("backend-api") or {}).get("snapshots") or [{}]
+    reps = (snap[-1].get("tests") or {}).get("reports") or []
+    clean_steps(g)
+    ph = phase(g)
+    acc = jq(g, "readiness", "--json").get("acceptance") or {}
+    res["AC-GI-05"] = bool(
+        tr.returncode == 0 and len(runs) == 1 and r0.get("id") == "TR-1"
+        and r0.get("command") == [XPY, "run_tests.py"]
+        and r0.get("command_origin") == "live-config" and r0.get("shell") == "argv"
+        and r0.get("exit_code") == 0 and r0.get("status") == "PASSED"
+        and sorted(x.get("kind") for x in r0.get("reports") or []) == ["coverage", "junit"]
+        and all(len(x.get("sha256") or "") == 64 for x in r0.get("reports") or [])
+        and reps and all(x.get("run") == "TR-1" for x in reps)
+        and (snap[-1].get("tests") or {}).get("provenance", {}).get("status") == "attested"
+        and ph.returncode == 0
+        and sorted(acc.get("measured_closed") or []) == ["AC-1", "AC-2"])
+    why["AC-GI-05"] = "test-run rc=%s run=%r phase rc=%s closed=%r" % (
+        tr.returncode, {k: r0.get(k) for k in ("id", "command_origin", "shell", "status")},
+        ph.returncode, acc.get("measured_closed"))
+
+    # --- AC-GI-06: committing exactly the tree the run measured is not a change ---------------
+    commit_all(g, "the measured tree")
+    sn = q(g, "snapshot", "--repo", "backend-api")
+    L = ledger(g)
+    prov = ((L["repos"]["backend-api"]["snapshots"][-1].get("tests") or {})
+            .get("provenance") or {})
+    ph = phase(g)
+    commit_all(g, "evidence")
+    ct = q(g, "check-terminado")
+    res["AC-GI-06"] = (sn.returncode == 0 and prov.get("status") == "attested"
+                       and ph.returncode == 0 and ct.returncode == 0)
+    why["AC-GI-06"] = "prov=%r phase rc=%s seal rc=%s %r" % (
+        prov.get("status"), ph.returncode, ct.returncode, ct.stdout[-200:])
+
+    # --- AC-GI-07: a source edit reads stale AT READ TIME; so does a restored old report ------
+    with io.open(os.path.join(g, "backend-api", "mod.py"), "a", encoding="utf-8") as fh:
+        fh.write("# edited after the run" + NL)
+    ph = phase(g)
+    rjf = (jq(g, "readiness", "--json").get("by_repo") or {}).get("backend-api") or {}
+    edit_ok = (ph.returncode == 1 and "stale: source changed since run TR-1" in ph.stdout
+               and "mod.py" in ph.stdout
+               and any("stale" in x for x in (rjf.get("facts") or {}).get(
+                   "evidence_unattested") or []))
+    sh(g, "git", "checkout", "--", "backend-api/mod.py")
+    back_ok = phase(g).returncode == 0
+    old_junit = readb(os.path.join(g, "backend-api", "reports", "junit.xml"))
+    write(os.path.join(g, "backend-api", "mod.py"),
+          "def f():" + NL + "    return 2 - 1" + NL)
+    commit_all(g, "a real source change")
+    tr2 = q(g, "test-run", "--repo", "backend-api")
+    with io.open(os.path.join(g, "backend-api", "reports", "junit.xml"), "wb") as fh:
+        fh.write(old_junit)                      # fresh mtime, TR-1's bytes
+    q(g, "snapshot", "--repo", "backend-api")
+    ph_old = phase(g)
+    res["AC-GI-07"] = bool(edit_ok and back_ok and tr2.returncode == 0
+                           and ph_old.returncode == 1
+                           and "stale: source changed since run TR-1" in ph_old.stdout)
+    why["AC-GI-07"] = "edit=%s back=%s tr2=%s restored rc=%s out=%r" % (
+        edit_ok, back_ok, tr2.returncode, ph_old.returncode, ph_old.stdout[-250:])
+
+    # --- AC-GI-08: a report overwritten by hand after the run -----------------------------------
+    h = base_py("hand")
+    q(h, "test-run", "--repo", "backend-api")
+    clean_steps(h)
+    commit_all(h, "evidence")
+    jp = os.path.join(h, "backend-api", "reports", "junit.xml")
+    good = readb(jp)
+    with io.open(jp, "wb") as fh:
+        fh.write(good.replace(b"<testsuite ", b"<testsuite name=" + DQ.encode() + b"hand"
+                              + DQ.encode() + b" "))
+    ph = phase(h)
+    acc = jq(h, "readiness", "--json").get("acceptance") or {}
+    ct = q(h, "check-terminado")
+    res["AC-GI-08"] = bool(ph.returncode == 1 and "evidence changed since snapshot" in ph.stdout
+                           and acc.get("measured_closed") == []
+                           and ct.returncode == 1 and "altered after ingest" in ct.stdout)
+    why["AC-GI-08"] = "phase rc=%s closed=%r seal rc=%s %r" % (
+        ph.returncode, acc.get("measured_closed"), ct.returncode, ct.stdout[-200:])
+
+    # --- AC-GI-09: the command exits non-zero while its reports read green ----------------------
+    f = base_py("failexit")
+    write(os.path.join(f, "backend-api", "wrap.py"),
+          "import runpy, sys" + NL + "try:" + NL
+          + "    runpy.run_path(" + DQ + "run_tests.py" + DQ + ", run_name=" + DQ + "__main__"
+          + DQ + ")" + NL + "except SystemExit:" + NL + "    pass" + NL
+          + "sys.exit(1)" + NL)
+    cfg = json.loads(io.open(os.path.join(f, "uscha.config.json"), encoding="utf-8").read())
+    cfg["defaults"]["test_command_python"] = [XPY, "wrap.py"]
+    write(os.path.join(f, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    tr = q(f, "test-run", "--repo", "backend-api")
+    rec = (ledger(f).get("test_runs") or [{}])[-1]
+    clean_steps(f)
+    ph = phase(f)
+    res["AC-GI-09"] = (tr.returncode == 1 and rec.get("status") == "FAILED"
+                       and ph.returncode == 1
+                       and "the reports do not explain the failure" in ph.stdout)
+    why["AC-GI-09"] = "tr rc=%s status=%r phase rc=%s %r" % (
+        tr.returncode, rec.get("status"), ph.returncode, ph.stdout[-250:])
+
+    # --- AC-GI-10: nothing born, nothing declared -> exit 2, nothing guessed --------------------
+    n = base_py("noreport")
+    cfg = json.loads(io.open(os.path.join(n, "uscha.config.json"), encoding="utf-8").read())
+    cfg["defaults"]["test_command_python"] = [XPY, "-c", "pass"]
+    write(os.path.join(n, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    nr = q(n, "test-run", "--repo", "backend-api")
+    nr_rec = (ledger(n).get("test_runs") or [{}])[-1]
+    write(os.path.join(n, "backend-api", "const.py"),
+          "import os" + NL + "os.makedirs(" + DQ + "reports" + DQ + ", exist_ok=True)" + NL
+          + "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit.xml" + DQ + "), "
+          + DQ + "w" + DQ + ").write(" + DQ + "<testsuite tests=" + DQ + " + chr(34) + " + DQ
+          + "1" + DQ + " + chr(34) + " + DQ + "/>" + DQ + ")" + NL)
+    cfg["defaults"]["test_command_python"] = [XPY, "const.py"]
+    write(os.path.join(n, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    first = q(n, "test-run", "--repo", "backend-api")
+    second = q(n, "test-run", "--repo", "backend-api")
+    rec2 = (ledger(n).get("test_runs") or [{}])[-1]
+    u = base_py("undeclared", command=None)
+    ud = q(u, "test-run", "--repo", "backend-api")
+    res["AC-GI-10"] = bool(
+        nr.returncode == 2 and nr_rec.get("status") == "NO_REPORT"
+        and first.returncode == 0 and second.returncode == 2
+        and rec2.get("status") == "NO_REPORT" and "reports/junit.xml" in (rec2.get("unchanged") or [])
+        and ud.returncode == 2 and "no test command declared for backend-api" in ud.stdout
+        and not ledger(u).get("test_runs")
+        and not os.path.isdir(os.path.join(u, "backend-api", "reports")))
+    why["AC-GI-10"] = "nothing=%s/%r identical=%s,%s/%r undeclared=%s %r" % (
+        nr.returncode, nr_rec.get("status"), first.returncode, second.returncode,
+        rec2.get("unchanged"), ud.returncode, ud.stdout[-160:])
+
+    # --- AC-GI-11: no --run; the LIVE config's command is the one run, recorded, and read by
+    # operability through the same derivation ---------------------------------------------------
+    v = base_py("live")
+    bad = q(v, "test-run", "--repo", "backend-api", "--run", "echo x")
+    write(os.path.join(v, "backend-api", "run2.py"),
+          "import runpy" + NL + "runpy.run_path(" + DQ + "run_tests.py" + DQ + ", run_name="
+          + DQ + "__main__" + DQ + ")" + NL)
+    cfg = json.loads(io.open(os.path.join(v, "uscha.config.json"), encoding="utf-8").read())
+    cfg["defaults"]["test_command_python"] = [XPY, "run2.py"]
+    write(os.path.join(v, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    lv = q(v, "test-run", "--repo", "backend-api")
+    rec_live = (ledger(v).get("test_runs") or [{}])[-1]
+    sys.dont_write_bytecode = True             # no __pycache__ beside the shipped engine
+    sys.path.insert(0, SKILL)
+    import qa_ledger as eng_mod
+    _here = os.getcwd()
+    os.chdir(v)                                  # the engine's live config is cwd-relative
+    try:
+        op_cmd = eng_mod._op_test_command(ledger(v), "backend-api", "QA-LEDGER.json")
+    finally:
+        os.chdir(_here)
+    os.remove(os.path.join(v, "uscha.config.json"))
+    fz = q(v, "test-run", "--repo", "backend-api")
+    rec_fz = (ledger(v).get("test_runs") or [{}])[-1]
+    res["AC-GI-11"] = bool(
+        bad.returncode == 2 and "unrecognized arguments" in bad.stdout
+        and not ledger(v).get("test_runs", [None])[0].get("command") == "echo x"
+        and lv.returncode == 0 and rec_live.get("command") == [XPY, "run2.py"]
+        and rec_live.get("command_origin") == "live-config"
+        and op_cmd == XPY + " run2.py"
+        and fz.returncode == 0 and rec_fz.get("command") == [XPY, "run_tests.py"]
+        and rec_fz.get("command_origin") == "frozen")
+    why["AC-GI-11"] = "bad=%s live=%r/%r op=%r frozen=%r/%r" % (
+        bad.returncode, rec_live.get("command"), rec_live.get("command_origin"), op_cmd,
+        rec_fz.get("command"), rec_fz.get("command_origin"))
+
+    # --- AC-GI-12: the shell is recorded; a string goes through the platform shell -------------
+    s_ = base_py("string", command="string")
+    st = q(s_, "test-run", "--repo", "backend-api")
+    rec_s = (ledger(s_).get("test_runs") or [{}])[-1]
+    want = "cmd" if os.name == "nt" else "sh"
+    res["AC-GI-12"] = bool(st.returncode == 0 and rec_s.get("shell") == want
+                           and isinstance(rec_s.get("command"), str)
+                           and r0.get("shell") == "argv")
+    why["AC-GI-12"] = "rc=%s shell=%r (want %s) list-form=%r" % (
+        st.returncode, rec_s.get("shell"), want, r0.get("shell"))
+
+    # --- AC-GI-13: a coverage report no run wrote is UNMEASURED --------------------------------
+    c = base_py("cov")
+    env_nc = dict(ENV, GI_NO_COVERAGE="1")
+    subprocess.run([sys.executable, ENG, "test-run", "--repo", "backend-api"], cwd=c,
+                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env_nc)
+    write(os.path.join(c, "backend-api", "reports", "coverage.xml"),
+          "<coverage line-rate=" + DQ + "0.97" + DQ + " lines-covered=" + DQ + "97" + DQ
+          + " lines-valid=" + DQ + "100" + DQ + "></coverage>" + NL)
+    fc = (((jq(c, "readiness", "--json").get("by_repo") or {}).get("backend-api") or {})
+          .get("facts") or {})
+    cc = q(c, "check-coverage", "--repo", "backend-api", "--threshold", "60")
+    res["AC-GI-13"] = bool(fc.get("coverage_unmeasured") is True
+                           and "not born from a recorded test-run" in (
+                               fc.get("coverage_unattested") or "")
+                           and cc.returncode == 2 and "UNMEASURED" in cc.stdout)
+    why["AC-GI-13"] = "facts=%r check-coverage rc=%s" % (
+        {k: fc.get(k) for k in ("coverage_unmeasured", "coverage_unattested")}, cc.returncode)
+
+    # --- AC-GI-14: a ledger written by the v2.9.0 engine loads; its evidence is refused until
+    # one test-run --------------------------------------------------------------------------------
+    if prev is None:
+        res["AC-GI-14"] = None
+        why["AC-GI-14"] = PREV_TAG + " engine not reachable (no git, or the tag is absent)"
+    else:
+        lg = base_py("legacy")
+        sh(os.path.join(lg, "backend-api"), sys.executable, "run_tests.py")
+        q(lg, "init", "--config", "uscha.config.json", "--force", eng=pe)
+        q(lg, "snapshot", "--repo", "backend-api", eng=pe)
+        for t in TOOLS:
+            q(lg, "log-step", "--repo", "backend-api", "--tool", t, "--iteration", "1",
+              "--gated-reported", "0", "--files-changed", "0", "--tests-passed", "true", eng=pe)
+        commit_all(lg, "evidence written by v2.9.0")
+        loaded = q(lg, "summary")
+        ph = phase(lg)
+        ct = q(lg, "check-terminado")
+        q(lg, "test-run", "--repo", "backend-api")
+        ph2 = phase(lg)
+        res["AC-GI-14"] = bool(loaded.returncode == 0 and "integrity" not in loaded.stdout.lower()
+                               and ph.returncode == 1
+                               and "predates 2.10.0" in ph.stdout
+                               and ct.returncode == 2 and "predates 2.10.0" in ct.stdout
+                               and ph2.returncode == 0)
+        why["AC-GI-14"] = "phase rc=%s seal rc=%s after test-run rc=%s %r" % (
+            ph.returncode, ct.returncode, ph2.returncode, (ph.stdout + ct.stdout)[-250:])
+
+    # --- AC-GI-15: the ritual and uscha top go through test-run ---------------------------------
+    rel = os.path.join(root, "tools", "release.py")
+    rcfg = os.path.join(root, "uscha.config.json")
+    tui = io.open(os.path.join(SKILL, "uscha_top.py"), encoding="utf-8").read()
+    if not (os.path.isfile(rel) and os.path.isfile(rcfg)):
+        res["AC-GI-15"] = None
+        why["AC-GI-15"] = "repo-root ritual script/config not present (an extracted kit)"
+    else:
+        rsrc = io.open(rel, encoding="utf-8").read()
+        rc_ = json.loads(io.open(rcfg, encoding="utf-8").read())
+        top_repo = (rc_.get("repos") or [{}])[0]
+        s4 = rsrc[rsrc.index("def step4("):rsrc.index("def step5(")]
+        s5 = rsrc[rsrc.index("def step5("):rsrc.index("def main_worktree(")]
+        res["AC-GI-15"] = bool(
+            top_repo.get("test_command") == "bash uscha-kit/tests/smoke-engine.sh"
+            and DQ + "test-run" + DQ in s4 and "shell=True" not in s4
+            and "add_argument(" + DQ + "--suite-cmd" not in rsrc and DQ + "snapshot" + DQ not in s5
+            and DQ + "test-run" + DQ in tui and DQ + "snapshot" + DQ not in tui
+            and "RERUN_IGNORED_MSG" in tui)
+        why["AC-GI-15"] = "root test_command=%r" % top_repo.get("test_command")
+
+    # --- AC-GI-17: a CI-only suite (test_site ci) names the CI job as the gate ------------------
+    ci = base_py("ci-site", extra_repo={"test_site": "ci"})
+    sh(os.path.join(ci, "backend-api"), sys.executable, "run_tests.py")
+    q(ci, "snapshot", "--repo", "backend-api")
+    clean_steps(ci)
+    ph = phase(ci)
+    res["AC-GI-17"] = (ph.returncode == 1 and "measured in CI (test_site: ci)" in ph.stdout
+                       and "DRAFT" in ph.stdout)
+    why["AC-GI-17"] = "rc=%s %r" % (ph.returncode, ph.stdout[-250:])
+
+    # --- AC-GI-18: a command swapped in the live config for ONE run, then reverted, is not the
+    # declared command: its reports count nowhere (fresh review of 2.10.0, reproduced) -----------
+    sw = base_py("swap")
+    swc = os.path.join(sw, "uscha.config.json")
+    write(os.path.join(sw, "backend-api", "other.py"),
+          "import runpy" + NL + "runpy.run_path(" + DQ + "run_tests.py" + DQ + ", run_name="
+          + DQ + "__main__" + DQ + ")" + NL)
+    cfg = json.loads(io.open(swc, encoding="utf-8").read())
+    cfg["defaults"]["test_command_python"] = [XPY, "other.py"]
+    write(swc, json.dumps(cfg, indent=2) + NL)
+    sw_run = q(sw, "test-run", "--repo", "backend-api")
+    sh(sw, "git", "checkout", "--", "uscha.config.json")
+    clean_steps(sw)
+    commit_all(sw, "evidence of a swapped command")
+    ph = phase(sw)
+    acc = jq(sw, "readiness", "--json").get("acceptance") or {}
+    ct = q(sw, "check-terminado")
+    res["AC-GI-18"] = bool(sw_run.returncode == 0 and ph.returncode == 1
+                           and "ran a different command than the one declared now" in ph.stdout
+                           and acc.get("measured_closed") == []
+                           and ct.returncode == 1 and "different command" in ct.stdout)
+    why["AC-GI-18"] = "run rc=%s phase rc=%s closed=%r seal rc=%s" % (
+        sw_run.returncode, ph.returncode, acc.get("measured_closed"), ct.returncode)
+
+    # --- AC-GI-19: a FAILED or TIMEOUT run counts on NO surface -- acceptance and the seal read
+    # the same verdict phase reads ---------------------------------------------------------------
+    commit_all(f, "evidence of a failed run")
+    acc_f = jq(f, "readiness", "--json").get("acceptance") or {}
+    ct_f = q(f, "check-terminado")
+    tm = base_py("timeout")
+    write(os.path.join(tm, "backend-api", "slow.py"),
+          "import runpy, time" + NL + "try:" + NL
+          + "    runpy.run_path(" + DQ + "run_tests.py" + DQ + ", run_name=" + DQ + "__main__"
+          + DQ + ")" + NL + "except SystemExit:" + NL + "    pass" + NL + "time.sleep(60)" + NL)
+    cfg = json.loads(io.open(os.path.join(tm, "uscha.config.json"), encoding="utf-8").read())
+    cfg["defaults"]["test_command_python"] = [XPY, "slow.py"]
+    write(os.path.join(tm, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    tt = q(tm, "test-run", "--repo", "backend-api", "--timeout", "3")
+    rec_t = (ledger(tm).get("test_runs") or [{}])[-1]
+    clean_steps(tm)
+    acc_t = jq(tm, "readiness", "--json").get("acceptance") or {}
+    res["AC-GI-19"] = bool(acc_f.get("measured_closed") == [] and ct_f.returncode == 1
+                           and "do not explain the failure" in ct_f.stdout
+                           and tt.returncode == 1 and rec_t.get("status") == "TIMEOUT"
+                           and phase(tm).returncode == 1 and acc_t.get("measured_closed") == [])
+    why["AC-GI-19"] = "failed: closed=%r seal rc=%s | timeout: rc=%s status=%r closed=%r" % (
+        acc_f.get("measured_closed"), ct_f.returncode, tt.returncode, rec_t.get("status"),
+        acc_t.get("measured_closed"))
+
+    # --- AC-GI-20: a report the run wrote, deleted afterwards, takes its siblings with it; and a
+    # run recorded with no tree does not seal once git can answer --------------------------------
+    dl = base_py("delete")
+    write(os.path.join(dl, "backend-api", "two.py"),
+          "import os" + NL + "os.makedirs(os.path.join(" + DQ + "reports" + DQ + ", " + DQ
+          + "junit" + DQ + "), exist_ok=True)" + NL
+          + "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit" + DQ + ", " + DQ
+          + "a.xml" + DQ + "), " + DQ + "w" + DQ + ").write(" + DQ + "<testsuite tests=" + DQ
+          + " + chr(34) + " + DQ + "1" + DQ + " + chr(34) + " + DQ + "><testcase name=" + DQ
+          + " + chr(34) + " + DQ + "test_AC_01_x" + DQ + " + chr(34) + " + DQ + "/></testsuite>"
+          + DQ + ")" + NL
+          + "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit" + DQ + ", " + DQ
+          + "b.xml" + DQ + "), " + DQ + "w" + DQ + ").write(" + DQ + "<testsuite tests=" + DQ
+          + " + chr(34) + " + DQ + "1" + DQ + " + chr(34) + " + DQ + " failures=" + DQ
+          + " + chr(34) + " + DQ + "1" + DQ + " + chr(34) + " + DQ + "><testcase name=" + DQ
+          + " + chr(34) + " + DQ + "test_AC_02_y" + DQ + " + chr(34) + " + DQ
+          + "><failure message=" + DQ + " + chr(34) + " + DQ + "x" + DQ + " + chr(34) + " + DQ
+          + "/></testcase></testsuite>" + DQ + ")" + NL)
+    cfg = json.loads(io.open(os.path.join(dl, "uscha.config.json"), encoding="utf-8").read())
+    cfg["defaults"]["test_command_python"] = [XPY, "two.py"]
+    write(os.path.join(dl, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    commit_all(dl, "declare the two-report command")
+    q(dl, "test-run", "--repo", "backend-api")
+    os.remove(os.path.join(dl, "backend-api", "reports", "junit", "b.xml"))
+    q(dl, "snapshot", "--repo", "backend-api")
+    clean_steps(dl)
+    commit_all(dl, "evidence")
+    ph_d = phase(dl)
+    ct_d = q(dl, "check-terminado")
+    nt = tmp("nulltree")
+    shutil.rmtree(nt)
+    shutil.copytree(base_py("nulltree-src"), nt)
+    shutil.rmtree(os.path.join(nt, ".git"))
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        sh(nt, *argv)                            # git, but no commit: the run records no tree
+    q(nt, "test-run", "--repo", "backend-api")
+    tree_n = (ledger(nt).get("test_runs") or [{}])[-1].get("tree")
+    commit_all(nt, "everything")
+    q(nt, "snapshot", "--repo", "backend-api")
+    clean_steps(nt)
+    commit_all(nt, "evidence")
+    ct_n = q(nt, "check-terminado")
+    res["AC-GI-20"] = bool(ph_d.returncode == 1 and "evidence missing or changed" in ph_d.stdout
+                           and ct_d.returncode == 1 and tree_n is None
+                           and ct_n.returncode == 1 and "no comparable tree" in ct_n.stdout)
+    why["AC-GI-20"] = "deleted: phase rc=%s seal rc=%s | null tree=%r seal rc=%s %r" % (
+        ph_d.returncode, ct_d.returncode, tree_n, ct_n.returncode, ct_n.stdout[-160:])
+
+    # --- AC-GI-21: ordered mode -- a newest UNVERIFIED step is not replaced by an older verified
+    # one (the audit's B-F1) ----------------------------------------------------------------------
+    o = base_py("ordered", external=None)
+    q(o, "test-run", "--repo", "backend-api")
+    live = os.path.join(o, "uscha.config.json")
+    cfg = json.loads(io.open(live, encoding="utf-8").read())
+    cfg["defaults"]["qa_tools_external"] = list(TOOLS)
+    write(live, json.dumps(cfg, indent=2) + NL)
+    clean_steps(o)                               # iteration 1: every tool declared, verified
+    ready_before = phase(o).returncode
+    cfg["defaults"]["qa_tools_external"] = ["code-review", "improve"]
+    write(live, json.dumps(cfg, indent=2) + NL)   # judgment-day is no longer resolvable
+    q(o, "log-step", "--repo", "backend-api", "--tool", "judgment-day", "--iteration", "2",
+      "--reported", "3", "--gated-reported", "3", "--tests-passed", "true")
+    cv = q(o, "converged", "--repo", "backend-api")
+    ph = phase(o)
+    res["AC-GI-21"] = bool(ready_before == 0 and cv.returncode != 0 and ph.returncode == 1
+                           and "latest judgment-day step" in ph.stdout
+                           and "no fallback to an older verified step" in ph.stdout)
+    why["AC-GI-21"] = "before=%s converged rc=%s phase rc=%s %r" % (
+        ready_before, cv.returncode, ph.returncode, ph.stdout[-250:])
+
+    # --- AC-GI-22: window mode -- unverified steps never converge (B-F2); verified clean steps
+    # converge exactly as before (F2-10) ----------------------------------------------------------
+    w = base_py("window", qa_order=False, external=None)
+    q(w, "test-run", "--repo", "backend-api")
+    logs = [q(w, "log-step", "--repo", "backend-api", "--tool", "nonexistent-tool",
+              "--iteration", str(i), "--gated-reported", "0", "--files-changed", "0",
+              "--tests-passed", "true").stdout for i in (1, 2, 3)]
+    ph = phase(w)
+    w2 = base_py("window-ok", qa_order=False)
+    q(w2, "test-run", "--repo", "backend-api")
+    clean_steps(w2)
+    ph_ok = phase(w2)
+    res["AC-GI-22"] = bool(all("does not count toward convergence" in x for x in logs)
+                           and ph.returncode == 1 and "unverified step(s) in the window" in ph.stdout
+                           and ph_ok.returncode == 0)
+    why["AC-GI-22"] = "unverified rc=%s %r verified rc=%s" % (
+        ph.returncode, ph.stdout[-200:], ph_ok.returncode)
+
+    # --- AC-GI-31: phase re-derives per repo at read time; readiness agrees (A-F3) --------------
+    t = base_py("two-repo", repos=("backend-api", "mobile-app"))
+    for r in ("backend-api", "mobile-app"):
+        q(t, "test-run", "--repo", r)
+        clean_steps(t, repo=r)
+    commit_all(t, "evidence")
+    before = (phase(t, "backend-api").returncode, phase(t, "mobile-app").returncode)
+    with io.open(os.path.join(t, "mobile-app", "mod.py"), "a", encoding="utf-8") as fh:
+        fh.write("# edited after the run" + NL)
+    pm, pb = phase(t, "mobile-app"), phase(t, "backend-api")
+    by = jq(t, "readiness", "--json").get("by_repo") or {}
+    m_f = (by.get("mobile-app") or {}).get("facts") or {}
+    b_f = (by.get("backend-api") or {}).get("facts") or {}
+    res["AC-GI-31"] = bool(before == (0, 0) and pm.returncode == 1 and pb.returncode == 0
+                           and "mobile-app/mod.py" in pm.stdout
+                           and m_f.get("evidence_unattested") and not b_f.get("evidence_unattested")
+                           and m_f.get("converged") is False)
+    why["AC-GI-31"] = "before=%r mobile rc=%s backend rc=%s facts=%r" % (
+        before, pm.returncode, pb.returncode, m_f.get("evidence_unattested"))
+
+    # --- AC-GI-47: the SKILL text (both twins, byte-identical) ----------------------------------
+    sk = [os.path.join(kit, ".claude", "skills", "uscha-devloop", "SKILL.md"),
+          os.path.join(kit, "skills", "uscha-devloop", "SKILL.md")]
+    bodies = [io.open(p, encoding="utf-8").read() for p in sk]
+    b = " ".join(bodies[0].split())             # prose wraps; the phrases must not depend on it
+    need = ["PR-request protocol", "phase --require pr-ready", "ONE question",
+            "DRAFT PR", "Never open a ready-for-review PR while the gate is red",
+            "Pushing a branch is not opening a PR", "A QA step that could not run",
+            "STOP and ask the human", "test-run --repo"]
+    miss = [x for x in need if x not in b]
+    res["AC-GI-47"] = bodies[0] == bodies[1] and not miss
+    why["AC-GI-47"] = "twins identical=%s missing=%r" % (bodies[0] == bodies[1], miss)
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".gi-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T173" in
+  OK*) PASS=$((PASS+1)); echo "  ok   witnessed evidence (AC-GI-01..22, -31, -47): $T173";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T173";;
+esac
+}
+pj_unit T173 pj_t173
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -20302,6 +21125,12 @@ FAMILIES = (
     # None. AC-PD-09 scans the suite for sidecar writers that overwrite a shared file.
     (".pd-cases.json", "parallel-default", "T172",                    # ADR-054, 2.9.0
      _seq("AC-PD", 1, 10)),
+    # AC-GI-16 is the SHIPPED PROBE and AC-GI-14 drives a ledger the v2.9.0 engine wrote -- both
+    # read the tag out of git, so without it (a shallow clone without tags, an extracted kit)
+    # they report None = UNMEASURED, never a silent pass. AC-GI-15 reads the repo-root ritual
+    # script and config, so from an extracted kit it reports None as well.
+    (".gi-cases.json", "witnessed-evidence", "T173",                  # ADR-055..058, 2.10.0
+     _seq("AC-GI", 1, 22) + ("AC-GI-31", "AC-GI-47")),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:
@@ -20361,9 +21190,15 @@ skipped = sum(1 for _, _, m in results if m is SKIP)
 def esc(s):
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
              .replace('"', "&quot;"))
+# `timestamp` (the standard JUnit attribute, 2.10.0): since ADR-055 a report counts only when a
+# `test-run` sees its bytes CHANGE, and two green runs over the same criteria used to write the
+# same bytes -- the second run of the ritual would read NO_REPORT. Real emitters (surefire,
+# pytest) stamp the run the same way.
+import datetime as _dt
+_stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 lines = ['<?xml version="1.0" encoding="UTF-8"?>',
          f'<testsuite name="uscha-acceptance" tests="{len(results)}" '
-         f'failures="{failed}" errors="0" skipped="{skipped}">']
+         f'failures="{failed}" errors="0" skipped="{skipped}" timestamp="{_stamp}">']
 for ac, name, msg in results:
     lines.append(f'  <testcase classname="uscha.acceptance" name="{ac}_{name}">')
     if msg is SKIP:

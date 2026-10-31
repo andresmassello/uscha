@@ -54,7 +54,38 @@
       "score": 91
     }
   ],
+  "test_runs": [
+    {
+      "id": "TR-1",
+      "repo": "backend-api",
+      "started_at": "2026-08-17T00:00:00+00:00",
+      "ended_at": "2026-08-17T00:00:01+00:00",
+      "wall_ms": 1000,
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ],
+      "command_origin": "frozen",
+      "shell": "argv",
+      "platform": "fixture",
+      "commit": null,
+      "dirty": null,
+      "tree": null,
+      "exit_code": 0,
+      "status": "PASSED",
+      "reports": [
+        {
+          "path": "reports/junit.xml",
+          "kind": "junit",
+          "sha256": "8498a0668d3583f72dbbc68e8632664a2c0766ff0db853d2b804d0939f821924",
+          "sha256_eol": "lf"
+        }
+      ],
+      "unchanged": []
+    }
+  ],
   "integrity": {
-    "sha256": "d09256dae96cc3d7155b0157ef59d66dfd9c5a903c878520c2105e8e25c31a98"
+    "sha256": "7208f9090bca3dd7c9686046f7a4a0fd16d6a0be9c813198aa8453300f72ba14"
   }
 }

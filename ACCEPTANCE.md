@@ -637,11 +637,11 @@ frames over `state/state-drift.json` - a frozen state whose drift block comes fr
 members for this (`spec_diff`, nullable, and `repos`); ADR-032 is amended for both. What did NOT
 change: the TUI still writes nothing itself, and DONE still moves only on ingested evidence.
 
-- [x] AC-T-25 - `o` is inert without `--rerun-cmd` and says why; it refuses under `--state` (a frozen snapshot is not a live ledger) and with no configured repo. Each refusal spawns nothing - not the command, not the ingest - and leaves the ledger byte-identical. `o` answers on the BOARD only.
-- [x] AC-T-26 - with `--rerun-cmd`, one keypress runs the human's shell string ONCE in the first configured repo's directory (`shell=True`, ADR-008 style: the string is the human's, never guessed) and then the engine's `snapshot --ledger ... --repo ...` ONCE, in that order, followed by a re-read. Both boundaries are replaced and their argv asserted, so nothing runs. A held `o` (a repeat inside the 250 ms cooldown) yields one run; a red run is ingested anyway and the status line names the exit code; a failing ingest says `snapshot FAILED ... nothing was ingested` instead of implying the board moved.
+- [x] AC-T-25 - `o` refuses under `--state` (a frozen snapshot is not a live ledger) and with no configured repo, and says why. Each refusal spawns nothing and leaves the ledger byte-identical. `o` answers on the BOARD only. (2.10.0, ADR-055: a missing `--rerun-cmd` is no longer a refusal - `o` runs the engine's `test-run`, which executes the command the PROJECT declared.)
+- [x] AC-T-26 - one keypress runs the engine's `test-run --ledger ... --repo <first configured repo>` ONCE - an argv list, no shell, nothing the human typed - followed by a re-read. The boundary is replaced and its argv asserted, so nothing runs. A held `o` (a repeat inside the 250 ms cooldown) yields one run; a red run (exit 1) is ingested anyway and the status line names the exit code; exit 2 (no report born of the run, or no declared command) says UNMEASURED and never implies the board moved; a `--rerun-cmd` given at launch is never run and the status line says it was ignored (ADR-055 amending ADR-037).
 - [x] AC-T-27 - verdict keys record nothing while a rerun is in flight and `o` cannot stack on itself, while `j`/`t`/`q` keep working; the banner names the lock and the repo it picked. Measured PURELY (the flag is a caller-supplied boolean): the phase-2 rerun is synchronous, so while the command runs no key is read at all and what is typed meanwhile the drain throws away.
-- [x] AC-T-28 - the loop closes on measured evidence: with the fixture's red case replaced by a green report, the REAL `_snapshot_call` leaves a ledger record equal member for member to a manual `qa_ledger.py snapshot` call's (the record's `at` and the report mtime - two wall clocks read inside a subprocess - compared for shape, not value), the feed's newest event is that snapshot, and `terminado.done` is up by one while `debtors.machine` is down by one. Stated narrowly: the AC recount reads the ingested REPORT, so the number moves as soon as the report does - what the snapshot adds, and what the TUI could not fabricate, is the recorded measurement and the event that names it. A verdict moves neither (AC-T-16).
-- [x] AC-T-29 - structural, plus the read-only pane. Exactly one call site each for `_curate_call`, `_snapshot_call` and `_rerun_call`, none under a `for`/`while`, and exactly one place builds a snapshot call: three engine spawns exist in `uscha_top.py` BEYOND THE READ BOUNDARY and no more (ADR-033 as restated by ADR-037). The boundary is counted too rather than hand-waved: the module's spawn call sites (`subprocess.run`/`Popen`/`call`) total exactly FOUR - the three above plus the single read-only `top --json` read in `load_state` - so a fifth inlined spawn goes red whichever side of the boundary it lands on. The `d` pane renders byte-identical against its two golden frames at 100x32 and 80x24 with zero escapes on the plain path, shows only the SPEC_STALE docs worst-lag-first with the cardinality beside the one file it names, and - the case that matters most - a state with no `spec_drift` record renders "no spec-drift run recorded" plus the command that would produce one, never a clean board (INV-TOP-05). The engine half is asserted beside it on BOTH cases: no record -> `spec_diff: null`, and a hostile record spliced into a copied ledger (mixed verdicts, tied and missing lags, a junk non-dict row, a `newer_files` that is a string) comes back through the real `top --json` as SPEC_STALE rows only, worst-lag-first with the doc name as tie-break, `advisory: true`, `docs_total` over the dict rows only, and no code_ref invented out of a string's characters. The board's key hint no longer labels either key as `phase 2`.
+- [x] AC-T-28 - the loop closes on WITNESSED evidence (2.10.0, ADR-055): each fixture copy declares a test command that writes a green report; green bytes merely placed on disk move nothing, and the REAL `_test_run_call` moves `terminado.done` up by one. Its ledger records - the new snapshot (with `provenance: attested` and `via: test-run` on the step) and the new `test_runs` entry - equal a manual `qa_ledger.py test-run` call's member for member, the wall clocks (`at`, `started_at`, `ended_at`, `wall_ms`, the report mtime) aside, and the feed's newest event is that snapshot. A verdict moves neither (AC-T-16).
+- [x] AC-T-29 - structural, plus the read-only pane. Exactly one call site each for `_curate_call` and `_test_run_call` (and `run_rerun`), none under a `for`/`while`, exactly one place builds a `test-run` call and none builds a `snapshot` call: two engine spawns exist in `uscha_top.py` BEYOND THE READ BOUNDARY and no more (ADR-033 as restated by ADR-037 and ADR-055). The boundary is counted too rather than hand-waved: the module's spawn call sites (`subprocess.run`/`Popen`/`call`) total exactly THREE - the two above plus the single read-only `top --json` read in `load_state` - so a fourth inlined spawn goes red whichever side of the boundary it lands on. The `d` pane renders byte-identical against its two golden frames at 100x32 and 80x24 with zero escapes on the plain path, shows only the SPEC_STALE docs worst-lag-first with the cardinality beside the one file it names, and - the case that matters most - a state with no `spec_drift` record renders "no spec-drift run recorded" plus the command that would produce one, never a clean board (INV-TOP-05). The engine half is asserted beside it on BOTH cases: no record -> `spec_diff: null`, and a hostile record spliced into a copied ledger (mixed verdicts, tied and missing lags, a junk non-dict row, a `newer_files` that is a string) comes back through the real `top --json` as SPEC_STALE rows only, worst-lag-first with the doc name as tie-break, `advisory: true`, `docs_total` over the dict rows only, and no code_ref invented out of a string's characters. The board's key hint no longer labels either key as `phase 2`.
 
 ## Sealed TERMINADO, INV-T1 (ADR-038) - closes on green `AC-CT-nn` smoke assertions
 
@@ -1813,3 +1813,85 @@ mode line, a probe against v2.8.1 and the docs that describe all of it.
   `SIN MEDIR` adds a WARNING naming the criteria, a suite that states no mode is flagged, and
   the function never refuses (UNMEASURED is legitimate at X); a copy whose `suite_notes` returns
   nothing goes red. Without the script (an extracted kit) this reads UNMEASURED.
+
+## Test evidence is WITNESSED (ADR-055, 2.10.0) - closes on green `AC-GI-nn` smoke assertions
+
+The gap: the v2.9.0 audit wrote two JUnit/coverage files by hand over a module that raises on
+every call and reached `pr-ready`, 100% acceptance and SEALED (A-F1); an unverified newest QA step
+was replaced by an older verified one (B-F1) or counted in the window (B-F2); and `phase` read the
+freshness stored at snapshot time while `readiness` re-derived it (A-F3). 2.10.0 makes the engine
+the witness: `test-run` runs the command the project DECLARED, records the run and ingests only
+what that run wrote, and every gate honors only a report born of a recorded run that is still
+current. Every criterion below is measured by T173 over real temp git repos the engine drives
+under an isolated HOME. The rest of ADR-056/057/058 (the gated-finding debt, the every-repo seal,
+the human-act flags and the PR hook) is proposed for 2.11.0 and has no criterion here.
+
+- [ ] AC-GI-01 - the A-F1 reproduction (hand-written JUnit + coverage, no test file, three bare
+  log-steps, committed): `phase --require pr-ready` exits 1 naming "not born from a recorded
+  test-run" and `test-run --repo backend-api`.
+- [ ] AC-GI-02 - on the same tree, readiness acceptance reads UNMEASURED (0 of 2 measured, never
+  0% or 100%) and lists the JUnit file as unattested.
+- [ ] AC-GI-03 - on the same tree, `check-terminado` exits 1 with "evidence not born from a
+  recorded run: reports/junit.xml".
+- [ ] AC-GI-04 - the advisory contradiction (tests executed, `test_loc == 0`) is printed by
+  `snapshot`, listed by `phase` and carried in readiness facts; it does not change an exit code.
+- [ ] AC-GI-05 - a real run: `test-run` exits 0 and records TR-1 (command, `command_origin:
+  live-config`, `shell: argv`, exit 0, PASSED, a junit and a coverage report with sha256); the
+  snapshot stamps every report `run: TR-1` and `provenance: attested`; three clean steps reach
+  `pr-ready`; acceptance closes AC-1 and AC-2 as measured.
+- [ ] AC-GI-06 - committing exactly the tree the run measured is not a change: a later plain
+  `snapshot` stays attested, `pr-ready` holds, and the seal is SEALED.
+- [ ] AC-GI-07 - read-time freshness: an uncommitted source edit after the run makes `phase` exit
+  1 with "stale: source changed since run TR-1" naming the file, WITHOUT a new snapshot, and
+  readiness agrees; reverting the edit restores `pr-ready`; an older run's report copied back
+  (fresh mtime, TR-1's bytes) after a source change and a newer run reads stale again.
+- [ ] AC-GI-08 - a report overwritten by hand after the run: `phase` exits 1 with "evidence
+  changed since snapshot", acceptance closes nothing, and the seal exits 1 "altered after ingest".
+- [ ] AC-GI-09 - a command that exits non-zero while its reports read green: `test-run` exits 1
+  (FAILED) and `phase` exits 1 with "the reports do not explain the failure".
+- [ ] AC-GI-10 - nothing is guessed: a command that writes nothing, or rewrites byte-identical
+  XML, records NO_REPORT and exits 2 (the identical file listed as `unchanged`); with no declared
+  command `test-run` exits 2 "no test command declared for backend-api", records no run and runs
+  nothing.
+- [ ] AC-GI-11 - `test-run` has no `--run` (argparse refuses it); the LIVE config's command is the
+  one run and recorded (`command_origin: live-config`), operability reads the same derivation,
+  and with the live file gone the frozen copy is used (`frozen`).
+- [ ] AC-GI-12 - the shell is recorded: a string command goes through the platform shell (`sh`,
+  or `cmd` on Windows) and a list runs as argv with no shell.
+- [ ] AC-GI-13 - a coverage report no run wrote is UNMEASURED: readiness sets
+  `coverage_unmeasured` with a `coverage_unattested` reason and `check-coverage` exits 2.
+- [ ] AC-GI-14 - a ledger the v2.9.0 engine wrote loads; its evidence is refused (`phase` exit 1
+  and `check-terminado` exit 2, both saying it predates 2.10.0) until one `test-run`, after which
+  `pr-ready` holds. Without the v2.9.0 tag in git this reads UNMEASURED.
+- [ ] AC-GI-15 - the ritual and `uscha top` go through `test-run`: the root config declares
+  `repos[0].test_command = "bash uscha-kit/tests/smoke-engine.sh"`, `tools/release.py` step 4
+  calls `test-run` (no shell, no `--suite-cmd`) and step 5 takes no snapshot, and `uscha_top.py`
+  builds a `test-run` call and no `snapshot` call. From an extracted kit this reads UNMEASURED.
+- [ ] AC-GI-16 - the SHIPPED PROBE: the v2.9.0 engine, driven through the same commands over the
+  A-F1 tree, reaches `pr-ready` (exit 0) and the current engine refuses (exit 1). Without the tag
+  in git this reads UNMEASURED.
+- [ ] AC-GI-17 - a repo declared `test_site: "ci"` with no recorded run reads red locally and
+  names the CI job as its gate and a DRAFT PR as the local path (owner decision Q2).
+- [ ] AC-GI-18 - a command swapped in the live config for ONE run and then reverted is not the
+  declared command: its run's reports count on no surface (`phase` exit 1 "ran a different
+  command than the one declared now", acceptance closes nothing, the seal exits 1).
+- [ ] AC-GI-19 - a FAILED run (exit 1, green reports) and a TIMEOUT run (`--timeout`, recorded as
+  TIMEOUT) count on no surface: acceptance closes nothing and the seal exits 1 naming that the
+  reports do not explain the failure - the same verdict `phase` reads.
+- [ ] AC-GI-20 - a report the run wrote, deleted after it (the red one of two), takes its siblings
+  with it: `phase` exits 1 "evidence missing or changed" and the seal exits 1; and a run recorded
+  with no tree (git but no commit yet) does not seal once git can answer.
+- [ ] AC-GI-21 - ordered mode: a newest UNVERIFIED step of a listed tool (its tool MISSING at log
+  time, carrying gated findings) is not replaced by an older verified step: `converged` fails and
+  `phase` names "latest judgment-day step ... no fallback to an older verified step" (B-F1).
+- [ ] AC-GI-22 - window mode: three steps of a nonexistent tool each print "does not count toward
+  convergence" and the loop does not converge (`unverified step(s) in the window`, B-F2); three
+  verified clean steps still converge exactly as before.
+- [ ] AC-GI-31 - two repos: an edit in `mobile-app` after its run makes `phase --repo mobile-app`
+  exit 1 naming `mobile-app/mod.py` while `backend-api` stays `pr-ready`, and readiness agrees per
+  repo (A-F3).
+- [ ] AC-GI-47 - both `uscha-devloop` SKILL.md twins (byte-identical) carry the PR-request
+  protocol (gate every repo first; when red, show the missing facts and ask ONE question: QA loop
+  first or a DRAFT PR; never a ready-for-review PR while red; pushing a branch is not opening a
+  PR), the proactive report of a QA step that could not run, `test-run --repo` as the only way
+  evidence is produced, and "STOP and ask the human" for closing an escalation.

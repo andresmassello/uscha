@@ -19,7 +19,10 @@ Six steps. Every refusal names the invariant it protects and exits non-zero:
         claim to the derived fact, and the `facts --check` that follows is green -- a claim the
         writer cannot express is still a refusal, because I3 was never about being able to fix
         a claim
-    I4  the suite runs at X with no source-relevant path dirty, and a non-zero exit is a refusal
+    I4  the suite runs at X with no source-relevant path dirty, and a non-zero exit is a refusal.
+        Since 2.10.0 (ADR-055) it runs as `qa_ledger.py test-run --repo uscha`: the engine runs
+        the command the root uscha.config.json DECLARES, witnesses the report it writes and
+        ingests it in the same call -- there is no ritual-chosen suite command any more
     I5  the evidence is recorded AFTER X, and X's identity has not moved since (the amend trap)
     I6  X+1 carries evidence only: no source-relevant path in its staged set
     I7  check-terminado prints SEALED at X+1
@@ -109,8 +112,8 @@ def refuse(inv, message):
 # --------------------------------------------------------------------------- #
 def run(argv, cwd=None, env=None):
     """One child process, captured, from a LIST -- no shell, so nothing here can be word-split
-    or glob-expanded. The one exception in this file is the suite command in step 4, which is a
-    command line the human supplied and is run with shell=True on purpose."""
+    or glob-expanded. There is no exception any more: since 2.10.0 (ADR-055) the suite is the
+    engine's `test-run`, which runs the command the root uscha.config.json declares."""
     merged = None
     if env:
         merged = dict(os.environ)
@@ -510,23 +513,25 @@ def step4(args, dry, state):
             refuse("I4", "source-relevant paths are dirty, so a green report would measure "
                          "bytes no commit carries: %s" % ", ".join(dirty_src[:5]))
 
-    cmd = args.suite_cmd or ("bash uscha-kit/tests/smoke-engine.sh")
+    # ADR-055 (2.10.0): the suite is a WITNESSED run. The engine executes the test command the
+    # root uscha.config.json declares for repo `uscha`, hashes the report set before and after,
+    # records the run and ingests the reports it wrote -- the snapshot that used to be step 5's
+    # first call happens HERE, inside the same command, at X. A command chosen by this script
+    # (the old --suite-cmd) would be exactly the hole ADR-055 closes, so there is none.
     if dry:
-        say("    would run: %s (PYTHON=%s)" % (cmd, sys.executable))
+        say("    would run: qa_ledger.py test-run --repo uscha (PYTHON=%s)" % sys.executable)
         return {}
-    say("    running: %s" % cmd)
-    r = subprocess.run(cmd, cwd=REPO, shell=True, stdout=subprocess.PIPE,
-                       stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                       errors="replace",
-                       # The environment passes through (ADR-054): the ritual measures with the
-                       # suite as it runs by default, min(cores, 8) parallel jobs. A human who
-                       # wants the serial suite exports USCHA_JOBS=1 before running this script.
-                       env=dict(os.environ, PYTHON=sys.executable,
-                                PYTHONIOENCODING="utf-8"))
+    say("    running: qa_ledger.py test-run --repo uscha")
+    # The environment passes through (ADR-054): the ritual measures with the suite as it runs by
+    # default, min(cores, 8) parallel jobs. A human who wants the serial suite exports
+    # USCHA_JOBS=1 before running this script.
+    r = run([sys.executable, ENGINE, "test-run", "--repo", "uscha"],
+            env=dict(os.environ, PYTHON=sys.executable, PYTHONIOENCODING="utf-8"))
     tail = "\n".join(r.stdout.splitlines()[-15:])
     if r.returncode != 0:
-        refuse("I4", "the suite exited %d. A red suite is a refusal, never a note.\n%s"
-               % (r.returncode, tail))
+        refuse("I4", "test-run exited %d (1 = the suite failed, 2 = no report was born of the "
+                     "run or no test command is declared). A red suite is a refusal, never a "
+                     "note.\n%s" % (r.returncode, tail))
     m_res, m_acc = RESULTADO.search(r.stdout), ACCEPTANCE.search(r.stdout)
     if not m_res or not m_acc:
         refuse("I4", "the suite exited 0 but printed no RESULTADO/ACCEPTANCE line -- counts "
@@ -544,7 +549,7 @@ def step4(args, dry, state):
 # step 5 -- record the evidence, then commit X+1 (I5, I6)
 # --------------------------------------------------------------------------- #
 def step5(args, dry, state):
-    say("[5] snapshot + readiness --record, then commit X+1")
+    say("[5] readiness --record, then commit X+1 (the snapshot was step 4's test-run)")
     recorded = state.get("code_commit") or {}
     sha, when = head_identity()
     if recorded:
@@ -559,9 +564,9 @@ def step5(args, dry, state):
         refuse("I4", "no suite counts recorded -- step 4 has not run for this release.")
 
     if dry:
-        say("    would run: qa_ledger.py snapshot --repo uscha; qa_ledger.py readiness --record")
+        say("    would run: qa_ledger.py readiness --record")
     else:
-        for argv in (["snapshot", "--repo", "uscha"], ["readiness", "--record"]):
+        for argv in (["readiness", "--record"],):
             r = engine(*argv)
             if r.returncode != 0:
                 refuse("engine failure", "qa_ledger.py %s failed:\n%s" % (" ".join(argv), r.stdout.strip()))
@@ -771,9 +776,6 @@ def build_parser():
     p.add_argument("--message-file", default=None,
                    help="file holding the commit message for the code commit X (required "
                         "from step 3: this script does not author one)")
-    p.add_argument("--suite-cmd", default=None,
-                   help="override the suite command (default: bash "
-                        "uscha-kit/tests/smoke-engine.sh with PYTHON set to this interpreter)")
     p.add_argument("--from-step", type=int, default=1, choices=range(1, 7),
                    help="resume at this step (state carries X's identity and the suite counts)")
     p.add_argument("--to-step", type=int, default=6, choices=range(1, 7),

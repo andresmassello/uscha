@@ -170,6 +170,9 @@ def _load(path, what="ledger", flag="--ledger"):
             f"[qa_ledger] {path} corrupto (JSON invalido: {exc}). Es un artefacto "
             f"fuente-de-verdad del loop — restauralo desde git "
             f"(`git checkout -- {path}`) o desde el ultimo backup; no lo edites a mano.")
+    if what == "ledger":
+        global _LAST_LEDGER_PATH
+        _LAST_LEDGER_PATH = path
     if isinstance(data, dict) and "integrity" in data:
         want = (data.get("integrity") or {}).get("sha256")
         got = _integrity_hash(data)
@@ -181,6 +184,11 @@ def _load(path, what="ledger", flag="--ledger"):
                 f"si la edicion externa fue deliberada y la aceptas, borra el campo "
                 f"'integrity' del JSON (acto humano explicito).")
     return data
+
+
+# The ledger path the gates' witness resolves the LIVE config against (beside the ledger, the
+# same lookup `test-run` makes). One ledger per process is the engine's shape; `_load` records it.
+_LAST_LEDGER_PATH = None
 
 
 def _save(path, data):
@@ -972,7 +980,7 @@ def _ac_tag_ids(name):
     return ids
 
 
-def _ac_tags(repo_path, repo_type, last_snapshot=None):
+def _ac_tags(repo_path, repo_type, last_snapshot=None, witness=None):
     """Tags AC-n leidos de los NOMBRES de testcase en los reportes JUnit que el
     engine ya ingiere. Devuelve (tags, stale) donde tags = {'AC-n': {'green': x,
     'red': y}} (o 'AC-FAM-n' para la forma con familia, ADR-036 / kit 1.87.0)
@@ -986,7 +994,12 @@ def _ac_tags(repo_path, repo_type, last_snapshot=None):
     por reportes stale queda UNMEASURED (ni falso-verde ni falso-rojo): honrar
     evidencia stale romperia 'la evidencia decide'. junit_test_count (el conteo
     aproximado) mantiene el limite conocido — su blast radius es menor (no
-    cierra ACs, solo aproxima un conteo)."""
+    cierra ACs, solo aproxima un conteo).
+
+    WITNESS (kit 2.10.0, ADR-055): with a `_Witness` (the ledger's recorded `test-run`s), a file
+    counts only if its current bytes are a report BORN of a recorded run whose tree is still
+    current. Otherwise it joins `stale` under its own label and the criterion reads UNMEASURED:
+    a hand-written XML can no longer close an AC."""
     tags = {}
     stale = []
     newest_src = _source_newest_mtime(repo_path)
@@ -1005,6 +1018,11 @@ def _ac_tags(repo_path, repo_type, last_snapshot=None):
         if _report_fresh(repo_path, f, clock_fresh, content_state) is None:
             stale.append(f)
             continue
+        if witness is not None:
+            _run, problem = witness.check(f)
+            if problem:
+                stale.append("%s (%s)" % (f.replace("\\", "/"), problem.split(" -- ")[0]))
+                continue
         try:
             root = _parse_xml(f).getroot()
         except (ET.ParseError, OSError):
@@ -1052,7 +1070,8 @@ def _sum_ac_tags(ledger):
         # commit the evidence was measured at and the hash each report carried at ingest.
         snaps = ((ledger.get("repos") or {}).get(rcfg.get("name")) or {}).get("snapshots") or []
         rtags, rstale = _ac_tags(rcfg.get("path", "."), rcfg.get("type", "maven"),
-                                 snaps[-1] if snaps else None)
+                                 snaps[-1] if snaps else None,
+                                 _Witness(ledger, rcfg.get("name")))
         for cid, v in rtags.items():
             d = ac_tags.setdefault(cid, {"green": 0, "red": 0, "cases": []})
             d["green"] += v["green"]
@@ -2402,6 +2421,564 @@ def _evidence_origin(repo_path):
     return origin
 
 
+# --------------------------------------------------------------------------- #
+# ADR-055 (2.10.0): test evidence is WITNESSED
+# --------------------------------------------------------------------------- #
+# Until 2.10.0 the engine ingested JUnit and coverage reports BY PATH and could not tell who
+# wrote a file: two hand-typed XML files over a module that raises on every call reached
+# `pr-ready`, 100% acceptance and SEALED (the v2.9.0 audit, A-F1). `test-run` is the witness:
+# it runs the project's DECLARED test command, hashes the report set before and after, and the
+# gates honor only a report that run wrote ("born of the run") while the source is still the
+# source that run measured. What stays trusted is the declared command itself (a config diff a
+# reviewer reads) -- the engine proves "this command ran at this tree and wrote these bytes",
+# never that the command tests anything.
+TEST_RUNS_KEY = "test_runs"
+TEST_RUN_TAIL_CHARS = 2000
+
+
+def _scope_entry(ledger, name):
+    """The config entry of a scope; the synthetic `integration` scope is measured where
+    `_snapshot` measures it -- path ".", type maven -- whatever its config block says, so the
+    witness hashes exactly the report set the snapshot ingests."""
+    cfg = ledger.get("config") or {}
+    if name == "integration":
+        entry = dict(cfg.get("integration") or {})
+        entry["path"], entry["type"] = ".", "maven"
+        return entry
+    for r in cfg.get("repos", []):
+        if r.get("name") == name:
+            return r
+    return {}
+
+
+def _test_command_ok(value):
+    if isinstance(value, str):
+        return bool(value.strip())
+    return (isinstance(value, list) and bool(value)
+            and all(isinstance(x, str) and x.strip() for x in value))
+
+
+def _command_text(cmd):
+    """A declared command as one printable string (a list is shown space-joined)."""
+    if isinstance(cmd, list):
+        return " ".join(cmd)
+    return (cmd or "").strip()
+
+
+def _resolve_test_command(ledger, name, ledger_path=None):
+    """(command, origin) -- the ONE derivation of the test command a repo declares, read by
+    `test-run` and by operability's `ci` check alike (ADR-055). A string runs through the
+    platform shell; a JSON list runs as argv with no shell. Precedence is ADR-051's: the LIVE
+    uscha.config.json beside the ledger first (only when it describes THIS repo -- a live file
+    that does not list the repo is about another project), then the frozen copy; within each,
+    repos[R].test_command, else defaults.test_command_<type> (the integration scope reads only
+    integration.test_command). Nothing declared -> (None, None):
+    the kit never falls back to a type default the project did not write."""
+    entry = _scope_entry(ledger, name)
+    rtype = entry.get("type") or (ledger.get("repos", {}).get(name) or {}).get("type")
+
+    def pick(cfg, require_repo):
+        repos = [r for r in (cfg.get("repos") or []) if isinstance(r, dict)]
+        if name == "integration":
+            own = cfg.get("integration") if isinstance(cfg.get("integration"), dict) else None
+        else:
+            own = next((r for r in repos if r.get("name") == name), None)
+        if require_repo and own is None:
+            return None
+        if own is not None and _test_command_ok(own.get("test_command")):
+            return own["test_command"]
+        if name == "integration":
+            # the cross-repo layer runs its OWN command; a per-type default is a repo's unit
+            # suite, never the contract tests -- so integration declares one or has none
+            return None
+        d = cfg.get("defaults") or {}
+        v = d.get("test_command_%s" % rtype) if rtype else None
+        return v if _test_command_ok(v) else None
+
+    live = _live_project_config(QA_LIVE_CONFIG, ledger_path) if ledger_path else None
+    if live is not None:
+        found = pick(_load(live, what="config", flag="--config"), True)
+        if found is not None:
+            return found, "live-config"
+    found = pick(ledger.get("config") or {}, False)
+    return (found, "frozen") if found is not None else (None, None)
+
+
+def _repo_git_toplevel(repo_path):
+    top = _seal_git(repo_path, "rev-parse", "--show-toplevel")
+    return top.stdout.strip() if top is not None and top.stdout.strip() else None
+
+
+def _tree_stamp(repo_path, rtype):
+    """`{commit, src_dirty: {path: blob-sha | "deleted"}}` -- the SOURCE-relevant state of the
+    tree, or None when git cannot say (no git, no commit). `src_dirty` covers the paths git
+    status reports that `_src_relevant` keeps (ADR-039's machinery, one definition), hashed in
+    ONE `git hash-object --stdin-paths` call. Two stamps hold the same source iff `_src_moved`
+    finds no path with a different effective blob between them."""
+    work = _repo_git_toplevel(repo_path)
+    head = _seal_git(repo_path, "rev-parse", "HEAD")
+    if not work or head is None or not head.stdout.strip():
+        return None
+    st = _seal_git(repo_path, "-c", "core.quotepath=false", "status", "--porcelain",
+                   "-uall", "--", ".")
+    if st is None:
+        return None
+    paths = sorted(set(_src_relevant(_porcelain_paths(st.stdout), rtype)))
+    dirty, present = {}, []
+    for p in paths:
+        if os.path.isfile(os.path.join(work, p)):
+            present.append(p)
+        else:
+            dirty[p] = "deleted"
+    if present:
+        try:
+            r = subprocess.run(["git", "hash-object", "--stdin-paths"], cwd=work,
+                               input="\n".join(present) + "\n", capture_output=True,
+                               text=True, encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        shas = r.stdout.split()
+        if r.returncode != 0 or len(shas) != len(present):
+            return None
+        dirty.update(zip(present, shas))
+    return {"commit": head.stdout.strip(), "src_dirty": dirty}
+
+
+def _stamp_blob(repo_path, stamp, path):
+    if path in stamp["src_dirty"]:
+        return stamp["src_dirty"][path]
+    r = _seal_git(repo_path, "rev-parse", "%s:%s" % (stamp["commit"], path))
+    return r.stdout.strip() if r is not None and r.stdout.strip() else "deleted"
+
+
+def _src_moved(repo_path, rtype, a, b):
+    """Source-relevant paths whose effective content differs between stamps A and B: [] means
+    the same source (committing exactly the tree a run measured is NOT a change), None means
+    it cannot be answered (a missing stamp, an unreachable commit) -- the caller decides, and
+    fail-closed callers read None as a difference."""
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return None
+    paths = set(a.get("src_dirty") or {}) | set(b.get("src_dirty") or {})
+    if a.get("commit") != b.get("commit"):
+        d = _seal_git(repo_path, "-c", "core.quotepath=false", "diff", "--name-only",
+                      a["commit"], b["commit"], "--", ".")
+        if d is None:
+            return None
+        paths |= set(_src_relevant(_git_path_list(d.stdout), rtype))
+    return sorted(p for p in paths
+                  if _stamp_blob(repo_path, a, p) != _stamp_blob(repo_path, b, p))
+
+
+def _witness_inventory(repo_path, rtype):
+    """{relpath: (kind, sha256)} of the report set a run can produce: the JUnit files the
+    engine ingests plus the coverage reports `coverage()` reads. Paths use the form snapshots
+    record (relative to the repo path, forward slashes)."""
+    inv = {}
+    for f in _junit_files_for(repo_path, rtype):
+        rel = os.path.relpath(f, repo_path).replace("\\", "/")
+        inv[rel] = ("junit", _sha256_evidence(f))
+    for f in (coverage(repo_path, rtype).get("reports") or []):
+        rel = os.path.relpath(f, repo_path).replace("\\", "/")
+        inv.setdefault(rel, ("coverage", _sha256_evidence(f)))
+    return inv
+
+
+def _kill_tree(proc):
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           capture_output=True)
+        else:
+            os.killpg(proc.pid, 9)
+    except (OSError, ProcessLookupError):
+        pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+
+
+def _run_declared(cmd, cwd, timeout):
+    """Run the declared command, streaming its output to the terminal. Returns (exit_code,
+    shell, tail, timed_out, wall_ms). A string goes through the platform shell (`/bin/sh`,
+    `cmd.exe` on Windows -- the `cleanroom` contract); a list runs as argv, no shell."""
+    import collections
+    import threading
+    import time
+    as_list = isinstance(cmd, list)
+    shell = "argv" if as_list else ("cmd" if os.name == "nt" else "sh")
+    kw = {"cwd": cwd, "stdin": subprocess.DEVNULL, "stdout": subprocess.PIPE,
+          "stderr": subprocess.STDOUT, "shell": not as_list}
+    if os.name != "nt":
+        kw["start_new_session"] = True
+    started = time.time()
+    try:
+        proc = subprocess.Popen(cmd, **kw)
+    except OSError as exc:
+        return 127, shell, "cannot start the command: %s" % exc, False, 0
+    tail = collections.deque(maxlen=60)
+
+    def pump():
+        for raw in iter(proc.stdout.readline, b""):
+            line = raw.decode("utf-8", errors="replace")
+            tail.append(line)
+            try:
+                sys.stdout.write(line)
+            except UnicodeEncodeError:
+                sys.stdout.write(line.encode("ascii", "replace").decode("ascii"))
+            sys.stdout.flush()
+
+    reader = threading.Thread(target=pump)
+    reader.daemon = True
+    reader.start()
+    timed_out = False
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _kill_tree(proc)
+        proc.wait()
+    reader.join(5)
+    wall_ms = int((time.time() - started) * 1000)
+    return proc.returncode, shell, "".join(tail)[-TEST_RUN_TAIL_CHARS:], timed_out, wall_ms
+
+
+def _provenance_of(ledger, name, tests):
+    """Stamp each report of a snapshot's `tests` with `run: "TR-n" | null` -- the newest run of
+    this repo that WROTE those exact bytes at that path -- and return the provenance summary."""
+    runs = [r for r in (ledger.get(TEST_RUNS_KEY) or []) if r.get("repo") == name]
+    unattested, used = [], []
+    for rep in tests.get("reports") or []:
+        rid = None
+        for r in reversed(runs):
+            if any(x.get("path") == rep.get("path") and x.get("sha256") == rep.get("sha256")
+                   for x in (r.get("reports") or [])):
+                rid = r["id"]
+                break
+        rep["run"] = rid
+        if rid:
+            if rid not in used:
+                used.append(rid)
+        else:
+            unattested.append(rep.get("path"))
+    n = len(tests.get("reports") or [])
+    if not n:
+        status = "none"
+    elif not unattested:
+        status = "attested"
+    elif len(unattested) < n:
+        status = "partial"
+    else:
+        status = "unattested"
+    return {"status": status, "runs": used, "unattested": unattested}
+
+
+def _contradiction(snap):
+    """The advisory tripwire: tests executed but no test code counted. Rust inline tests
+    legitimately produce it, so it advises (INV-ADVISORY-01's spirit); provenance is the gate."""
+    t = (snap or {}).get("tests") or {}
+    loc = (snap or {}).get("loc") or {}
+    if (t.get("executed", 0) or 0) > 0 and (loc.get("test_loc", 0) or 0) == 0:
+        return ("contradiction: tests=%s executed with test_loc=0 -- the reports claim tests "
+                "ran but no test code was counted (advisory; inline tests, as in Rust, can "
+                "produce this legitimately)" % t.get("executed"))
+    return None
+
+
+class _Witness(object):
+    """What the gates ask about ONE repo: is this report file born of a recorded run, and does
+    that run still describe the code? One object per repo per read; the tree stamp is taken once
+    and lazily, and every per-run answer is memoised (a gate read must not spawn one git process
+    per report per path: Maven projects carry hundreds of surefire files).
+
+    `check()` is THE verdict every gate reads -- `phase` (via `_evidence_live`), the acceptance
+    count (`_ac_tags`), the seal and coverage -- so the rules below hold on every surface:
+      * the file's current bytes are a report the run WROTE;
+      * the run exited 0 (a non-zero exit with green reports does not explain the failure);
+      * every JUnit report the run wrote is still on disk with the same bytes (deleting the red
+        one of two does not leave the green one standing);
+      * the run executed the command the project declares NOW (a command swapped in the live
+        config for one run and reverted is not the declared command);
+      * the source the run measured is the source now -- and when git can answer but the run
+        recorded no tree, that is not current either."""
+
+    def __init__(self, ledger, name):
+        self.name = name
+        entry = _scope_entry(ledger, name)
+        self.path = entry.get("path", ".")
+        self.rtype = entry.get("type", "maven")
+        self.runs = [r for r in (ledger.get(TEST_RUNS_KEY) or []) if r.get("repo") == name]
+        self.ledger = ledger
+        self._now = False
+        self._moved = {}
+        self._declared = False
+        self._intact = {}
+
+    def now(self):
+        if self._now is False:
+            self._now = _tree_stamp(self.path, self.rtype)
+        return self._now
+
+    def rel(self, full):
+        return os.path.relpath(full, self.path).replace("\\", "/")
+
+    def run_for(self, full):
+        """The newest run whose report record is exactly this path with exactly these bytes."""
+        rel = self.rel(full)
+        for r in reversed(self.runs):
+            for x in r.get("reports") or []:
+                if x.get("path") == rel and _evidence_hash_matches(full, x) is True:
+                    return r
+        return None
+
+    def moved(self, run):
+        """Source paths moved since the run ([] = same source), or None (cannot tell)."""
+        key = run.get("id")
+        if key not in self._moved:
+            self._moved[key] = _src_moved(self.path, self.rtype, run.get("tree"), self.now())
+        return self._moved[key]
+
+    def current(self, run):
+        """True / False / None (cannot tell: no git or a run recorded without a tree)."""
+        moved = self.moved(run)
+        if moved is None:
+            return None
+        return not moved
+
+    def declared(self):
+        if self._declared is False:
+            self._declared = _resolve_test_command(self.ledger, self.name,
+                                                   _LAST_LEDGER_PATH)[0]
+        return self._declared
+
+    def intact(self, run):
+        """The first JUnit report this run wrote that is gone or changed, or None."""
+        key = run.get("id")
+        if key not in self._intact:
+            bad = None
+            for x in run.get("reports") or []:
+                if x.get("kind") != "junit":
+                    continue
+                full = os.path.join(self.path, x.get("path") or "")
+                if not os.path.isfile(full) or _evidence_hash_matches(full, x) is not True:
+                    bad = x.get("path")
+                    break
+            self._intact[key] = bad
+        return self._intact[key]
+
+    def check(self, full):
+        """(run | None, problem | None) for one report file."""
+        cure = "run `qa_ledger.py test-run --repo %s`" % self.name
+        run = self.run_for(full)
+        if run is None:
+            return None, ("unattested: %s is not born from a recorded test-run -- %s"
+                          % (self.rel(full), cure))
+        if (run.get("exit_code") or 0) != 0:
+            return run, ("the test command exited %s while its reports read green -- the "
+                         "reports do not explain the failure (run %s) -- %s"
+                         % (run.get("exit_code"), run["id"], cure))
+        gone = self.intact(run)
+        if gone:
+            return run, ("evidence missing or changed: %s, born of run %s -- every report a run "
+                         "wrote counts, or none of them does -- %s" % (gone, run["id"], cure))
+        if run.get("command") != self.declared():
+            return run, ("stale: run %s ran a different command than the one declared now "
+                         "(%s) -- %s" % (run["id"], _command_text(self.declared()) or "none",
+                                         cure))
+        cur = self.current(run)
+        if cur is False:
+            first = (self.moved(run) or ["?"])[0]
+            return run, ("stale: source changed since run %s: %s -- %s"
+                         % (run["id"], first, cure))
+        if cur is None and self.now() is not None:
+            return run, ("stale: run %s recorded no comparable tree -- %s" % (run["id"], cure))
+        return run, None
+
+
+def _evidence_live(ledger, name):
+    """ONE read-time derivation of the test-evidence facts the gates read (ADR-055/057): the
+    freshness of the last snapshot's reports recomputed NOW (not the verdict stored at snapshot
+    time -- a stored verdict is a claim about a tree that has moved), whether every JUnit report
+    it names is born of a recorded run that is still current, and the advisory contradiction.
+    `freshness` is None with no snapshot. `attest` is True / False / None (nothing to attest).
+    `reasons` name the cure."""
+    out = {"freshness": None, "attest": None, "reasons": [], "contradiction": None,
+           "has_runs": False}
+    try:
+        node = _repo_node(ledger, name)
+    except SystemExit:
+        return out
+    snaps = node.get("snapshots") or []
+    if not snaps:
+        return out
+    last = snaps[-1]
+    entry = _scope_entry(ledger, name)
+    path, rtype = entry.get("path", "."), entry.get("type", "maven")
+    _reports, fresh = _test_evidence_provenance(path, rtype, last)
+    out["freshness"] = fresh
+    out["contradiction"] = _contradiction(last)
+    wit = _Witness(ledger, name)
+    out["has_runs"] = bool(wit.runs)
+    tests = last.get("tests") or {}
+    reports = [r for r in (tests.get("reports") or []) if isinstance(r, dict) and r.get("path")]
+    cure = "run `qa_ledger.py test-run --repo %s`" % name
+    reasons = []
+    if not wit.runs and entry.get("test_site") == "ci":
+        # owner decision Q2 (2.10.0): a suite that only runs in CI is measured THERE -- CI runs
+        # the same `test-run` + `phase --require pr-ready` against the committed ledger. Locally
+        # the fact is the same (nothing witnessed here); only the wording names the real gate.
+        reasons.append("test evidence for %s is measured in CI (test_site: ci): no test-run is "
+                       "recorded in this ledger, so the gate for %s is the CI job that runs "
+                       "`qa_ledger.py test-run --repo %s` and `phase --require pr-ready` -- "
+                       "locally, open a DRAFT PR" % (name, name, name))
+    elif not wit.runs:
+        reasons.append("test evidence for %s is not born from a recorded test-run (no run is "
+                       "recorded: the evidence predates 2.10.0, or the engine never produced "
+                       "it) -- %s" % (name, cure))
+    for r in reports:
+        full = os.path.join(path, r["path"])
+        if not os.path.isfile(full):
+            reasons.append("evidence missing: %s -- %s" % (r["path"], cure))
+            continue
+        if _evidence_hash_matches(full, r) is not True:
+            reasons.append("evidence changed since snapshot: %s -- %s" % (r["path"], cure))
+            continue
+        run, problem = wit.check(full)
+        if problem and wit.runs:
+            reasons.append(problem)
+    if not reports and rtype == "flutter":
+        # no JUnit exists for this type (the count is static): what can be witnessed is that the
+        # declared command passed at this tree
+        runs = wit.runs
+        last_run = runs[-1] if runs else None
+        if last_run is None:
+            reasons.append("no recorded test-run for %s -- %s" % (name, cure))
+        elif (last_run.get("exit_code") or 0) != 0:
+            reasons.append("the last test-run exited %s -- %s" % (last_run.get("exit_code"), cure))
+        elif wit.current(last_run) is False:
+            reasons.append("stale: source changed since run %s -- %s" % (last_run["id"], cure))
+    elif not reports:
+        out["attest"] = None
+        return out
+    out["reasons"] = reasons
+    out["attest"] = not reasons
+    return out
+
+
+def _coverage_live(ledger, name, cfg=None):
+    """`coverage()` for one repo, honored only when the report is born of a recorded run that is
+    still current (ADR-055). Otherwise the reading is UNMEASURED -- pct 0.0, report_found False
+    -- with `unattested` naming why. The scoring callers rely on that shape already."""
+    entry = cfg or _scope_entry(ledger, name)
+    path, rtype = entry.get("path", "."), entry.get("type", "maven")
+    cov = coverage(path, rtype)
+    if not cov.get("report_found"):
+        return cov
+    wit = _Witness(ledger, name)
+    reps = cov.get("reports") or []
+    problem = None
+    if not reps:
+        problem = "coverage report path unknown -- cannot be attributed to a run"
+    for f in reps:
+        _run, problem = wit.check(f)
+        if problem:
+            break
+    if problem is None:
+        return cov
+    out = dict(cov)
+    out.update({"covered": 0, "missed": 0, "pct": 0.0, "report_found": False,
+                "unattested": problem.replace("unattested: ", "coverage ")})
+    return out
+
+
+def cmd_test_run(args):
+    """Run the project's DECLARED test command, hash the report set before and after, record
+    the run, and ingest -- one atomic command (ADR-055). There is no `--run`: a command the
+    agent chooses per call is exactly the hole this closes. Exit 0 PASSED, 1 FAILED / TIMEOUT,
+    2 NO_REPORT or no command declared."""
+    ledger = _load(args.ledger)
+    name = args.repo
+    node = _repo_node(ledger, name)
+    entry = _scope_entry(ledger, name)
+    cmd, origin = _resolve_test_command(ledger, name, args.ledger)
+    if cmd is None:
+        print("[qa_ledger] %s: test-run UNMEASURED -- no test command declared for %s. Declare "
+              "repos[].test_command (or defaults.test_command_<type>) in uscha.config.json: the "
+              "kit never guesses the command a project's suite runs." % (name, name))
+        sys.exit(2)
+    path, rtype = entry.get("path", "."), entry.get("type", "maven")
+    if not os.path.isdir(path):
+        print("[qa_ledger] %s: test-run UNMEASURED -- repo path %r is not a directory"
+              % (name, path))
+        sys.exit(2)
+    print("[qa_ledger] test-run %s: running (%s) %s  [cwd %s]"
+          % (name, origin, _command_text(cmd), path))
+    sys.stdout.flush()
+    before = _witness_inventory(path, rtype)
+    tree = _tree_stamp(path, rtype)
+    org = _evidence_origin(path)
+    started = _now()
+    code, shell, tail, timed_out, wall_ms = _run_declared(cmd, path, args.timeout)
+    after = _witness_inventory(path, rtype)
+    born, unchanged = [], []
+    for rel, (kind, sha) in sorted(after.items()):
+        if sha is None:
+            continue
+        if rel not in before or before[rel][1] != sha:
+            born.append({"path": rel, "kind": kind, "sha256": sha, "sha256_eol": "lf"})
+        else:
+            unchanged.append(rel)
+    born_junit = [b for b in born if b["kind"] == "junit"]
+    no_junit_type = rtype == "flutter"
+    if timed_out:
+        status = "TIMEOUT"
+    elif code != 0:
+        status = "FAILED"
+    elif not born_junit and not no_junit_type:
+        status = "NO_REPORT"
+    else:
+        status = "PASSED"
+    rec = {
+        "id": "TR-%d" % (1 + max([0] + [int(str(r.get("id", "TR-0")).split("-")[-1] or 0)
+                                         for r in (ledger.get(TEST_RUNS_KEY) or [])
+                                         if str(r.get("id", "")).split("-")[-1].isdigit()])),
+        "repo": name, "started_at": started, "ended_at": _now(), "wall_ms": wall_ms,
+        "command": cmd, "command_origin": origin, "shell": shell,
+        "platform": sys.platform, "commit": org.get("commit"), "dirty": org.get("dirty"),
+        "tree": tree, "exit_code": code, "status": status,
+        "reports": born, "unchanged": unchanged,
+    }
+    if status in ("FAILED", "TIMEOUT") and tail:
+        rec["output_tail"] = tail
+    ledger.setdefault(TEST_RUNS_KEY, []).append(rec)
+    _save(args.ledger, ledger)
+    snap = _snapshot(ledger, name)
+    ledger["step_counter"] += 1
+    ledger["steps"].append({"n": ledger["step_counter"], "at": _now(), "kind": "snapshot",
+                            "repo": name, "phase": "post", "via": "test-run", "run": rec["id"]})
+    _save(args.ledger, ledger)
+    if args.json:
+        print(json.dumps(rec, indent=2, ensure_ascii=False))
+    else:
+        tests = snap["tests"]
+        print("[qa_ledger] test-run %s: %s %s exit=%s wall=%.1fs shell=%s reports born=%d "
+              "unchanged=%d provenance=%s"
+              % (name, rec["id"], status, code, wall_ms / 1000.0, shell, len(born),
+                 len(unchanged), (tests.get("provenance") or {}).get("status")))
+        print("[qa_ledger] snapshot %s: coverage=%s%% tests=%s origin=%s prod_loc=%s test_loc=%s"
+              % (name, snap["coverage"]["pct"], tests.get("total"),
+                 _origin_label(snap.get("origin")), snap["loc"]["prod_loc"],
+                 snap["loc"]["test_loc"]))
+        if status == "NO_REPORT":
+            print("  no report was born of this run: the command wrote no new or changed "
+                  "JUnit file%s -- evidence stays UNMEASURED."
+                  % (" (unchanged bytes: %s)" % ", ".join(unchanged[:3]) if unchanged else ""))
+        note = _contradiction(snap)
+        if note:
+            print("  " + note)
+    sys.exit({"PASSED": 0, "NO_REPORT": 2}.get(status, 1))
+
+
 def _snapshot(ledger, name):
     node = _repo_node(ledger, name)
     cfg = _repo_cfg(ledger, name) if name != "integration" else {"path": ".", "type": "maven"}
@@ -2418,6 +2995,19 @@ def _snapshot(ledger, name):
         "loc": count_loc(path, rtype),
         "origin": _evidence_origin(path),
     }
+    # ADR-055: stamp every report with the recorded run that WROTE those bytes (or null). A
+    # plain `snapshot` of untouched run-born files stays attested; a hand-written file is null.
+    snap["tests"]["provenance"] = _provenance_of(ledger, name, snap["tests"])
+    cov = snap["coverage"]
+    cov_run = None
+    for r in reversed([r for r in (ledger.get(TEST_RUNS_KEY) or []) if r.get("repo") == name]):
+        reps = cov.get("reports") or []
+        if reps and all(any(x.get("path") == os.path.relpath(f, path).replace("\\", "/")
+                            and x.get("sha256") == _sha256_evidence(f)
+                            for x in (r.get("reports") or [])) for f in reps):
+            cov_run = r["id"]
+            break
+    cov["run"] = cov_run
     node["snapshots"].append(snap)
     return snap
 
@@ -2440,6 +3030,14 @@ def cmd_snapshot(args):
           f"prod_loc={loc['prod_loc']}, test_loc={loc['test_loc']}")
     if freshness.get("status") == "stale":
         print(f"  test evidence stale: {freshness.get('reason')}")
+    prov = tests.get("provenance") or {}
+    if prov.get("status") in ("unattested", "partial"):
+        print("  test evidence NOT born from a recorded test-run (%s: %s): the gates will not "
+              "honor it -- run `qa_ledger.py test-run --repo %s`"
+              % (prov["status"], ", ".join(prov.get("unattested") or []), args.repo))
+    note = _contradiction(snap)
+    if note:
+        print("  " + note)
 
 
 def cmd_check_coverage(args):
@@ -2448,8 +3046,13 @@ def cmd_check_coverage(args):
     threshold = args.threshold
     if threshold is None:
         threshold = ledger["config"].get("defaults", {}).get("coverage_threshold", 60)
-    cov = coverage(cfg["path"], cfg["type"])
+    cov = _coverage_live(ledger, args.repo, cfg)
     pct = cov["pct"]
+    if cov.get("unattested"):
+        print(f"[qa_ledger] {args.repo}: coverage UNMEASURED -- {cov['unattested']}. Only a "
+              f"report born of a recorded test-run counts: run `qa_ledger.py test-run "
+              f"--repo {args.repo}`.")
+        sys.exit(2)
     if not cov["report_found"]:
         # No coverage report at all is UNMEASURED, not a below-threshold verdict: on a
         # greenfield repo pct 0.0 + report_found False means no report was ever produced,
@@ -3924,14 +4527,19 @@ def cmd_flag_blocker(args):
               f"(step #{rec['n']}, escape analysis recorded)")
 
 
-def _converged(node, k, qa_order=None):
+def _converged(node, k, qa_order=None, live=None):
     """Return (bool, reasons). Convergence = agent cycle clean AND latest
     static-gate run of every linter/fact-gate clean at the gate level.
     With qa_order (config defaults.qa_tools_order): the cycle is the LATEST agent
     step PER TOOL and every listed tool must have run — padding the window with
     clean throwaway steps can no longer push dirty findings out of sight.
     Measured tests beat narrated tests: a red last snapshot vetoes agent-reported
-    green (maker != checker, enforced where the data allows it)."""
+    green (maker != checker, enforced where the data allows it).
+
+    `live` (2.10.0, ADR-057): the caller's read-time `_evidence_live`. When given, the freshness
+    of the last snapshot is the one derived NOW; without it the stored verdict is read, as before.
+    An UNVERIFIED step (its tool was MISSING at log time) never counts, in either mode, and is
+    never replaced by an older verified step of the same tool (ADR-056 R1, ADR-051 as written)."""
     agent = [s for s in node["iterations"] if s.get("category", "agent") == "agent"]
     reasons = []
     k = max(1, k)
@@ -3941,26 +4549,48 @@ def _converged(node, k, qa_order=None):
         # installed, so it can no longer stand in for the tool -- it is reported on its own line,
         # distinct from "never ran". Steps written before 2.6.0 have no `unverified` key, so
         # `.get` is falsy and they are verified exactly as today (old-ledger compatibility).
-        latest_seen, latest_verified = {}, {}
+        latest_seen = {}
         for s in agent:                   # iteration order preserved -> last wins
             latest_seen[s["tool"]] = s
-            if s.get("unverified") is not True:
-                latest_verified[s["tool"]] = s
         never = [t for t in qa_order if t not in latest_seen]
+        # 2.10.0 (ADR-056 R1): the cycle is the LATEST SEEN step per tool. An unverified newest
+        # step blocks its tool with its own reason; there is no fallback to an older verified
+        # step of the same tool (the 2.9.0 audit's B-F1: a newest MISSING step carrying gated=3
+        # was skipped and an older clean one converged the loop).
         unverified = [t for t in qa_order
-                      if t in latest_seen and t not in latest_verified]
+                      if t in latest_seen and latest_seen[t].get("unverified") is True]
         if never:
             reasons.append(f"agent tools never ran: {','.join(never)}")
         if unverified:
             reasons.append("agent tools ran unverified (tool MISSING at log time): "
                            f"{','.join(unverified)}")
-        cycle = [latest_verified[t] for t in qa_order if t in latest_verified]
+            for t in unverified:
+                reasons.append("latest %s step #%s is unverified (tool MISSING at log time); "
+                               "no fallback to an older verified step"
+                               % (t, latest_seen[t].get("n")))
+        cycle = [latest_seen[t] for t in qa_order if t in latest_seen]
         if not agent:
             return False, ["no agent steps measured"]
     else:
         if len(agent) < k:
             return False, [f"only {len(agent)} agent steps (need a full cycle of {k})"]
         cycle = agent[-k:]
+        # 2.10.0 (ADR-056 R1, the audit's B-F2): `log-step` prints "does not count toward
+        # convergence" for an unverified step, so it must not. Any unverified step inside the
+        # window blocks, and so does a tool whose NEWEST step is unverified.
+        newest = {}
+        for s in agent:
+            newest[s["tool"]] = s
+        bad = [s for s in cycle if s.get("unverified") is True]
+        stale_tools = [t for t, s in newest.items()
+                       if s.get("unverified") is True and s not in bad]
+        if bad:
+            reasons.append("unverified step(s) in the window (tool MISSING at log time): "
+                           + ", ".join("%s#%s" % (s.get("tool"), s.get("n")) for s in bad)
+                           + " -- they do not count toward convergence")
+        if stale_tools:
+            reasons.append("agent tools ran unverified (tool MISSING at log time): "
+                           + ",".join(sorted(stale_tools)))
     gated = sum((s.get("gated_reported") or 0) for s in cycle)
     changed = sum((s.get("files_changed") or 0) for s in cycle)
     tests_ok = all(s.get("tests_passed") for s in cycle) if cycle else False
@@ -3970,7 +4600,7 @@ def _converged(node, k, qa_order=None):
         if (t.get("failures", 0) or 0) + (t.get("errors", 0) or 0) > 0:
             tests_ok = False
             reasons.append("snapshot shows failing tests (measured, overrides agent report)")
-        freshness = t.get("freshness", {})
+        freshness = (live or {}).get("freshness") or t.get("freshness", {})
         if freshness.get("status") == "stale":
             tests_ok = False
             reasons.append(f"snapshot test evidence is stale: "
@@ -4027,13 +4657,19 @@ def _derive_phase(ledger, name, node, k, qa_order):
         ids = ", ".join(p.get("id", "PF-?") for p in prod_open)
         return "escalated", [f"production finding abierto ({ids}): feedback real "
                              f"debe entrar al proximo discovery"]
-    conv, reasons = _converged(node, k, qa_order)
+    # ADR-055/057 (2.10.0): the test evidence is re-derived NOW, not read from the verdict stored
+    # at snapshot time, and every JUnit report must be born of a recorded test-run that is still
+    # current. One function (`_evidence_live`) feeds this gate, the convergence veto and the
+    # acceptance count, so the surfaces cannot disagree about the same tree.
+    live = _evidence_live(ledger, name)
+    conv, reasons = _converged(node, k, qa_order, live)
     tests_red = _tests_red(node)
     last_tests = (node["snapshots"][-1].get("tests", {})
                   if node.get("snapshots") else {})
+    live_fresh = (live.get("freshness") or last_tests.get("freshness", {})).get("status")
     tests_measured_green = (
         bool(last_tests.get("report_found"))
-        and last_tests.get("freshness", {}).get("status") != "stale"
+        and live_fresh != "stale"
         and (last_tests.get("executed", 0) or 0) > 0
         and (last_tests.get("failures", 0) or 0) == 0
         and (last_tests.get("errors", 0) or 0) == 0
@@ -4042,6 +4678,11 @@ def _derive_phase(ledger, name, node, k, qa_order):
         reasons.append("falta evidencia medida de tests")
     elif (last_tests.get("executed", 0) or 0) <= 0 and not tests_red:
         reasons.append("la evidencia medida no contiene tests ejecutados")
+    if live.get("attest") is False:
+        tests_measured_green = False
+        reasons.extend(live["reasons"])
+    if live.get("contradiction"):
+        reasons.append("advisory: " + live["contradiction"])
     _go, sev = _gate_open_and_sev(node)
     blk = sev.get("BLOCKER", 0) + sev.get("CRITICAL", 0)
     # clean-room gate (ADR-008). OPT-IN: no clean_room block, or mode "off", and this does not
@@ -4134,6 +4775,8 @@ def _derive_phase(ledger, name, node, k, qa_order):
     if conv and tests_measured_green and not tests_red and blk == 0:
         evidence = ["ciclo de agente limpio", "tests verdes (medidos)",
                     "0 BLOCKER/CRITICAL abiertos"]
+        if live.get("contradiction"):
+            evidence.append("advisory: " + live["contradiction"])
         if _latest_static_by_tool(node):
             evidence.insert(1, "static gates registrados sin findings gateados")
         return "pr-ready", evidence
@@ -4206,7 +4849,8 @@ def cmd_converged(args):
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
     qa_order = ledger["config"].get("defaults", {}).get("qa_tools_order")
-    ok, reasons = _converged(node, args.tools_per_cycle, qa_order)
+    ok, reasons = _converged(node, args.tools_per_cycle, qa_order,
+                             _evidence_live(ledger, args.repo))
     if ok:
         print(f"[qa_ledger] {args.repo}: CONVERGED")
     else:
@@ -4833,21 +5477,13 @@ def _op_other_ci(bases):
     return None
 
 
-def _op_test_command(ledger, repo):
-    """The repo's CONFIGURED test command: repos[R].test_command, else the per-type
-    defaults.test_command_<type>. Read, never run."""
-    cfg = ledger.get("config") or {}
-    defaults = cfg.get("defaults") or {}
-    entry = {}
-    for r in cfg.get("repos", []):
-        if r.get("name") == repo:
-            entry = r
-            break
-    if _has_text(entry.get("test_command")):
-        return entry["test_command"].strip()
-    rtype = entry.get("type") or (ledger.get("repos", {}).get(repo) or {}).get("type")
-    value = defaults.get("test_command_%s" % rtype) if rtype else None
-    return value.strip() if _has_text(value) else None
+def _op_test_command(ledger, repo, ledger_path=None):
+    """The repo's CONFIGURED test command as text. Read, never run. Since 2.10.0 (ADR-055) this
+    is the SAME derivation `test-run` executes (`_resolve_test_command`): one function, so the
+    command operability looks for in CI is the command the engine witnesses."""
+    cmd, _origin = _resolve_test_command(ledger, repo, ledger_path)
+    text = _command_text(cmd) if cmd is not None else ""
+    return text or None
 
 
 def _op_ci(workflows, command):
@@ -4952,7 +5588,7 @@ def _operability_report(ledger, repo, ledger_path):
     workflows, wf_base, wf_where = _op_workflows(bases)
     checks = {}
     if workflows:
-        ci_status, ci_detail = _op_ci(workflows, _op_test_command(ledger, repo))
+        ci_status, ci_detail = _op_ci(workflows, _op_test_command(ledger, repo, ledger_path))
         rel_status, rel_detail = _op_release(workflows)
         ci_source = "%s [%s]" % ("/".join(OPERABILITY_CI_DIR), wf_where)
     else:
@@ -5347,7 +5983,9 @@ def cmd_cleanroom(args):
     target = os.path.join(wt, "tree")
     started = time.time()
     record = {"repo": args.repo, "ref": sha, "at": _now(), "ok": False,
-              "status": None, "wall_ms": None, "worktree_sha": None}
+              "status": None, "wall_ms": None, "worktree_sha": None,
+              # ADR-055 (A-F4): the command that produced the verdict, in the record
+              "run": args.run, "setup": args.setup}
     keep = bool((_cr_cfg(ledger) or {}).get("keep_worktree_on_failure"))
     try:
         add = git("worktree", "add", "--detach", target, sha)
@@ -9709,7 +10347,7 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
     qa_order = defaults.get("qa_tools_order")
     cfg = next((r for r in ledger["config"].get("repos", []) if r["name"] == name), {})
     rtype = cfg.get("type", "maven")
-    cov = coverage(cfg.get("path", "."), rtype)
+    cov = _coverage_live(ledger, name, cfg if cfg else None)
     cov_dim = min(cov["pct"] / threshold, 1.0) if threshold else 0.0
     # silence is not success, part two (kit 1.44.0, mirrors static_unmeasured below):
     # NO coverage report at all is a different FACT from a report that says 0%. Both
@@ -9731,7 +10369,8 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
         static_dim = 0.0
     else:
         static_dim = 1.0 if gated_open == 0 else max(0.0, 1 - min(gated_open, zero_at) / zero_at)
-    converged, creasons = _converged(node, k, qa_order)
+    live = _evidence_live(ledger, name)
+    converged, creasons = _converged(node, k, qa_order, live)
     conv_dim = 1.0 if converged else 0.0
     # per-repo score uses only the local dimensions, renormalized
     local = {"coverage": cov_dim, "static_gate": static_dim, "convergence": conv_dim}
@@ -9771,6 +10410,15 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
                   "static_unmeasured": static_unmeasured,
                   "coverage_unmeasured": coverage_unmeasured,
                   "dropped_reports": dropped_reports,
+                  # 2.10.0 (ADR-055): surfaced only when present, so a repo without them has
+                  # byte-identical facts to before. The contradiction is ADVISORY; the
+                  # unattested coverage reading is why the coverage dimension reads UNMEASURED.
+                  **({"contradiction": live["contradiction"]}
+                     if live.get("contradiction") else {}),
+                  **({"coverage_unattested": cov["unattested"]}
+                     if cov.get("unattested") else {}),
+                  **({"evidence_unattested": live["reasons"]}
+                     if live.get("attest") is False else {}),
                   # only surfaced when golden_required is in play, so a config with neither
                   # risk_profile nor golden_required has byte-identical facts to before (1.45.0)
                   **({"golden_missing": golden_missing}
@@ -11104,6 +11752,13 @@ def _sealed_state(ledger, ledger_path):
         if dirty:
             failures.append("repo subtree dirty: changes no snapshot covers (%s)" % dirty[0])
 
+    # ADR-055 (2.10.0): the evidence must also be born of a recorded test-run. A snapshot that
+    # predates the provenance record is UNMEASURED (the same posture as a pre-1.92 snapshot with
+    # no hash); a report no recorded run wrote is a measured break.
+    wit = _Witness(ledger, name)
+    if reports and "provenance" not in (snap.get("tests") or {}):
+        unmeasured.append("snapshot predates 2.10.0 and records no provenance — seal UNMEASURED: "
+                          "run `qa_ledger.py test-run --repo %s`" % name)
     for r in reports:
         rel, full = r["path"], os.path.join(path, r["path"])
         if not os.path.isfile(full):
@@ -11113,6 +11768,16 @@ def _sealed_state(ledger, ledger_path):
                               "(older snapshot, or the file was unreadable)" % rel)
         elif _evidence_hash_matches(full, r) is not True:
             failures.append("evidence altered after ingest: %s" % rel)
+        elif "provenance" in (snap.get("tests") or {}):
+            # the SAME verdict phase and acceptance read (`_Witness.check`): a newer snapshot of
+            # an older run's report, a failed run, a run with a sibling report deleted, a run of a
+            # command no longer declared -- none of them seals (ADR-055)
+            run, problem = wit.check(full)
+            if run is None:
+                failures.append("evidence not born from a recorded run: %s — run `qa_ledger.py "
+                                "test-run --repo %s`" % (rel, name))
+            elif problem:
+                failures.append("evidence %s: %s" % (rel, problem))
 
     out["reasons"] = failures + unmeasured
     out["ok"] = False if failures else (None if unmeasured else True)
@@ -11153,7 +11818,7 @@ def cmd_check_terminado(args):
         for reason in sealed.get("reasons") or []:
             print("  - %s" % reason)
         if ok is not True:
-            print("  TERMINADO is not enabled: re-run the evidence and `snapshot` "
+            print("  TERMINADO is not enabled: re-run the evidence with `test-run` "
                   "on the current state.")
     sys.exit(0 if ok is True else (1 if ok is False else 2))
 
@@ -11417,7 +12082,7 @@ def cmd_readiness(args):
     agg_cov_c = agg_cov_m = 0
     for n, node in ledger["repos"].items():
         cfg = next((r for r in ledger["config"]["repos"] if r["name"] == n), {})
-        c = coverage(cfg.get("path", "."), cfg.get("type", "maven"))
+        c = _coverage_live(ledger, n, cfg if cfg else None)
         agg_cov_c += c["covered"]
         agg_cov_m += c["missed"]
     agg_cov_pct = (agg_cov_c / (agg_cov_c + agg_cov_m) * 100) if (agg_cov_c + agg_cov_m) else 0.0
@@ -11551,7 +12216,9 @@ def cmd_readiness(args):
     stalled_repos = sorted(n for n, node in ledger["repos"].items()
                            if _is_stalled(node, qa_order))
     stop_signal = (bool(conv_flags) and all(conv_flags)
-                   and not caps_active and total_open == 0)
+                   and not caps_active and total_open == 0
+                   # 2.10.0 (ADR-055): evidence the gate refuses is a blocking fact, not debt
+                   and not any(r["facts"].get("evidence_unattested") for r in repos.values()))
 
     # churn (separate from readiness)
     tool_roll = _tool_rollup(ledger)
@@ -11693,7 +12360,12 @@ def cmd_readiness(args):
     # % TERMINADO que el kit puede firmar: criterios cerrados por test verde /
     # total (MEDIDO, no el ratio de checkboxes). Solo con trazabilidad AC-n;
     # sin ella no hay % honesto que mostrar. Informativo: jamas gatea (kit 1.28.0).
-    if acc_traceable and total:
+    if acc_traceable and total and not measured_closed and stale_reports:
+        # 2.10.0 (ADR-055): every report was discarded (stale or unattested) -- 0% would read as
+        # a measured verdict; nothing was measured
+        print(f"  acceptance medido: UNMEASURED (0/{total} measured — every JUnit report was "
+              f"discarded as stale or not born from a recorded test-run; does not gate)")
+    elif acc_traceable and total:
         print(f"  acceptance medido: {out['acceptance']['measured_pct']}% "
               f"({len(measured_closed)}/{total} criteria closed by a green test "
               f"— measured, does not gate)")
@@ -11733,11 +12405,29 @@ def cmd_readiness(args):
         print(f"  ! {n_dropped} test report(s) DROPPED in: {', '.join(dropped_report_repos)} — "
               f"discovered but not usable JUnit; their tests do NOT count. Fix or remove "
               f"them (see stderr for each path and reason)")
+    cov_unattested_repos = sorted(n for n, r in repos.items()
+                                  if r["facts"].get("coverage_unattested"))
+    if cov_unattested_repos:
+        print(f"  ! coverage report NOT born from a recorded test-run in: "
+              f"{', '.join(cov_unattested_repos)} — coverage scored UNMEASURED (0.0); run "
+              f"`qa_ledger.py test-run --repo <R>`")
+    cov_unmeasured_repos = [n for n in cov_unmeasured_repos if n not in cov_unattested_repos]
     if cov_unmeasured_repos:
         print(f"  ! NO coverage report found in: {', '.join(cov_unmeasured_repos)} — "
               f"coverage scored UNMEASURED (0.0); that is NOT the same fact as a "
               f"measured 0%. Instrument it, or DECLARE the exemption with "
               f"defaults.readiness_weights.coverage = 0 (config = requirement)")
+    unattested_reports = [x for x in stale_reports if "(unattested:" in x]
+    stale_reports = [x for x in stale_reports if "(unattested:" not in x]
+    if unattested_reports:
+        print(f"  ! {len(unattested_reports)} JUnit report(s) NOT born from a recorded test-run "
+              f"discarded ({', '.join(x.split(' (')[0] for x in unattested_reports[:3])}) — "
+              f"the ACs that relied only on them go UNMEASURED; run `qa_ledger.py test-run`")
+    for rname, r in sorted(repos.items()):
+        for reason in (r["facts"].get("evidence_unattested") or [])[:2]:
+            print(f"  ! {rname}: {reason}")
+        if r["facts"].get("contradiction"):
+            print(f"  · {rname}: advisory {r['facts']['contradiction']}")
     if stale_reports:
         print(f"  ! {len(stale_reports)} STALE JUnit report(s) discarded "
               f"(code newer than the evidence) — the ACs that relied only "
@@ -14898,6 +15588,15 @@ def build_parser():
     ps.add_argument("--repo", required=True)
     ps.add_argument("--phase", default="post", choices=["pre", "post"])
     ps.set_defaults(func=cmd_snapshot)
+
+    ptr = sub.add_parser("test-run", help="run the repo's DECLARED test command, witness the "
+                         "reports it writes and ingest them (ADR-055; no --run by design)")
+    add_ledger(ptr)
+    ptr.add_argument("--repo", required=True)
+    ptr.add_argument("--timeout", type=float, default=None,
+                     help="kill the command after this many seconds (recorded as TIMEOUT)")
+    ptr.add_argument("--json", action="store_true")
+    ptr.set_defaults(func=cmd_test_run)
 
     pc = sub.add_parser("check-coverage", help="exit 0 if >= threshold, 1 if below")
     add_ledger(pc)

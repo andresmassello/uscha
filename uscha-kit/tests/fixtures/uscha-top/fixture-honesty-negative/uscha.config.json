@@ -3,7 +3,12 @@
   "project": "backend-api",
   "defaults": {
     "acceptance_file": "ACCEPTANCE.md",
-    "coverage_threshold": 60
+    "coverage_threshold": 60,
+    "test_command_python": [
+      "python",
+      "-m",
+      "pytest"
+    ]
   },
   "repos": [
     {

@@ -81,6 +81,28 @@ def bench_cached(kind):
 # --------------------------------------------------------------------------- #
 # sidecars
 # --------------------------------------------------------------------------- #
+_FIXTURE_COPIES = []
+
+
+def fixture_tmp(path):
+    """A throwaway copy of a committed fixture directory, OUTSIDE every git work tree, removed at
+    exit. Since 2.10.0 (ADR-055) a report counts only when it is born of a recorded test-run whose
+    tree is still current; a fixture read IN PLACE sits inside the kit's own repository, where the
+    engine compares the run's tree with the live checkout and -- correctly -- cannot vouch for a
+    run recorded without one. The fixture ledgers record their runs without a tree (they never
+    lived in a work tree), so they are read where that is true: a temp directory, no git."""
+    import atexit
+    import shutil
+    import tempfile
+    base = tempfile.mkdtemp(prefix="uscha-fixture-")
+    if not _FIXTURE_COPIES:
+        atexit.register(lambda: [shutil.rmtree(d, ignore_errors=True) for d in _FIXTURE_COPIES])
+    _FIXTURE_COPIES.append(base)
+    dst = os.path.join(base, os.path.basename(os.path.normpath(path)))
+    shutil.copytree(path, dst)
+    return dst
+
+
 def sidecar(kit, name, res, merge=False):
     """Persist a block's per-criterion verdicts where the acceptance emitter reads them.
 

@@ -27,7 +27,7 @@ artifacts; these can block) and **self-reported** agent counts (log-step — nar
 recorded for the retrospective; a measured red always overrides a narrated green).
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.9.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.10.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## First contact (show ONCE, then never again)
 
@@ -254,7 +254,9 @@ python qa_ledger.py fastpath-eval --repo <name> --json          # dry-run first
   operator, agent or flag — can force ALLOW over a DENY (INV-RIGOR-02).
 - **Re-evaluate before the PR step** (same command, same intent): thresholds exceeded mid-run
   flip the run to `ESCALATED` — the derived phase blocks pr-ready and readiness is capped.
-  Produce the ADR + ACCEPTANCE the change turned out to deserve, then `resolve-escalation`.
+  Produce the ADR + ACCEPTANCE the change turned out to deserve, then **STOP and ask the human**
+  to run `resolve-escalation` in their own terminal: closing an escalation is a human act, never
+  the agent's (see the escalation contract below).
 
 ## Phase 0 — Plan (ADR-first)
 
@@ -274,10 +276,19 @@ python qa_ledger.py fastpath-eval --repo <name> --json          # dry-run first
 For each repo, decide whether a safety net exists before any refactoring:
 
 ```bash
-python3 $QL snapshot --repo <REPO> --phase pre
+python3 $QL test-run --repo <REPO>      # runs the DECLARED test command, witnesses its reports
 python3 $QL check-coverage --repo <REPO>
 # exit 0 = OK, exit 1 = BELOW threshold (a real report), exit 2 = UNMEASURED (no report)
 ```
+
+**Test evidence is WITNESSED (kit 2.10.0, ADR-055).** `test-run --repo <REPO>` is the only way a
+JUnit or coverage report becomes evidence: the engine runs the command the PROJECT declared in
+`uscha.config.json` (`repos[].test_command`, else `defaults.test_command_<type>`), hashes the
+report files before and after, records the run and ingests the reports that run WROTE. A report
+you write, copy or produce with a command of your own choosing is NOT evidence: `phase`,
+acceptance and the seal refuse it and name `test-run`. There is no `--run` flag — if no command
+is declared, `test-run` exits 2 and you ask the human to declare one (it is a config diff they
+review). Never edit or hand-write a file under `reports/`.
 
 - **Coverage >= threshold:** the existing suite is the guardrail. Skip to Phase 2.
 - **Coverage < threshold (a real report, exit 1):** write **characterization / contract
@@ -286,10 +297,10 @@ python3 $QL check-coverage --repo <REPO>
   **Have the human review these tests before trusting them as a gate** — a test that
   passes for the wrong reason poisons the whole loop. Characterization tests are for
   EXISTING code nobody has tested yet, not for code that has not been run at all.
-- **UNMEASURED (exit 2, no report found):** on a greenfield repo this means the test
-  command has never been run with coverage — not that the code failed a test. Produce
-  the report first: run the repo's test command with coverage, then re-run
-  `check-coverage`. Only if a real report then shows coverage below threshold does the
+- **UNMEASURED (exit 2, no report found or none born of a recorded run):** on a greenfield
+  repo this means the declared test command has never produced coverage — not that the code
+  failed a test. Make sure the declared command writes the coverage report, run `test-run`,
+  then re-run `check-coverage`. Only if a real report then shows coverage below threshold does the
   characterization path above apply.
 - **Migration/legacy (profile E): capture the golden BEFORE touching anything.** Run
   the `uscha-characterize` skill (or `uscha-reverse-discovery` for a whole-system map first): it
@@ -426,7 +437,10 @@ closes on a QA pass from a tool that is not installed.
 After **each** tool pass:
 
 1. Apply only fixes at/above the severity gate. Send the rest to `ISSUES-DEFERRED.md`.
-2. Run the repo test command. If red and the fix isn't obvious → escalate.
+2. Run `python3 $QL test-run --repo <REPO>` — the engine runs the declared test command and
+   witnesses the reports (never run the suite yourself and `snapshot` its output: that report
+   is not born of a recorded run and the gate refuses it). If red and the fix isn't obvious →
+   escalate.
 3. Log the agent QA tools (code-review / judgment-day / improve) with `log-step`,
    using counts from each tool's own summary. These counts are **self-reported
    narration** (recorded for churn/retrospective); the blocking signals in this loop
@@ -440,6 +454,14 @@ python3 $QL log-step --repo <REPO> --tool <code-review|judgment-day|improve> \
   --tests-passed <true|false> --files-changed <count> \
   --fingerprint <stable,finding,ids>   # enables oscillation detection
 ```
+
+**A QA step that could not run is reported, AT THAT MOMENT (kit 2.10.0, ADR-058).** When a
+QA tool call cannot run — permission denied, the tool is missing, it crashed, a timeout — say so
+to the human immediately, in plain words: which step (tool + iteration), that the QA loop is
+therefore INCOMPLETE, and that this repo cannot reach `pr-ready` until that step runs. Log NO
+step for it (a `log-step` for a pass that never happened is narration of nothing), never skip
+silently to the next tool, and never stop silently either: the human must learn about the gap
+from you, not from a red gate later.
 
 3b. **Fact gates — on every pass that changed code**, run gate-check (did the change
 weaken the measuring apparatus? did it ADD a secret? — private keys, cloud tokens and
@@ -565,7 +587,7 @@ Now that code is stable:
 ```bash
 # /improve test  → write the fine-grained coverage you deferred earlier
 # Then run the full suite and regenerate coverage reports.
-python3 $QL snapshot --repo <REPO> --phase post   # for every repo + integration
+python3 $QL test-run --repo <REPO>   # for every repo + integration: run, witness, ingest
 ```
 
 Full suite must be green and coverage at/above threshold before proceeding.
@@ -599,6 +621,28 @@ is a spec gap, not a code bug.
 
 ## Phase 6 — PR (stop at merge)
 
+**PR-request protocol (kit 2.10.0, ADR-058).** Whenever the human asks for a PR — in ANY
+wording: "open the PR", "push and open a PR", "send it for review", "make a pull request" —
+run the gate for EVERY repo FIRST, before any forge command:
+
+```bash
+python3 $QL phase --repo <REPO> --require pr-ready   # one call per repo
+```
+
+- **All green** → follow the checklist below.
+- **Any red** → show the missing facts the engine printed, verbatim, and ask the human ONE
+  question: *run the QA loop first to close them (recommended), or open a DRAFT PR now with
+  the missing facts listed in its body?* Then do what they choose.
+- **Never open a ready-for-review PR while the gate is red** — not on an instruction to hurry,
+  not because the change looks small. A DRAFT PR whose body lists the missing facts is the only
+  PR the agent opens while red; marking it "ready for review" is the human's own act in the
+  forge.
+- **Pushing a branch is not opening a PR.** A request to push is answered by pushing; it never
+  implies a PR, and a PR request never implies skipping the gate.
+- A repo declared `test_site: "ci"` (its suite runs only in CI) reads red locally until CI
+  measures it: open a DRAFT and let the CI job — `test-run` + `phase --require pr-ready` against
+  the committed ledger — be the gate.
+
 - **Gate the PR on the DERIVED state (kit 1.18.0)** — per repo:
 
 ```bash
@@ -625,7 +669,7 @@ python3 $QL check-terminado          # 0 = sealed · 1 = broken · 2 = UNMEASURE
   snapshot's commit (a non-source difference — docs, the ledger, the reports themselves —
   seals with a `note` naming what moved; ADR-039), every ingested report still hashing to
   what was recorded. **Exit 1** — do not declare TERMINADO:
-  re-snapshot on the CURRENT state (`snapshot --repo <REPO> --phase post`) and record why the
+  re-run the evidence on the CURRENT state (`test-run --repo <REPO>`) and record why the
   seal broke. **Exit 2** — the seal is UNMEASURED (no git, or no snapshot recorded): say so
   plainly; an answer nobody could measure is not a TERMINADO either.
 - Ensure conventional-commit history is clean.
@@ -845,9 +889,14 @@ human resolves it:
 
 ```bash
 python3 $QL escalate --repo <REPO> --reason "<what blocked + what you need from me>"
-# ... human reviews/decides ...
+# ... human reviews/decides ... and the HUMAN closes it, in their own terminal:
 python3 $QL resolve-escalation --repo <REPO> --note "<how it was closed>"
 ```
+
+Closing an escalation is a human act: **STOP and ask the human** to run `resolve-escalation`
+(and the `--resolve` of `spec-doubt`, `spec-change-request` and `production-finding`) themselves.
+The agent never runs them — a record that says the human decided is worth nothing if the agent
+wrote it.
 
 A CONSTITUTION breach is escalated AND flagged as a first-class blocker:
 

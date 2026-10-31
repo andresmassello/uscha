@@ -22,15 +22,15 @@ does not rerun, and never moves DONE (INV-TOP-03).
 
 M4 scope (phase 2, ADR-037): `d` opens a READ-ONLY spec↔code drift pane over `spec_diff`, the
 advisory record `qa_ledger.py spec-drift` already left in the ledger -- it measures nothing and
-runs nothing; with no recorded run the pane says so instead of showing a clean board. `o` reruns
-the command THE HUMAN supplied at launch (`--rerun-cmd`, ADR-008 style: the tool never guesses a
-test command) and then lets the engine's own `snapshot` ingest whatever the run produced -- so the
-board still moves only on measured evidence, and the TUI still writes nothing itself. Three spawns
-exist BEYOND THE READ BOUNDARY and no more: `curate` (a verdict), `snapshot` (the ingest) and the
-human's own command, one per keypress, none inside a loop. The read boundary itself -- the one
-`top --json` call in `load_state` -- is a fourth `subprocess.run` in this module and always was;
-counting it among the three read as a false claim to anyone who grepped (1.91.0 blind review), so
-the sentence now says which side of the boundary it counts. Four call sites total, no fifth.
+runs nothing; with no recorded run the pane says so instead of showing a clean board. `o` runs
+the engine's own `test-run` for the first configured repo (2.10.0, ADR-055 amending ADR-037): the
+engine executes the test command the PROJECT declared in uscha.config.json, witnesses the reports
+it writes and ingests them in the same call -- so the board still moves only on measured evidence,
+and the TUI still writes nothing itself. The command is never guessed and never typed into the
+TUI: `--rerun-cmd` is accepted and IGNORED with a notice for one release. Two spawns exist BEYOND
+THE READ BOUNDARY and no more: `curate` (a verdict) and `test-run` (the witnessed run + ingest),
+one per keypress, none inside a loop. The read boundary itself -- the one `top --json` call in
+`load_state` -- is a third `subprocess.run` in this module. Three call sites total, no fourth.
 
 Stdlib only. Python 3.8+. Runnable directly or via `python -m uscha_top`.
 """
@@ -79,10 +79,12 @@ VERDICT_COOLDOWN = 0.25
 VERDICT_COOLDOWN_MSG = ("verdict recorded -- release the key (the queue advanced; the next "
                         "observation is a new judgement)")
 
-# `o` (ADR-037, option B). The command is NEVER guessed and never read from config: it is the
-# shell string the human passed at launch, the same discipline `cleanroom --run` follows
-# (ADR-008). Without it the key is inert and says why.
-RERUN_MISSING_MSG = "no rerun command given -- pass --rerun-cmd"
+# `o` (ADR-037, amended by ADR-055 in 2.10.0). The key runs the engine's `test-run`: the command
+# is the one the PROJECT declared (repos[R].test_command / defaults.test_command_<type>), never one
+# typed at launch -- a command chosen per call is exactly the hole ADR-055 closes. `--rerun-cmd` is
+# accepted for one release and ignored, and the status line says so every time.
+RERUN_IGNORED_MSG = ("--rerun-cmd is ignored since 2.10.0: `o` runs the repo's DECLARED test "
+                     "command through test-run")
 # The same courtesy a refused verdict key gets: a held `o` is one rerun, and the presses the
 # cooldown eats must SAY they were eaten. A keypress that vanishes silently reads as a dropped
 # input, and the next reflex is to press it again -- the repeat the cooldown exists to stop.
@@ -1030,83 +1032,65 @@ def apply_verdict(ob, verdict, args, engine=None):
     return False, said or ("curate exited %s -- nothing was recorded" % rc)
 
 
-def _rerun_call(cmd, cwd):
-    """The human's OWN command, run in the tracked repo's directory (ADR-037, option B).
+def _test_run_call(engine, ledger, repo):
+    """The witnessed run, made by the engine's own `test-run` (ADR-055): it executes the test
+    command the project DECLARED, hashes the report set before and after, records the run and
+    ingests what it wrote -- one engine process per keypress. This is what makes `o` honest: the
+    board moves on evidence born of a recorded run or it does not move at all, and the TUI still
+    builds no record of its own (ADR-033's rule).
 
-    `shell=True` is the decision, not an oversight: what arrives here is the shell string the
-    human typed after `--rerun-cmd` (`pytest -q && npm test`), exactly the way `cleanroom
-    --run` and `golden-coverage --harness` take theirs -- the engine never decides what to
-    run, and neither does this TUI (ADR-008). The trust boundary is the human's own shell,
-    which ADR-037 states rather than pretends to mitigate: a misspelt flag runs whatever the
-    shell makes of it, in that directory, the same as typing it there.
-
-    Output is NOT captured: a test suite writes to the terminal the human is watching, and
-    swallowing it would replace measured output with a spinner. One function on purpose --
-    it is the boundary the suite replaces to assert the command and the ONE call per keypress
-    without running anything (AC-T-26). Returns the exit code."""
-    return subprocess.run(cmd, shell=True, cwd=cwd).returncode
-
-
-def _snapshot_call(engine, ledger, repo):
-    """The INGEST, made by the engine's own `snapshot` -- the same subcommand the dev loop
-    runs at every pass close. This is what makes `o` honest: the board moves on ingested
-    evidence or it does not move at all, and the TUI still builds no record of its own
-    (ADR-033's rule, one more engine subcommand under it -- ADR-037).
-
-    Returns (returncode, the engine's own last line)."""
-    argv = [sys.executable, engine, "snapshot", "--ledger", ledger, "--repo", repo]
-    proc = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    said = ((proc.stderr or b"").decode("utf-8", "replace").strip().splitlines()
-            or (proc.stdout or b"").decode("utf-8", "replace").strip().splitlines())
-    return proc.returncode, (said[-1] if said else "")
+    Output is NOT captured: the suite writes to the terminal the human is watching (the engine
+    streams it), and swallowing it would replace measured output with a spinner. One function on
+    purpose -- it is the boundary the suite replaces to assert the ONE call per keypress without
+    running anything (AC-T-26). Returns the exit code: 0 PASSED, 1 FAILED/TIMEOUT, 2 no report
+    born of the run or no test command declared."""
+    # run FROM the ledger's directory, as the project's own commands are: the repo paths and the
+    # live uscha.config.json are relative to it, wherever the TUI was started
+    where = os.path.dirname(os.path.realpath(ledger)) or "."
+    argv = [sys.executable, engine, "test-run", "--ledger", os.path.basename(ledger),
+            "--repo", repo]
+    return subprocess.run(argv, cwd=where).returncode
 
 
-def rerun_banner(cmd, repo):
-    """What the board says WHILE the command runs. Pure, so the frame that carries it stays
-    a pure function of its inputs; the loop draws it before it blocks."""
-    return ("rerun: %s %s running in %s (first configured repo) %s verdict keys locked"
-            % (_safe(cmd), MID, _safe(repo), MID))
+def rerun_banner(repo):
+    """What the board says WHILE the run runs. Pure, so the frame that carries it stays a pure
+    function of its inputs; the loop draws it before it blocks."""
+    return ("rerun: test-run %s running for %s (first configured repo) %s verdict keys locked"
+            % (MID, _safe(repo), MID))
+
+
+_RERUN_SAID = {0: "test-run PASSED (exit 0) %s ingested" % MID,
+               1: "test-run FAILED (exit 1) %s ingested: a red run is evidence too" % MID,
+               2: ("test-run UNMEASURED (exit 2): no report was born of the run, or the repo "
+                   "declares no test command %s see the terminal" % MID)}
 
 
 def run_rerun(state, args, engine=None):
-    """One keypress -> the human's command, then the engine's ingest, then a reload upstream.
-    Returns (ran?, the line the status bar shows).
+    """One keypress -> the engine's `test-run` for the first configured repo -> a reload
+    upstream. Returns (ran?, the line the status bar shows).
 
-    The order is the decision: the snapshot runs **whether or not the command exited 0**. A
-    red suite is evidence too, and the whole point of `o` is that what lands on the board is
-    what a report says, never what an exit code narrated -- refusing to ingest a red run
-    would leave the board showing the previous, greener measurement (measured red beats
-    narrated green, kit 1.48.1). What a non-zero exit changes is the STATUS LINE, which names
-    it, and nothing else.
+    `test-run` ingests whether or not the suite passed: a red suite is evidence too, and the
+    whole point of `o` is that what lands on the board is what a report says, never what an exit
+    code narrated (measured red beats narrated green, kit 1.48.1). What the exit code changes is
+    the STATUS LINE, which names it.
 
-    Three refusals come first, none of which spawns anything: no `--rerun-cmd` (the command
-    is the human's to supply, ADR-008), a `--state` frozen snapshot (the ledger on disk is
-    not the one on screen -- the same refusal a verdict gets), and a ledger with no configured
-    repo (there is no cwd to run in and no repo to ingest for)."""
-    cmd = getattr(args, "rerun_cmd", None)
-    if not cmd:
-        return False, RERUN_MISSING_MSG
+    Two refusals come first, neither of which spawns anything: a `--state` frozen snapshot (the
+    ledger on disk is not the one on screen -- the same refusal a verdict gets) and a ledger with
+    no configured repo (there is no repo to run for). A `--rerun-cmd` given at launch is not run
+    (ADR-055): the line says so."""
     if getattr(args, "state", None):
         return False, RERUN_FROZEN_MSG
-    repo, path = first_repo(state)
+    repo, _path = first_repo(state)
     if not repo:
         return False, RERUN_NO_REPO_MSG
     eng = engine or engine_path()
     if not eng:
         return False, "qa_ledger.py not found next to uscha_top.py"
-    cwd = os.path.join(os.path.dirname(os.path.realpath(args.ledger)) or ".", path or ".")
-    if not os.path.isdir(cwd):
-        return False, "repo path '%s' does not exist -- nothing was run" % path
-    code = _rerun_call(cmd, cwd)
-    rc, said = _snapshot_call(eng, args.ledger, repo)
-    tail = said or ("snapshot exited %s" % rc)
-    if rc != 0:
-        return True, ("rerun exit %s %s snapshot FAILED (%s) -- nothing was ingested"
-                      % (code, MID, tail))
-    if code != 0:
-        # a red run is still a measurement: it is ingested, and the line says both facts.
-        return True, "rerun exit %s (red) %s ingested: %s" % (code, MID, tail)
-    return True, "rerun exit 0 %s ingested: %s" % (MID, tail)
+    code = _test_run_call(eng, args.ledger, repo)
+    said = _RERUN_SAID.get(code, "test-run exited %s %s see the terminal" % (code, MID))
+    if getattr(args, "rerun_cmd", None):
+        said = "%s %s %s" % (said, MID, RERUN_IGNORED_MSG)
+    return True, said
 
 
 def after_verdict(sel, count):
@@ -1126,8 +1110,8 @@ def is_rerun_key(key, mode, cooling=False, rerunning=False):
     """Is this keypress a rerun request (ADR-037)? A pure predicate, and deliberately NOT a
     sixth member of `dispatch_mode`'s tuple: that shape is what M3 measured, and widening a
     measured contract so it can carry a second action is how a keymap grows a second write
-    path nobody counted. The caller spends a True on exactly one `_rerun_call` + one
-    `_snapshot_call`, never a loop (AC-T-29).
+    path nobody counted. The caller spends a True on exactly one `_test_run_call`,
+    never a loop (AC-T-29).
 
     `o` answers on the BOARD only -- the verdicts queue and the drift pane have their own
     jobs -- and it is refused while a rerun is in flight or while the 250 ms cooldown after
@@ -1254,7 +1238,7 @@ def _apply_and_advance(state, args, queue, cur, verdict):
 
 
 def _rerun_and_reload(state, args):
-    """ONE keypress -> ONE command -> ONE `snapshot` -> re-read. Returns (state, status).
+    """ONE keypress -> ONE `test-run` -> re-read. Returns (state, status).
 
     A function of its own for the same structural reason `_apply_and_advance` is one, and the
     suite asserts it the same way (AC-T-29): the module's single call to `run_rerun` must have
@@ -1316,17 +1300,16 @@ def _loop(state, args):
                     if wrote:
                         _fresh, seen = _changed(paths, seen)
                 elif is_rerun_key(key, mode, cooling=cooling):
-                    if getattr(args, "rerun_cmd", None):
-                        # the frame the human watches WHILE the command runs, drawn before
-                        # the spawn because the spawn blocks this loop until it returns.
-                        # That synchronous shape is also why the verdict lock is measured on
+                    if not getattr(args, "state", None) and first_repo(state)[0]:
+                        # the frame the human watches WHILE the run runs, drawn before the
+                        # spawn because the spawn blocks this loop until it returns. That
+                        # synchronous shape is also why the verdict lock is measured on
                         # `dispatch_mode(..., rerunning=True)` and not raced against a
                         # terminal (AC-T-27): while the suite runs, no key is read at all --
                         # what is typed lands in the buffer and the drain throws it away.
                         sys.stdout.write("\x1b[H\x1b[2J" + "\n".join(render(
                             state, terminal_size(args.cols, args.rows), sel=sel, plain=False,
-                            mode=mode, status=rerun_banner(args.rerun_cmd,
-                                                           first_repo(state)[0] or "?"))))
+                            mode=mode, status=rerun_banner(first_repo(state)[0]))))
                         sys.stdout.flush()
                     state, status = _rerun_and_reload(state, args)
                     # the same 250 ms a verdict gets, for the same reason: a held `o` must be
@@ -1386,12 +1369,10 @@ def build_parser():
                              "key is the author of the judgement -- the TUI never invents a "
                              "name for it")
     parser.add_argument("--rerun-cmd", default=None,
-                        help="the shell command `o` reruns, in the first configured repo's "
-                             "directory (e.g. \"pytest -q\"). The tool NEVER guesses it and "
-                             "never reads it from config (ADR-008/037): without this flag "
-                             "`o` is inert and says so. After the command, the engine's own "
-                             "`snapshot` ingests the report -- on a red run too, because a "
-                             "red measurement is still a measurement")
+                        help="IGNORED since 2.10.0 (accepted for one release): `o` runs the "
+                             "engine's `test-run`, which executes the test command the project "
+                             "DECLARED in uscha.config.json and ingests the reports that run "
+                             "wrote -- on a red run too (ADR-055 amending ADR-037)")
     parser.add_argument("--cols", type=int, default=None)
     parser.add_argument("--rows", type=int, default=None)
     return parser
@@ -1405,6 +1386,8 @@ def main(argv=None):
             pass
     args = build_parser().parse_args(argv)
     args.human = resolve_human(args.human)
+    if args.rerun_cmd:
+        sys.stderr.write("[uscha top] %s\n" % RERUN_IGNORED_MSG)
     try:
         state = load_state(args.state, args.ledger)
     except (OSError, ValueError, RuntimeError) as exc:

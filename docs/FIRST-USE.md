@@ -249,18 +249,23 @@ def test_AC_01_rejects_a_percentage_outside_the_range():
         apply_discount(1000, 150)
 ```
 
-El nombre del test lleva `AC_01`. Corra el comando de test del proyecto — el que `init` escribió
-en `defaults.test_command_python` — y después deje que el motor ingiera lo que produjo:
+El nombre del test lleva `AC_01`. Deje que el motor corra el comando de test del proyecto — el que
+`init` escribió en `defaults.test_command_python` — e ingiera lo que esa corrida escribió
+(`test-run`, 2.10.0: un reporte que usted produce y después le entrega al motor no es evidencia):
 
 ```bash
-python -m pytest --cov --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
-python "$QL" snapshot --repo backend-api --phase post
+python "$QL" test-run --repo backend-api
 python "$QL" readiness
 ```
 
 ```text
-[qa_ledger] snapshot backend-api (post): coverage=100.0% (found=True), tests=2 (found=True),
-    freshness=fresh, origin=d090593b/dirty, prod_loc=248, test_loc=7
+[qa_ledger] test-run backend-api: running (live-config) pytest --cov
+    --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml  [cwd .]
+...
+[qa_ledger] test-run backend-api: TR-1 PASSED exit=0 wall=1.9s shell=sh reports born=2
+    unchanged=0 provenance=attested
+[qa_ledger] snapshot backend-api: coverage=100.0% tests=2 origin=d090593b/dirty prod_loc=248
+    test_loc=7
 
 READINESS: 45.0/100 — NOT READY
   acceptance medido: 100.0% (1/1 criteria closed by a green test — measured, does not gate)
@@ -272,8 +277,8 @@ READINESS: 45.0/100 — NOT READY
 
 Ese es un resultado normal, y es la frase que todo el kit existe para imprimir: **measured but
 unticked** (medido pero sin tildar). El motor encontró un caso de test en verde nombrado según
-`AC-01`, en un reporte que él no escribió, producido por una corrida cuya evidencia está
-`fresh` respecto del estado actual del código. Cerró el criterio por su cuenta — y no le va a
+`AC-01`, en un reporte que él no escribió, producido por una corrida que él registró y cuyo código fuente sigue siendo el
+estado actual. Cerró el criterio por su cuenta — y no le va a
 tildar la casilla.
 
 El puntaje es 45.0 y no más alto porque otras dimensiones siguen **UNMEASURED**: no corrió
@@ -323,13 +328,13 @@ READINESS: 45.0/100 — NOT READY
     success
 ```
 
-*Próxima acción:* escriba un test cuyo nombre lleve el identificador, corra el comando de test,
-vuelva a correr `snapshot`. O destilde la casilla. No discuta con el ledger.
+*Próxima acción:* escriba un test cuyo nombre lleve el identificador y vuelva a correr
+`test-run`. O destilde la casilla. No discuta con el ledger.
 
 **`UNMEASURED` — no corrió nada, así que no se sabe nada.** Una dimensión sin reporte se puntúa
 como UNMEASURED, nunca como un 0% aprobado.
 
-*Próxima acción:* instruméntela (corra la herramienta, produzca el reporte, `snapshot` de
+*Próxima acción:* instruméntela (que el comando declarado produzca el reporte, `test-run` de
 nuevo), o **declare la excepción** en la configuración: la línea de advertencia nombra la clave
 exacta. Una dimensión que decide no medir es una decisión que se escribe, no un silencio.
 
