@@ -2745,6 +2745,14 @@ class _Witness(object):
             return None
         return not moved
 
+    def between(self, a, b):
+        """`_src_moved` between two recorded stamps, memoised per pair (gate reads compare the
+        same reviewed trees many times)."""
+        key = json.dumps([a, b], sort_keys=True)
+        if key not in self._moved:
+            self._moved[key] = _src_moved(self.path, self.rtype, a, b)
+        return self._moved[key]
+
     def declared(self):
         if self._declared is False:
             self._declared = _resolve_test_command(self.ledger, self.name,
@@ -2803,11 +2811,14 @@ def _evidence_live(ledger, name):
     `freshness` is None with no snapshot. `attest` is True / False / None (nothing to attest).
     `reasons` name the cure."""
     out = {"freshness": None, "attest": None, "reasons": [], "contradiction": None,
-           "has_runs": False}
+           "has_runs": False, "wit": None}
     try:
         node = _repo_node(ledger, name)
     except SystemExit:
         return out
+    # the same witness the QA-review checks of `_converged` read (ADR-056 R2', 2.11.0): one
+    # tree stamp per read, whatever the test evidence says
+    out["wit"] = _Witness(ledger, name)
     snaps = node.get("snapshots") or []
     if not snaps:
         return out
@@ -2889,6 +2900,144 @@ def _coverage_live(ledger, name, cfg=None):
     out.update({"covered": 0, "missed": 0, "pct": 0.0, "report_found": False,
                 "unattested": problem.replace("unattested: ", "coverage ")})
     return out
+
+
+# --------------------------------------------------------------------------- #
+# ADR-056 R2' (2.11.0): a QA review is WITNESSED when it starts
+# --------------------------------------------------------------------------- #
+# The engine cannot run a QA reviewer, but it can stamp the tree the moment it is handed to one.
+# `review-start` records that stamp; `log-step --review RV-n` carries the REVIEWED tree instead of
+# the tree at log time (the SKILL order review -> fix -> test -> log makes those differ on every
+# pass that fixes something -- the gap a TLA+ model check found in the first R2 design,
+# docs/gate-integrity/models/). Convergence then reads three things off reviewed trees: the
+# latest review of each tool saw the source on disk now (Anchor), a gated finding closes only on
+# a different reviewed state (the debt), and a clean verdict on exactly the content an earlier
+# review flagged contradicts the record (Memory).
+REVIEWS_KEY = "reviews"
+DEFERRED_FILE = "ISSUES-DEFERRED.md"
+
+
+def _deferred_sha(repo_path, ledger_path=None):
+    """sha256 over the ISSUES-DEFERRED.md files a deferral can land in (the repo path, and the
+    project root beside the ledger), or None when there is none. Content, not mtime."""
+    seen, parts = set(), []
+    cands = [os.path.join(repo_path, DEFERRED_FILE)]
+    if ledger_path:
+        cands.append(os.path.join(os.path.dirname(os.path.abspath(ledger_path)), DEFERRED_FILE))
+    for c in cands:
+        real = os.path.realpath(c)
+        if real in seen or not os.path.isfile(c):
+            continue
+        seen.add(real)
+        h = _sha256_evidence(c)
+        if h:
+            parts.append(h)
+    if not parts:
+        return None
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+def cmd_review_start(args):
+    """Record the tree a QA review starts on (ADR-056 R2'). Runs nothing, reviews nothing."""
+    ledger = _load(args.ledger)
+    _repo_node(ledger, args.repo)
+    entry = _scope_entry(ledger, args.repo)
+    path, rtype = entry.get("path", "."), entry.get("type", "maven")
+    reviews = ledger.setdefault(REVIEWS_KEY, [])
+    rec = {"id": "RV-%d" % (len(reviews) + 1), "repo": args.repo, "tool": args.tool,
+           "iteration": args.iteration, "at": _now(), "tree": _tree_stamp(path, rtype),
+           "deferred_sha256": _deferred_sha(path, args.ledger), "closed_by": None}
+    reviews.append(rec)
+    _save(args.ledger, ledger)
+    if args.json:
+        print(json.dumps(rec, indent=2, ensure_ascii=False))
+    else:
+        print("[qa_ledger] review %s started: %s/%s iter=%s on %s -- run the tool now, then "
+              "`log-step ... --review %s`"
+              % (rec["id"], args.repo, args.tool, args.iteration,
+                 ((rec["tree"] or {}).get("commit") or "no git")[:8], rec["id"]))
+
+
+def _review_link(ledger, args):
+    """(review | None, problem | None) for `log-step --review`."""
+    if not getattr(args, "review", None):
+        return None, ("no review-start recorded for this pass (log-step without --review): "
+                      "an unwitnessed step never counts toward convergence")
+    rv = next((r for r in (ledger.get(REVIEWS_KEY) or []) if r.get("id") == args.review), None)
+    if rv is None:
+        return None, "unknown review %s" % args.review
+    if rv.get("closed_by") is not None:
+        return None, "review %s was already logged by step #%s" % (args.review, rv["closed_by"])
+    if (rv.get("repo"), rv.get("tool"), rv.get("iteration")) != (args.repo, args.tool,
+                                                                  args.iteration):
+        return None, ("review %s was started for %s/%s iter=%s, not this step"
+                      % (args.review, rv.get("repo"), rv.get("tool"), rv.get("iteration")))
+    return rv, None
+
+
+def _review_verdicts(agent, tools, wit):
+    """(reasons, info) of ADR-056 R2' for the tools of a cycle. Legacy steps (no `reviewed`, no
+    `unwitnessed`: written before 2.11.0) are not judged here -- 2.10 semantics."""
+    reasons, info = [], {"deferred_not_fixed": 0, "legacy_steps": 0}
+    info["legacy_steps"] = sum(1 for s in agent
+                               if "reviewed" not in s and "unwitnessed" not in s)
+    if wit is None:
+        return reasons, info
+
+    def same_state(a, b):
+        m = wit.between(a.get("tree"), b.get("tree"))
+        return m == [] and a.get("deferred_sha256") == b.get("deferred_sha256"), m
+
+    for t in tools:
+        steps = [s for s in agent if s.get("tool") == t]
+        witnessed = [s for s in steps if isinstance(s.get("reviewed"), dict)]
+        if not steps or not witnessed:
+            continue
+        latest = steps[-1]
+        # Anchor: the latest review of this tool saw the source that is on disk now
+        if isinstance(latest.get("reviewed"), dict):
+            now = wit.now()
+            moved = wit.between(latest["reviewed"].get("tree"), now)
+            if moved is None and now is not None:
+                reasons.append("%s: the last review (%s, step #%s) recorded no comparable tree "
+                               "-- run the review again"
+                               % (t, latest.get("review"), latest.get("n")))
+            elif moved:
+                reasons.append("%s: the last review (%s, step #%s) saw a different source than "
+                               "the tree now: %s -- run the review again"
+                               % (t, latest.get("review"), latest.get("n"), moved[0]))
+        # the debt, on reviewed states
+        for i, g in enumerate(witnessed):
+            if (g.get("gated_reported") or 0) <= 0:
+                continue
+            closer = None
+            for c in witnessed[i + 1:]:
+                if (c.get("gated_reported") or 0) != 0:
+                    continue
+                same, m = same_state(g["reviewed"], c["reviewed"])
+                if not same and (m or g["reviewed"].get("deferred_sha256")
+                                 != c["reviewed"].get("deferred_sha256")):
+                    closer = (c, m)
+                    break
+            if closer is None:
+                reasons.append("%s: %s gated finding(s) from step #%s (%s) still open -- no "
+                               "later clean review of a different source or of a changed %s"
+                               % (t, g.get("gated_reported"), g.get("n"), g.get("review"),
+                                  DEFERRED_FILE))
+            elif not closer[1]:
+                info["deferred_not_fixed"] += g.get("gated_reported") or 0
+        # Memory: a clean verdict on exactly the content an earlier review flagged
+        if isinstance(latest.get("reviewed"), dict) and (latest.get("gated_reported") or 0) == 0:
+            for g in witnessed[:-1]:
+                if (g.get("gated_reported") or 0) > 0 and \
+                        same_state(g["reviewed"], latest["reviewed"])[0]:
+                    reasons.append("%s: step #%s reports 0 gated findings on exactly the content "
+                                   "step #%s flagged with %s -- the record contradicts itself; "
+                                   "fix, or defer in %s"
+                                   % (t, latest.get("n"), g.get("n"), g.get("gated_reported"),
+                                      DEFERRED_FILE))
+                    break
+    return reasons, info
 
 
 def cmd_test_run(args):
@@ -3373,6 +3522,15 @@ def cmd_log_step(args):
         record["source_origin"] = ext["origin"]
     if res["source"] == "MISSING":
         record["unverified"] = True
+    # ADR-056 R2' (2.11.0): the step carries the tree the tool REVIEWED, from its review-start
+    rv, rv_problem = _review_link(ledger, args)
+    if rv is not None:
+        record["review"] = rv["id"]
+        record["reviewed"] = {"tree": rv.get("tree"),
+                              "deferred_sha256": rv.get("deferred_sha256")}
+        rv["closed_by"] = record["n"]
+    else:
+        record["unwitnessed"] = rv_problem
     node["iterations"].append(record)
     ledger["steps"].append({"n": record["n"], "at": record["at"], "kind": "qa-step",
                             "repo": args.repo, "tool": args.tool,
@@ -3384,7 +3542,9 @@ def cmd_log_step(args):
           f"tests_passed={record['tests_passed']} files_changed={args.files_changed} "
           f"source={res['source']}"
           + ("" if res["source"] != "MISSING" else
-             " (unverified: tool not installed -- does not count toward convergence)"))
+             " (unverified: tool not installed -- does not count toward convergence)")
+          + (" review=%s" % rv["id"] if rv is not None else
+             " (unwitnessed: %s)" % rv_problem))
 
 
 def cmd_ingest_gate(args):
@@ -4568,6 +4728,13 @@ def _converged(node, k, qa_order=None, live=None):
                 reasons.append("latest %s step #%s is unverified (tool MISSING at log time); "
                                "no fallback to an older verified step"
                                % (t, latest_seen[t].get("n")))
+        # 2.11.0 (ADR-056 R2'): an UNWITNESSED step (logged with no review-start) never counts
+        # and never hides either -- the same posture as an unverified one
+        for t in qa_order:
+            s_ = latest_seen.get(t)
+            if s_ is not None and s_.get("unwitnessed"):
+                reasons.append("latest %s step #%s is unwitnessed (%s); no fallback to an "
+                               "older step" % (t, s_.get("n"), s_["unwitnessed"]))
         cycle = [latest_seen[t] for t in qa_order if t in latest_seen]
         if not agent:
             return False, ["no agent steps measured"]
@@ -4584,6 +4751,14 @@ def _converged(node, k, qa_order=None, live=None):
         bad = [s for s in cycle if s.get("unverified") is True]
         stale_tools = [t for t, s in newest.items()
                        if s.get("unverified") is True and s not in bad]
+        # 2.11.0 (ADR-056 R2'): an unwitnessed step in the window, or a tool whose newest step
+        # is unwitnessed, blocks the same way
+        unwit = [s for s in cycle if s.get("unwitnessed")]
+        unwit += [s for t, s in newest.items() if s.get("unwitnessed") and s not in unwit]
+        if unwit:
+            reasons.append("unwitnessed step(s) (logged with no review-start): "
+                           + ", ".join("%s#%s" % (s.get("tool"), s.get("n")) for s in unwit)
+                           + " -- they do not count toward convergence")
         if bad:
             reasons.append("unverified step(s) in the window (tool MISSING at log time): "
                            + ", ".join("%s#%s" % (s.get("tool"), s.get("n")) for s in bad)
@@ -4591,6 +4766,12 @@ def _converged(node, k, qa_order=None, live=None):
         if stale_tools:
             reasons.append("agent tools ran unverified (tool MISSING at log time): "
                            + ",".join(sorted(stale_tools)))
+    # 2.11.0 (ADR-056 R2'): Anchor, the debt on reviewed trees, Memory
+    r2_reasons, r2_info = _review_verdicts(agent, sorted({s.get("tool") for s in cycle}),
+                                           (live or {}).get("wit"))
+    reasons.extend(r2_reasons)
+    if live is not None:
+        live["r2"] = r2_info
     gated = sum((s.get("gated_reported") or 0) for s in cycle)
     changed = sum((s.get("files_changed") or 0) for s in cycle)
     tests_ok = all(s.get("tests_passed") for s in cycle) if cycle else False
@@ -10419,6 +10600,11 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
                      if cov.get("unattested") else {}),
                   **({"evidence_unattested": live["reasons"]}
                      if live.get("attest") is False else {}),
+                  # 2.11.0 (ADR-056 R2'): surfaced only when present
+                  **({"gated_deferred_not_fixed": (live.get("r2") or {})["deferred_not_fixed"]}
+                     if (live.get("r2") or {}).get("deferred_not_fixed") else {}),
+                  **({"steps_predate_reviews": (live.get("r2") or {})["legacy_steps"]}
+                     if (live.get("r2") or {}).get("legacy_steps") else {}),
                   # only surfaced when golden_required is in play, so a config with neither
                   # risk_profile nor golden_required has byte-identical facts to before (1.45.0)
                   **({"golden_missing": golden_missing}
@@ -11616,6 +11802,35 @@ def _porcelain_paths(text):
 
 
 def _sealed_state(ledger, ledger_path):
+    """INV-T1 for EVERY configured repo (ADR-057, 2.11.0; the synthetic `integration` scope is
+    not a repo). One repo -> exactly `_seal_repo`'s block, byte-identical to 2.10 (no prefix, no
+    `repos` key). Several -> the AGGREGATE: `ok` False if any repo is False, else None if any is
+    None, else True; `repo`/`commit`/`note` of the first repo whose verdict is not True (else of
+    the first repo); reasons prefixed `[name]`; and a `repos[]` detail key, one block per repo.
+    Until 2.11.0 only `repos[0]` was sealed, so a crash committed into the second repo after its
+    evidence read SEALED (the v2.9.0 audit's A-F9)."""
+    repos = [r for r in ((ledger.get("config", {}) or {}).get("repos") or [])
+             if r.get("name") != "integration"]
+    if len(repos) <= 1:
+        return _seal_repo(ledger, ledger_path, repos[0] if repos else None, ())
+    # nested repo paths: every repo's named reports are seal footprint, not dirt, for all
+    footprint = []
+    for rc in repos:
+        snaps = ((ledger.get("repos") or {}).get(rc.get("name")) or {}).get("snapshots") or []
+        for r in ((snaps[-1].get("tests") or {}).get("reports") or []) if snaps else []:
+            if isinstance(r, dict) and r.get("path"):
+                footprint.append(os.path.join(rc.get("path", "."), r["path"]))
+    blocks = [_seal_repo(ledger, ledger_path, rc, footprint) for rc in repos]
+    oks = [b["ok"] for b in blocks]
+    agg_ok = False if False in oks else (None if None in oks else True)
+    lead = next((b for b in blocks if b["ok"] is not True), blocks[0])
+    return {"ok": agg_ok,
+            "reasons": ["[%s] %s" % (b["repo"], r) for b in blocks for r in b["reasons"]],
+            "commit": lead["commit"], "repo": lead["repo"], "note": lead["note"],
+            "repos": blocks}
+
+
+def _seal_repo(ledger, ledger_path, rcfg, extra_exempt):
     """INV-T1 (ADR-038): is the recorded evidence bound to the code state on disk RIGHT NOW?
 
     Derived at read time, never written: nothing here creates a file, and re-deriving it is
@@ -11648,13 +11863,12 @@ def _sealed_state(ledger, ledger_path):
     `generated_at` -- and two consecutive `top --json` runs must differ in nothing else
     (AC-T-24 measures exactly that, and caught this before it shipped)."""
     out = {"ok": None, "reasons": [], "commit": None, "repo": None, "note": None}
-    repos = (ledger.get("config", {}) or {}).get("repos") or []
-    if not repos:
+    if not rcfg:
         out["reasons"].append("no repo configured — seal UNMEASURED")
         return out
-    name = repos[0].get("name")
-    path = repos[0].get("path", ".")
-    rtype = repos[0].get("type")
+    name = rcfg.get("name")
+    path = rcfg.get("path", ".")
+    rtype = rcfg.get("type")
     out["repo"] = _top_clean(name) if name else None
 
     top = _seal_git(path, "rev-parse", "--show-toplevel")
@@ -11693,7 +11907,8 @@ def _sealed_state(ledger, ledger_path):
     reports = [r for r in ((snap.get("tests") or {}).get("reports") or [])
                if isinstance(r, dict) and r.get("path")]
     exempt = set()
-    for candidate in [ledger_path] + [os.path.join(path, r["path"]) for r in reports]:
+    for candidate in ([ledger_path] + [os.path.join(path, r["path"]) for r in reports]
+                      + list(extra_exempt)):
         rel = _seal_rel(work_tree, candidate)
         if rel:
             exempt.add(rel)
@@ -11809,7 +12024,13 @@ def cmd_check_terminado(args):
     if getattr(args, "json", False):
         print(json.dumps(sealed, indent=2, ensure_ascii=False))
     else:
-        verdict = "SEALED" if ok is True else ("UNSEALED" if ok is False else "UNMEASURED")
+        def word(v):
+            return "SEALED" if v is True else ("UNSEALED" if v is False else "UNMEASURED")
+        for block in sealed.get("repos") or []:
+            # ADR-057 (2.11.0): one verdict line per configured repo, then the aggregate
+            print("[qa_ledger] %s: %s%s" % (block.get("repo") or "?", word(block.get("ok")),
+                  " at %s" % block["commit"][:8] if block.get("commit") else ""))
+        verdict = word(ok)
         where = " at %s" % sealed["commit"][:8] if sealed.get("commit") else ""
         print("[qa_ledger] check-terminado: %s%s (repo %s)"
               % (verdict, where, sealed.get("repo") or "?"))
@@ -12428,6 +12649,12 @@ def cmd_readiness(args):
             print(f"  ! {rname}: {reason}")
         if r["facts"].get("contradiction"):
             print(f"  · {rname}: advisory {r['facts']['contradiction']}")
+        if r["facts"].get("gated_deferred_not_fixed"):
+            print(f"  · {rname}: {r['facts']['gated_deferred_not_fixed']} gated finding(s) "
+                  f"deferred, not fixed (ISSUES-DEFERRED.md)")
+        if r["facts"].get("steps_predate_reviews"):
+            print(f"  · {rname}: {r['facts']['steps_predate_reviews']} QA step(s) predate "
+                  f"witnessed reviews (2.11.0) and keep 2.10 semantics")
     if stale_reports:
         print(f"  ! {len(stale_reports)} STALE JUnit report(s) discarded "
               f"(code newer than the evidence) — the ACs that relied only "
@@ -15619,7 +15846,19 @@ def build_parser():
     pl.add_argument("--fingerprint", default=None,
                     help="comma-separated stable finding IDs for oscillation detection")
     pl.add_argument("--note", default=None)
+    pl.add_argument("--review", default=None,
+                    help="the RV-n id `review-start` printed for this pass (ADR-056 R2'); a step "
+                         "without one is unwitnessed and never counts toward convergence")
     pl.set_defaults(func=cmd_log_step)
+
+    prv = sub.add_parser("review-start", help="record the tree a QA review starts on (ADR-056 "
+                         "R2'); log the pass with `log-step --review RV-n`")
+    add_ledger(prv)
+    prv.add_argument("--repo", required=True)
+    prv.add_argument("--tool", required=True)
+    prv.add_argument("--iteration", type=int, required=True)
+    prv.add_argument("--json", action="store_true")
+    prv.set_defaults(func=cmd_review_start)
 
     pg = sub.add_parser("ingest-gate",
                         help="parse Checkstyle/PMD/SpotBugs/FindSecBugs reports and "
