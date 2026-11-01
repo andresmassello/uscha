@@ -24,4 +24,4 @@ hit).
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 466 checks · 0 fail; acceptance 440/441.
