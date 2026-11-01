@@ -452,7 +452,7 @@
       <ul class="small">
         <li>The agent implements only what the SPEC allows</li>
         <li>Writes tests that assert the ACCEPTANCE cases</li>
-        <li>QA-LEDGER records measured results (pass/fail, coverage, etc.)</li>
+        <li>QA-LEDGER records results the engine measured: tests run by <code>test-run</code> (the project's declared command), not reported by the agent</li>
         <li>The loop is bounded — it cannot declare itself done without evidence</li>
         <li>It stops at human merge approval</li>
       </ul>
@@ -663,6 +663,7 @@
         <li>Keeping decisions only in the chat history</li>
         <li>Removing the human gate "just this once"</li>
         <li>Trying to boil the ocean on day one</li>
+        <li>Running the tests by hand and expecting the gate to count them — the engine only honors reports from its own <code>test-run</code></li>
       </ul>
     </section>
 

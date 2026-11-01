@@ -73,8 +73,8 @@ output. For tests that is enforced, not hoped for (2.10.0): the engine runs the 
 your project DECLARED (`test-run`), records the run, and its gates honor only the JUnit and
 coverage files that run wrote — a report written, copied or edited by anyone else is not
 evidence. What stays trusted is the declared command itself: a config line a reviewer reads. **Facts block; guesses advise.** A checkbox ticked by hand is recorded as
-`narrated` and does not close a criterion. A test named after that criterion, green, in an
-ingested report — that closes it.
+`narrated` and does not close a criterion. A test named after that criterion, green, in a
+report a recorded `test-run` wrote — that closes it.
 
 The result is a readiness score you can actually trust, because you can click any number
 and see which file, which test, and when.
@@ -101,7 +101,8 @@ cpp, swift, flutter — and computes a readiness score with hard caps and visibl
 
 ## Compatibility matrix
 
-Generated from `TARGETS`/`SKILL_ROOTS` in the installer, so it cannot drift from the code.
+The target and install-path columns mirror `TARGETS`/`SKILL_ROOTS` in the installer. The
+*exercised* column is editorial, not generated: last updated 2026-09-20 (ADR-049).
 
 | target | agent | installs to | INV-GOLDEN-01 | exercised against a real agent |
 |---|---|---|---|---|

@@ -22,6 +22,8 @@ it, and rigor is a one-way ratchet (a human may force more, never less). Spec-dr
 (ADR-005) flags specs gone stale relative to their code from git dates — advisory,
 it never gates. Neither skips human approval or asserting tests.
 
+Evidence is witnessed (kit 2.10-2.11, ADR-055/056/057): test-run executes the project's declared test command and the gates honor only the reports that run wrote; a QA review is registered when it starts (review-start) and convergence requires each tool's latest review to match the tree on disk. The engine does not run the reviewer and trusts the declared command; smoke-ingest and CI-ref evidence are still read by path. A full dev loop was run once on Codex (2026-09-20, ADR-049); there the golden write guard is advisory (no hooks).
+
 For existing systems, Reverse Discovery (kit 1.64+, ADR-009) extracts facts (a
 system map and a mechanically captured golden), then authors CANDIDATE claims about
 behavior in quarantine (discovery/*.md, each with typed evidence and confidence).
@@ -60,7 +62,7 @@ that ingests evidence from 11 language stacks. It runs on Windows, macOS and Lin
 
 - [Home](https://uscha.dev): landing page — the method, the five rules, the nine skills, the engine's numbers
 - [Why uscha exists](https://uscha.dev/why): essay — open loop vs. measured graph, who answers the gates, why the loop is caged
-- [How it works](https://uscha.dev/how): three diagrams — greenfield discovery, brownfield reverse discovery, and the curation mechanism (one human verdict, everything else measured)
+- [How it works](https://uscha.dev/how): four diagrams — greenfield discovery, brownfield reverse discovery, the curation mechanism (one human verdict, everything else measured), and the forward leg (compile, certify, round-trip)
 - [The diamond](https://uscha.dev/diamond): the thesis — specs as source code, code as build artifact, with the REAL vs VISION vs REJECTED truth-pass table
 - [2-day developer course](https://uscha.dev/docs/uscha-dev-course-EN.html): from zero to production — day 1 greenfield (discovery), day 2 migration (characterize, reverse-discovery)
 - [Complete documentation](https://uscha.dev/docs/uscha-claude-code-doc-EN.html): the whole method in one place — rules, phases, every skill, gates and the ledger

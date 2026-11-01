@@ -137,14 +137,16 @@ that are \emph{measured} (parsed from a real artifact --- a test report, a
 coverage file, linter output) and records that are \emph{narrated} (an agent's
 own account of what it did, believed only because it says so). A measured red
 always overrides a narrated green. Acceptance criteria close per criterion only when a green,
-name-tagged test case exists in the ingested reports --- a checked checkbox
+name-tagged test case exists in a report born of a recorded, still-current
+\texttt{test-run} (otherwise the criterion reads UNMEASURED) --- a checked checkbox
 without a test is recorded as \emph{narrated-only} and does not close.
 \item[The human at three fixed points.] The human approves the \emph{shape}
 (specification front), approves the \emph{golden baseline} (the one artifact
 the agent is mechanically forbidden from authoring), and \emph{merges}. The
 agent proposes, measures, and stops.
 \item[Tool-agnosticism by contract.] The engine is dependency-free Python that
-never runs an LLM: it validates structures and ingests reports. Wherever a
+never runs an LLM: it validates structures and ingests reports, and for tests it
+runs only the command the project declared (\texttt{test-run}). Wherever a
 model's judgment participates (e.g.\ rubric grading), the interface is a JSON
 contract; who produced the JSON --- one vendor's agent, another's, or a human
 --- is irrelevant to the ledger.
@@ -171,7 +173,7 @@ a first-class blocker, never a trade-off.
 that agents deliver what is checked, not what is requested, and name the
 missing disposition \emph{validation self-awareness}. Uscha treats this as
 its central adversary: acceptance closes per criterion on measured test
-evidence; findings cannot be closed without new test material (\emph{find bugs
+evidence (from a recorded, still-current \texttt{test-run}, else UNMEASURED); findings cannot be closed without new test material (\emph{find bugs
 once}); qualitative verdicts require file-and-line evidence or they do not
 count; and the workflow state that authorizes a pull request is derived from
 ledger facts, never self-declared by the agent.
@@ -383,10 +385,12 @@ failure or refinement is the expected shape of the process, not an anomaly.}
 
 \section{The Evidence Engine}\label{sec:engine}
 
-The engine is a single dependency-free Python file. It never runs an LLM and
-never runs the tools it scores: it \emph{ingests} their reports (JUnit-family
-XML, Cobertura and lcov coverage, thirteen linter formats across eleven language
-stacks) and validates structures. Every verdict is persisted in a
+The engine is a single dependency-free Python file. It never runs an LLM. For
+tests it runs only the command the project declared (\texttt{test-run}) and
+honors only the reports that run wrote; the other tools it scores (linters,
+smoke runs, CI references) are still \emph{ingested} by path (JUnit-family XML,
+Cobertura and lcov coverage, thirteen linter formats across eleven language
+stacks), and it validates structures. Every verdict is persisted in a
 deterministic ledger with an integrity checksum; external mutation or a
 truncated write blocks loading with a recovery message.
 Table~\ref{tab:checks} summarizes the complete check family and the verdict
@@ -441,6 +445,19 @@ pr-ready) is computed from ledger facts. A self-declared state machine would
 be narrated state --- the exact category of signal the methodology distrusts
 --- so there is nothing to declare and no illegal transition to police.
 
+\textbf{Witnessed evidence.} Since kit 2.10.0 the engine no longer ingests test
+reports by path alone: \texttt{test-run} executes the project's declared test
+command, hashes the report set before and after, and records the run;
+acceptance, the workflow state and the seal honor only a report born of a
+recorded, still-current run. Since 2.11.0 a QA review is witnessed when it
+starts: the ledger records the tree the review began on, convergence requires
+each tool's latest review to have seen the source now on disk, and a gated
+finding closes only through measured movement. The design of the latter was
+model-checked (TLA+/TLC, bounded to three code versions, one tool, one repo),
+and the check broke the first draft. Provenance proves that a command ran at a
+tree and wrote bytes, not that it tests anything; the engine does not run the
+reviewer and cannot prove a review took place.
+
 \textbf{Structured guesses (advise).} The advisory layer includes regression
 capture (closing findings without adding a single non-blank test line is
 flagged as \emph{narrated closure}; the failing test goes before the fix);
@@ -467,7 +484,7 @@ blocks on those would be disabled and die.
 \textbf{Readiness and the anti-ceremony invariant.} A weighted 0--100 score
 reports the state of the result, never effort (Table~\ref{tab:readiness}). The
 dominant dimension is measured acceptance --- criteria closed by green,
-name-tagged tests --- with checkbox completion demoted to a narrative
+name-tagged tests from a recorded \texttt{test-run} (else UNMEASURED) --- with checkbox completion demoted to a narrative
 dimension. Hard caps override the weighted average, and every biting threshold
 states its provenance. The score reports; it does not gate --- the gates are
 the facts above. As the gate set grows, the dominant risk shifts from any one
@@ -488,14 +505,15 @@ itself~\cite{poppendieck2006lean}.
 \textbf{Dimension} & \textbf{Weight} & \textbf{Measured from} \\
 \midrule
 acceptance (measured) & 30 & criteria closed by green, name-tagged test cases
-in ingested reports \\
+in reports born of a recorded, still-current \texttt{test-run} (else UNMEASURED) \\
 static gate & 20 & latest linter runs, normalized severities; never-ran scores
 0 (silence is not success) \\
 \texttt{adr} (narrative completion) & 15 & checkbox ratio of the acceptance
 file --- narrated progress, deliberately demoted below measured acceptance \\
 coverage & 15 & coverage reports against the declared threshold \\
-convergence & 10 & clean last cycle of every review tool plus clean persisted
-fact gates \\
+convergence & 10 & clean last cycle of every review tool --- each tool's latest
+review witnessed (\texttt{review-start}) and anchored to the tree on disk --- plus
+clean persisted fact gates \\
 integration & 10 & cross-repository contract pass (weight redistributed if
 disabled) \\
 \bottomrule
@@ -850,6 +868,12 @@ methodology targets, not for simple tasks in general.
 \textbf{Reviewer cost is unmeasured.} The human cost of spec-anchored review
 --- measured elsewhere~\cite{garg2026spec} as a substantial increase in
 reviewer minutes --- is not measured in this work.
+\textbf{Trusted declarations and bounded checks.} The declared test command is
+trusted: it is a configuration line a reviewer reads, not something the engine
+can validate. A review is witnessed at its start, not proven to have run. The
+TLA+/TLC check is bounded (three code versions, one tool, one repository). And
+the full dev loop on Codex was a pilot with $n=1$, a tiny greenfield repository
+and no hooks, so the golden write guard is advisory there (ADR-049).
 
 \section{Future Work}\label{sec:future}
 

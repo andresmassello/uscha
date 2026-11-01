@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How uscha works — discovery, reverse discovery, curation, the diamond leg</title>
-<meta name="description" content="Three diagrams: greenfield discovery, brownfield reverse discovery, and the curation mechanism where a single human verdict is the only judgment in the loop.">
+<meta name="description" content="Four diagrams: greenfield discovery, brownfield reverse discovery, the curation mechanism where a single human verdict is the only judgment in the loop, and the forward leg they feed.">
 <link rel="canonical" href="https://uscha.dev/how">
 <link rel="alternate" hreflang="en" href="https://uscha.dev/how">
 <link rel="alternate" hreflang="es" href="https://uscha.dev/es/how">
@@ -343,10 +343,12 @@
         <span><i class="lg-adv"></i>advisory instrument</span>
         <span><i style="border-color:#22403f"></i>model / skill step</span>
       </div>
+
+      <p class="cap">Tests are run by the engine, not reported to it: <code>test-run</code> runs the declared command and only the reports it wrote count. A QA pass is registered when it starts (<code>review-start</code>), so a verdict is tied to the tree it reviewed — a later source edit sends that tool back through the loop.</p>
     </section>
 
     <p class="cap" style="margin-top:32px;color:var(--mute);font-size:13px">
-      Every node above maps to a real subcommand or invariant in <code>qa_ledger.py</code> (kit 1.96.0).
+      Every node above maps to a real subcommand or invariant in <code>qa_ledger.py</code>.
       These three flows are the human-judgment layer. The forward leg they feed — the LLM as compiler
       under a validated contract, blind compilations judged by a withheld oracle, and the measured round
       trip back — is the <a href="../diamond/index.html">diamond</a>: same doctrine, one level up.

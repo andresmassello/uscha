@@ -272,7 +272,7 @@
         <a class="lib-card" href="how/index.html">
           <span class="lk">diagramas</span>
           <h3>Cómo funciona</h3>
-          <p>Tres flujos en una imagen cada uno: discovery greenfield, reverse discovery brownfield, y el mecanismo de curación donde un único veredicto humano es el único juicio del loop.</p>
+          <p>Cuatro diagramas: discovery greenfield, reverse discovery brownfield, el mecanismo de curación donde un único veredicto humano es el único juicio del loop, y la ida que alimentan (compilar, certificar, round-trip).</p>
         </a>
         <a class="lib-card" href="../docs/uscha-dev-course.html">
           <span class="lk">curso <span class="fmt">html</span></span>
@@ -318,6 +318,14 @@
         persona que lo firmó. Eso sale del propio ledger, de <code>bench-curate --human</code> para los
         artefactos compilados del bench Diamond, y de las marcas <code>origin: agent</code> que registran
         qué ítems de la especificación propuso el agente y cuáles decidió el humano.
+      </p>
+      <p class="ev-note">
+        La evidencia de tests tiene testigo, no solo lectura: <code>test-run</code> ejecuta el comando de tests
+        que declaró tu proyecto, registra la corrida, y los gates solo aceptan los reportes que esa corrida
+        escribió. Un reporte escrito, copiado o editado por otra vía no es evidencia, y una revisión de QA
+        cuenta solo si se registró (<code>review-start</code>) sobre el árbol exacto que vio. Lo que sigue
+        siendo confianza es el propio comando declarado —una línea de config que revisa una persona— y el
+        motor no puede probar que una revisión se hizo, solo sobre qué árbol dice haberse hecho.
       </p>
 
       <div class="field">

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cómo funciona uscha — discovery, reverse discovery, curación, la pata del diamante</title>
-<meta name="description" content="Tres diagramas: discovery greenfield, reverse discovery brownfield, y el mecanismo de curación donde un único veredicto humano es el único juicio del loop.">
+<meta name="description" content="Cuatro diagramas: discovery greenfield, reverse discovery brownfield, el mecanismo de curación donde un único veredicto humano es el único juicio del loop, y la ida que alimentan.">
 <link rel="canonical" href="https://uscha.dev/es/how">
 <link rel="alternate" hreflang="en" href="https://uscha.dev/how">
 <link rel="alternate" hreflang="es" href="https://uscha.dev/es/how">
@@ -314,10 +314,12 @@
         <span><i class="lg-adv"></i>instrumento advisory</span>
         <span><i style="border-color:#22403f"></i>paso de modelo / skill</span>
       </div>
+
+      <p class="cap">Los tests los corre el motor, no se le reportan: <code>test-run</code> ejecuta el comando declarado y solo cuentan los reportes que escribió. Una pasada de QA se registra cuando arranca (<code>review-start</code>), así cada veredicto queda atado al árbol que revisó — una edición posterior del código manda a esa herramienta de nuevo por el loop.</p>
     </section>
 
     <p class="cap" style="margin-top:32px;color:var(--mute);font-size:13px">
-      Cada nodo de arriba mapea a un subcomando o invariante real de <code>qa_ledger.py</code> (kit 1.96.0).
+      Cada nodo de arriba mapea a un subcomando o invariante real de <code>qa_ledger.py</code>.
       Estos tres flujos son la capa de juicio humano. La ida que alimentan — el LLM como compilador bajo
       un contrato validado, compilaciones ciegas juzgadas por un oráculo oculto, y el round trip medido
       de vuelta — es el <a href="../diamond/index.html">diamante</a>: la misma doctrina, un nivel arriba.

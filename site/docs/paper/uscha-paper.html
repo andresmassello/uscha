@@ -173,8 +173,9 @@ advisory is what keeps them alive.</dd>
 output) and records that are <i>narrated</i> (an agent's own account of what it
 did, believed only because it says so). A measured red always overrides a
 narrated green. Acceptance criteria
-close per criterion only when a green, name-tagged test case exists in the
-ingested reports &mdash; a checked checkbox without a test is recorded as
+close per criterion only when a green, name-tagged test case exists in a
+report born of a recorded, still-current <code>test-run</code> (otherwise the
+criterion reads UNMEASURED) &mdash; a checked checkbox without a test is recorded as
 <i>narrated-only</i> and does not close.</dd>
 <dt>The human at three fixed points.</dt>
 <dd>The human approves the <i>shape</i> (specification front), approves the
@@ -182,7 +183,8 @@ ingested reports &mdash; a checked checkbox without a test is recorded as
 from authoring), and <i>merges</i>. The agent proposes, measures, and stops.</dd>
 <dt>Tool-agnosticism by contract.</dt>
 <dd>The engine is dependency-free Python that never runs an LLM: it validates
-structures and ingests reports. Wherever a model's judgment participates
+structures and ingests reports, and for tests it runs only the command the
+project declared (<code>test-run</code>). Wherever a model's judgment participates
 (e.g.&nbsp;rubric grading), the interface is a JSON contract; who produced the
 JSON &mdash; one vendor's agent, another's, or a human &mdash; is irrelevant to the
 ledger.</dd>
@@ -207,7 +209,8 @@ blocker, never a trade-off.</p>
 <p><b class="rh">Building to the test.</b> Ma et al. [2] demonstrate that
 agents deliver what is checked, not what is requested, and name the missing
 disposition <i>validation self-awareness</i>. Uscha treats this as its
-central adversary: acceptance closes per criterion on measured test evidence;
+central adversary: acceptance closes per criterion on measured test evidence
+(from a recorded, still-current <code>test-run</code>, else UNMEASURED);
 findings cannot be closed without new test material (<i>find bugs once</i>);
 qualitative verdicts require file-and-line evidence or they do not count; and
 the workflow state that authorizes a pull request is derived from ledger facts,
@@ -412,10 +415,12 @@ reach the human gate, where a person reads the diff and approves the merge.</p>
 
 <h2>4&nbsp;&nbsp;The Evidence Engine</h2>
 
-<p>The engine is a single dependency-free Python file. It never runs an LLM and
-never runs the tools it scores: it <i>ingests</i> their reports (JUnit-family
-XML, Cobertura and lcov coverage, thirteen linter formats across eleven language
-stacks) and validates structures. Every verdict is persisted in a deterministic
+<p>The engine is a single dependency-free Python file. It never runs an LLM. For
+tests it runs only the command the project declared (<code>test-run</code>) and
+honors only the reports that run wrote; the other tools it scores (linters,
+smoke runs, CI references) are still <i>ingested</i> by path (JUnit-family XML,
+Cobertura and lcov coverage, thirteen linter formats across eleven language
+stacks), and it validates structures. Every verdict is persisted in a deterministic
 ledger with an integrity checksum; external mutation or a truncated write
 blocks loading with a recovery message. Table&nbsp;1 summarizes the complete
 check family and the verdict class of each.</p>
@@ -451,6 +456,19 @@ machine would be narrated state &mdash; the exact category of signal the
 methodology distrusts &mdash; so there is nothing to declare and no illegal
 transition to police.</p>
 
+<p><b class="rh">Witnessed evidence.</b> Since kit 2.10.0 the engine no longer
+ingests test reports by path alone: <code>test-run</code> executes the project's
+declared test command, hashes the report set before and after, and records the
+run; acceptance, the workflow state and the seal honor only a report born of a
+recorded, still-current run. Since 2.11.0 a QA review is witnessed when it
+starts: the ledger records the tree the review began on, convergence requires
+each tool's latest review to have seen the source now on disk, and a gated
+finding closes only through measured movement. The design of the latter was
+model-checked (TLA+/TLC, bounded to three code versions, one tool, one repo),
+and the check broke the first draft. Provenance proves that a command ran at a
+tree and wrote bytes, not that it tests anything; the engine does not run the
+reviewer and cannot prove a review took place.</p>
+
 <p><b class="rh">Structured guesses (advise).</b> The advisory layer includes
 regression capture (closing findings without adding a single non-blank test
 line is flagged as <i>narrated closure</i>; the failing test goes before the
@@ -477,7 +495,7 @@ that blocks on those would be disabled and die.</p>
 <p><b class="rh">Readiness and the anti-ceremony invariant.</b> A weighted
 0&ndash;100 score reports the state of the result, never effort (Table&nbsp;2).
 The dominant dimension is measured acceptance &mdash; criteria closed by green,
-name-tagged tests &mdash; with checkbox completion demoted to a narrative
+name-tagged tests from a recorded <code>test-run</code> (else UNMEASURED) &mdash; with checkbox completion demoted to a narrative
 dimension. Hard caps override the weighted average, and every biting threshold
 states its provenance. The score reports; it does not gate &mdash; the gates
 are the facts above. As the gate set grows, the dominant risk shifts from any
@@ -491,11 +509,11 @@ same Lean lens the method applies to code, turned on the method itself&nbsp;[9].
 
 <table class="tab">
 <tr><th>Dimension</th><th>Weight</th><th>Measured from</th></tr>
-<tr><td>acceptance (measured)</td><td>30</td><td>criteria closed by green, name-tagged test cases in ingested reports</td></tr>
+<tr><td>acceptance (measured)</td><td>30</td><td>criteria closed by green, name-tagged test cases in reports born of a recorded, still-current <code>test-run</code> (else UNMEASURED)</td></tr>
 <tr><td>static gate</td><td>20</td><td>latest linter runs, normalized severities; never-ran scores 0 (silence is not success)</td></tr>
 <tr><td><code>adr</code> (narrative completion)</td><td>15</td><td>checkbox ratio of the acceptance file &mdash; narrated progress, deliberately demoted below measured acceptance</td></tr>
 <tr><td>coverage</td><td>15</td><td>coverage reports against the declared threshold</td></tr>
-<tr><td>convergence</td><td>10</td><td>clean last cycle of every review tool plus clean persisted fact gates</td></tr>
+<tr><td>convergence</td><td>10</td><td>clean last cycle of every review tool &mdash; each tool's latest review witnessed (<code>review-start</code>) and anchored to the tree on disk &mdash; plus clean persisted fact gates</td></tr>
 <tr class="last"><td>integration</td><td>10</td><td>cross-repository contract pass (weight redistributed if disabled)</td></tr>
 </table>
 <div class="tabcap"><b>Table 2.</b> Readiness dimensions and default weights.
@@ -843,7 +861,14 @@ quality claim made here is defensible only for the multi-constraint work the
 methodology targets, not for simple tasks in general.
 <b class="rh">Reviewer cost is unmeasured.</b> The human cost of
 spec-anchored review &mdash; measured elsewhere [20] as a substantial
-increase in reviewer minutes &mdash; is not measured in this work.</p>
+increase in reviewer minutes &mdash; is not measured in this work.
+<b class="rh">Trusted declarations and bounded checks.</b> The declared test
+command is trusted: it is a configuration line a reviewer reads, not something
+the engine can validate. A review is witnessed at its start, not proven to have
+run. The TLA+/TLC check is bounded (three code versions, one tool, one
+repository). And the full dev loop on Codex was a pilot with <i>n</i>&nbsp;=&nbsp;1,
+a tiny greenfield repository and no hooks, so the golden write guard is advisory
+there (ADR-049).</p>
 
 <h2>8&nbsp;&nbsp;Future Work</h2>
 

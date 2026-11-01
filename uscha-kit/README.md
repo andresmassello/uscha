@@ -759,7 +759,7 @@ python3 $QL spec-change-request --repo backend-api --source SD-001 --requested-c
 - **Traceability (kit 1.10.0, the dominant dimension)**: each criterion carries a stable ID
   — `- [ ] AC-01 — when X then Y`. A criterion closes MEASURED only when there exists
   ≥1 GREEN testcase with its tag in the name (`test_ac1_x` / `testAC01X` / `"AC-01: ..."`
-  — normalized by number: `AC-01 == AC_1 == ac1`) in the already-ingested JUnit reports,
+  — normalized by number: `AC-01 == AC_1 == ac1`) in the JUnit reports of a recorded `test-run` (a report not born of one reads UNMEASURED),
   and no tagged testcase in red. The checkbox is NARRATIVE; the testcase is FACT: an
   `[x]` without a green test appears as `narrated_only` and does NOT close. Anti-Goodhart: the agent
   can no longer raise the KPI by polishing coverage — only by closing criteria with named

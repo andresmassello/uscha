@@ -452,7 +452,7 @@
       <ul class="small">
         <li>El agente implementa solo lo que el SPEC permite</li>
         <li>Escribe tests que asertan los casos de ACCEPTANCE</li>
-        <li>QA-LEDGER registra resultados medidos (pass/fail, cobertura, etc.)</li>
+        <li>QA-LEDGER registra resultados que el motor midió: tests corridos por <code>test-run</code> (el comando declarado del proyecto), no reportados por el agente</li>
         <li>El loop está acotado — no puede declararse terminado sin evidencia</li>
         <li>Frena en la aprobación humana del merge</li>
       </ul>
@@ -663,6 +663,7 @@
         <li>Mantener decisiones solo en el historial del chat</li>
         <li>Sacar el gate humano "solo por esta vez"</li>
         <li>Querer hervir el océano el primer día</li>
+        <li>Correr los tests a mano y esperar que el gate los cuente — el motor solo acepta reportes de su propio <code>test-run</code></li>
       </ul>
     </section>
 
