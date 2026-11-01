@@ -63,4 +63,4 @@ counted.
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 467 checks · 0 fail; acceptance 448/449.

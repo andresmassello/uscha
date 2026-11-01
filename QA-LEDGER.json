@@ -2,7 +2,7 @@
   "schema": "dev-loop/qa-ledger@1",
   "run_id": "20260721-164219",
   "started_at": "2026-07-21T19:42:19+00:00",
-  "updated_at": "2026-11-01T18:57:08+00:00",
+  "updated_at": "2026-11-01T20:14:44+00:00",
   "config": {
     "version": "1.44.0",
     "project": "uscha (self-applied)",
@@ -32,7 +32,7 @@
       "enabled": false
     }
   },
-  "step_counter": 69,
+  "step_counter": 70,
   "repos": {
     "uscha": {
       "type": "python",
@@ -2780,6 +2780,66 @@
             "commit": "1f6f38efd1e2518226bc5f38af2bbc9dfefcffc6",
             "dirty": true
           }
+        },
+        {
+          "at": "2026-11-01T20:14:44+00:00",
+          "coverage": {
+            "covered": 6752,
+            "missed": 1108,
+            "pct": 85.9,
+            "report_found": true,
+            "reports": [
+              "./reports/coverage.xml"
+            ],
+            "run": null
+          },
+          "tests": {
+            "total": 449,
+            "executed": 448,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 1,
+            "passed": 448,
+            "report_found": true,
+            "reports": [
+              {
+                "path": "reports/junit/uscha-acceptance.xml",
+                "mtime_ns": 1793564084310191774,
+                "mtime": "2026-11-01T20:14:44.310192+00:00",
+                "sha256": "3a25662d32835c2cd02417a9a077e2829d1ab0dd99de7193731487097b544b52",
+                "sha256_eol": "lf",
+                "fresh_by": "clock",
+                "run": "TR-6"
+              }
+            ],
+            "freshness": {
+              "status": "fresh",
+              "reason": "selected JUnit report(s) are current relative to source/test files",
+              "newest_source": {
+                "path": "tools/model-check.py",
+                "mtime_ns": 1793562058309424414,
+                "mtime": "2026-11-01T19:40:58.309424+00:00"
+              },
+              "tolerance_ns": 1000000000
+            },
+            "provenance": {
+              "status": "attested",
+              "runs": [
+                "TR-6"
+              ],
+              "unattested": []
+            }
+          },
+          "loc": {
+            "prod_loc": 39412,
+            "test_loc": 15507,
+            "prod_files": 21,
+            "test_files": 184
+          },
+          "origin": {
+            "commit": "4bd43d058e8f5c10531bcc707d3c6557f75c9730",
+            "dirty": true
+          }
         }
       ],
       "iterations": [
@@ -3582,6 +3642,15 @@
       "phase": "post",
       "via": "test-run",
       "run": "TR-5"
+    },
+    {
+      "n": 70,
+      "at": "2026-11-01T20:14:44+00:00",
+      "kind": "snapshot",
+      "repo": "uscha",
+      "phase": "post",
+      "via": "test-run",
+      "run": "TR-6"
     }
   ],
   "escalations": [],
@@ -3589,7 +3658,7 @@
   "spec_doubts": [],
   "spec_change_requests": [],
   "integrity": {
-    "sha256": "94a5bb6526d9be1e27af353ac79ba9f1c1336206778e1f409901ec0bc9a6a492"
+    "sha256": "9d0071f801b0b7ef73352b0fadc661e6044aa760b63a4600ef543bf948605812"
   },
   "readiness_history": [
     {
@@ -4144,14 +4213,23 @@
         "count": 0,
         "reports": []
       }
+    },
+    {
+      "at": "2026-11-01T20:14:44+00:00",
+      "score": 76.4,
+      "cap_applied": null,
+      "stale_discarded": {
+        "count": 0,
+        "reports": []
+      }
     }
   ],
   "measured": {
-    "at": "2026-11-01T18:57:08+00:00",
-    "score": 76.5,
+    "at": "2026-11-01T20:14:44+00:00",
+    "score": 76.4,
     "band": "IN PROGRESS",
-    "acceptance_done": 431,
-    "acceptance_total": 432,
+    "acceptance_done": 439,
+    "acceptance_total": 440,
     "next": {
       "id": "AC-DF-1",
       "text": "the root `QA-LEDGER.json` was recorded after the last engine change, decided by ancestry: the commit that last touched `qa_ledger.py` is the ledger's commit or an ancestor of it = GREEN; the ledger's commit is an ancestor of the engine's (HEAD is the code commit X, the evidence lands in X+1) = UNMEASURED; diverged histories = RED; shallow clone or no git = UNMEASURED. No clock is consulted."
@@ -4400,6 +4478,36 @@
           "path": "reports/junit/uscha-acceptance.xml",
           "kind": "junit",
           "sha256": "d3898620852c10f6078e64516e153252ab547155e8d88765f9dc05165b194b09",
+          "sha256_eol": "lf"
+        }
+      ],
+      "unchanged": [
+        "reports/coverage.xml"
+      ]
+    },
+    {
+      "id": "TR-6",
+      "repo": "uscha",
+      "started_at": "2026-11-01T20:07:26+00:00",
+      "ended_at": "2026-11-01T20:14:44+00:00",
+      "wall_ms": 437834,
+      "command": "bash uscha-kit/tests/smoke-engine.sh",
+      "command_origin": "live-config",
+      "shell": "sh",
+      "platform": "linux",
+      "commit": "4bd43d058e8f5c10531bcc707d3c6557f75c9730",
+      "dirty": false,
+      "tree": {
+        "commit": "4bd43d058e8f5c10531bcc707d3c6557f75c9730",
+        "src_dirty": {}
+      },
+      "exit_code": 0,
+      "status": "PASSED",
+      "reports": [
+        {
+          "path": "reports/junit/uscha-acceptance.xml",
+          "kind": "junit",
+          "sha256": "3a25662d32835c2cd02417a9a077e2829d1ab0dd99de7193731487097b544b52",
           "sha256_eol": "lf"
         }
       ],
