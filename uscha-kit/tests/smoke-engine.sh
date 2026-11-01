@@ -21446,7 +21446,9 @@ def measure():
         "undo in a comment": hook(bash("gh pr ready 5 # --undo", red)),
         "second line": hook(bash("echo hi" + NL + "gh pr create -t x", red)),
         "env prefix": hook(bash("GH_TOKEN=x command gh pr create -t x", red)),
-        "cd into the project": hook(bash("cd " + red + " && gh pr create -t x", HOME_ISO)),
+        # quoted, as a shell needs it on Windows (unquoted, bash itself eats the backslashes)
+        "cd into the project": hook(bash("cd " + chr(39) + red + chr(39) + " && gh pr create -t x",
+                                         HOME_ISO)),
         "PowerShell": hook({"tool_name": "PowerShell", "tool_input": {"command": "gh pr create"},
                             "cwd": red}),
         "mcp update draft string": hook(mcp("mcp__github__update_pull_request", red,
