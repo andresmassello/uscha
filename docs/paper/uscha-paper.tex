@@ -458,6 +458,11 @@ and the check broke the first draft. Provenance proves that a command ran at a
 tree and wrote bytes, not that it tests anything; the engine does not run the
 reviewer and cannot prove a review took place.
 
+\textbf{Declared human acts.} Since 2.12.0 the commands that lift the escalated
+phase require a declared name and reason, record them, and refuse when the
+process carries a known agent-shell marker; re-initialising a ledger over an
+open human gate is refused too (ADR-058).
+
 \textbf{Structured guesses (advise).} The advisory layer includes regression
 capture (closing findings without adding a single non-blank test line is
 flagged as \emph{narrated closure}; the failing test goes before the fix);
@@ -541,11 +546,11 @@ identically from any of them. Second, every LLM-judgment interface is a
 contract: the rubric grader ships as a neutral prompt usable by any vendor's
 agent, a raw API call, or a human filling the JSON by hand --- the
 implementation's test suite exercises exactly that path, with no LLM in the
-loop. Third, the one mechanical prohibition (the agent must not write approved
+loop. Third, the mechanical prohibition (the agent must not write approved
 golden fixtures) is enforced by a pre-tool-use hook at the runtime boundary,
 not by instruction --- during development of the implementation itself the hook
 blocked one of its author's own commands, which is the property working as
-designed. Table~\ref{tab:skills} maps the nine skills to the phase each serves.
+designed. Since 2.12.0 a second hook on the same runtime keeps a pull request a draft while the gate is red. Table~\ref{tab:skills} maps the nine skills to the phase each serves.
 
 \begin{table}[t]
 \centering
@@ -873,7 +878,10 @@ trusted: it is a configuration line a reviewer reads, not something the engine
 can validate. A review is witnessed at its start, not proven to have run. The
 TLA+/TLC check is bounded (three code versions, one tool, one repository). And
 the full dev loop on Codex was a pilot with $n=1$, a tiny greenfield repository
-and no hooks, so the golden write guard is advisory there (ADR-049).
+and no hooks, so the golden write guard is advisory there (ADR-049). A declared human name is not identity: an agent can unset the marker, other
+harnesses expose none, and the pull-request hook reads text, so an API call or a
+browser passes it. The only authenticated human act is the forge's own
+ready-for-review or merge.
 
 \section{Future Work}\label{sec:future}
 

@@ -24,6 +24,8 @@ it never gates. Neither skips human approval or asserting tests.
 
 Evidence is witnessed (kit 2.10-2.11, ADR-055/056/057): test-run executes the project's declared test command and the gates honor only the reports that run wrote; a QA review is registered when it starts (review-start) and convergence requires each tool's latest review to match the tree on disk. The engine does not run the reviewer and trusts the declared command; smoke-ingest and CI-ref evidence are still read by path. A full dev loop was run once on Codex (2026-09-20, ADR-049); there the golden write guard is advisory (no hooks).
 
+Human acts are declared (kit 2.12, ADR-058): the four commands that lift the escalated phase require --human and --note, record who and why, and refuse inside Claude Code's shell. There, the guard-pr-gate.py hook keeps a pull request a draft while pr-gate reads red. A declared name is not identity, other harnesses expose no marker the engine knows (there the act is declared, not refused), and the hook reads text, so gh api or a browser get through; the only authenticated human act is the forge's ready-for-review or merge.
+
 For existing systems, Reverse Discovery (kit 1.64+, ADR-009) extracts facts (a
 system map and a mechanically captured golden), then authors CANDIDATE claims about
 behavior in quarantine (discovery/*.md, each with typed evidence and confidence).

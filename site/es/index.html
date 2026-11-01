@@ -327,6 +327,14 @@
         siendo confianza es el propio comando declarado —una línea de config que revisa una persona— y el
         motor no puede probar que una revisión se hizo, solo sobre qué árbol dice haberse hecho.
       </p>
+      <p class="ev-note">
+        Los actos humanos siguen siendo humanos. Levantar una escalación exige declarar un nombre y un motivo,
+        y esos comandos se niegan a correr dentro del shell de Claude Code; ahí, además, un hook mantiene el
+        pull request en draft mientras el gate está en rojo. Los dos límites están a la vista: un nombre
+        declarado no prueba identidad, un agente puede borrar la marca, otros harnesses no exponen ninguna, y
+        el hook lee la llamada como texto, así que <code>gh api</code> o un navegador pasan igual. El único acto
+        humano autenticado es el "ready for review" o el merge en la propia forja.
+      </p>
 
       <div class="field">
         <div class="fk">Nota de campo · caso real 001</div>

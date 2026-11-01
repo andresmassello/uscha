@@ -327,6 +327,14 @@
         declared command itself — a config line a reviewer reads — and the engine cannot prove a review
         ran, only what tree it claimed.
       </p>
+      <p class="ev-note">
+        Human acts stay human. Lifting an escalation requires a declared name and reason, and those
+        commands refuse inside Claude Code's shell; there, a hook also keeps a pull request a draft while
+        the gate is red. Both limits are on the record: a declared name is not proof of identity, an agent
+        can unset the marker, other harnesses expose none, and the hook reads the tool call as text, so
+        <code>gh api</code> or a browser get through. The one authenticated human act is the forge's own
+        "ready for review" or merge.
+      </p>
 
       <div class="field">
         <div class="fk">Field note · real case 001</div>
