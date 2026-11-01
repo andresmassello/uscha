@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="409" failures="0" errors="0" skipped="1" timestamp="2026-10-31T19:43:37.376842Z">
+<testsuite name="uscha-acceptance" tests="431" failures="0" errors="0" skipped="1" timestamp="2026-11-01T02:05:57.653282Z">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -815,6 +815,50 @@
   <testcase classname="uscha.acceptance" name="AC-GI-31_witnessed-evidence">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-GI-47_witnessed-evidence">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-30_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-32_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-33_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-34_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-35_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-36_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-50_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-51_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-52_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-53_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-54_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-55_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-56_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-57_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-58_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-59_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-60_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-61_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-62_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-63_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-64_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-65_nothing-vanishes">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
     <skipped message="shallow clone or no git: ancestry unmeasurable"/>

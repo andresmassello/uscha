@@ -112,4 +112,4 @@ as shipped (64, 65).
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 465 checks · 0 fail; acceptance 430/431.
