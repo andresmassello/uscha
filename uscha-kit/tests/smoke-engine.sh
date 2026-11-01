@@ -11480,6 +11480,37 @@ def measure():
     why["AC-RL-06"] = "rc=%s X+1=%s origin/main=%s local-main=%s out=%r" % (
         r6.returncode, x1[:8], pushed[:8], local_main[:8], r6.stdout[-160:])
 
+    # --- AC-RL-07 (2.12.1): a local tag that is a DIFFERENT OBJECT than origin's but names the
+    # SAME commit -- the human re-created and pushed the tag from another machine -- made
+    # `git fetch --tags` fail "would clobber existing tag", and preflight refused I1 on every
+    # release after (2.11.0 and 2.12.0 both hit it). Same commit: re-point the local tag to
+    # origin's object and say so. A different commit is a real conflict: refuse, naming both.
+    tg = fixture()          # its own origin: AC-RL-06 already advanced the shared one
+    bare_tg = sh(tg, "git", "remote", "get-url", "origin").stdout.strip()
+    # a second commit, on a side branch: wip/1.0.1 still IS main in a fresh fixture
+    side = sh(tg, "git", "commit-tree", "-m", "side", "-p", "main", "main^{tree}").stdout.strip()
+    other = side
+    for name, target in (("v0.9.0", "main"), ("v0.9.1", "main")):
+        sh(tg, "git", "tag", "-a", name, target, "-m", "pushed from the other machine")
+    sh(tg, "git", "push", "-q", "origin", "v0.9.0", "v0.9.1")
+    remote_obj = sh(bare_tg, "git", "rev-parse", "refs/tags/v0.9.0").stdout.strip()
+    sh(tg, "git", "tag", "-d", "v0.9.0", "v0.9.1")
+    sh(tg, "git", "tag", "-a", "v0.9.0", "main", "-m", "created here, never pushed")
+    same = rel_run(tg, "1.0.1", "--to-step", "1")
+    local_obj = sh(tg, "git", "rev-parse", "refs/tags/v0.9.0").stdout.strip()
+    # the first run's `fetch --tags` brought origin's v0.9.1 in: force a local one elsewhere
+    sh(tg, "git", "tag", "-f", "-a", "v0.9.1", other, "-m", "a different commit")
+    clash = rel_run(tg, "1.0.1", "--to-step", "1")
+    left = sh(tg, "git", "for-each-ref", "refs/uscha-release/").stdout.strip()
+    res["AC-RL-07"] = bool(
+        same.returncode == 0 and "REFUSED" not in same.stdout and "v0.9.0" in same.stdout
+        and local_obj == remote_obj
+        and clash.returncode == 2 and "REFUSED -- I1" in clash.stdout and "v0.9.1" in clash.stdout
+        and other[:7] in clash.stdout and not left)
+    why["AC-RL-07"] = "same rc=%s %r aligned=%s | clash rc=%s %r | temp refs left=%r" % (
+        same.returncode, same.stdout[-160:], local_obj == remote_obj, clash.returncode,
+        clash.stdout[-200:], left)
+
 
 try:
     measure()
@@ -11496,7 +11527,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T151" in
-  OK*) PASS=$((PASS+1)); echo "  ok   release ritual (AC-RL-01..06): $T151";;
+  OK*) PASS=$((PASS+1)); echo "  ok   release ritual (AC-RL-01..07): $T151";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T151";;
 esac
 }
@@ -21870,7 +21901,7 @@ FAMILIES = (
     (".df-cases.json", "dogfood-ancestry", "T150",                  # ADR-041
      _seq("AC-DF", 2, 5)),
     (".rl-cases.json", "release-ritual", "T151",                    # ADR-041
-     _seq("AC-RL", 1, 6)),
+     _seq("AC-RL", 1, 7)),
     (".dc-cases.json", "docs-generated", "T152",                    # 1.97.0
      _seq("AC-DC", 1, 4)),
     # AC-FW-08 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a

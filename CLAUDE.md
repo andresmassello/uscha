@@ -56,7 +56,9 @@ itself.
 
    - **I1** the branch is ahead of `origin/main` only, with no merge in progress and no unmerged
      paths (a DIRTY tree is not refused: it is what X commits, and step 3 prints the staged list
-     before it commits anything);
+     before it commits anything); a local tag that is a different object than origin's but names
+     the SAME commit (re-created and pushed from another clone) is re-pointed to origin's and
+     named (2.12.1) -- one naming a DIFFERENT commit is refused, never moved;
    - **I2** `uscha-kit/CHANGELOG-X.Y.Z.md` exists, still carries the placeholder line, and
      `vX.Y.Z` is not already tagged;
    - **I3** the six version surfaces move together (exactly one hit per file),

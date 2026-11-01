@@ -303,6 +303,50 @@ def engine(*argv):
 # --------------------------------------------------------------------------- #
 # step 1 -- preflight (I1, I2)
 # --------------------------------------------------------------------------- #
+TAG_NS = "refs/uscha-release/remote-tags/"
+
+
+def reconcile_tags():
+    """Before `git fetch --tags`: a local tag that is a DIFFERENT object than origin's tag of the
+    same name makes that fetch fail ("would clobber existing tag") -- which refused every release
+    after the human re-created and pushed a tag from another machine (2.11.0 and 2.12.0 both hit
+    it: the ritual's own `--tag` could not push through the session proxy, so the human tagged).
+    When both name the SAME commit, origin's object wins and the local tag is re-pointed, said
+    aloud; nothing a release reads changes. When they name DIFFERENT commits it is a real
+    conflict, and I1 refuses naming both -- a tag is never moved to another commit silently.
+    The remote tags are read into a private namespace and that namespace is always removed."""
+    if git("fetch", "-q", "--no-tags", "origin",
+           "+refs/tags/*:" + TAG_NS + "*").returncode != 0:
+        return                      # the `fetch --tags` that follows refuses, naming it
+    aligned, clash = [], []
+    try:
+        for line in git_lines("for-each-ref", "--format=%(refname) %(objectname)", TAG_NS):
+            ref, obj = line.split()
+            name = ref[len(TAG_NS):]
+            local = git_out("rev-parse", "-q", "--verify", "refs/tags/" + name)
+            if not local or local == obj:
+                continue
+            here = git_out("rev-parse", "refs/tags/%s^{commit}" % name)
+            there = git_out("rev-parse", "%s^{commit}" % ref)
+            if here and here == there:
+                git("update-ref", "refs/tags/" + name, obj, local)
+                aligned.append((name, here))
+            else:
+                clash.append((name, here, there))
+    finally:
+        for ref in git_lines("for-each-ref", "--format=%(refname)", TAG_NS):
+            git("update-ref", "-d", ref)
+    for name, commit in aligned:
+        say("    local tag %s re-pointed to origin's tag object (same commit %s): it had been "
+            "re-created and pushed from another clone" % (name, commit[:8]))
+    if clash:
+        refuse("I1", "local tag(s) name a different commit than origin's: %s. A tag is never "
+                     "moved silently -- delete the wrong one yourself (`git tag -d <tag>`) and "
+                     "release again." % "; ".join(
+                         "%s local %s vs origin %s" % (n, (h or "?")[:8], (t or "?")[:8])
+                         for n, h, t in clash))
+
+
 def step1(args, dry):
     say("[1] preflight")
     if not SEMVER.match(args.version):
@@ -324,7 +368,7 @@ def step1(args, dry):
 
     if dry:
         say("    would run: git fetch --tags origin (skipped: a dry run touches no network)")
-    elif git("fetch", "--tags", "origin").returncode != 0:
+    elif reconcile_tags() or git("fetch", "--tags", "origin").returncode != 0:
         refuse("I1", "`git fetch --tags origin` failed -- the merge-base and the tag check "
                      "below would be answered against a stale remote, which is not an answer.")
     origin_main = git_out("rev-parse", "origin/main")
