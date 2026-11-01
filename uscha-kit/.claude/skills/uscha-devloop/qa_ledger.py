@@ -3543,8 +3543,10 @@ def cmd_log_step(args):
           f"source={res['source']}"
           + ("" if res["source"] != "MISSING" else
              " (unverified: tool not installed -- does not count toward convergence)")
-          + (" review=%s" % rv["id"] if rv is not None else
-             " (unwitnessed: %s)" % rv_problem))
+          # witnessed steps name their review; an unwitnessed one prints exactly what 2.10 printed
+          # (the human-approved devloop-entry golden pins this line) and is named by
+          # `converged` / `phase`, where it matters
+          + (" review=%s" % rv["id"] if rv is not None else ""))
 
 
 def cmd_ingest_gate(args):

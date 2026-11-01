@@ -434,6 +434,25 @@ declared-external — and `log-step` stamps every step with its tool's resolved 
 whose tool is MISSING is recorded `unverified` and cannot satisfy convergence, so this loop never
 closes on a QA pass from a tool that is not installed.
 
+**Each tool pass is WITNESSED (kit 2.11.0, ADR-056 R2').** Right BEFORE you run a QA tool,
+record the tree it is about to review:
+
+```bash
+python3 $QL review-start --repo <REPO> --tool <TOOL> --iteration <N>   # prints RV-n
+```
+
+Then run the tool, apply the fixes, run `test-run`, and log the pass with `--review RV-n`. The
+step carries the tree the tool REVIEWED, not the tree you log it from. A step logged without
+`--review` is **unwitnessed** and never counts toward convergence. Three rules then read the
+ledger, so do not try to work around them:
+
+- **Anchor**: the latest review of each tool must have seen the source that is on disk now. Any
+  source edit after the last pass (a late fix, a revert) means that tool runs again.
+- **Debt**: a gated finding closes only on a later clean review of a DIFFERENT source (a fix)
+  or of a changed `ISSUES-DEFERRED.md` (a deferral, which `readiness` reports as such).
+- **Memory**: a clean verdict on exactly the content an earlier review flagged contradicts the
+  record and does not count. Fix it, or defer it.
+
 After **each** tool pass:
 
 1. Apply only fixes at/above the severity gate. Send the rest to `ISSUES-DEFERRED.md`.
@@ -448,7 +467,7 @@ After **each** tool pass:
 
 ```bash
 python3 $QL log-step --repo <REPO> --tool <code-review|judgment-day|improve> \
-  --iteration <N> \
+  --iteration <N> --review <RV-n from review-start> \
   --reported <total findings> --gated-reported <findings at/above gate> \
   --fixed <fixed this pass> --deferred <sent to backlog> --suppressed <false positives> \
   --tests-passed <true|false> --files-changed <count> \

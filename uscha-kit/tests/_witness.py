@@ -100,6 +100,30 @@ def witness(ql, cwd, ledger_path, repo, env=None):
                           encoding="utf-8", errors="replace", env=env)
 
 
+def rstep_argv(ql, cwd, argv, env=None):
+    """2.11.0 (ADR-056 R2'): a QA step counts only when it is WITNESSED. Given a `log-step`
+    argv (["log-step", "--repo", ...]), run the engine's own `review-start` for the same
+    ledger/repo/tool/iteration from `cwd` and return the argv with `--review RV-n` appended (the
+    argv unchanged when the start fails, so the step is recorded unwitnessed and says why)."""
+    import json
+    import subprocess
+    want = {"--ledger": None, "--repo": None, "--tool": None, "--iteration": None}
+    for i, a in enumerate(argv[:-1]):
+        if a in want:
+            want[a] = argv[i + 1]
+    start = [sys.executable, ql, "review-start", "--json"]
+    for k, v in want.items():
+        if v is not None:
+            start += [k, str(v)]
+    r = subprocess.run(start, cwd=cwd, capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", env=env)
+    try:
+        rv = json.loads(r.stdout)["id"]
+    except (ValueError, KeyError, TypeError):
+        return list(argv)
+    return list(argv) + ["--review", rv]
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "prepare":
         prepare(sys.argv[2], sys.argv[3], sys.argv[4])

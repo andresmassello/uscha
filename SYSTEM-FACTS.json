@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 58,
+    "count": 59,
     "list": [
       "bench",
       "bench-curate",
@@ -75,6 +75,7 @@
       "rebuild",
       "regression-check",
       "resolve-escalation",
+      "review-start",
       "roundtrip",
       "rubric-ingest",
       "simplicity-check",

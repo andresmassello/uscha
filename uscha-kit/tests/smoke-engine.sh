@@ -259,6 +259,25 @@ chk() { # $1 = descripción, $2 = exit esperado, $3.. = comando
 wrun() {
   "$PY" "$KIT/tests/_witness.py" prepare "$QL" "$1" "$2" && run test-run --ledger "$1" --repo "$2"
 }
+# rstep <log-step args> -- since 2.11.0 (ADR-056 R2') a QA step counts only when it is WITNESSED:
+# `review-start` stamps the tree the review starts on and `log-step --review RV-n` carries it. A
+# block that logs a QA pass it means to count calls this instead of `rstep`; the args are
+# log-step's own, and the four review-start needs are read out of them.
+rstep() {
+  local led="" repo="" tool="" it="" prev="" a rv
+  for a in "$@"; do
+    case "$prev" in --ledger) led="$a";; --repo) repo="$a";; --tool) tool="$a";; --iteration) it="$a";; esac
+    prev="$a"
+  done
+  if [ -n "$led" ]; then
+    rv=$(run review-start --ledger "$led" --repo "$repo" --tool "$tool" --iteration "$it" --json 2>/dev/null \
+         | "$PY" -c 'import json,sys; print(json.load(sys.stdin)["id"])' 2>/dev/null)
+  else
+    rv=$(run review-start --repo "$repo" --tool "$tool" --iteration "$it" --json 2>/dev/null \
+         | "$PY" -c 'import json,sys; print(json.load(sys.stdin)["id"])' 2>/dev/null)
+  fi
+  if [ -n "$rv" ]; then run log-step "$@" --review "$rv"; else run log-step "$@"; fi
+}
 # Coverage of the engine is OPT-IN (USCHA_COVERAGE=1). The engine is exercised through
 # ~370 subprocess calls, so measuring it means wrapping the ONE choke point they all pass
 # through -- not instrumenting the suite. Off by default: the normal smoke stays fast and
@@ -448,12 +467,12 @@ echo "== T1 readiness virgen: static UNMEASURED, no 1.0 por silencio =="
 run readiness 2>/dev/null | grep -q "UNMEASURED" && { PASS=$((PASS+1)); echo "  ok   warning UNMEASURED presente"; } || { FAIL=$((FAIL+1)); echo "  FAIL sin warning UNMEASURED"; }
 
 echo "== T2 converged exige TODAS las tools de qa_tools_order =="
-run log-step --repo repo-a --tool code-review --iteration 1 --tests-passed true >/dev/null
-run log-step --repo repo-a --tool judgment-day --iteration 1 --tests-passed true >/dev/null
+rstep --repo repo-a --tool code-review --iteration 1 --tests-passed true >/dev/null
+rstep --repo repo-a --tool judgment-day --iteration 1 --tests-passed true >/dev/null
 chk "falta 'improve' -> NOT converged" 1 run converged --repo repo-a
 
 echo "== T3 log-gate fail bloquea convergencia; pass la limpia =="
-run log-step --repo repo-a --tool improve --iteration 1 --tests-passed true >/dev/null
+rstep --repo repo-a --tool improve --iteration 1 --tests-passed true >/dev/null
 chk "ciclo completo limpio -> CONVERGED" 0 run converged --repo repo-a
 run log-gate --repo repo-a --iteration 1 --kind golden-diff --verdict fail --note smoke >/dev/null
 chk "fact gate rojo -> NOT converged" 1 run converged --repo repo-a
@@ -534,9 +553,9 @@ chk "diff 1.9x budget + --gate -> OVERBUILT exit 1" 1 run simplicity-check --dif
 chk "el mismo diff sin --gate -> advisory exit 0" 0 run simplicity-check --diff big.diff --max-lines-added 100 --max-net-lines 999 --max-files-changed 20 --max-hunk-added 999
 
 echo "== T11 oscillation Jaccard (a,b -> c -> a,b) =="
-run log-step --repo repo-b --tool code-review --iteration 1 --fingerprint "a,b" >/dev/null
-run log-step --repo repo-b --tool code-review --iteration 2 --fingerprint "c" >/dev/null
-run log-step --repo repo-b --tool code-review --iteration 3 --fingerprint "a,b" >/dev/null
+rstep --repo repo-b --tool code-review --iteration 1 --fingerprint "a,b" >/dev/null
+rstep --repo repo-b --tool code-review --iteration 2 --fingerprint "c" >/dev/null
+rstep --repo repo-b --tool code-review --iteration 3 --fingerprint "a,b" >/dev/null
 chk "set repetido -> OSCILLATING exit 1" 1 run oscillation --repo repo-b --tool code-review
 
 echo "== T12 converged: snapshot rojo MEDIDO veta verde narrado =="
@@ -1009,10 +1028,10 @@ echo "== T36 plateau/stop-signal: advisory sobre el historico (Know When to Stop
 # (a) stall: findings gateados SUBIENDO 3 ciclos COMPLETOS en repo-a -> re-planear.
 # Con qa_tools_order configurado solo cuentan ciclos con TODAS las tools logueadas.
 for i in 1 2 3; do
-  run log-step --repo repo-a --tool code-review --iteration $i \
+  rstep --repo repo-a --tool code-review --iteration $i \
     --reported $((i+3)) --gated-reported $((i+3)) --tests-passed true >/dev/null 2>&1
   for t in judgment-day improve; do
-    run log-step --repo repo-a --tool $t --iteration $i \
+    rstep --repo repo-a --tool $t --iteration $i \
       --gated-reported 0 --tests-passed true >/dev/null 2>&1
   done
 done
@@ -1021,7 +1040,7 @@ run readiness 2>/dev/null | grep -q "stall: repo-a" \
   || { FAIL=$((FAIL+1)); echo "  FAIL sin aviso de stall"; }
 # (b) mismo patron pero con el ULTIMO ciclo INCOMPLETO (1 de 3 tools) -> no cuenta,
 # la serie completa queda corta y el stall NO dispara (sin contaminacion parcial)
-run log-step --repo repo-a --tool code-review --iteration 4 \
+rstep --repo repo-a --tool code-review --iteration 4 \
   --gated-reported 9 --tests-passed true >/dev/null 2>&1
 run readiness 2>/dev/null | grep -q "stall: repo-a" \
   && { PASS=$((PASS+1)); echo "  ok   ciclo 4 parcial no rompe la serie (stall sigue por ciclos 1-3)"; } \
@@ -1029,10 +1048,10 @@ run readiness 2>/dev/null | grep -q "stall: repo-a" \
 # (c) serie BAJANDO no es stall (hay progreso)
 run init --config uscha.config.json >/dev/null 2>&1
 for i in 1 2 3; do
-  run log-step --repo repo-a --tool code-review --iteration $i \
+  rstep --repo repo-a --tool code-review --iteration $i \
     --reported $((7-i*2)) --gated-reported $((7-i*2)) --tests-passed true >/dev/null 2>&1
   for t in judgment-day improve; do
-    run log-step --repo repo-a --tool $t --iteration $i \
+    rstep --repo repo-a --tool $t --iteration $i \
       --gated-reported 0 --tests-passed true >/dev/null 2>&1
   done
 done
@@ -1043,7 +1062,7 @@ run readiness 2>/dev/null | grep -q "stall: repo-a" \
 printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md", "qa_tools_order": ["code-review","judgment-day","improve"], "qa_tools_external": ["judgment-day","improve"] },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' > c-solo.json
 run init --config c-solo.json --out L-solo.json >/dev/null 2>&1
 for t in code-review judgment-day improve; do
-  run log-step --ledger L-solo.json --repo solo --tool $t --iteration 1 \
+  rstep --ledger L-solo.json --repo solo --tool $t --iteration 1 \
     --gated-reported 0 --files-changed 0 --tests-passed true >/dev/null 2>&1
 done
 RDY=$(run readiness --ledger L-solo.json --json 2>/dev/null)
@@ -1172,7 +1191,7 @@ run init --config c-fsm.json --out L-fsm.json >/dev/null 2>&1
 chk "ledger virgen -> plan" 0 run phase --ledger L-fsm.json --repo fsm --require plan
 wrun L-fsm.json fsm >/dev/null 2>&1
 chk "snapshot medido sin QA -> build" 0 run phase --ledger L-fsm.json --repo fsm --require build
-run log-step --ledger L-fsm.json --repo fsm --tool code-review --iteration 1 \
+rstep --ledger L-fsm.json --repo fsm --tool code-review --iteration 1 \
   --reported 2 --gated-reported 2 --tests-passed true >/dev/null 2>&1
 chk "pasos de QA sin converger -> qa" 0 run phase --ledger L-fsm.json --repo fsm --require qa
 chk "pedir pr-ready con findings abiertos -> exit 1 (los hechos mandan)" 1 \
@@ -1181,7 +1200,7 @@ run escalate --ledger L-fsm.json --repo fsm --reason "duda de diseño" >/dev/nul
 chk "escalacion abierta -> escalated (pisa todo)" 0 run phase --ledger L-fsm.json --repo fsm --require escalated
 run resolve-escalation --ledger L-fsm.json --repo fsm --note ok >/dev/null 2>&1
 for t in code-review judgment-day improve; do
-  run log-step --ledger L-fsm.json --repo fsm --tool $t --iteration 2 \
+  rstep --ledger L-fsm.json --repo fsm --tool $t --iteration 2 \
     --gated-reported 0 --files-changed 0 --tests-passed true >/dev/null 2>&1
 done
 chk "convergido + limpio -> pr-ready" 0 run phase --ledger L-fsm.json --repo fsm --require pr-ready
@@ -1203,7 +1222,7 @@ chk "rama normal -> pr-ready OK de nuevo" 0 \
   run phase --ledger L-fsm.json --repo fsm --require pr-ready
 # default sin --fixed: lee la suma de 'fixed' de la ultima iteracion del ledger
 run init --config uscha.config.json >/dev/null 2>&1
-run log-step --repo repo-a --tool code-review --iteration 1 --fixed 3 --tests-passed true >/dev/null 2>&1
+rstep --repo repo-a --tool code-review --iteration 1 --fixed 3 --tests-passed true >/dev/null 2>&1
 run regression-check --repo repo-a --diff fix-sin-test.diff --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
@@ -1296,7 +1315,7 @@ run readiness 2>/dev/null | grep -q "rubric repo-a" \
 # Primero repo-a CONVERGE (ciclo limpio) — sin esto el check seria VACUO
 # (converged ya sale 1 en un ledger virgen por 'no agent steps').
 for t in code-review judgment-day improve; do
-  run log-step --repo repo-a --tool $t --iteration 9 \
+  rstep --repo repo-a --tool $t --iteration 9 \
     --gated-reported 0 --files-changed 0 --tests-passed true >/dev/null 2>&1
 done
 chk "repo-a converge ANTES del gate (sanidad del fixture)" 0 run converged --repo repo-a
@@ -1516,9 +1535,9 @@ echo "== T47 FTY (1.27.0): first-time yield pasivo en summary, informativo, no g
 printf '{ "defaults": {"qa_tools_order":["code-review"]},\n  "repos": [ {"name":"fa","path":"repo-c","type":"python"},{"name":"fb","path":"repo-d","type":"python"} ], "integration": {"enabled": false} }\n' > fty-cfg.json
 run init --config fty-cfg.json --out L-fty.json >/dev/null
 # fa: limpio al ciclo 1 (first-time). fb: necesito 2 ciclos (no first-time).
-run log-step --repo fa --tool code-review --iteration 1 --gated-reported 0 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
-run log-step --repo fb --tool code-review --iteration 1 --gated-reported 3 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
-run log-step --repo fb --tool code-review --iteration 2 --gated-reported 0 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
+rstep --repo fa --tool code-review --iteration 1 --gated-reported 0 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
+rstep --repo fb --tool code-review --iteration 1 --gated-reported 3 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
+rstep --repo fb --tool code-review --iteration 2 --gated-reported 0 --tests-passed true --ledger L-fty.json >/dev/null 2>&1
 run summary --ledger L-fty.json --json 2>/dev/null | "$PY" -c "
 import json, sys
 f = json.load(sys.stdin)['first_time_yield']
@@ -2189,7 +2208,7 @@ mkdir -p repo-pr-evidence
 printf '{ "defaults": {"qa_tools_order":["code-review","judgment-day","improve"]},\n  "repos": [ {"name":"pr-evidence","path":"repo-pr-evidence","type":"python"} ], "integration": {"enabled": false} }\n' > c-pr-evidence.json
 run init --config c-pr-evidence.json --out L-pr-evidence.json >/dev/null 2>&1
 for t in code-review judgment-day improve; do
-  run log-step --ledger L-pr-evidence.json --repo pr-evidence --tool "$t" \
+  rstep --ledger L-pr-evidence.json --repo pr-evidence --tool "$t" \
     --iteration 1 --gated-reported 0 --files-changed 0 >/dev/null 2>&1
 done
 chk "QA narrada sin snapshot/reporte medido NO queda pr-ready" 1 \
@@ -2333,12 +2352,12 @@ mkdir -p ri/reports
 printf '{ "defaults": { "acceptance_file": "acc-ri.md" }, "repos": [ {"name":"backend-api","path":"ri","type":"python"} ], "integration": {"enabled": true, "contract_tests_command": "x"} }\n' > ri.json
 printf -- "# A\n\n- [x] AC-01 x\n" > acc-ri.md
 run init --config ri.json --out L-ri.json >/dev/null 2>&1
-run log-step --ledger L-ri.json --repo integration --tool e2e-gate --iteration 1 --reported 3 --gated-reported 3 --tests-passed false >/dev/null 2>&1
-run log-step --ledger L-ri.json --repo integration --tool e2e-tests --iteration 2 --reported 0 --gated-reported 0 --tests-passed true >/dev/null 2>&1
+rstep --ledger L-ri.json --repo integration --tool e2e-gate --iteration 1 --reported 3 --gated-reported 3 --tests-passed false >/dev/null 2>&1
+rstep --ledger L-ri.json --repo integration --tool e2e-tests --iteration 2 --reported 0 --gated-reported 0 --tests-passed true >/dev/null 2>&1
 run readiness --ledger L-ri.json --json 2>/dev/null | "$PY" -c "import json,sys; sys.exit(0 if json.load(sys.stdin)['dimensions'].get('integration',{}).get('raw')==0.0 else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   a failing integration gate is not masked by a trailing green test (dim=0.0)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL integration still trusts the last event (masking not closed)"; }
-run log-step --ledger L-ri.json --repo integration --tool e2e-gate --iteration 3 --reported 3 --gated-reported 0 >/dev/null 2>&1
+rstep --ledger L-ri.json --repo integration --tool e2e-gate --iteration 3 --reported 3 --gated-reported 0 >/dev/null 2>&1
 run readiness --ledger L-ri.json --json 2>/dev/null | "$PY" -c "import json,sys; sys.exit(0 if json.load(sys.stdin)['dimensions'].get('integration',{}).get('raw')==1.0 else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   clearing the same-tool gate restores integration to green (no false negative)"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL a fixed integration gate is not seen"; }
@@ -2365,7 +2384,7 @@ EOF
 printf '{ "defaults": {"qa_tools_order":["code-review"]},\n  "repos": [ {"name":"zero-tests","path":"repo-zero-tests","type":"python"} ], "integration": {"enabled": false} }\n' > c-zero-tests.json
 run init --config c-zero-tests.json --out L-zero-tests.json >/dev/null 2>&1
 wrun L-zero-tests.json zero-tests >/dev/null 2>&1
-run log-step --ledger L-zero-tests.json --repo zero-tests --tool code-review \
+rstep --ledger L-zero-tests.json --repo zero-tests --tool code-review \
   --iteration 1 --gated-reported 0 --files-changed 0 >/dev/null 2>&1
 chk "zero executed tests cannot satisfy pr-ready" 1 \
   run phase --ledger L-zero-tests.json --repo zero-tests --require pr-ready
@@ -2542,10 +2561,10 @@ do
 done
 reject_unchanged "negative FACT-gate count rejected without mutation" L-validation.json \
   run log-gate --ledger L-validation.json --repo valid --iteration 1 --kind regression --verdict fail --count -1
-chk "log-step allows fixed above reported" 0 run log-step --ledger L-validation.json --repo valid --tool code-review --iteration 2 --reported 1 --fixed 2
+chk "log-step allows fixed above reported" 0 rstep --ledger L-validation.json --repo valid --tool code-review --iteration 2 --reported 1 --fixed 2
 reject_unchanged "older log-step iteration cannot supersede newer state" L-validation.json \
-  run log-step --ledger L-validation.json --repo valid --tool code-review --iteration 1
-chk "same-cycle retry remains valid" 0 run log-step --ledger L-validation.json --repo valid --tool code-review --iteration 2
+  rstep --ledger L-validation.json --repo valid --tool code-review --iteration 1
+chk "same-cycle retry remains valid" 0 rstep --ledger L-validation.json --repo valid --tool code-review --iteration 2
 chk "newer FACT-gate state accepted" 0 run log-gate --ledger L-validation.json --repo valid --iteration 3 --kind regression --verdict fail --count 1
 reject_unchanged "older FACT-gate iteration cannot supersede newer state" L-validation.json \
   run log-gate --ledger L-validation.json --repo valid --iteration 2 --kind regression --verdict pass
@@ -2553,7 +2572,7 @@ cat > c-integration-readiness.json <<'EOF'
 {"defaults":{"qa_tools_order":["code-review"]},"repos":[],"integration":{"enabled":true}}
 EOF
 run init --config c-integration-readiness.json --out L-integration-readiness.json >/dev/null
-run log-step --ledger L-integration-readiness.json --repo integration --tool integration-tests \
+rstep --ledger L-integration-readiness.json --repo integration --tool integration-tests \
   --iteration 1 --tests-passed false >/dev/null
 run log-gate --ledger L-integration-readiness.json --repo integration --iteration 1 \
   --kind gate-check --verdict pass >/dev/null
@@ -2561,7 +2580,7 @@ run readiness --ledger L-integration-readiness.json --json | "$PY" -c \
   "import json,sys; sys.exit(0 if json.load(sys.stdin)['dimensions']['integration']['raw'] == 0 else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   integration failure survives later non-test event"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL integration failure hidden by later non-test event"; }
-run log-step --ledger L-integration-readiness.json --repo integration --tool integration-tests \
+rstep --ledger L-integration-readiness.json --repo integration --tool integration-tests \
   --iteration 2 --tests-passed true >/dev/null
 run readiness --ledger L-integration-readiness.json --json | "$PY" -c \
   "import json,sys; sys.exit(0 if json.load(sys.stdin)['dimensions']['integration']['raw'] == 1 else 1)" \
@@ -3011,7 +3030,7 @@ run readiness --ledger L-t82.json 2>/dev/null | grep -q "NO coverage report foun
 t82_setup() { # $1 = config, $2 = ledger
   run init --config "$1" --out "$2" >/dev/null 2>&1
   for t in code-review judgment-day improve; do
-    run log-step --repo t82sin --tool "$t" --iteration 1 --tests-passed true --ledger "$2" >/dev/null 2>&1
+    rstep --repo t82sin --tool "$t" --iteration 1 --tests-passed true --ledger "$2" >/dev/null 2>&1
   done
   run ingest-gate --repo t82sin --tool code-review --iteration 1 --json-report /dev/null --ledger "$2" >/dev/null 2>&1
   run log-gate --repo t82sin --iteration 1 --kind simplicity --verdict pass --ledger "$2" >/dev/null 2>&1
@@ -3123,7 +3142,7 @@ echo "== T87 (1.45.0): golden_required caps readiness to 49 when the approved go
 t87() { # $1 = extra defaults ; $2 = 'golden' para loguear golden aprobado ; imprime score|source
   printf '{ "defaults": { "acceptance_file": "t86-acc.md", "readiness_weights": {"acceptance":0,"adr":0,"coverage":0,"static_gate":50,"convergence":50}, "qa_tools_external": ["judgment-day","improve"] %s },\n  "repos": [ {"name":"solo","path":"repo-c","type":"python"} ], "integration": {"enabled": false} }\n' "$1" > t87.json
   run init --config t87.json --out L-t87.json >/dev/null 2>&1
-  for tl in code-review judgment-day improve; do run log-step --repo solo --tool "$tl" --iteration 1 --tests-passed true --ledger L-t87.json >/dev/null 2>&1; done
+  for tl in code-review judgment-day improve; do rstep --repo solo --tool "$tl" --iteration 1 --tests-passed true --ledger L-t87.json >/dev/null 2>&1; done
   run ingest-gate --repo solo --tool code-review --iteration 1 --json-report /dev/null --ledger L-t87.json >/dev/null 2>&1
   run log-gate --repo solo --iteration 1 --kind simplicity --verdict pass --ledger L-t87.json >/dev/null 2>&1
   [ "${2:-}" = golden ] && run log-gate --repo solo --iteration 1 --kind golden-diff --verdict pass --ledger L-t87.json >/dev/null 2>&1
@@ -3237,8 +3256,8 @@ T91="$(mktemp -d)"
   run init --config uscha.config.json --out QA-LEDGER.json >/dev/null 2>&1
   run snapshot --ledger QA-LEDGER.json --repo p >/dev/null 2>&1
   # two QA loop passes -> phase "qa", loops 2
-  run log-step --ledger QA-LEDGER.json --repo p --tool code-review --iteration 1 --reported 3 --gated-reported 2 --fixed 2 >/dev/null 2>&1
-  run log-step --ledger QA-LEDGER.json --repo p --tool code-review --iteration 2 --reported 1 --gated-reported 1 --fixed 1 >/dev/null 2>&1
+  rstep --ledger QA-LEDGER.json --repo p --tool code-review --iteration 1 --reported 3 --gated-reported 2 --fixed 2 >/dev/null 2>&1
+  rstep --ledger QA-LEDGER.json --repo p --tool code-review --iteration 2 --reported 1 --gated-reported 1 --fixed 1 >/dev/null 2>&1
   run readiness --ledger QA-LEDGER.json --record >/dev/null 2>&1
   # 1) measured carries the odometer: derived phase + loop count + plateau flag per repo
   odo=$("$PY" -c "import json;r=json.load(open('QA-LEDGER.json'))['measured']['repos']['p'];print('%s/%s/%s'%(r['phase'],r['loops'],r['stalled']))")
@@ -3299,7 +3318,7 @@ T93="$(mktemp -d)"
   # 'converged' on the mirador while the odometer withholds readiness: same ledger,
   # same derivation. This is the view a human reads before deciding a merge.
   for t in code-review judgment-day improve; do
-    run log-step --ledger QA-LEDGER.json --repo p --tool $t --iteration 1 \
+    rstep --ledger QA-LEDGER.json --repo p --tool $t --iteration 1 \
       --tests-passed true --files-changed 0 >/dev/null 2>&1
   done
   narr=$(run dashboard --ledger QA-LEDGER.json --json 2>/dev/null | "$PY" -c "import json,sys;d=json.load(sys.stdin);print(next(l['state'] for l in d['loops'] if l['mod']=='p'))")
@@ -3366,8 +3385,8 @@ T95="$(mktemp -d)"
   printf '{ "defaults": { "acceptance_file": "ACCEPTANCE.md" }, "repos": [ {"name":"p","path":".","type":"python","label":"DEMO"} ], "integration": {"enabled": false} }\n' > uscha.config.json
   run init --config uscha.config.json --out L.json >/dev/null 2>&1
   wrun L.json p >/dev/null 2>&1
-  run log-step --ledger L.json --repo p --tool code-review --iteration 1 --reported 3 --gated-reported 2 --fixed 1 >/dev/null 2>&1
-  run log-step --ledger L.json --repo p --tool code-review --iteration 2 --reported 1 --gated-reported 1 --fixed 1 >/dev/null 2>&1
+  rstep --ledger L.json --repo p --tool code-review --iteration 1 --reported 3 --gated-reported 2 --fixed 1 >/dev/null 2>&1
+  rstep --ledger L.json --repo p --tool code-review --iteration 2 --reported 1 --gated-reported 1 --fixed 1 >/dev/null 2>&1
   # a static-gate ingest in cycle 2 with a below-gate LOW: must NOT enter the series
   printf '[{"code":"E702","filename":"a.py","location":{"row":1}}]\n' > ruff.json
   run ingest-gate --ledger L.json --repo p --iteration 2 --ruff ruff.json >/dev/null 2>&1
@@ -4219,7 +4238,7 @@ import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
-from _witness import witness
+from _witness import witness, rstep_argv
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r"); os.makedirs(os.path.join(repo, "reports"))
@@ -4257,9 +4276,9 @@ def make_ledger(name, mode):
     eng("init", "--config", "c.json", "--out", name)
     witness(ENG, w, name, "r")   # 2.10.0: born of a recorded test-run
     for it, tool in ((1, "code-review"), (1, "judgment-day"), (1, "improve")):
-        eng("log-step", "--ledger", name, "--repo", "r", "--tool", tool,
+        eng(*rstep_argv(ENG, w, ["log-step", "--ledger", name, "--repo", "r", "--tool", tool,
             "--iteration", str(it), "--gated-reported", "0", "--files-changed", "0",
-            "--tests-passed", "true")
+            "--tests-passed", "true"]))
     return name
 
 def pr_ready(name):
@@ -4335,7 +4354,7 @@ import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
-from _witness import witness
+from _witness import witness, rstep_argv
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -4364,9 +4383,9 @@ io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
 eng("init", "--config", "c.json", "--out", "L.json")
 witness(ENG, w, "L.json", "r")   # 2.10.0: born of a recorded test-run
 for tool in ("code-review", "judgment-day", "improve"):
-    eng("log-step", "--ledger", "L.json", "--repo", "r", "--tool", tool,
+    eng(*rstep_argv(ENG, w, ["log-step", "--ledger", "L.json", "--repo", "r", "--tool", tool,
         "--iteration", "1", "--gated-reported", "0", "--files-changed", "0",
-        "--tests-passed", "true")
+        "--tests-passed", "true"]))
 
 def pr_ready():
     return eng("phase", "--ledger", "L.json", "--repo", "r", "--require", "pr-ready")
@@ -4667,7 +4686,7 @@ import io, json, os, subprocess, sys, tempfile
 kit = sys.argv[1]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
-from _witness import witness
+from _witness import witness, rstep_argv
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 res = {}
 w = tempfile.mkdtemp(); repo = os.path.join(w, "r")
@@ -4703,9 +4722,9 @@ io.open(os.path.join(w, "c.json"), "w").write(json.dumps({
 eng("init", "--config", "c.json", "--out", "L.json")
 witness(ENG, w, "L.json", "r")   # 2.10.0: born of a recorded test-run
 for tool in ("code-review", "judgment-day", "improve"):
-    eng("log-step", "--ledger", "L.json", "--repo", "r", "--tool", tool,
+    eng(*rstep_argv(ENG, w, ["log-step", "--ledger", "L.json", "--repo", "r", "--tool", tool,
         "--iteration", "1", "--gated-reported", "0", "--files-changed", "0",
-        "--tests-passed", "true")
+        "--tests-passed", "true"]))
 eng("log-gate", "--ledger", "L.json", "--repo", "r", "--iteration", "1",
     "--kind", "golden-diff", "--verdict", "pass")
 before = eng("phase", "--ledger", "L.json", "--repo", "r",
@@ -12992,6 +13011,7 @@ import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import rstep_argv
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 INSTALLER = os.path.join(kit, "install-uscha.py")
 # the release before the change: the red probe runs its engine on the very case that motivated
@@ -13194,8 +13214,8 @@ def measure():
         _cfg["defaults"]["qa_tools_external"] = ["judgment-day", "improve"]
         io.open(_cfg_p, "w", encoding="utf-8").write(json.dumps(_cfg))
         for _tool in ("code-review", "judgment-day", "improve"):
-            run([ENG, "log-step", "--repo", "app", "--tool", _tool, "--iteration", "1",
-                 "--tests-passed", "true"], cwd=d)
+            run([ENG] + rstep_argv(ENG, d, ["log-step", "--repo", "app", "--tool", _tool,
+                                            "--iteration", "1", "--tests-passed", "true"]), cwd=d)
         adv = run([ENG, "log-gate", "--repo", "app", "--iteration", "1",
                    "--kind", "simplicity", "--verdict", "advisory",
                    "--note", "OVERBUILT 60/100 - advisory, no budget declared"], cwd=d)
@@ -13830,6 +13850,7 @@ import io, json, os, shutil, subprocess, sys, tempfile
 kit, root = sys.argv[1], sys.argv[2]
 sys.path.insert(0, os.path.join(kit, "tests"))
 from _harness import sidecar
+from _witness import rstep_argv
 ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
 # the release before these fixes: its engine must show all four field failures (AC-FF-10).
 PREV_TAG = "v2.1.0"
@@ -14077,9 +14098,10 @@ def measure():
         io.open(_cp, "w", encoding="utf-8").write(json.dumps(_c, indent=2) + chr(10))
         for repo in ("backend-api", "mobile-app"):
             for i in (1, 2, 3):
-                eng(d, ["log-step", "--ledger", "L.json", "--repo", repo, "--tool", "t%d" % i,
-                        "--iteration", "1", "--fixed", "0", "--files-changed", "0",
-                        "--tests-passed", "yes"])
+                eng(d, rstep_argv(ENG, d, ["log-step", "--ledger", "L.json", "--repo", repo,
+                                           "--tool", "t%d" % i, "--iteration", "1",
+                                           "--fixed", "0", "--files-changed", "0",
+                                           "--tests-passed", "yes"]))
         if kind is not None:
             eng(d, ["log-gate", "--ledger", "L.json", "--repo", "backend-api", "--iteration",
                     "1", "--kind", kind, "--verdict", "fail", "--note", "n"] + list(extra or []))
@@ -15370,6 +15392,7 @@ def run(*args):
 # engine's own before/after hash sees it born of the run.
 sys.path.insert(0, str(engine.parents[3] / "tests"))
 from _witness import prepare as _witness_prepare
+from _witness import rstep_argv as _rstep_argv
 
 
 def witnessed(ledger, name):
@@ -15404,9 +15427,9 @@ def check_layout(root, name, repo_type, source_rel, report_rel):
     assert result.returncode == 0, (name, "init", result.stdout, result.stderr)
     result = witnessed(ledger, name)
     assert result.returncode == 0, (name, "fresh snapshot", result.stdout, result.stderr)
-    result = run("log-step", "--ledger", ledger, "--repo", name,
-                 "--tool", "code-review", "--iteration", "1",
-                 "--gated-reported", "0", "--files-changed", "0")
+    result = run(*_rstep_argv(str(engine), os.getcwd(), [
+        "log-step", "--ledger", str(ledger), "--repo", name, "--tool", "code-review",
+        "--iteration", "1", "--gated-reported", "0", "--files-changed", "0"]))
     assert result.returncode == 0, (name, "log-step", result.stdout, result.stderr)
     result = run("phase", "--ledger", ledger, "--repo", name,
                  "--require", "pr-ready")
@@ -15458,8 +15481,9 @@ def check_report_only_compatibility(root):
     _witness_prepare(str(engine), str(ledger), name)
     for args in (
         ("test-run", "--ledger", ledger, "--repo", name),
-        ("log-step", "--ledger", ledger, "--repo", name, "--tool", "code-review",
-         "--iteration", "1", "--gated-reported", "0", "--files-changed", "0"),
+        tuple(_rstep_argv(str(engine), os.getcwd(), [
+            "log-step", "--ledger", str(ledger), "--repo", name, "--tool", "code-review",
+            "--iteration", "1", "--gated-reported", "0", "--files-changed", "0"])),
     ):
         result = run(*args)
         assert result.returncode == 0, (name, args[0], result.stdout, result.stderr)
@@ -17842,7 +17866,8 @@ def measure():
     led = read_json(lp)
     had_source = any("source" in s for s in led["repos"]["app"]["iterations"])
     for s in led["repos"]["app"]["iterations"]:
-        for key in ("source", "source_sha256", "unverified"):
+        for key in ("source", "source_sha256", "unverified", "unwitnessed", "review",
+                    "reviewed"):
             s.pop(key, None)
     led.pop("integrity", None)
     led["integrity"] = {"sha256": QL._integrity_hash(led)}
@@ -20233,9 +20258,13 @@ def base_py(prefix, repos=("backend-api",), command="list", qa_order=True, exter
 
 
 def clean_steps(d, repo="backend-api", iteration=1, tools=TOOLS):
+    # witnessed (2.11.0, ADR-056 R2'): an unwitnessed step never counts toward convergence
     for t in tools:
+        rv = json.loads(q(d, "review-start", "--repo", repo, "--tool", t, "--iteration",
+                          str(iteration), "--json").stdout)["id"]
         q(d, "log-step", "--repo", repo, "--tool", t, "--iteration", str(iteration),
-          "--gated-reported", "0", "--files-changed", "0", "--tests-passed", "true")
+          "--gated-reported", "0", "--files-changed", "0", "--tests-passed", "true",
+          "--review", rv)
 
 
 def ledger(d):
@@ -20780,6 +20809,338 @@ esac
 }
 pj_unit T173 pj_t173
 
+pj_t174() {
+echo "== T174 (ADR-056 R2', ADR-057, 2.11.0): nothing vanishes -- a QA review is witnessed, convergence is anchored to the tree on disk, and the seal covers every repo =="
+# A TLA+ model check (docs/gate-integrity/models/) broke the first R2 design with an honest agent:
+# flag v0, fix, log, review v1 clean, revert to v0, re-test -> pr-ready. Each TLC path is a RED case
+# here, driven through the real engine over real temp git repos under an isolated HOME. AC-GI-50
+# carries the SHIPPED PROBE: the v2.10.1 engine, driven the same way, reaches pr-ready. AC-GI-57
+# drives a ledger the v2.10.1 engine wrote. Both read the tag out of git -- without it they report
+# None = UNMEASURED. The seal cases are the audit's A-F9 and its neighbours.
+T174=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+PREV_TAG = "v2.10.1"
+NL, DQ = chr(10), chr(34)
+TMPS = []
+res, why = {}, {}
+HOME_ISO = tempfile.mkdtemp(prefix="uscha-nv-home-")
+TMPS.append(HOME_ISO)
+ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
+for _k in ("CLAUDECODE", "USCHA_JOBS"):
+    ENV.pop(_k, None)
+XPY = sys.executable.replace(chr(92), "/")
+# a declared test command that writes a fresh JUnit report on every run
+EMIT = NL.join([
+    "import os, time",
+    "os.makedirs(" + DQ + "reports" + DQ + ", exist_ok=True)",
+    "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit.xml" + DQ + "), " + DQ + "w"
+    + DQ + ").write(" + DQ + "<testsuite tests=" + DQ + " + chr(34) + " + DQ + "1" + DQ
+    + " + chr(34) + " + DQ + " timestamp=" + DQ + " + chr(34) + repr(time.time()) + chr(34) + "
+    + DQ + "><testcase name=" + DQ + " + chr(34) + " + DQ + "t" + DQ + " + chr(34) + " + DQ
+    + "/></testsuite>" + DQ + ")",
+]) + NL
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix="uscha-nv-" + prefix + "-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def sh(d, *argv):
+    return subprocess.run(list(argv), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, encoding="utf-8", errors="replace", env=ENV)
+
+
+def q(d, *argv, **kw):
+    return subprocess.run([sys.executable, kw.get("eng", ENG)] + list(argv), cwd=d,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace", env=ENV)
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def commit_all(d, msg):
+    sh(d, "git", "add", "-A")
+    sh(d, "git", "commit", "-qm", msg)
+
+
+def project(prefix, repos=(("api", "api"),), order=("cr",)):
+    d = tmp(prefix)
+    for name, path in repos:
+        write(os.path.join(d, path, "mod.py"), "v = 0" + NL)
+        write(os.path.join(d, path, "run.py"), EMIT)
+    write(os.path.join(d, "uscha.config.json"), json.dumps(
+        {"defaults": {"qa_tools_order": list(order), "qa_tools_external": list(order),
+                      "test_command_python": [XPY, "run.py"]},
+         "repos": [{"name": n, "path": p, "type": "python"} for n, p in repos],
+         "integration": {"enabled": False}}, indent=2) + NL)
+    write(os.path.join(d, ".gitignore"), "__pycache__/" + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        sh(d, *argv)
+    commit_all(d, "base")
+    q(d, "init", "--config", "uscha.config.json")
+    return d
+
+
+def setv(d, v, path="api"):
+    write(os.path.join(d, path, "mod.py"), "v = %d" % v + NL)
+
+
+def review(d, it, repo="api", tool="cr"):
+    r = q(d, "review-start", "--repo", repo, "--tool", tool, "--iteration", str(it), "--json")
+    return json.loads(r.stdout)["id"]
+
+
+def log(d, it, gated, rv=None, repo="api", tool="cr", eng=ENG):
+    argv = ["log-step", "--repo", repo, "--tool", tool, "--iteration", str(it), "--reported",
+            str(gated), "--gated-reported", str(gated), "--tests-passed", "true"]
+    if rv:
+        argv += ["--review", rv]
+    return q(d, *argv, eng=eng)
+
+
+def phase(d, repo="api", eng=ENG):
+    return q(d, "phase", "--repo", repo, "--require", "pr-ready", eng=eng)
+
+
+def trun(d, repo="api", eng=ENG):
+    return q(d, "test-run", "--repo", repo, eng=eng)
+
+
+def ledger(d):
+    return json.loads(io.open(os.path.join(d, "QA-LEDGER.json"), encoding="utf-8").read())
+
+
+def measure():
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    pe = None
+    if prev is not None:
+        pe = os.path.join(tmp("prev-eng"), "qa_ledger.py")
+        write(pe, prev)
+
+    # --- AC-GI-50: TLC path M1 -- flag v0, fix, log, review v1 clean, revert to v0, re-test.
+    # The v2.10.1 engine, driven the same way without --review, reaches pr-ready (SHIPPED PROBE).
+    d = project("m1")
+    trun(d)
+    rv = review(d, 1); setv(d, 1); log(d, 1, 1, rv)
+    rv = review(d, 2); log(d, 2, 0, rv)
+    setv(d, 0); trun(d)
+    ph = phase(d)
+    ok = (ph.returncode == 1 and "saw a different source than the tree now" in ph.stdout
+          and "api/mod.py" in ph.stdout)
+    if pe is None:
+        res["AC-GI-50"] = None
+        why["AC-GI-50"] = PREV_TAG + " engine not reachable (no git, or the tag is absent)"
+    else:
+        o = project("m1-prev")
+        trun(o, eng=pe)
+        setv(o, 1); log(o, 1, 1, eng=pe); log(o, 2, 0, eng=pe)
+        setv(o, 0); trun(o, eng=pe)
+        old = phase(o, eng=pe)
+        res["AC-GI-50"] = bool(ok and old.returncode == 0)
+        why["AC-GI-50"] = "current rc=%s %r | %s rc=%s (want 0)" % (
+            ph.returncode, ph.stdout[-200:], PREV_TAG, old.returncode)
+
+    # --- AC-GI-51: TLC path M2 -- the review saw v1, the agent reverts BEFORE logging: the step
+    # carries the REVIEWED tree, so Anchor refuses the clean verdict on v0
+    d = project("m2")
+    trun(d)
+    rv = review(d, 1); setv(d, 1); log(d, 1, 1, rv)
+    rv = review(d, 2); setv(d, 0); log(d, 2, 0, rv); trun(d)
+    st = ledger(d)["repos"]["api"]["iterations"][-1]
+    ph = phase(d)
+    res["AC-GI-51"] = bool(ph.returncode == 1 and st.get("review") == rv
+                           and (st.get("reviewed") or {}).get("tree")
+                           and "saw a different source than the tree now" in ph.stdout)
+    why["AC-GI-51"] = "rc=%s step=%r %r" % (ph.returncode, st.get("review"), ph.stdout[-200:])
+
+    # --- AC-GI-52: TLC path Lies -- after the debt closed on v1, a clean verdict on the flagged
+    # content (v0) contradicts the record: Memory
+    d = project("lies")
+    rv = review(d, 1); setv(d, 1); log(d, 1, 1, rv)
+    rv = review(d, 2); log(d, 2, 0, rv)
+    setv(d, 0); rv = review(d, 3); log(d, 3, 0, rv); trun(d)
+    ph = phase(d)
+    res["AC-GI-52"] = bool(ph.returncode == 1 and "the record contradicts itself" in ph.stdout)
+    why["AC-GI-52"] = "rc=%s %r" % (ph.returncode, ph.stdout[-200:])
+
+    # --- AC-GI-53: the audit's A-F2 -- the same tool+iteration re-logged clean with no review
+    d = project("af2")
+    trun(d)
+    rv = review(d, 1); log(d, 1, 1, rv); log(d, 1, 0)
+    st = ledger(d)["repos"]["api"]["iterations"][-1]
+    ph = phase(d)
+    res["AC-GI-53"] = bool(ph.returncode == 1 and st.get("unwitnessed")
+                           and "is unwitnessed" in ph.stdout)
+    why["AC-GI-53"] = "rc=%s unwitnessed=%r" % (ph.returncode, st.get("unwitnessed"))
+
+    # --- AC-GI-54: vacuity -- a real fix still converges
+    d = project("fix")
+    rv = review(d, 1); setv(d, 2); trun(d); log(d, 1, 1, rv)
+    rv = review(d, 2); log(d, 2, 0, rv)
+    ph = phase(d)
+    res["AC-GI-54"] = ph.returncode == 0
+    why["AC-GI-54"] = "rc=%s %r" % (ph.returncode, ph.stdout[-200:])
+
+    # --- AC-GI-55: a deferral closes the debt and is printed as a deferral
+    d = project("defer")
+    trun(d)
+    rv = review(d, 1); log(d, 1, 1, rv)
+    write(os.path.join(d, "ISSUES-DEFERRED.md"), "- cr: one gated finding, deferred" + NL)
+    rv = review(d, 2); log(d, 2, 0, rv)
+    ph = phase(d)
+    rd = q(d, "readiness")
+    res["AC-GI-55"] = bool(ph.returncode == 0
+                           and "1 gated finding(s) deferred, not fixed" in rd.stdout)
+    why["AC-GI-55"] = "rc=%s readiness=%r" % (ph.returncode, rd.stdout[-300:])
+
+    # --- AC-GI-56: a docs-only commit after convergence leaves it converged (Anchor compares
+    # source-relevant content only)
+    commit_all(d, "evidence")
+    write(os.path.join(d, "NOTES.md"), "notes" + NL)
+    commit_all(d, "docs only")
+    ph = phase(d)
+    res["AC-GI-56"] = ph.returncode == 0
+    why["AC-GI-56"] = "rc=%s %r" % (ph.returncode, ph.stdout[-200:])
+
+    # --- AC-GI-57: a v2.10.1 ledger (steps with no review) loads and converges as before;
+    # readiness names the steps that predate witnessed reviews
+    if pe is None:
+        res["AC-GI-57"] = None
+        why["AC-GI-57"] = PREV_TAG + " engine not reachable (no git, or the tag is absent)"
+    else:
+        lg = project("legacy")
+        trun(lg, eng=pe)
+        log(lg, 1, 0, eng=pe)
+        ph = phase(lg)
+        rd = q(lg, "readiness")
+        res["AC-GI-57"] = bool(ph.returncode == 0
+                               and "predate witnessed reviews" in rd.stdout)
+        why["AC-GI-57"] = "rc=%s readiness=%r" % (ph.returncode, rd.stdout[-300:])
+
+    # --- AC-GI-58: --review naming an unknown, an already-logged or another tool's review is
+    # recorded unwitnessed, named, and never counts
+    d = project("badrv", order=("cr", "jd"))
+    trun(d)
+    other = review(d, 1, tool="jd")
+    log(d, 1, 0, "RV-99")
+    s1 = ledger(d)["repos"]["api"]["iterations"][-1].get("unwitnessed") or ""
+    log(d, 1, 0, other)
+    s2 = ledger(d)["repos"]["api"]["iterations"][-1].get("unwitnessed") or ""
+    rv = review(d, 2); log(d, 2, 0, rv)
+    log(d, 2, 0, rv)
+    s3 = ledger(d)["repos"]["api"]["iterations"][-1].get("unwitnessed") or ""
+    cv = q(d, "converged", "--repo", "api")
+    res["AC-GI-58"] = bool("unknown review RV-99" in s1 and "was started for" in s2
+                           and "already logged" in s3 and cv.returncode != 0)
+    why["AC-GI-58"] = "s1=%r s2=%r s3=%r cv=%s" % (s1, s2, s3, cv.returncode)
+
+    # ------------------------------ the seal, every repo (ADR-057) ------------------------------
+    two = (("backend-api", "backend-api"), ("mobile-app", "mobile-app"))
+    t = project("seal-one-snap", repos=two)
+    trun(t, "backend-api")
+    commit_all(t, "evidence")
+    ct = q(t, "check-terminado")
+    # --- AC-GI-33: only the first repo was ever snapshotted -> UNMEASURED, naming the second
+    res["AC-GI-33"] = bool(ct.returncode == 2 and "mobile-app: UNMEASURED" in ct.stdout
+                           and "[mobile-app] no snapshot recorded yet" in ct.stdout)
+    why["AC-GI-33"] = "rc=%s %r" % (ct.returncode, ct.stdout[-300:])
+    trun(t, "mobile-app")
+    commit_all(t, "evidence 2")
+    ct = q(t, "check-terminado")
+    top = json.loads(q(t, "top", "--json").stdout or "{}")
+    sealed = (top.get("terminado") or {}).get("sealed") or {}
+    # --- AC-GI-32: both sealed -> exit 0, one line per repo, repos[] of two
+    res["AC-GI-32"] = bool(ct.returncode == 0 and "backend-api: SEALED" in ct.stdout
+                           and "mobile-app: SEALED" in ct.stdout and sealed.get("ok") is True
+                           and len(sealed.get("repos") or []) == 2)
+    why["AC-GI-32"] = "rc=%s keys=%r %r" % (ct.returncode, sorted(sealed), ct.stdout[-200:])
+    # --- AC-GI-36: a docs-only commit keeps both sealed, with ADR-039's note
+    write(os.path.join(t, "NOTES.md"), "n" + NL)
+    commit_all(t, "docs only")
+    j = json.loads(q(t, "check-terminado", "--json").stdout or "{}")
+    res["AC-GI-36"] = bool(j.get("ok") is True
+                           and all(b.get("ok") is True and b.get("note")
+                                   for b in j.get("repos") or [{}]))
+    why["AC-GI-36"] = "ok=%r notes=%r" % (j.get("ok"),
+                                          [b.get("note") for b in j.get("repos") or []])
+    # --- AC-GI-30: the audit's A-F9 -- a crash committed into the SECOND repo after its evidence
+    setv(t, 1, "mobile-app")
+    write(os.path.join(t, "mobile-app", "mod.py"), "v = 1 / 0" + NL)
+    commit_all(t, "crash")
+    ct = q(t, "check-terminado")
+    res["AC-GI-30"] = bool(ct.returncode == 1 and "mobile-app: UNSEALED" in ct.stdout
+                           and "backend-api: SEALED" in ct.stdout
+                           and "[mobile-app] stale seal: source changed" in ct.stdout)
+    why["AC-GI-30"] = "rc=%s %r" % (ct.returncode, ct.stdout[-300:])
+
+    # --- AC-GI-34: one repo -> the 2.10 shape, byte for byte: no repos key, no prefix
+    one = project("seal-single")
+    trun(one)
+    commit_all(one, "evidence")
+    j = json.loads(q(one, "check-terminado", "--json").stdout or "{}")
+    res["AC-GI-34"] = bool(sorted(j) == ["commit", "note", "ok", "reasons", "repo"]
+                           and not any(str(r).startswith("[") for r in j.get("reasons") or []))
+    why["AC-GI-34"] = "keys=%r" % (sorted(j),)
+
+    # --- AC-GI-35: nested paths -- a repo at "." and another under it: the inner repo's reports
+    # are not the outer repo's dirt, and an inner source change breaks both, named per repo
+    n = project("nested", repos=(("backend-api", "."), ("mobile-app", "mobile-app")))
+    trun(n, "backend-api")
+    trun(n, "mobile-app")
+    commit_all(n, "evidence")
+    first = q(n, "check-terminado")
+    write(os.path.join(n, "mobile-app", "mod.py"), "v = 7" + NL)
+    commit_all(n, "inner change")
+    second = q(n, "check-terminado")
+    res["AC-GI-35"] = bool(first.returncode == 0 and second.returncode == 1
+                           and "backend-api: UNSEALED" in second.stdout
+                           and "mobile-app: UNSEALED" in second.stdout)
+    why["AC-GI-35"] = "first rc=%s %r | second rc=%s %r" % (
+        first.returncode, first.stdout[-200:], second.returncode, second.stdout[-200:])
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".nv-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T174" in
+  OK*) PASS=$((PASS+1)); echo "  ok   nothing vanishes (AC-GI-30, -32..36, -50..58): $T174";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T174";;
+esac
+}
+pj_unit T174 pj_t174
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -21132,6 +21493,10 @@ FAMILIES = (
     # script and config, so from an extracted kit it reports None as well.
     (".gi-cases.json", "witnessed-evidence", "T173",                  # ADR-055..058, 2.10.0
      _seq("AC-GI", 1, 22) + ("AC-GI-31", "AC-GI-47")),
+    # AC-GI-50 is the SHIPPED PROBE and AC-GI-57 drives a ledger the v2.10.1 engine wrote -- both
+    # read the tag out of git, so without it they report None = UNMEASURED, never a silent pass.
+    (".nv-cases.json", "nothing-vanishes", "T174",                    # ADR-056 R2', ADR-057, 2.11.0
+     ("AC-GI-30",) + _seq("AC-GI", 32, 36) + _seq("AC-GI", 50, 58)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:
