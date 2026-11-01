@@ -23,10 +23,13 @@
 (* the agent may also UNDO a deferral and log a gated step with no review *)
 (* (both were outside the first model); an unwitnessed gated step opens a *)
 (* debt on its logged state; Anchor also compares ISSUES-DEFERRED.md.     *)
+(* DeferFix / MemoryFix = TRUE: the two fixes TLC forced on the shipped   *)
+(* design (AC-GI-64, -65). Each `ci` teeth config sets one to FALSE and   *)
+(* MUST break -- the bound still finds the hole it closes (ADR-059).      *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences
 
-CONSTANTS MaxLog, Anchor, Lies, Witness, Memory, V211
+CONSTANTS MaxLog, Anchor, Lies, Witness, Memory, V211, DeferFix, MemoryFix
 
 Versions == 0..2
 Buggy == {0}
@@ -127,7 +130,7 @@ Max(S) == CHOOSE m \in S : \A k \in S : k <= m
 Base(i) == IF Witness THEN i ELSE IF i > 1 THEN i - 1 ELSE i   \* witnessed: the reviewed tree IS the before
 \* V211: a changed deferral file closes a debt only when the clean review SAW a deferral --
 \* removing one is not a deferral (TLC found the removal path: Defer, log gated, Undefer, clean)
-Moved(a, b) == a.src /= b.src \/ (a.def /= b.def /\ (V211 => b.def /= 0))
+Moved(a, b) == a.src /= b.src \/ (a.def /= b.def /\ ((V211 /\ DeferFix) => b.def /= 0))
 
 DebtOpen(i) ==
   /\ IsStep(i)
@@ -141,7 +144,7 @@ Contradicts(c) == \E i \in 1..(c - 1) :
   IsStep(i) /\ log[i].gated > 0 /\ log[i].src = log[c].src
   \* V211: with no deferral on disk the clean verdict is on the same content as ANY earlier
   \* gated verdict on that source -- removing a deferral does not make it new content
-  /\ (log[i].def = log[c].def \/ (V211 /\ log[c].def = 0))
+  /\ (log[i].def = log[c].def \/ (V211 /\ MemoryFix /\ log[c].def = 0))
 
 Converged ==
   /\ Steps /= {}

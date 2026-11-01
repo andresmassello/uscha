@@ -72,6 +72,29 @@ TLC broke the rule twice more -- each fixed in the engine and replayed as a RED 
 file, so editing `ISSUES-DEFERRED.md` (present, different) to drop one entry while keeping others
 still reads as a deferral -- the engine cannot tell which finding a line defers.
 
+## The manifest (ADR-059, 2.13.0)
+
+`models.json` is the first manifest under ADR-059: it declares, per `.cfg`, the verdict TLC must
+give, a tier, and the RED case that replays each counterexample.
+
+- **`ci` tier** (MaxLog=4, run by the CI `models` job on every push, blocking the publish):
+  `ci-shipped` (no error), `ci-vacuity` (MUST break), and four teeth configs that MUST break --
+  `ci-as-specified` (the first design: AC-GI-50, -51), `ci-lies-without-memory` (AC-GI-52),
+  `ci-without-both-fixes` (AC-GI-64) and `ci-without-memory-fix` (AC-GI-65). Measured 1-25 s each.
+- **`deep` tier** (MaxLog=5, by hand): the original configs, with the date, the distinct states and
+  the sha256 of `GatedDebt.tla` they were measured against; a newer `.tla` makes
+  `tools/model-check.py check` print an advisory.
+
+`DeferFix` and `MemoryFix` name the two fixes TLC forced in 2.11.0. Building the teeth configs found
+that reverting `DeferFix` ALONE is not a violation at MaxLog=4: Memory already refuses that path. The
+engine keeps both rules; `ci-without-both-fixes` is the teeth config for AC-GI-64 for that reason.
+
+```sh
+python tools/model-check.py check                                   # no Java
+python tools/model-check.py run --tier ci --jar tla2tools.jar       # TLC, pinned sha256
+python tools/model-check.py run --tier deep --jar tla2tools.jar     # by hand, ~9 min
+```
+
 ## Reproduce
 
 ```sh

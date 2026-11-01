@@ -113,6 +113,21 @@ itself.
    and reports `current` / `outdated` / `not installed` -- advisory, exit code unchanged). A bump
    therefore drifts all 18 regions: `tools/release.py` re-renders them in step 2, right after the
    six surfaces move and before the facts gate, and `--check` stays red until it has.
+12. **A design with state and rules is model-checked, and the decision is written** (2.13.0,
+   ADR-059). Every ADR numbered 059 or higher declares in its frontmatter `model: required` (with
+   `model_manifest:` pointing at the feature's `docs/<feature>/models/models.json`) or
+   `model: not-needed -- <reason>`; written by the agent, the latter carries `(origin: agent)`
+   until the human confirms it (ADR-044). `/uscha-adr-refine` asks the question because THIS file
+   requires it -- the shipped skill is not changed until a later ADR promotes the rule into the
+   kit. A manifest declares per `.cfg` the expected verdict, a `ci` or `deep` tier, a vacuity
+   config that MUST break, and the AC id of the RED case that replays each counterexample.
+   `python tools/model-check.py check` (no Java, smoke T176, all six cells) refuses a missing
+   field, a broken manifest, or a replayed AC id that ACCEPTANCE or the suite does not carry; the
+   CI `models` job runs the `ci` tier with TLC v1.7.4 pinned by sha256 (60 s per config, 120 s
+   timeout) and is part of the smoke run, so a red model blocks the publish. The `deep` tier is run
+   by hand and recorded in the manifest (`measured`, with the `.tla`'s sha256 -- a newer `.tla` is an
+   advisory). A green model proves no violation OF THE MODEL at its bounds; the RED replays are the
+   only link to the engine, and every claim says so (rule 2).
 
 ## Running the suite fast (2.8.0, ADR-053; parallel by default since 2.9.0, ADR-054)
 

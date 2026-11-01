@@ -155,3 +155,56 @@ jobs:
           test -f reports/junit/uscha-acceptance.xml \
             && cat reports/junit/uscha-acceptance.xml \
             || echo "no acceptance report emitted"
+
+  # ADR-059 (2.13.0): every design with state and rules that declared `model: required` -- and the
+  # first manifest, GatedDebt (2.11.0) -- is model-checked here, at the bounded `ci` tier, with TLC
+  # from a TAGGED release pinned by sha256 (never the rolling pre-release, whose jar is rebuilt per
+  # commit). One cell is enough: TLC's verdict does not depend on the OS, and the six-cell suite
+  # already checks the manifests themselves without Java (T176). This job is part of the smoke run,
+  # so a red model is a red run and `publish.yml` refuses the tag. The `deep` tier is run by hand
+  # (ADR-059 s4): its result is recorded in the manifest, never gated here.
+  models:
+    name: models (TLC, ci tier)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TLC_VERSION: "1.7.4"
+      TLC_SHA256: "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+
+      - name: Set up Java (Temurin 21)
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Cache the pinned tla2tools.jar
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: .tlc
+          key: tla2tools-${{ env.TLC_VERSION }}-${{ env.TLC_SHA256 }}
+
+      # Fail-closed: one retry on a download error, then red. The sha256 is checked here AND by
+      # model-check.py itself before TLC runs, so a swapped jar never models anything.
+      - name: Fetch and verify tla2tools.jar
+        shell: bash
+        run: |
+          set -e
+          mkdir -p .tlc
+          if [ ! -f .tlc/tla2tools.jar ]; then
+            url="https://github.com/tlaplus/tlaplus/releases/download/v${TLC_VERSION}/tla2tools.jar"
+            curl -fsSL -o .tlc/tla2tools.jar "$url" || { sleep 5; curl -fsSL -o .tlc/tla2tools.jar "$url"; }
+          fi
+          echo "${TLC_SHA256}  .tlc/tla2tools.jar" | sha256sum -c -
+
+      - name: Model-check every manifest (ci tier)
+        shell: bash
+        run: |
+          python tools/model-check.py check
+          python tools/model-check.py run --tier ci --jar .tlc/tla2tools.jar

@@ -23,7 +23,7 @@ lifecycle:
 ---
 # ADR-059: A design with state and rules is MODEL-CHECKED before it is built — and the decision to model or not is written down, never forgotten
 
-## Status: Proposed — decided by the owner on 2026-11-01 (an `adr-refine` interview); built in 2.13.0. Repo-level: nothing here ships in the kit package until a later ADR promotes it.
+## Status: Accepted (2.13.0) — decided by the owner on 2026-11-01 (an `adr-refine` interview). Repo-level: nothing here ships in the kit package until a later ADR promotes it.
 
 ## Context
 
@@ -109,8 +109,14 @@ Option B, at repo level first (scope C). Promotion into the kit is a later ADR.
 | as-specified (expect violated) | 2 s | 1 s |
 | proposed-lying-agent (expect no-error) | 3 s | 15 s |
 
-The bound keeps its teeth: with either 2.11.0 fix reverted, MaxLog=4 still finds the hole (1 s and
-2 s). So `ci` = MaxLog=4 and `deep` = MaxLog=5.
+The bound keeps its teeth: with both 2.11.0 fixes reverted, or the Memory fix alone, MaxLog=4
+still finds the hole (1 s and 2 s). So `ci` = MaxLog=4 and `deep` = MaxLog=5.
+
+**Found while building it** (the manifest's teeth configs, 2026-11-01): with the Memory fix in place,
+reverting the deferral-closure fix alone is NOT a violation at MaxLog=4 -- Memory already refuses
+that path. The engine keeps both rules (defense in depth, and AC-GI-64 pins the closure message);
+the manifest's teeth config for AC-GI-64 therefore reverts both, and says why. The model gained two
+constants, `DeferFix` and `MemoryFix`, so the fixes TLC forced are named in the model itself.
 
 ## Stack and lifecycle
 
@@ -158,7 +164,7 @@ maintainer's machine -- the kit package gains no dependency.
   tag's run; ADR-044's markers for the unconfirmed `not-needed`.
 - Tests: the RED cases below, each red before the code exists.
 
-## Verification (draft criteria, promoted into ACCEPTANCE.md when built -- rule 8)
+## Verification (promoted into ACCEPTANCE.md in 2.13.0)
 
 - [ ] AC-MC-01 -- an ADR numbered >= 059 without `model:` turns the suite red, naming the ADR; ADRs
   <= 058 are not read.
@@ -168,9 +174,9 @@ maintainer's machine -- the kit package gains no dependency.
   without a vacuity config, turns the suite red, naming what is missing.
 - [ ] AC-MC-04 -- an AC id named in a manifest that is absent from `ACCEPTANCE.md` or from the
   smoke suite turns the suite red.
-- [ ] AC-MC-05 -- the `models` job runs GatedDebt's `ci` tier and every verdict matches `expect`,
-  each config under 60 s; with a 2.11.0 fix reverted in a fixture copy, the job is red and prints
-  the trace.
+- [ ] AC-MC-05 -- `run` compares every verdict with `expect`, prints the trace when they differ and
+  turns a config over the limit red (measured in the suite with a stub TLC); the `models` job runs
+  GatedDebt's `ci` tier, whose teeth configs revert the 2.11.0 fixes and MUST break.
 - [ ] AC-MC-06 -- a jar whose sha256 differs from the pin: red, and TLC never runs.
 - [ ] AC-MC-07 -- a `.tla` changed after its recorded deep run: an advisory warning naming the
   model; the exit code does not change.

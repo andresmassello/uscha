@@ -1,0 +1,120 @@
+{
+  "schema": "uscha/models@1",
+  "adr": "ADR-056",
+  "note": "The 2.11.0 model of the gated-finding debt (ADR-056 R2'): the first manifest under ADR-059, the precedent that proves the mechanism. Not a retroactive gate on ADR-056.",
+  "module": "GatedDebt.tla",
+  "configs": [
+    {
+      "cfg": "ci-shipped.cfg",
+      "tier": "ci",
+      "expect": "no-error"
+    },
+    {
+      "cfg": "ci-vacuity.cfg",
+      "tier": "ci",
+      "expect": "violated: NeverFixedAndReady",
+      "vacuity": true
+    },
+    {
+      "cfg": "ci-as-specified.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-GI-50",
+        "AC-GI-51"
+      ]
+    },
+    {
+      "cfg": "ci-lies-without-memory.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-GI-52"
+      ]
+    },
+    {
+      "cfg": "ci-without-both-fixes.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-GI-64"
+      ]
+    },
+    {
+      "cfg": "ci-without-memory-fix.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-GI-65"
+      ]
+    },
+    {
+      "cfg": "shipped-2.11.0.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-01",
+        "distinct_states": 46976202,
+        "tlc": "1.7.4",
+        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+      }
+    },
+    {
+      "cfg": "shipped-2.11.0-vacuity.cfg",
+      "tier": "deep",
+      "expect": "violated: NeverFixedAndReady",
+      "measured": {
+        "date": "2026-11-01",
+        "distinct_states": 1948,
+        "tlc": "1.7.4",
+        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+      },
+      "vacuity": true
+    },
+    {
+      "cfg": "as-specified.cfg",
+      "tier": "deep",
+      "expect": "violated: NoFlaggedBugShips",
+      "measured": {
+        "date": "2026-11-01",
+        "distinct_states": 8213,
+        "tlc": "1.7.4",
+        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+      }
+    },
+    {
+      "cfg": "proposed-honest.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-01",
+        "distinct_states": 926106,
+        "tlc": "1.7.4",
+        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+      }
+    },
+    {
+      "cfg": "proposed-lying-agent.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-01",
+        "distinct_states": 1914237,
+        "tlc": "1.7.4",
+        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+      }
+    },
+    {
+      "cfg": "proposed-vacuity-control.cfg",
+      "tier": "deep",
+      "expect": "violated: NeverFixedAndReady",
+      "measured": {
+        "date": "2026-11-01",
+        "distinct_states": 2902,
+        "tlc": "1.7.4",
+        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+      },
+      "vacuity": true
+    }
+  ]
+}

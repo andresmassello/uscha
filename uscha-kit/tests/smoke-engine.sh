@@ -21648,6 +21648,254 @@ esac
 }
 pj_unit T175 pj_t175
 
+pj_t176() {
+echo "== T176 (ADR-059, 2.13.0): a design with state and rules is model-checked -- and the decision to model or not is written down =="
+# tools/model-check.py is repo-level (never shipped). This block drives its two halves without
+# Java: `check` over temp fixture repos, and `run` with a stub TLC (--tlc-cmd) so the verdict
+# comparison, the trace, the limit and the jar pin are measured on all six cells. The REAL TLC run
+# of the repo's manifests is the CI `models` job, which blocks the publish (AC-MC-08).
+T176=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+MC = os.path.join(root, "tools", "model-check.py")
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+NL = chr(10)
+res, why, TMPS = {}, {}, []
+ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
+for _k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"):
+    ENV.pop(_k, None)
+# a stand-in for TLC: the .cfg carries a directive line, the stub prints what TLC would
+STUB = NL.join([
+    "import sys, time",
+    "cfg = sys.argv[sys.argv.index(" + chr(34) + "-config" + chr(34) + ") + 1]",
+    "body = open(cfg).read()",
+    "for line in body.splitlines():",
+    "    w = line.split()",
+    "    if len(w) >= 3 and w[1] == " + chr(34) + "stub:" + chr(34) + ":",
+    "        if w[2] == " + chr(34) + "sleep" + chr(34) + ":",
+    "            time.sleep(float(w[3]))",
+    "        elif w[2] == " + chr(34) + "violated" + chr(34) + ":",
+    "            print(" + chr(34) + "Error: Invariant %s is violated." + chr(34) + " % w[3])",
+    "            print(" + chr(34) + "State 1: <Initial predicate>" + chr(34) + ")",
+    "            print(" + chr(34) + "State 2: <TheStep>" + chr(34) + ")",
+    "        elif w[2] == " + chr(34) + "ok" + chr(34) + ":",
+    "            print(" + chr(34) + "Model checking completed. No error has been found." + chr(34) + ")",
+]) + NL
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix="uscha-mc-" + prefix + "-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def mc(*a):
+    return subprocess.run([sys.executable, MC] + list(a), stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                          errors="replace", env=ENV)
+
+
+def adr(d, num, model_lines):
+    fm = ["---", "governs:", "  - x.py"] + model_lines + ["---"]
+    write(os.path.join(d, "docs", "adr", "ADR-%03d-thing.md" % num),
+          NL.join(fm) + NL + "# ADR-%03d: a thing" % num + NL + NL + "## Status: Proposed" + NL)
+
+
+def repo(prefix, manifest=None, cfgs=None, acc="- [ ] AC-X-01 - a" + NL,
+         smoke="AC-X-01" + NL):
+    d = tmp(prefix)
+    write(os.path.join(d, "ACCEPTANCE.md"), "# A" + NL + NL + acc)
+    write(os.path.join(d, "uscha-kit", "tests", "smoke-engine.sh"), smoke)
+    if manifest is not None:
+        base = os.path.join(d, "docs", "feat", "models")
+        write(os.path.join(base, "M.tla"), "---- MODULE M ----" + NL + "====" + NL)
+        for name, body in (cfgs or {}).items():
+            write(os.path.join(base, name), body)
+        write(os.path.join(base, "models.json"), json.dumps(manifest, indent=2) + NL)
+    return d
+
+
+def man(configs, adr_id="ADR-060"):
+    return {"schema": "uscha/models@1", "adr": adr_id, "module": "M.tla", "configs": configs}
+
+
+GOOD_CFGS = {"ci-ok.cfg": "SPECIFICATION Spec" + NL + "\\* stub: ok" + NL,
+             "ci-vac.cfg": "SPECIFICATION Spec" + NL + "\\* stub: violated Never" + NL}
+GOOD = [{"cfg": "ci-ok.cfg", "tier": "ci", "expect": "no-error"},
+        {"cfg": "ci-vac.cfg", "tier": "ci", "expect": "violated: Never", "vacuity": True,
+         "replays": ["AC-X-01"]}]
+REQ = ["model: required", "model_manifest: docs/feat/models/models.json"]
+
+
+def measure():
+    # --- AC-MC-01: an ADR >= 059 without model: is red, named; an older one is not read
+    d = repo("no-field")
+    adr(d, 10, [])
+    old_only = mc("check", "--root", d)
+    adr(d, 60, [])
+    new = mc("check", "--root", d)
+    res["AC-MC-01"] = bool(old_only.returncode == 0 and new.returncode == 1
+                           and "ADR-060-thing.md" in new.stdout and "ADR-010" not in new.stdout)
+    why["AC-MC-01"] = "old rc=%s new rc=%s %r" % (old_only.returncode, new.returncode,
+                                                  new.stdout[-200:])
+
+    # --- AC-MC-02: not-needed by the agent is an unconfirmed agent-origin item until confirmed;
+    # a not-needed with no reason is red
+    d = repo("not-needed")
+    write(os.path.join(d, "c.json"), json.dumps(
+        {"defaults": {}, "repos": [{"name": "r", "path": ".", "type": "python"}],
+         "integration": {"enabled": False}}))
+    subprocess.run([sys.executable, ENG, "init", "--config", "c.json"], cwd=d, env=ENV,
+                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    adr(d, 60, ["model: not-needed -- no state to walk through (origin: agent)"])
+    chk = mc("check", "--root", d)
+    rd1 = subprocess.run([sys.executable, ENG, "readiness"], cwd=d, env=ENV, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
+    adr(d, 60, ["model: not-needed -- no state to walk through (origin: agent, confirmed: "
+                "2026-11-01)"])
+    rd2 = subprocess.run([sys.executable, ENG, "readiness"], cwd=d, env=ENV, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
+    adr(d, 61, ["model: not-needed --"])
+    bare = mc("check", "--root", d)
+    res["AC-MC-02"] = bool(chk.returncode == 0 and "1 agent-origin item(s) unconfirmed" in rd1
+                           and "agent-origin item(s) unconfirmed" not in rd2
+                           and bare.returncode == 1 and "without a reason" in bare.stdout)
+    why["AC-MC-02"] = "check rc=%s rd1 origin=%s rd2 origin=%s bare rc=%s" % (
+        chk.returncode, "agent-origin" in rd1, "agent-origin" in rd2, bare.returncode)
+
+    # --- AC-MC-03: required without its manifest, without a ci config, without a vacuity config
+    d = repo("no-manifest")
+    adr(d, 60, REQ)
+    nomani = mc("check", "--root", d)
+    d = repo("no-ci", man([dict(GOOD[0], tier="deep"), dict(GOOD[1], tier="deep")]), GOOD_CFGS)
+    adr(d, 60, REQ)
+    noci = mc("check", "--root", d)
+    d = repo("no-vacuity", man([GOOD[0], dict(GOOD[1], vacuity=False)]), GOOD_CFGS)
+    adr(d, 60, REQ)
+    novac = mc("check", "--root", d)
+    d = repo("good", man(GOOD), GOOD_CFGS)
+    adr(d, 60, REQ)
+    good = mc("check", "--root", d)
+    GOOD_ROOT = d
+    res["AC-MC-03"] = bool(nomani.returncode == 1 and "does not exist" in nomani.stdout
+                           and noci.returncode == 1 and "no `ci` config" in noci.stdout
+                           and novac.returncode == 1 and "vacuity" in novac.stdout
+                           and good.returncode == 0)
+    why["AC-MC-03"] = "nomani=%s noci=%s novac=%s good=%s %r" % (
+        nomani.returncode, noci.returncode, novac.returncode, good.returncode,
+        good.stdout[-160:])
+
+    # --- AC-MC-04: an AC id a config replays must be in ACCEPTANCE.md AND in the smoke suite
+    d = repo("no-acc", man(GOOD), GOOD_CFGS, acc="- [ ] AC-Y-01 - b" + NL)
+    adr(d, 60, REQ)
+    noacc = mc("check", "--root", d)
+    d = repo("no-smoke", man(GOOD), GOOD_CFGS, smoke="nothing" + NL)
+    adr(d, 60, REQ)
+    nosmoke = mc("check", "--root", d)
+    res["AC-MC-04"] = bool(noacc.returncode == 1 and "not in ACCEPTANCE.md" in noacc.stdout
+                           and nosmoke.returncode == 1
+                           and "does not measure" in nosmoke.stdout)
+    why["AC-MC-04"] = "noacc=%s %r nosmoke=%s %r" % (noacc.returncode, noacc.stdout[-120:],
+                                                     nosmoke.returncode, nosmoke.stdout[-120:])
+
+    # --- AC-MC-05: run compares each verdict with expect, prints the trace when they differ,
+    # and an over-limit config is red; the repo's own manifests pass the check
+    stub = os.path.join(tmp("stub"), "tlc.py")
+    write(stub, STUB)
+    cmd = sys.executable.replace(chr(92), "/") + " " + stub.replace(chr(92), "/")
+    ok = mc("run", "--root", GOOD_ROOT, "--tier", "ci", "--tlc-cmd", cmd)
+    d = repo("broken", man(GOOD), dict(GOOD_CFGS, **{
+        "ci-ok.cfg": "SPECIFICATION Spec" + NL + "\\* stub: violated Safe" + NL}))
+    broken = mc("run", "--root", d, "--tier", "ci", "--tlc-cmd", cmd)
+    d = repo("slow", man(GOOD), dict(GOOD_CFGS, **{
+        "ci-ok.cfg": "SPECIFICATION Spec" + NL + "\\* stub: sleep 1.5" + NL
+                     + "\\* stub: ok" + NL}))
+    slow = mc("run", "--root", d, "--tier", "ci", "--tlc-cmd", cmd, "--limit", "1")
+    real = mc("check", "--root", root)
+    res["AC-MC-05"] = bool(ok.returncode == 0 and "2 ci config(s) run, 0 red" in ok.stdout
+                           and broken.returncode == 1 and "expected no-error" in broken.stdout
+                           and "State 2: <TheStep>" in broken.stdout
+                           and slow.returncode == 1 and "measured limit" in slow.stdout
+                           and real.returncode == 0)
+    why["AC-MC-05"] = "ok=%s broken=%s %r slow=%s real=%s %r" % (
+        ok.returncode, broken.returncode, broken.stdout[-160:], slow.returncode,
+        real.returncode, real.stdout[-200:])
+
+    # --- AC-MC-06: a jar that is not the pinned one is refused before java ever runs
+    bad_jar = os.path.join(tmp("jar"), "tla2tools.jar")
+    write(bad_jar, "not the pinned jar" + NL)
+    marker = os.path.join(tmp("marker"), "ran")
+    fake_java = os.path.join(tmp("java"), "java.py")
+    write(fake_java, "open(" + repr(marker) + ", " + chr(34) + "w" + chr(34) + ").write("
+          + chr(34) + "x" + chr(34) + ")" + NL)
+    pin = mc("run", "--root", GOOD_ROOT, "--tier", "ci", "--jar", bad_jar,
+             "--java", fake_java)
+    res["AC-MC-06"] = bool(pin.returncode == 1 and "refusing to run" in pin.stdout
+                           and not os.path.exists(marker))
+    why["AC-MC-06"] = "rc=%s %r ran=%s" % (pin.returncode, pin.stdout[-160:],
+                                           os.path.exists(marker))
+
+    # --- AC-MC-07: a deep run recorded against an older .tla is an advisory, never a red
+    deep = dict(GOOD[0], cfg="deep.cfg", tier="deep",
+                measured={"date": "2026-11-01", "distinct_states": 1, "model_sha256": "0" * 64})
+    d = repo("stale", man(GOOD + [deep]), dict(GOOD_CFGS, **{"deep.cfg": "SPECIFICATION Spec"
+                                                             + NL}))
+    adr(d, 60, REQ)
+    stale = mc("check", "--root", d)
+    res["AC-MC-07"] = bool(stale.returncode == 0 and "advisory" in stale.stdout
+                           and "predates" in stale.stdout)
+    why["AC-MC-07"] = "rc=%s %r" % (stale.returncode, stale.stdout[-200:])
+
+    # --- AC-MC-08: the CI models job runs the ci tier against the pinned jar inside the smoke
+    # workflow, and publish.yml refuses on that workflow run's conclusion -- a red models job
+    # is a red smoke run, so nothing is published
+    wf = io.open(os.path.join(root, ".github", "workflows", "smoke.yml"), encoding="utf-8").read()
+    pub = io.open(os.path.join(root, ".github", "workflows", "publish.yml"),
+                  encoding="utf-8").read()
+    job = wf.split(NL + "  models:", 1)[1] if (NL + "  models:") in wf else ""
+    res["AC-MC-08"] = bool(job and "model-check.py run --tier ci" in job
+                           and "sha256sum" in job and "continue-on-error" not in job
+                           and "select(.name==" in pub and "smoke" in pub
+                           and "conclusion" in pub)
+    why["AC-MC-08"] = "models job present=%s run=%s pin=%s" % (
+        bool(job), "model-check.py run --tier ci" in job, "sha256sum" in job)
+
+
+try:
+    if not os.path.isfile(MC):
+        for k in ("AC-MC-01", "AC-MC-02", "AC-MC-03", "AC-MC-04", "AC-MC-05", "AC-MC-06",
+                  "AC-MC-07", "AC-MC-08"):
+            res[k] = None          # an extracted kit has no tools/: UNMEASURED, never a pass
+            why[k] = "tools/model-check.py absent (not the repo)"
+    else:
+        measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".mc-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T176" in
+  OK*) PASS=$((PASS+1)); echo "  ok   model-checked designs (AC-MC-01..08): $T176";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T176";;
+esac
+}
+pj_unit T176 pj_t176
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -22006,6 +22254,9 @@ FAMILIES = (
      ("AC-GI-30",) + _seq("AC-GI", 32, 36) + _seq("AC-GI", 50, 65)),
     (".hp-cases.json", "human-acts-pr-gate", "T175",                  # ADR-058, 2.12.0
      _seq("AC-GI", 40, 46) + ("AC-GI-48", "AC-GI-49")),
+    # tools/model-check.py is repo-level: from an extracted kit every case reads None = UNMEASURED
+    (".mc-cases.json", "model-checked-designs", "T176",               # ADR-059, 2.13.0
+     _seq("AC-MC", 1, 8)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:
