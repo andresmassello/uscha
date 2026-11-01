@@ -2961,13 +2961,18 @@ def _review_exclusions(repo_path, rtype, ledger_path, work):
     return out
 
 
+# prose a QA review does not judge: a tracked doc is not review content, so a docs-only change
+# leaves the last review current (SPEC-2.11.0 §3.2) -- inside the repo as well as beside it
+_REVIEW_DOC_EXT = {".md", ".markdown", ".rst", ".txt", ".adoc"}
+
+
 def _review_relevant(path, rtype, tracked, excluded):
     """Does a change to this path change what a QA review looked at? Wider than ADR-039's
     `_src_relevant` on purpose (the 2.11.0 fresh review): a reviewer reads templates and config,
     so a TRACKED file counts whatever its extension, and a source-extension file counts wherever
     it lives (a package named `reports`/`build` included). Not review content: the review's own
     footprint (`excluded`), ISSUES-DEFERRED.md, untracked non-source files (build output,
-    bytecode), and non-source files under a `reports` directory."""
+    bytecode), non-source files under a `reports` directory, and prose (`_REVIEW_DOC_EXT`)."""
     if path in excluded:
         return False
     parts = path.split("/")
@@ -2977,6 +2982,8 @@ def _review_relevant(path, rtype, tracked, excluded):
     allowed = _SRC_EXT | SOURCE_EXT.get(rtype or "", set()) | _HARNESS_EXT
     is_src = os.path.splitext(name)[1] in allowed or name in _HARNESS_NAMES
     if "reports" in parts[:-1] and not is_src:
+        return False
+    if not is_src and os.path.splitext(name)[1] in _REVIEW_DOC_EXT:
         return False
     return is_src or tracked
 
@@ -3702,10 +3709,11 @@ def cmd_log_step(args):
           + ("" if res["source"] != "MISSING" else
              " (unverified: tool not installed -- does not count toward convergence)")
           # witnessed steps name their review; an unwitnessed one prints exactly what 2.10 printed
-          # on stdout (the human-approved devloop-entry golden pins that line) and says why on
-          # stderr, at the moment it is logged
+          # (the human-approved devloop-entry golden pins stdout AND stderr of a clean one)
           + (" review=%s" % rv["id"] if rv is not None else ""))
-    if rv is None:
+    if rv is None and (record.get("gated_reported") or 0) > 0:
+        # a GATED unwitnessed step opens a debt on the state it was logged at: said now, on
+        # stderr; a clean one is named by `converged` and `phase`
         sys.stderr.write("[qa_ledger] step #%s is UNWITNESSED: %s\n" % (record["n"], rv_problem))
 
 

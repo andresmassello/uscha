@@ -44,7 +44,8 @@ case. A debt did not survive the window in window mode (AC-GI-59); a gated step 
 deleting `ISSUES-DEFERRED.md` after a deferral closed a debt went unnoticed -- Anchor now compares
 that file too (AC-GI-61); and the review stamp used ADR-039's source filter, which a tracked
 template or a `.py` under a `reports/` package slipped past -- what a review saw is now every
-tracked file plus untracked source, minus the ledger and the evidence (AC-GI-62). The summary line
+tracked file plus untracked source, minus the ledger, the evidence and prose (`.md`, `.rst`,
+`.txt`, `.adoc`: a docs-only change inside a repo leaves its last review current) (AC-GI-62). The summary line
 of a multi-repo seal also names the repo that decided it (AC-GI-63).
 
 The TLA+ model was then extended with the two moves the reviewer exercised (removing a deferral;
@@ -68,9 +69,10 @@ vacuity control still breaks.
   a finding the human accepts.
 - **A multi-repo project where only the first repo was ever snapshotted** used to read SEALED; it now
   reads UNMEASURED (exit 2), naming the other repo.
-- `log-step`'s printed line is unchanged for an unwitnessed step (the human-approved devloop-entry
-  golden pins it); the reason is named by `converged` and `phase`. A witnessed step prints
-  `review=RV-n`.
+- `log-step`'s output is unchanged for a clean unwitnessed step (the human-approved devloop-entry
+  golden pins stdout and stderr); the reason is named by `converged` and `phase`. A GATED
+  unwitnessed step also says on stderr that it is unwitnessed (it opens a debt on the state it was
+  logged at). A witnessed step prints `review=RV-n`.
 
 ## Pins that moved, on purpose
 

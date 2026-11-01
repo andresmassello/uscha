@@ -1933,7 +1933,7 @@ the engine drives under an isolated HOME.
   reaches `pr-ready`: the rules are not vacuous.
 - [ ] AC-GI-55 - a deferral (`ISSUES-DEFERRED.md` changed between the two reviews) closes the debt,
   `pr-ready` holds, and `readiness` prints "1 gated finding(s) deferred, not fixed".
-- [ ] AC-GI-56 - a docs-only commit after convergence keeps it converged (Anchor compares
+- [ ] AC-GI-56 - a docs-only commit after convergence keeps it converged, a doc inside the repo included (Anchor compares
   source-relevant content only).
 - [ ] AC-GI-57 - a ledger whose steps the v2.10.1 engine wrote (no review) loads and converges as
   before, and `readiness` names the steps that predate witnessed reviews. Without the tag in git

@@ -21021,6 +21021,7 @@ def measure():
     # source-relevant content only)
     commit_all(d, "evidence")
     write(os.path.join(d, "NOTES.md"), "notes" + NL)
+    write(os.path.join(d, "api", "NOTES.md"), "notes inside the repo" + NL)
     commit_all(d, "docs only")
     ph = phase(d)
     res["AC-GI-56"] = ph.returncode == 0
@@ -21237,7 +21238,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T174" in
-  OK*) PASS=$((PASS+1)); echo "  ok   nothing vanishes (AC-GI-30, -32..36, -50..63): $T174";;
+  OK*) PASS=$((PASS+1)); echo "  ok   nothing vanishes (AC-GI-30, -32..36, -50..65): $T174";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T174";;
 esac
 }
