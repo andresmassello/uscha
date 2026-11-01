@@ -80,7 +80,15 @@ act in this design is the forge's own "ready for review" / merge.
   (`--decision`, `--amended`): the decision says WHAT was decided, the note says WHY, and the
   record must carry both under a declared name.
 - The refusal is checked before anything is written and prints the filled-in command for the
-  human to paste. The marker table is `AGENT_SHELL_MARKERS = ("CLAUDECODE",)`.
+  human to paste. The marker table is `AGENT_SHELL_MARKERS = ("CLAUDECODE",
+  "CLAUDE_CODE_ENTRYPOINT")` (both measured in Claude Code's Bash tool, 2026-11-01); PRESENCE
+  counts, and a name or note must carry a letter or digit.
+- The fresh review found a fifth way out of `escalated`: re-running `init` over the ledger. `init`
+  now refuses while the ledger holds an open human gate.
+- The ledger is found up from the cwd, else in an immediate child folder of an ancestor whose
+  config maps the cwd (the kit's sibling layout), else at `USCHA_LEDGER`; the hook carries a copy
+  of the engine's lookup. `readiness` prints the exception; `summary` does not carry it yet, so §2's
+  "and the retrospective" is not built.
 - `pr-gate --cwd` exits 0 when no `QA-LEDGER.json` is found up from the cwd (the hook is global);
   `pr-opened-not-ready` records nothing when the repo is already `pr-ready` (not an exception).
 - The hook lets `gh pr ready --undo` and an MCP `update_pull_request` that does not set
@@ -107,7 +115,8 @@ act in this design is the forge's own "ready for review" / merge.
 ## Consequences
 
 + The field failure has a written path: gate first, one question, a draft, a recorded exception.
-+ An escalation cannot be lifted from the agent's Claude Code shell; elsewhere it is declared.
++ An escalation cannot be lifted from the agent's Claude Code shell by the four commands or by
+  re-running `init`; elsewhere it is declared.
 - Humans type one more command themselves; the agent shows it ready to paste.
 - The hook exists only on Claude Code, reads text, and misses `gh api` calls and browser PRs.
 
@@ -129,3 +138,4 @@ Authenticating identity; forge APIs inside the engine; `flag-blocker --resolve`;
 - AC-GI-46 — `pr-opened-not-ready` is recorded and surfaced as an exception.
 - AC-GI-47 — both SKILL twins carry the protocol, the proactive report and "STOP and ask".
 - AC-GI-48 — install/uninstall/doctor handle `guard-pr-gate.py` like the golden hook.
+- AC-GI-49 — `init` refuses to re-initialise a ledger that holds an open human gate.

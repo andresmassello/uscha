@@ -1925,21 +1925,29 @@ def _has_text(value):
 # agent. A human act refuses when one is present. The table is MEASURED, not guessed: Claude Code's
 # Bash tool carries CLAUDECODE=1 (2026-10-20). A harness with no known marker is UNMEASURED, never
 # trusted -- `--human` is a declaration there, not a proof.
-AGENT_SHELL_MARKERS = ("CLAUDECODE",)
+AGENT_SHELL_MARKERS = ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT")
 
 
 def _agent_marker():
+    # PRESENCE, not value: `CLAUDECODE= cmd` (set, empty) is still the agent's shell -- an empty
+    # assignment is exactly how a marker would be "turned off" from inside it (2.12.0 review)
     for name in AGENT_SHELL_MARKERS:
-        if _has_text(os.environ.get(name)):
+        if name in os.environ:
             return name
     return None
+
+
+def _has_word(value):
+    """A declared name or reason must carry a letter or digit: whitespace, a zero-width space or
+    punctuation alone is not a declaration (2.12.0 review)."""
+    return isinstance(value, str) and any(ch.isalnum() for ch in value)
 
 
 def _human_act(args, what, example):
     """The gate on the four commands that lift `escalated` (ADR-058 §5): a NAME and a REASON are
     typed, and the process is not an agent's shell. Refused before anything is read or written,
     exit 2. Returns the declared actor."""
-    if not _has_text(getattr(args, "human", None)) or not _has_text(getattr(args, "note", None)):
+    if not _has_word(getattr(args, "human", None)) or not _has_word(getattr(args, "note", None)):
         print("[qa_ledger] %s is a HUMAN act: it needs --human NAME --note TEXT (who decided, "
               "and why). Run it in your own terminal:\n    %s" % (what, example),
               file=sys.stderr)
@@ -2367,6 +2375,35 @@ def _init_add_repo(args):
           "first snapshot or gate lands. That is an unmeasured repo, not a regression." % name)
 
 
+def _refuse_init_over_human_gate(out):
+    """ADR-058 (2.12.0 review): `init` over an existing ledger erased its open escalations -- a
+    fifth way out of `escalated`, reachable from the agent's shell. A ledger that still holds an
+    open human gate is not re-initialised; the human resolves the gate first (a recorded act), or
+    moves the file away themselves."""
+    if not out or not os.path.isfile(out):
+        return
+    try:
+        with open(out, encoding="utf-8") as fh:
+            old = json.load(fh)
+    except (OSError, ValueError):
+        return
+    if not isinstance(old, dict):
+        return
+    open_ = ["%s escalation(s)" % sum(1 for e in old.get("escalations") or []
+                                       if isinstance(e, dict) and not e.get("resolved_at"))]
+    open_ += ["%s %s" % (len(f(old)), what) for f, what in (
+        (lambda l: _open_spec_doubts(l), "spec-doubt(s)"),
+        (lambda l: _open_spec_change_requests(l), "spec-change-request(s)"),
+        (lambda l: _open_production_findings(l, gate_only=True), "production finding(s)"))]
+    open_ = [x for x in open_ if not x.startswith("0 ")]
+    if open_:
+        print("[qa_ledger] init REFUSED: %s already holds an open human gate (%s). Re-initialising "
+              "would erase it -- a way out of `escalated` that no human decided. Resolve it first "
+              "(resolve-escalation / --resolve, with --human and --note), or move the file away "
+              "yourself." % (out, ", ".join(open_)), file=sys.stderr)
+        sys.exit(2)
+
+
 def cmd_init(args):
     if getattr(args, "add_repo", None):
         return _init_add_repo(args)
@@ -2375,6 +2412,7 @@ def cmd_init(args):
                          "NAME (with --path and --type) to append one repo to an existing one")
     cfg = _load(args.config, what="config", flag="--config")
     _validate_init_config(cfg)
+    _refuse_init_over_human_gate(args.out)
     defaults = cfg.get("defaults", {})
     ledger = {
         "schema": "dev-loop/qa-ledger@1",
@@ -5255,7 +5293,37 @@ def _pr_ready_verdict(ledger, name, k=3):
     return state == "pr-ready" and not spike, state, evidence, spike
 
 
+def _norm_path(p):
+    return os.path.normcase(os.path.realpath(p))
+
+
+def _path_within(child, parent):
+    c, pa = _norm_path(child), _norm_path(parent)
+    return c == pa or c.startswith(pa.rstrip(os.sep) + os.sep)
+
+
+def _ledger_maps(ledger_path, cwd):
+    """Does this ledger configure a repo whose path contains cwd? (paths relative to the
+    ledger's folder, as the engine reads them)"""
+    try:
+        with open(ledger_path, encoding="utf-8") as fh:
+            repos = (json.load(fh).get("config") or {}).get("repos") or []
+    except (OSError, ValueError, AttributeError):
+        return False
+    base = os.path.dirname(ledger_path)
+    return any(isinstance(r, dict) and _path_within(cwd, os.path.join(base, r.get("path") or "."))
+               for r in repos)
+
+
 def _find_ledger_up(start):
+    """The ledger governing `start`: USCHA_LEDGER if set; else QA-LEDGER.json in start or an
+    ancestor; else one in an immediate CHILD folder of an ancestor whose config maps `start` --
+    the kit's default layout keeps the ledger in a control folder beside the repos
+    (`"path": "../backend-api"`), where walking up never meets it (2.12.0 review). The PR hook
+    carries a copy of this function; the two must agree."""
+    env = os.environ.get("USCHA_LEDGER")
+    if env:
+        return env if os.path.isfile(env) else None
     d = os.path.realpath(start)
     while True:
         cand = os.path.join(d, "QA-LEDGER.json")
@@ -5263,7 +5331,21 @@ def _find_ledger_up(start):
             return cand
         parent = os.path.dirname(d)
         if parent == d:
+            break
+        d = parent
+    d = os.path.realpath(start)
+    while True:
+        parent = os.path.dirname(d)
+        if parent == d:
             return None
+        try:
+            kids = sorted(os.listdir(parent))
+        except OSError:
+            kids = []
+        for k in kids:
+            cand = os.path.join(parent, k, "QA-LEDGER.json")
+            if os.path.isfile(cand) and _ledger_maps(cand, start):
+                return cand
         d = parent
 
 
@@ -5289,7 +5371,7 @@ def cmd_pr_gate(args):
             rp = os.path.realpath(os.path.join(base, _repo_cfg(ledger, n).get("path", ".")))
         except SystemExit:
             continue
-        if cwd == rp or cwd.startswith(rp.rstrip(os.sep) + os.sep):
+        if _path_within(cwd, rp):
             matched.append(n)
     out = []
     for n in (matched or names):
@@ -5304,8 +5386,12 @@ def cmd_pr_gate(args):
 
 def cmd_pr_opened_not_ready(args):
     """Record that the agent opened a DRAFT PR while the gate was red (ADR-058 §2): an exception,
-    in ADR-044's vocabulary (origin: agent). It changes no derived state; readiness and the
-    retrospective print it as an exception, never as normal."""
+    in ADR-044's vocabulary (origin: agent). It changes no derived state; `readiness` prints it as
+    an exception, never as normal (`summary` does not carry it yet)."""
+    if not _has_word(args.requested_by) or not _has_word(args.note):
+        print("[qa_ledger] pr-opened-not-ready needs --requested-by NAME (who asked for the PR) "
+              "and --note TEXT (why it could not wait for the gate).", file=sys.stderr)
+        sys.exit(2)
     ledger = _load(args.ledger)
     ok, state, evidence, _spike = _pr_ready_verdict(ledger, args.repo)
     if ok:

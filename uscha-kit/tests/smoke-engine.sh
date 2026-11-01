@@ -48,9 +48,9 @@ QL="$KIT/.claude/skills/uscha-devloop/qa_ledger.py"
 # remembered to retype it.
 KIT_VERSION="$(awk 'NR==1{print $NF}' "$KIT/VERSION")"
 # ADR-058 (2.12.0): the four commands that lift `escalated` refuse in an agent's shell
-# (CLAUDECODE=1). The suite is a test harness, not the agent's hands: it drops the marker for
-# everything it runs, and T175 sets it back explicitly where the refusal is what it measures.
-unset CLAUDECODE
+# (CLAUDECODE / CLAUDE_CODE_ENTRYPOINT). The suite is a test harness, not the agent's hands: it
+# drops the markers for everything it runs, and T175 sets one back where the refusal is measured.
+unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 # probe FUNCIONAL: en Windows 'python3' puede ser un stub de Store que está en
 # PATH pero no ejecuta — hay que probar --version, no solo command -v.
 PY="${PYTHON:-}"
@@ -8980,7 +8980,8 @@ a, b = dict(rec_tui[0]), dict(rec_man[0])
 at_a, at_b = a.pop("at", None), b.pop("at", None)
 if json.dumps(a, sort_keys=True) != json.dumps(b, sort_keys=True):
     ok = False
-if sorted(rec_tui[0]) != ["at", "human", "note", "obs_id", "repo", "verdict"]:
+# 2.12.0 (ADR-058): the record also says where its human came from (`human_source`)
+if sorted(rec_tui[0]) != ["at", "human", "human_source", "note", "obs_id", "repo", "verdict"]:
     ok = False
 if not (isinstance(at_a, str) and isinstance(at_b, str) and len(at_a) == len(at_b)):
     ok = False
@@ -21266,7 +21267,8 @@ res, why = {}, {}
 HOME_ISO = tempfile.mkdtemp(prefix="uscha-hp-home-")
 TMPS.append(HOME_ISO)
 ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
-for _k in ("CLAUDECODE", "USCHA_JOBS", "USCHA_QA_LEDGER"):
+for _k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "USCHA_JOBS", "USCHA_QA_LEDGER",
+           "USCHA_LEDGER"):
     ENV.pop(_k, None)
 AGENT = dict(ENV, CLAUDECODE="1")
 XPY = sys.executable.replace(chr(92), "/")
@@ -21394,6 +21396,11 @@ def measure():
         b = ledger_bytes(d)
         r = q(d, *argv, env=AGENT)
         refused.append(r.returncode == 2 and ledger_bytes(d) == b and "CLAUDECODE" in r.stdout)
+    # an EMPTY marker is still the agent's shell, and a zero-width "name" is not a declaration
+    b = ledger_bytes(d)
+    empty = q(d, *calls[0], env=dict(ENV, CLAUDECODE=""))
+    zw = q(d, "resolve-escalation", "--repo", "api", "--human", chr(0x200b), "--note", chr(0x200b))
+    refused.append(empty.returncode == 2 and zw.returncode == 2 and ledger_bytes(d) == b)
     human = [q(d, *argv).returncode for argv in calls]
     res["AC-GI-41"] = bool(all(refused) and human == [0, 0, 0, 0])
     why["AC-GI-41"] = "refused=%r human rc=%r" % (refused, human)
@@ -21431,6 +21438,20 @@ def measure():
         "mcp create draft=false": hook(mcp("mcp__github__create_pull_request", red, draft=False)),
         "mcp update draft=false": hook(mcp("mcp__github__update_pull_request", red, draft=False,
                                            pullNumber=3)),
+        # the 2.12.0 fresh review's bypasses, each one a shape gh accepts
+        "gh pr new": hook(bash("gh pr new -t x", red)),
+        "global flag first": hook(bash("gh --repo o/r pr create -t x", red)),
+        "--draft=0": hook(bash("gh pr create --draft=0 -t x", red)),
+        "draft as a value": hook(bash("gh pr create --body --draft -t x", red)),
+        "undo in a comment": hook(bash("gh pr ready 5 # --undo", red)),
+        "second line": hook(bash("echo hi" + NL + "gh pr create -t x", red)),
+        "env prefix": hook(bash("GH_TOKEN=x command gh pr create -t x", red)),
+        "cd into the project": hook(bash("cd " + red + " && gh pr create -t x", HOME_ISO)),
+        "PowerShell": hook({"tool_name": "PowerShell", "tool_input": {"command": "gh pr create"},
+                            "cwd": red}),
+        "mcp update draft string": hook(mcp("mcp__github__update_pull_request", red,
+                                            draft="false", pullNumber=3)),
+        "mcp mark ready": hook(mcp("mcp__github__mark_pr_ready_for_review", red, pullNumber=3)),
     }
     bad = {k: (r.returncode, r.stderr[-120:]) for k, r in blocked.items()
            if not (r.returncode == 2 and "pr-ready" in r.stderr)}
@@ -21449,6 +21470,22 @@ def measure():
         "green create": hook(bash("gh pr create --title t", green)),
         "green ready": hook(bash("gh pr ready 12", green)),
         "green mcp": hook(mcp("mcp__github__create_pull_request", green)),
+        # the review's false positives: a draft whose body holds shell punctuation, prose that
+        # mentions the command, and MCP tools whose names merely contain the operation
+        "draft body with a pipe": hook(bash("gh pr create -t x --body " + chr(39) + "a | b; c"
+                                            + chr(39) + " --draft", red)),
+        "draft multi-line body": hook(bash("gh pr create -t x --body " + DQ + "l1" + NL + "l2"
+                                           + DQ + " --draft", red)),
+        "draft heredoc body": hook(bash("gh pr create --title t --body " + DQ + "$(cat <<"
+                                        + chr(39) + "EOF" + chr(39) + NL + "x | y; z" + NL
+                                        + "EOF" + NL + ")" + DQ + " --draft", red)),
+        "commit message": hook(bash("git commit -m " + chr(39) + "docs: explain gh pr create"
+                                    + chr(39), red)),
+        "grep": hook(bash("grep -rn " + chr(39) + "gh pr ready" + chr(39) + " docs/", red)),
+        "mcp review": hook(mcp("mcp__github__create_pull_request_review", red, pullNumber=3)),
+        "mcp update branch": hook(mcp("mcp__github__update_pull_request_branch", red,
+                                      draft=False, pullNumber=3)),
+        "ready --undo": hook(bash("gh pr ready 5 --undo", red)),
     }
     bad = {k: (r.returncode, r.stderr[-120:]) for k, r in passes.items() if r.returncode != 0}
     res["AC-GI-44"] = bool(not bad and phase(green).returncode == 0)
@@ -21462,28 +21499,67 @@ def measure():
     junk = hook(None, raw="{not json")
     sub = os.path.join(red, "api")
     nested = hook(bash("gh pr create --title t", sub))
+    # the kit's default layout: the ledger in a control folder BESIDE the repo
+    ws = tmp("sibling")
+    write(os.path.join(ws, "api", "mod.py"), "v = 0" + NL)
+    ctl = os.path.join(ws, "control")
+    write(os.path.join(ctl, "c.json"), json.dumps(
+        {"defaults": {}, "repos": [{"name": "api", "path": "../api", "type": "python"}],
+         "integration": {"enabled": False}}) + NL)
+    q(ctl, "init", "--config", "c.json")
+    sib = hook(bash("gh pr create -t x", os.path.join(ws, "api")))
+    # two repos, one green and one red: the cwd decides which one the gate reads
+    two = project("two-repos", ready=True)
+    write(os.path.join(two, "web", "mod.py"), "v = 0" + NL)
+    led = ledger(two)
+    led["config"]["repos"].append({"name": "web", "path": "web", "type": "python"})
+    led["repos"]["web"] = {"type": "python", "path": "web", "snapshots": [], "iterations": []}
+    led.pop("integrity", None)
+    write(os.path.join(two, "QA-LEDGER.json"), json.dumps(led, indent=2) + NL)
+    in_green = hook(bash("gh pr create -t x", os.path.join(two, "api")))
+    in_red = hook(bash("gh pr create -t x", os.path.join(two, "web")))
+    at_root = hook(bash("gh pr create -t x", two))
     res["AC-GI-45"] = bool(nol.returncode == 0 and noeng.returncode == 2
                            and "missing.py" in noeng.stderr and junk.returncode == 2
-                           and nested.returncode == 2)
-    why["AC-GI-45"] = "noledger=%s noengine=%s %r junk=%s nested=%s" % (
+                           and nested.returncode == 2 and sib.returncode == 2
+                           and in_green.returncode == 0 and in_red.returncode == 2
+                           and "web" in in_red.stderr and at_root.returncode == 2)
+    why["AC-GI-45"] = ("noledger=%s noengine=%s %r junk=%s nested=%s sibling=%s %r green=%s %r "
+                       "red=%s root=%s") % (
         nol.returncode, noeng.returncode, noeng.stderr[-120:], junk.returncode,
-        nested.returncode)
+        nested.returncode, sib.returncode, sib.stderr[-120:], in_green.returncode,
+        in_green.stderr[-160:], in_red.returncode, at_root.returncode)
 
     # --- AC-GI-46: a draft opened while red is recorded as an exception and changes nothing
     d = project("exception")
     ph_before = phase(d)
+    nobody = q(d, "pr-opened-not-ready", "--repo", "api")
     r = q(d, "pr-opened-not-ready", "--repo", "api", "--requested-by", "Ana",
           "--note", "draft for early feedback")
     ev = [e for e in ledger(d).get("events") or [] if e.get("kind") == "pr-opened-not-ready"]
     rd = q(d, "readiness")
     ph_after = phase(d)
-    res["AC-GI-46"] = bool(r.returncode == 0 and len(ev) == 1 and ev[0].get("origin") == "agent"
+    res["AC-GI-46"] = bool(nobody.returncode == 2 and r.returncode == 0 and len(ev) == 1 and ev[0].get("origin") == "agent"
                            and ev[0].get("missing") and ev[0].get("phase")
                            and "exception" in rd.stdout.lower()
                            and "pr-opened-not-ready" in rd.stdout
                            and ph_before.stdout == ph_after.stdout)
     why["AC-GI-46"] = "rc=%s %r ev=%r readiness=%r" % (r.returncode, r.stdout[-150:], ev,
                                                       rd.stdout[-200:])
+
+    # --- AC-GI-49: the review's fifth way out -- re-running `init` erased open escalations from
+    # the agent's shell. A ledger that holds an open human gate is not re-initialised.
+    d = project("reinit", ready=True)
+    q(d, "escalate", "--repo", "api", "--reason", "r")
+    b = ledger_bytes(d)
+    again = q(d, "init", "--config", "uscha.config.json", env=AGENT)
+    kept = ledger_bytes(d) == b and phase(d).returncode == 1
+    q(d, "resolve-escalation", "--repo", "api", "--human", "Ana", "--note", "closed")
+    after = q(d, "init", "--config", "uscha.config.json")
+    res["AC-GI-49"] = bool(again.returncode == 2 and "open human gate" in again.stdout and kept
+                           and after.returncode == 0)
+    why["AC-GI-49"] = "again rc=%s %r kept=%s after rc=%s" % (
+        again.returncode, again.stdout[-160:], kept, after.returncode)
 
     # --- AC-GI-48: install / doctor / uninstall handle guard-pr-gate.py like the golden hook
     h = tmp("install")
@@ -21533,7 +21609,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T175" in
-  OK*) PASS=$((PASS+1)); echo "  ok   human acts + PR gate (AC-GI-40..46, -48): $T175";;
+  OK*) PASS=$((PASS+1)); echo "  ok   human acts + PR gate (AC-GI-40..46, -48, -49): $T175";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T175";;
 esac
 }
@@ -21896,7 +21972,7 @@ FAMILIES = (
     (".nv-cases.json", "nothing-vanishes", "T174",                    # ADR-056 R2', ADR-057, 2.11.0
      ("AC-GI-30",) + _seq("AC-GI", 32, 36) + _seq("AC-GI", 50, 65)),
     (".hp-cases.json", "human-acts-pr-gate", "T175",                  # ADR-058, 2.12.0
-     _seq("AC-GI", 40, 46) + ("AC-GI-48",)),
+     _seq("AC-GI", 40, 46) + ("AC-GI-48", "AC-GI-49")),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

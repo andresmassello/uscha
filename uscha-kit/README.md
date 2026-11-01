@@ -249,7 +249,9 @@ Four commands lift the `escalated` phase: `resolve-escalation` and the `--resolv
 `production-finding`, `spec-doubt` and `spec-change-request`. Each now requires `--human NAME
 --note TEXT`, records `resolved_by`, `resolution_note` and `human_declared: true`, and refuses
 (exit 2, nothing written) when the process carries a known agent-shell marker -- today
-`CLAUDECODE=1`, which Claude Code sets in its Bash tool. Resolutions recorded before 2.12.0 load
+`CLAUDECODE` or `CLAUDE_CODE_ENTRYPOINT`, which Claude Code sets in its Bash tool (presence
+counts, an empty value included). `init` also refuses to re-initialise a ledger that still holds an
+open human gate. Resolutions recorded before 2.12.0 load
 and `readiness` names them ("actor not recorded"); `curate` keeps its OS-user default and records
 `human_source: flag | os-user`. What `--human` proves: a name and a reason were typed, outside a
 known agent shell. Not identity -- an agent can unset the variable, and other harnesses expose no
@@ -257,9 +259,11 @@ marker the engine knows.
 
 On the Claude target the installer also registers `hooks/guard-pr-gate.py`: while the read-only
 `qa_ledger.py pr-gate --cwd <cwd>` says a repo mapped to the cwd is not `pr-ready`, it blocks
-`gh pr create` without `--draft`, `gh pr ready`, and a forge MCP create without `draft: true`. A
-draft passes; "ready for review" stays the human's act in the forge. No `QA-LEDGER.json` up the cwd
--> allow; a ledger without a readable engine -> block. A draft opened while red is recorded with
+`gh pr create`/`gh pr new` without `--draft`, `gh pr ready`, and a forge MCP create without
+`draft: true`. A draft passes; "ready for review" stays the human's act in the forge. The ledger is
+found up from the cwd, in a control folder beside the repo that maps it (`"path":
+"../backend-api"`), or at `USCHA_LEDGER`; none -> allow; a ledger without a readable engine ->
+block. A draft opened while red is recorded with
 `pr-opened-not-ready` and printed by `readiness` as an EXCEPTION. `doctor` reports `pr_guard:
 enforced | advisory` beside `golden_guard`. Like the golden hook it reads text: `gh api`, a script
 or a browser get through.

@@ -1971,21 +1971,31 @@ hook script (JSON payload probes, nothing executed) and the real installer, unde
   `resolved_by`, `resolution_note` and `human_declared: true`, and the gate opens.
 - [ ] AC-GI-41 - `resolve-escalation` and the `--resolve` of `production-finding`, `spec-doubt`
   and `spec-change-request` each refuse under `CLAUDECODE=1` (exit 2, ledger bytes unchanged,
-  the marker named), and each succeeds from a shell without it.
+  the marker named), and each succeeds from a shell without it; an EMPTY `CLAUDECODE=` and a
+  zero-width `--human` are refused too.
 - [ ] AC-GI-42 - a resolution recorded before 2.12.0 (no actor) loads and `readiness` names it
   "actor not recorded"; `curate` records `human_source: flag` with `--human` and `os-user`
   without.
 - [ ] AC-GI-43 - while red, the hook blocks `gh pr create` without `--draft`, `gh pr ready` (also
   inside a chained command), a forge MCP create without `draft: true` or with `draft: false`, and
-  an MCP update that sets `draft: false` -- exit 2, naming `pr-ready`.
+  an MCP update that sets `draft: false` -- exit 2, naming `pr-ready` -- and the fresh review's
+  shapes: `gh pr new`, `gh --repo o/r pr create`, `--draft=0`, `--body --draft`, `gh pr ready #
+  --undo`, a second line, an env prefix, `cd <project> &&`, the PowerShell tool, a string-valued
+  MCP `draft` and an MCP "mark ready".
 - [ ] AC-GI-44 - `--draft`, `-d` and MCP `draft: true` pass while red; an MCP update that leaves
   `draft` alone, a push and a non-forge tool pass; every PR shape passes when the repo is
-  `pr-ready`.
+  `pr-ready`; a draft whose body holds `|`, `;`, newlines or a heredoc, a commit message or grep
+  that mentions the command, `gh pr ready --undo`, and MCP `create_pull_request_review` /
+  `update_pull_request_branch` pass while red.
 - [ ] AC-GI-45 - no `QA-LEDGER.json` up the cwd -> allow; a ledger with the engine missing ->
-  block naming the path; an unparseable payload -> block; a cwd inside a configured repo maps to
-  it.
-- [ ] AC-GI-46 - `pr-opened-not-ready` records one event (`origin: agent`, phase, missing facts),
+  block naming the path; an unparseable payload -> block; the ledger in a control folder BESIDE
+  the repo (`"path": "../api"`) is found; with two repos, a cwd in the green one passes, a cwd in
+  the red one blocks naming it, and the project root reads every repo.
+- [ ] AC-GI-46 - `pr-opened-not-ready` without `--requested-by`/`--note` exits 2; with them it records one event (`origin: agent`, phase, missing facts),
   `readiness` prints it as an EXCEPTION, and `phase` prints the same before and after.
 - [ ] AC-GI-48 - `install --target claude` copies and registers both hooks beside a foreign one,
   `doctor` reports `"pr_guard": "enforced"`, and `uninstall` removes both files and entries and
   keeps the foreign hook.
+- [ ] AC-GI-49 - the fresh review's fifth way out: `init` over a ledger that holds an open
+  escalation exits 2 and leaves it untouched (the gate stays red); after the human resolves it,
+  `init` runs.
