@@ -47,6 +47,10 @@ QL="$KIT/.claude/skills/uscha-devloop/qa_ledger.py"
 # reads this same file, so a literal was never proving the number -- only that someone
 # remembered to retype it.
 KIT_VERSION="$(awk 'NR==1{print $NF}' "$KIT/VERSION")"
+# ADR-058 (2.12.0): the four commands that lift `escalated` refuse in an agent's shell
+# (CLAUDECODE=1). The suite is a test harness, not the agent's hands: it drops the marker for
+# everything it runs, and T175 sets it back explicitly where the refusal is what it measures.
+unset CLAUDECODE
 # probe FUNCIONAL: en Windows 'python3' puede ser un stub de Store que está en
 # PATH pero no ejecuta — hay que probar --version, no solo command -v.
 PY="${PYTHON:-}"
@@ -494,7 +498,7 @@ echo "== T5 escalate/resolve-escalation registrados =="
 run escalate --repo repo-a --reason "smoke" >/dev/null
 "$PY" -c "import json,sys; e=json.load(open('QA-LEDGER.json'))['escalations']; sys.exit(0 if any(not x.get('resolved_at') for x in e) else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   escalación abierta registrada"; } || { FAIL=$((FAIL+1)); echo "  FAIL escalación no registrada"; }
-run resolve-escalation --repo repo-a >/dev/null
+run resolve-escalation --repo repo-a --human tester --note "smoke closed" >/dev/null
 "$PY" -c "import json,sys; e=json.load(open('QA-LEDGER.json'))['escalations']; sys.exit(0 if all(x.get('resolved_at') for x in e) else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   resolved_at registrado al resolver"; } || { FAIL=$((FAIL+1)); echo "  FAIL resolved_at ausente"; }
 
@@ -1198,7 +1202,7 @@ chk "pedir pr-ready con findings abiertos -> exit 1 (los hechos mandan)" 1 \
   run phase --ledger L-fsm.json --repo fsm --require pr-ready
 run escalate --ledger L-fsm.json --repo fsm --reason "duda de diseño" >/dev/null 2>&1
 chk "escalacion abierta -> escalated (pisa todo)" 0 run phase --ledger L-fsm.json --repo fsm --require escalated
-run resolve-escalation --ledger L-fsm.json --repo fsm --note ok >/dev/null 2>&1
+run resolve-escalation --ledger L-fsm.json --repo fsm --human tester --note ok >/dev/null 2>&1
 for t in code-review judgment-day improve; do
   rstep --ledger L-fsm.json --repo fsm --tool $t --iteration 2 \
     --gated-reported 0 --files-changed 0 --tests-passed true >/dev/null 2>&1
@@ -1921,7 +1925,7 @@ sys.exit(0 if ok else 1)" \
 run readiness --ledger L-intake.json 2>/dev/null | grep -q "production findings open" \
   && { PASS=$((PASS+1)); echo "  ok   readiness default avisa que discovery debe reabrirse"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL readiness default no avisa production finding"; }
-run production-finding --ledger L-intake.json --id PF-001 --resolve --note "fed into SPEC next cycle" >/dev/null 2>&1
+run production-finding --ledger L-intake.json --id PF-001 --resolve --human tester --note "fed into SPEC next cycle" >/dev/null 2>&1
 run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
@@ -1948,7 +1952,7 @@ d = json.load(sys.stdin)
 sys.exit(0 if d['phase'] == 'escalated' and any('spec-doubt' in e for e in d['evidence']) else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   phase deriva escalated si hay spec-doubt abierto"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL phase ignora spec-doubt abierto"; }
-run spec-doubt --ledger L-intake.json --id SD-001 --resolve --decision "SPEC amended" --note "acceptance updated" >/dev/null 2>&1
+run spec-doubt --ledger L-intake.json --id SD-001 --resolve --decision "SPEC amended" --human tester --note "acceptance updated" >/dev/null 2>&1
 run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
@@ -2044,7 +2048,7 @@ d = json.load(sys.stdin)
 sys.exit(0 if d['phase'] == 'escalated' and any('SCR-001' in e for e in d['evidence']) else 1)" \
   && { PASS=$((PASS+1)); echo "  ok   phase deriva escalated si hay SCR humano pendiente"; } \
   || { FAIL=$((FAIL+1)); echo "  FAIL phase ignora SCR abierto"; }
-run spec-change-request --ledger L-intake.json --id SCR-001 --resolve --decision accepted --note "ACCEPTANCE amended" --amended ACCEPTANCE.md >/dev/null 2>&1
+run spec-change-request --ledger L-intake.json --id SCR-001 --resolve --decision accepted --human tester --note "ACCEPTANCE amended" --amended ACCEPTANCE.md >/dev/null 2>&1
 run readiness --ledger L-intake.json --json 2>/dev/null | "$PY" -c "
 import json, sys
 d = json.load(sys.stdin)
@@ -2442,13 +2446,13 @@ reject_unchanged "escalate rejects unknown repo and preserves bytes" L-validatio
   run escalate --ledger L-validation.json --repo missing --reason "invalid target"
 run production-finding --ledger L-validation.json --repo valid --title "prod" --evidence "log:1" >/dev/null
 reject_unchanged "PF resolve requires nonempty note and preserves bytes" L-validation.json \
-  run production-finding --ledger L-validation.json --id PF-001 --resolve --note "   "
-chk "PF resolve accepts disposition note" 0 run production-finding --ledger L-validation.json --id PF-001 --resolve --note "triaged into fix"
+  run production-finding --ledger L-validation.json --id PF-001 --resolve --human tester --note "   "
+chk "PF resolve accepts disposition note" 0 run production-finding --ledger L-validation.json --id PF-001 --resolve --human tester --note "triaged into fix"
 
 run spec-doubt --ledger L-validation.json --repo valid --note "contract mismatch" >/dev/null
 reject_unchanged "SD resolve requires nonempty decision and preserves bytes" L-validation.json \
-  run spec-doubt --ledger L-validation.json --id SD-001 --resolve --decision "   "
-chk "SD resolve accepts decision" 0 run spec-doubt --ledger L-validation.json --id SD-001 --resolve --decision "SPEC amended"
+  run spec-doubt --ledger L-validation.json --id SD-001 --resolve --decision "   " --human tester --note why
+chk "SD resolve accepts decision" 0 run spec-doubt --ledger L-validation.json --id SD-001 --resolve --decision "SPEC amended" --human tester --note why
 
 run production-finding --ledger L-validation.json --repo valid --title "source" --evidence "log:2" >/dev/null
 run spec-doubt --ledger L-validation.json --repo other --note "other repo doubt" >/dev/null
@@ -2461,7 +2465,7 @@ reject_unchanged "SCR rejects cross-repo SD source and preserves bytes" L-valida
 chk "SCR accepts same-repo PF source" 0 run spec-change-request --ledger L-validation.json --repo valid --source PF-002 --requested-change "change" --evidence "log:3"
 for bad_args in "--decision accepted" "--decision rejected" "--decision superseded" "--decision rejected --note '   '"; do
   cp L-validation.json L-validation-before-scr.json
-  eval "run spec-change-request --ledger L-validation.json --id SCR-001 --resolve $bad_args" >/dev/null 2>&1; rc=$?
+  eval "run spec-change-request --ledger L-validation.json --id SCR-001 --resolve --human tester $bad_args" >/dev/null 2>&1; rc=$?
   if [ "$rc" -ne 0 ] && cmp -s L-validation-before-scr.json L-validation.json; then
     PASS=$((PASS+1)); echo "  ok   invalid SCR closure rejected without mutation: $bad_args"
   else
@@ -2469,13 +2473,13 @@ for bad_args in "--decision accepted" "--decision rejected" "--decision supersed
   fi
 done
 reject_unchanged "SCR resolve requires decision and preserves bytes" L-validation.json \
-  run spec-change-request --ledger L-validation.json --id SCR-001 --resolve
-chk "SCR accepted requires amended artifact" 0 run spec-change-request --ledger L-validation.json --id SCR-001 --resolve --decision accepted --amended SPEC.md
+  run spec-change-request --ledger L-validation.json --id SCR-001 --resolve --human tester --note why
+chk "SCR accepted requires amended artifact" 0 run spec-change-request --ledger L-validation.json --id SCR-001 --resolve --decision accepted --amended SPEC.md --human tester --note why
 
 run spec-change-request --ledger L-validation.json --repo valid --source PF-002 --requested-change "reject" --evidence "log:4" >/dev/null
-chk "SCR rejected accepts rationale" 0 run spec-change-request --ledger L-validation.json --id SCR-002 --resolve --decision rejected --note "not aligned"
+chk "SCR rejected accepts rationale" 0 run spec-change-request --ledger L-validation.json --id SCR-002 --resolve --decision rejected --human tester --note "not aligned"
 run spec-change-request --ledger L-validation.json --repo valid --source PF-002 --requested-change "replace" --evidence "log:5" >/dev/null
-chk "SCR superseded accepts replacement reference" 0 run spec-change-request --ledger L-validation.json --id SCR-003 --resolve --decision superseded --amended SPEC-v2.md
+chk "SCR superseded accepts replacement reference" 0 run spec-change-request --ledger L-validation.json --id SCR-003 --resolve --decision superseded --amended SPEC-v2.md --human tester --note why
 
 echo "== T73b P1 ledger integrity: readiness config and one-shot closures =="
 "$PY" "$KIT/tests/ledger-integrity-regressions.py" "$QL" >/dev/null 2>&1 \
@@ -21244,6 +21248,297 @@ esac
 }
 pj_unit T174 pj_t174
 
+pj_t175() {
+echo "== T175 (ADR-058, 2.12.0): human acts are declared and kept out of the agent's shell -- and a PR request runs the gate first =="
+# The audit's A-F6: `escalate` then `resolve-escalation` with no actor reached pr-ready, from the
+# agent's own shell. The field finding: an agent opened a ready-for-review PR while the ledger read
+# `qa`. Each is a RED case here, driven through the real engine, the real hook script (JSON payload
+# probes on stdin -- nothing executed) and the real installer, under an isolated HOME.
+T175=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+HOOK = os.path.join(kit, "hooks", "guard-pr-gate.py")
+INSTALLER = os.path.join(kit, "install-uscha.py")
+NL, DQ = chr(10), chr(34)
+TMPS = []
+res, why = {}, {}
+HOME_ISO = tempfile.mkdtemp(prefix="uscha-hp-home-")
+TMPS.append(HOME_ISO)
+ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
+for _k in ("CLAUDECODE", "USCHA_JOBS", "USCHA_QA_LEDGER"):
+    ENV.pop(_k, None)
+AGENT = dict(ENV, CLAUDECODE="1")
+XPY = sys.executable.replace(chr(92), "/")
+EMIT = NL.join([
+    "import os, time",
+    "os.makedirs(" + DQ + "reports" + DQ + ", exist_ok=True)",
+    "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit.xml" + DQ + "), " + DQ + "w"
+    + DQ + ").write(" + DQ + "<testsuite tests=" + DQ + " + chr(34) + " + DQ + "1" + DQ
+    + " + chr(34) + " + DQ + " timestamp=" + DQ + " + chr(34) + repr(time.time()) + chr(34) + "
+    + DQ + "><testcase name=" + DQ + " + chr(34) + " + DQ + "t" + DQ + " + chr(34) + " + DQ
+    + "/></testsuite>" + DQ + ")",
+]) + NL
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix="uscha-hp-" + prefix + "-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def sh(d, *argv):
+    return subprocess.run(list(argv), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, encoding="utf-8", errors="replace", env=ENV)
+
+
+def q(d, *argv, **kw):
+    return subprocess.run([sys.executable, ENG] + list(argv), cwd=d,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace", env=kw.get("env", ENV))
+
+
+def ledger_bytes(d):
+    with io.open(os.path.join(d, "QA-LEDGER.json"), "rb") as fh:
+        return fh.read()
+
+
+def ledger(d):
+    return json.loads(ledger_bytes(d).decode("utf-8"))
+
+
+def project(prefix, ready=False):
+    d = tmp(prefix)
+    write(os.path.join(d, "api", "mod.py"), "v = 0" + NL)
+    write(os.path.join(d, "api", "run.py"), EMIT)
+    write(os.path.join(d, "uscha.config.json"), json.dumps(
+        {"defaults": {"qa_tools_external": ["cr"], "qa_tools_order": ["cr"],
+                      "test_command_python": [XPY, "run.py"]},
+         "repos": [{"name": "api", "path": "api", "type": "python"}],
+         "integration": {"enabled": False}}, indent=2) + NL)
+    write(os.path.join(d, ".gitignore"), "__pycache__/" + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        sh(d, *argv)
+    sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "base")
+    q(d, "init", "--config", "uscha.config.json")
+    if ready:
+        q(d, "test-run", "--repo", "api")
+        rv = json.loads(q(d, "review-start", "--repo", "api", "--tool", "cr", "--iteration", "1",
+                          "--json").stdout)["id"]
+        q(d, "log-step", "--repo", "api", "--tool", "cr", "--iteration", "1", "--reported", "0",
+          "--gated-reported", "0", "--tests-passed", "true", "--review", rv)
+    return d
+
+
+def phase(d):
+    return q(d, "phase", "--repo", "api", "--require", "pr-ready")
+
+
+def hook(payload, env=None, raw=None):
+    data = raw if raw is not None else json.dumps(payload)
+    return subprocess.run([sys.executable, HOOK], input=data, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                          errors="replace", env=env or dict(ENV, USCHA_QA_LEDGER=ENG))
+
+
+def bash(cmd, cwd):
+    return {"tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": cwd}
+
+
+def mcp(name, cwd, **inp):
+    return {"tool_name": name, "tool_input": dict({"owner": "o", "repo": "r", "title": "t",
+                                                   "head": "h", "base": "main"}, **inp),
+            "cwd": cwd}
+
+
+def measure():
+    # --- AC-GI-40: the A-F6 reproduction -- no actor, no lift; with one, the actor is recorded
+    d = project("af6", ready=True)
+    q(d, "escalate", "--repo", "api", "--reason", "touches a fast-path protected path")
+    before = ledger_bytes(d)
+    bare = q(d, "resolve-escalation", "--repo", "api", "--note", "reviewed")
+    still = phase(d)
+    unchanged = ledger_bytes(d) == before
+    ok = q(d, "resolve-escalation", "--repo", "api", "--human", "Ana", "--note", "ADR-9 written")
+    e = ledger(d)["escalations"][-1]
+    res["AC-GI-40"] = bool(bare.returncode == 2 and "--human" in bare.stdout and unchanged
+                           and still.returncode == 1 and ok.returncode == 0
+                           and e.get("resolved_by") == "Ana" and e.get("human_declared") is True
+                           and e.get("resolution_note") == "ADR-9 written"
+                           and phase(d).returncode == 0)
+    why["AC-GI-40"] = "bare rc=%s %r unchanged=%s | ok rc=%s rec=%r" % (
+        bare.returncode, bare.stdout[-160:], unchanged, ok.returncode, e)
+
+    # --- AC-GI-41: the four commands that lift `escalated` refuse in the agent's shell
+    d = project("marker")
+    q(d, "escalate", "--repo", "api", "--reason", "r")
+    q(d, "production-finding", "--repo", "api", "--title", "t", "--evidence", "log:1")
+    q(d, "spec-doubt", "--repo", "api", "--note", "n")
+    q(d, "spec-change-request", "--repo", "api", "--source", "PF-001",
+      "--requested-change", "c", "--evidence", "log:2")
+    hn = ["--human", "Ana", "--note", "decided"]
+    calls = [["resolve-escalation", "--repo", "api"] + hn,
+             ["production-finding", "--id", "PF-001", "--resolve"] + hn,
+             ["spec-doubt", "--id", "SD-001", "--resolve", "--decision", "SPEC amended"] + hn,
+             ["spec-change-request", "--id", "SCR-001", "--resolve", "--decision", "rejected"]
+             + hn]
+    refused = []
+    for argv in calls:
+        b = ledger_bytes(d)
+        r = q(d, *argv, env=AGENT)
+        refused.append(r.returncode == 2 and ledger_bytes(d) == b and "CLAUDECODE" in r.stdout)
+    human = [q(d, *argv).returncode for argv in calls]
+    res["AC-GI-41"] = bool(all(refused) and human == [0, 0, 0, 0])
+    why["AC-GI-41"] = "refused=%r human rc=%r" % (refused, human)
+
+    # --- AC-GI-42: legacy resolved escalations read "actor not recorded"; curate records where
+    # its human came from
+    d = project("legacy")
+    q(d, "escalate", "--repo", "api", "--reason", "r")
+    led = ledger(d)
+    led["escalations"][-1]["resolved_at"] = "2026-01-01T00:00:00Z"
+    led.pop("integrity", None)        # a ledger an older engine wrote, edited as data
+    write(os.path.join(d, "QA-LEDGER.json"), json.dumps(led, indent=2) + NL)
+    rd = q(d, "readiness")
+    write(os.path.join(d, "narr.json"), json.dumps([
+        {"type": "decision_trace", "statement": "totals are never rounded", "files": []},
+        {"type": "decision_trace", "statement": "ids are never reused", "files": []}]))
+    q(d, "discover", "--repo", "api", "--narrated", os.path.join(d, "narr.json"))
+    delta = json.load(io.open(os.path.join(d, "api", "discovery", "CANDIDATE-DELTA.json"),
+                              encoding="utf-8"))
+    oids = [o["id"] for o in delta["observations"]]
+    q(d, "curate", "--repo", "api", "--obs", oids[0], "--verdict", "preserve", "--human", "Ana")
+    q(d, "curate", "--repo", "api", "--obs", oids[1], "--verdict", "preserve")
+    cur = ledger(d).get("curation") or []
+    src = [c.get("human_source") for c in cur]
+    res["AC-GI-42"] = bool(rd.returncode in (0, 1) and "actor not recorded" in rd.stdout
+                           and src == ["flag", "os-user"])
+    why["AC-GI-42"] = "readiness=%r sources=%r" % (rd.stdout[-200:], src)
+
+    # --- AC-GI-43: while red, the hook blocks a ready-for-review PR in every shape it can read
+    red = project("red")
+    blocked = {
+        "gh pr create": hook(bash("gh pr create --title t --body b", red)),
+        "gh pr ready": hook(bash("git push && gh pr ready 12", red)),
+        "mcp create": hook(mcp("mcp__github__create_pull_request", red)),
+        "mcp create draft=false": hook(mcp("mcp__github__create_pull_request", red, draft=False)),
+        "mcp update draft=false": hook(mcp("mcp__github__update_pull_request", red, draft=False,
+                                           pullNumber=3)),
+    }
+    bad = {k: (r.returncode, r.stderr[-120:]) for k, r in blocked.items()
+           if not (r.returncode == 2 and "pr-ready" in r.stderr)}
+    res["AC-GI-43"] = not bad
+    why["AC-GI-43"] = "not blocked: %r" % bad
+
+    # --- AC-GI-44: drafts pass while red; anything passes when pr-ready; other calls pass
+    green = project("green", ready=True)
+    passes = {
+        "draft --draft": hook(bash("gh pr create --draft --title t", red)),
+        "draft -d": hook(bash("gh pr create -d -t t", red)),
+        "mcp draft": hook(mcp("mcp__github__create_pull_request", red, draft=True)),
+        "mcp update title": hook(mcp("mcp__github__update_pull_request", red, pullNumber=3)),
+        "push": hook(bash("git push -u origin feature", red)),
+        "read": hook({"tool_name": "Read", "tool_input": {"file_path": "x"}, "cwd": red}),
+        "green create": hook(bash("gh pr create --title t", green)),
+        "green ready": hook(bash("gh pr ready 12", green)),
+        "green mcp": hook(mcp("mcp__github__create_pull_request", green)),
+    }
+    bad = {k: (r.returncode, r.stderr[-120:]) for k, r in passes.items() if r.returncode != 0}
+    res["AC-GI-44"] = bool(not bad and phase(green).returncode == 0)
+    why["AC-GI-44"] = "blocked: %r" % bad
+
+    # --- AC-GI-45: no ledger up the cwd -> allow; ledger but no engine, or a bad payload -> block
+    bare_dir = tmp("noledger")
+    nol = hook(bash("gh pr create --title t", bare_dir))
+    noeng = hook(bash("gh pr create --title t", red),
+                 env=dict(ENV, USCHA_QA_LEDGER=os.path.join(bare_dir, "missing.py")))
+    junk = hook(None, raw="{not json")
+    sub = os.path.join(red, "api")
+    nested = hook(bash("gh pr create --title t", sub))
+    res["AC-GI-45"] = bool(nol.returncode == 0 and noeng.returncode == 2
+                           and "missing.py" in noeng.stderr and junk.returncode == 2
+                           and nested.returncode == 2)
+    why["AC-GI-45"] = "noledger=%s noengine=%s %r junk=%s nested=%s" % (
+        nol.returncode, noeng.returncode, noeng.stderr[-120:], junk.returncode,
+        nested.returncode)
+
+    # --- AC-GI-46: a draft opened while red is recorded as an exception and changes nothing
+    d = project("exception")
+    ph_before = phase(d)
+    r = q(d, "pr-opened-not-ready", "--repo", "api", "--requested-by", "Ana",
+          "--note", "draft for early feedback")
+    ev = [e for e in ledger(d).get("events") or [] if e.get("kind") == "pr-opened-not-ready"]
+    rd = q(d, "readiness")
+    ph_after = phase(d)
+    res["AC-GI-46"] = bool(r.returncode == 0 and len(ev) == 1 and ev[0].get("origin") == "agent"
+                           and ev[0].get("missing") and ev[0].get("phase")
+                           and "exception" in rd.stdout.lower()
+                           and "pr-opened-not-ready" in rd.stdout
+                           and ph_before.stdout == ph_after.stdout)
+    why["AC-GI-46"] = "rc=%s %r ev=%r readiness=%r" % (r.returncode, r.stdout[-150:], ev,
+                                                      rd.stdout[-200:])
+
+    # --- AC-GI-48: install / doctor / uninstall handle guard-pr-gate.py like the golden hook
+    h = tmp("install")
+    claude = os.path.join(h, ".claude")
+    write(os.path.join(claude, "settings.json"), json.dumps({"hooks": {"PreToolUse": [
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": "foreign-guard"}]}]}}))
+
+    def inst(*argv):
+        return subprocess.run([sys.executable, INSTALLER] + list(argv) + ["--home", h, "--json"],
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                              encoding="utf-8", errors="replace", env=ENV)
+    i = inst("install", "--target", "claude")
+    files = [os.path.isfile(os.path.join(claude, "hooks", n))
+             for n in ("block-approved-writes.py", "guard-pr-gate.py")]
+    st = json.load(io.open(os.path.join(claude, "settings.json"), encoding="utf-8"))
+    cmds = [it.get("command", "") for g in st["hooks"]["PreToolUse"] for it in g.get("hooks", [])]
+    doc = inst("doctor", "--target", "claude")
+    u = inst("uninstall", "--target", "claude")
+    st2 = json.load(io.open(os.path.join(claude, "settings.json"), encoding="utf-8"))
+    cmds2 = [it.get("command", "") for g in st2.get("hooks", {}).get("PreToolUse", [])
+             for it in g.get("hooks", [])]
+    res["AC-GI-48"] = bool(i.returncode == 0 and all(files)
+                           and any("guard-pr-gate.py" in c for c in cmds)
+                           and "foreign-guard" in cmds
+                           and doc.returncode == 0 and DQ + "pr_guard" + DQ + ": " + DQ
+                           + "enforced" + DQ in doc.stdout
+                           and u.returncode == 0 and cmds2 == ["foreign-guard"]
+                           and not os.path.exists(os.path.join(claude, "hooks",
+                                                               "guard-pr-gate.py")))
+    why["AC-GI-48"] = "install rc=%s files=%r cmds=%r doctor=%r uninstall rc=%s after=%r" % (
+        i.returncode, files, cmds, doc.stdout[-200:], u.returncode, cmds2)
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+sidecar(kit, ".hp-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T175" in
+  OK*) PASS=$((PASS+1)); echo "  ok   human acts + PR gate (AC-GI-40..46, -48): $T175";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T175";;
+esac
+}
+pj_unit T175 pj_t175
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -21600,6 +21895,8 @@ FAMILIES = (
     # read the tag out of git, so without it they report None = UNMEASURED, never a silent pass.
     (".nv-cases.json", "nothing-vanishes", "T174",                    # ADR-056 R2', ADR-057, 2.11.0
      ("AC-GI-30",) + _seq("AC-GI", 32, 36) + _seq("AC-GI", 50, 65)),
+    (".hp-cases.json", "human-acts-pr-gate", "T175",                  # ADR-058, 2.12.0
+     _seq("AC-GI", 40, 46) + ("AC-GI-48",)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

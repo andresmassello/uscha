@@ -18,7 +18,8 @@ uscha-kit/
 ?? install-uscha.py             # canonical installer used by npm/npx
 ├─ uscha.config.json            # config: repos, thresholds, commands
 ├─ hooks/
-│  └─ block-approved-writes.py     # PreToolUse: best-effort block on writing a golden (Claude only)
+│  ├─ block-approved-writes.py     # PreToolUse: best-effort block on writing a golden (Claude only)
+│  └─ guard-pr-gate.py             # PreToolUse: a PR stays a DRAFT while the gate is red (Claude only)
 ├─ templates/
 │  ├─ CLAUDE.md                    # permanent repo protocol
 │  ├─ CONSTITUTION.md              # inviolable invariants (fill in the domain)
@@ -241,6 +242,27 @@ before 2.11.0 keep their steps' 2.10 semantics until a tool's first witnessed st
 `check-terminado` and `top --json` seal EVERY configured repo since 2.11.0 (ADR-057): one verdict
 line per repo, the exit code of the aggregate, and a `repos[]` detail only when there are several
 (a single-repo payload is byte-identical to 2.10).
+
+## Human acts and the PR gate (ADR-058, 2.12.0) - who lifted it, and who opened that PR?
+
+Four commands lift the `escalated` phase: `resolve-escalation` and the `--resolve` of
+`production-finding`, `spec-doubt` and `spec-change-request`. Each now requires `--human NAME
+--note TEXT`, records `resolved_by`, `resolution_note` and `human_declared: true`, and refuses
+(exit 2, nothing written) when the process carries a known agent-shell marker -- today
+`CLAUDECODE=1`, which Claude Code sets in its Bash tool. Resolutions recorded before 2.12.0 load
+and `readiness` names them ("actor not recorded"); `curate` keeps its OS-user default and records
+`human_source: flag | os-user`. What `--human` proves: a name and a reason were typed, outside a
+known agent shell. Not identity -- an agent can unset the variable, and other harnesses expose no
+marker the engine knows.
+
+On the Claude target the installer also registers `hooks/guard-pr-gate.py`: while the read-only
+`qa_ledger.py pr-gate --cwd <cwd>` says a repo mapped to the cwd is not `pr-ready`, it blocks
+`gh pr create` without `--draft`, `gh pr ready`, and a forge MCP create without `draft: true`. A
+draft passes; "ready for review" stays the human's act in the forge. No `QA-LEDGER.json` up the cwd
+-> allow; a ledger without a readable engine -> block. A draft opened while red is recorded with
+`pr-opened-not-ready` and printed by `readiness` as an EXCEPTION. `doctor` reports `pr_guard:
+enforced | advisory` beside `golden_guard`. Like the golden hook it reads text: `gh api`, a script
+or a browser get through.
 
 ## Evidence origin (ADR-007) - green, but green at *what*?
 
@@ -966,7 +988,7 @@ python3 $QL readiness
 
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (59 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (61 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

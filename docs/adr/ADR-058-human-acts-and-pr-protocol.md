@@ -10,7 +10,7 @@ governs:
 ---
 # ADR-058: Human acts are DECLARED and RECORDED, kept out of the agent's shell — and a PR request runs the gate first
 
-## Status: Proposed — **the SKILL text (PR-request protocol, proactive report of a QA step that could not run, STOP and ask the human) shipped in 2.10.0; `--human`/`--note`, the agent-marker refusal and the PR hook proposed for 2.12.0**
+## Status: Accepted — **the SKILL text (PR-request protocol, proactive report of a QA step that could not run, STOP and ask the human) shipped in 2.10.0; `--human`/`--note`, the agent-marker refusal, `pr-gate`, `pr-opened-not-ready` and the PR hook in 2.12.0**
 
 ## Context
 
@@ -74,6 +74,20 @@ marker. It does not prove identity: an agent can unset the variable (a deliberat
 its command text) and Codex/pi expose no marker the engine knows. The only authenticated human
 act in this design is the forge's own "ready for review" / merge.
 
+## Decided while implementing (2.12.0)
+
+- `--note` is required on all four commands, beside each command's own reason rules
+  (`--decision`, `--amended`): the decision says WHAT was decided, the note says WHY, and the
+  record must carry both under a declared name.
+- The refusal is checked before anything is written and prints the filled-in command for the
+  human to paste. The marker table is `AGENT_SHELL_MARKERS = ("CLAUDECODE",)`.
+- `pr-gate --cwd` exits 0 when no `QA-LEDGER.json` is found up from the cwd (the hook is global);
+  `pr-opened-not-ready` records nothing when the repo is already `pr-ready` (not an exception).
+- The hook lets `gh pr ready --undo` and an MCP `update_pull_request` that does not set
+  `draft: false` pass: neither turns a draft into ready-for-review. It finds the engine at
+  `USCHA_QA_LEDGER`, else beside itself (`../skills/uscha-devloop/qa_ledger.py`), which holds for
+  both the installed (`~/.claude/hooks`) and the plugin (`<root>/hooks`) layouts.
+
 ## Alternatives
 
 - **`pr-override --human --note`, HEAD-pinned, letting the hook allow a non-draft PR** (the
@@ -101,7 +115,7 @@ act in this design is the forge's own "ready for review" / merge.
 
 Authenticating identity; forge APIs inside the engine; `flag-blocker --resolve`; `bench-curate`.
 
-## Acceptance (draft, not in ACCEPTANCE.md — rule 8)
+## Acceptance (in ACCEPTANCE.md since 2.12.0; AC-GI-47 shipped in 2.10.0)
 
 - AC-GI-40 — the A-F6 reproduction is refused without `--human`/`--note`; with them it records
   the actor.

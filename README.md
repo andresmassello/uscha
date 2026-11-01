@@ -95,7 +95,7 @@ and see which file, which test, and when.
 | `/uscha-mirador` | Bird's-eye HTML dashboard: readiness, trail, acceptance, loops |
 | `/uscha-status` | One-line progress readout, in chat |
 
-**A measurement engine** (`qa_ledger.py`, 59 subcommands, Python stdlib) that ingests
+**A measurement engine** (`qa_ledger.py`, 61 subcommands, Python stdlib) that ingests
 evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
 cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
 
@@ -140,7 +140,10 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
 4. **Readiness.** One score, one screen: acceptance (measured) 30 · static gate 20 ·
    ADR 15 · coverage 15 · convergence 10 · integration 10, with hard caps that say *why*
    they bit and whether the threshold was your requirement or the kit's default.
-5. **You decide.** The agent proposes, measures and stops at the PR. Merging is a human act.
+5. **You decide.** The agent proposes, measures and stops at the PR. Merging is a human act,
+   and so is lifting an escalation: since 2.12.0 those commands need `--human`/`--note` and
+   refuse inside Claude Code's shell, and a hook keeps a PR a draft while the gate is red
+   (ADR-058).
 
 ## What makes it different
 
@@ -205,7 +208,7 @@ automatic tool can perform: a human verdict.
    from the compiled code: 0.815 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (59 subcommands, all measured):**
+**What each arrow is, in the engine (61 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|
@@ -284,7 +287,9 @@ smoke test; and a PreToolUse hook stops the agent from writing a `.approved` gol
 **Scoped honestly**: that hook is a *best-effort* guard and it is registered on the Claude
 target only — it inspects a tool call as TEXT, so an indirect write (a script that assembles
 the filename, a symlink) gets through, and every other target reports `golden_guard:
-advisory`. The MEASURED control is `golden-diff`, which compares bytes.
+advisory`. The MEASURED control is `golden-diff`, which compares bytes. A second hook,
+`guard-pr-gate.py` (2.12.0), keeps a pull request a draft while `pr-gate` reads red -- same
+scope, same honesty: Claude only, text only, and `doctor` reports `pr_guard`.
 
 ## History
 

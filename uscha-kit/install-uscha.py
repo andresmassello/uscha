@@ -33,6 +33,10 @@ SKILL_ROOTS = {
 }
 TARGETS = ("codex", "claude") + tuple(SKILL_ROOTS)
 HOOK_NAME = "block-approved-writes.py"
+# ADR-058 (2.12.0): the second PreToolUse guard -- a pull request stays a DRAFT while the uscha
+# gate is red. Installed, registered, reported (`pr_guard`) and removed exactly like HOOK_NAME.
+PR_HOOK_NAME = "guard-pr-gate.py"
+HOOK_NAMES = (HOOK_NAME, PR_HOOK_NAME)
 # The kit's version, copied beside the installed skills so an INSTALLED engine can date them
 # (ADR-045). The name is NAMESPACED (2.2.0, fresh review): until this release the copy was
 # called `VERSION`, a bare shared name written into directories the kit does not own --
@@ -125,8 +129,9 @@ def source_skills():
     missing = [skill for skill in SKILLS if not (root / skill / "SKILL.md").is_file()]
     if missing:
         raise InstallError("[install-uscha] source skills missing: %s" % ", ".join(missing))
-    if not (KIT_ROOT / "hooks" / HOOK_NAME).is_file():
-        raise InstallError("[install-uscha] source hook missing: %s" % HOOK_NAME)
+    for name in HOOK_NAMES:
+        if not (KIT_ROOT / "hooks" / name).is_file():
+            raise InstallError("[install-uscha] source hook missing: %s" % name)
     return root
 
 
@@ -206,7 +211,7 @@ def hook_command(hook):
     return subprocess.list2cmdline(parts) if os.name == "nt" else " ".join(shlex.quote(part) for part in parts)
 
 
-def hook_registered(settings, command):
+def hook_registered(settings, command, name=HOOK_NAME):
     # Match a registered PreToolUse "*" hook by the guard SCRIPT it references (PATH-ANCHORED),
     # not by exact command equality. `command` embeds sys.executable, an absolute interpreter
     # path: install-time and doctor-time can run under different interpreters (a `python` that
@@ -216,7 +221,7 @@ def hook_registered(settings, command):
     # foreign command that merely MENTIONS the name -- `...not-block-approved-writes.py`, or the
     # literal inside a `-c` snippet -- from reading as our enforced guard, since this check feeds
     # the golden_guard trust signal. Exact `command` stays a fallback; a None command is skipped.
-    anchored = ("/" + HOOK_NAME, "\\" + HOOK_NAME)
+    anchored = ("/" + name, "\\" + name)
     def _is_ours(cmd):
         return isinstance(cmd, str) and (any(a in cmd for a in anchored) or cmd == command)
     hooks = settings.get("hooks", {}) if isinstance(settings, dict) else {}
@@ -227,7 +232,7 @@ def hook_registered(settings, command):
                for group in groups if isinstance(groups, list))
 
 
-def prepared_settings(path, command):
+def prepared_settings(path, commands):
     data = {} if not path.exists() else load_json(path, "Claude settings.json")
     if not isinstance(data, dict):
         raise InstallError("[install-uscha] Claude settings.json must be an object: %s" % path)
@@ -257,7 +262,7 @@ def prepared_settings(path, command):
         # with spaces in quotes, so the command can end in `...block-approved-writes.py"`.
         # The script basename is specific enough that a foreign hook won't contain it.
         c = str(item.get("command", "")).replace("\\", "/") if isinstance(item, dict) else ""
-        return HOOK_NAME in c
+        return any(name in c for name in HOOK_NAMES)
     groups = []
     for group in groups_data:
         kept = [it for it in group.get("hooks", []) if not _ours(it)]
@@ -265,7 +270,8 @@ def prepared_settings(path, command):
             g = dict(group)
             g["hooks"] = kept
             groups.append(g)
-    groups.append({"matcher": "*", "hooks": [{"type": "command", "command": command}]})
+    for command in ([commands] if isinstance(commands, str) else commands):
+        groups.append({"matcher": "*", "hooks": [{"type": "command", "command": command}]})
     hooks["PreToolUse"] = groups
     result["hooks"] = hooks
     return result
@@ -368,12 +374,13 @@ def install_claude(home, mode, dry_run, operations):
     source = source_skills()
     root = home / ".claude"
     hook = root / "hooks" / HOOK_NAME
+    pr_hook = root / "hooks" / PR_HOOK_NAME
     settings = root / "settings.json"
     install_marker = root / "uscha-install.json"
-    data = prepared_settings(settings, hook_command(hook))  # parse and merge before writes, including dry-run
+    data = prepared_settings(settings, [hook_command(hook), hook_command(pr_hook)])  # parse and merge before writes, including dry-run
     marker_data = marker("claude", root, mode)
     operations.extend({"action": "install-skill", "path": str(root / "skills" / skill)} for skill in SKILLS)
-    operations.extend([{"action": "copy-version", "path": str(root / "skills" / KIT_VERSION_COPY)}, {"action": "copy-hook", "path": str(hook)}, {"action": "atomic-write-json", "path": str(settings)}, {"action": "write-marker-last", "path": str(install_marker)}])
+    operations.extend([{"action": "copy-version", "path": str(root / "skills" / KIT_VERSION_COPY)}, {"action": "copy-hook", "path": str(hook)}, {"action": "copy-hook", "path": str(pr_hook)}, {"action": "atomic-write-json", "path": str(settings)}, {"action": "write-marker-last", "path": str(install_marker)}])
     if dry_run:
         return root
 
@@ -389,7 +396,8 @@ def install_claude(home, mode, dry_run, operations):
         for skill in SKILLS:
             copy_skill(source / skill, staged / "skills" / skill, mode)
         (staged / "hooks").mkdir()
-        shutil.copy2(KIT_ROOT / "hooks" / HOOK_NAME, staged / "hooks" / HOOK_NAME)
+        for name in HOOK_NAMES:
+            shutil.copy2(KIT_ROOT / "hooks" / name, staged / "hooks" / name)
         shutil.copy2(KIT_ROOT / "VERSION", staged / "skills" / KIT_VERSION_COPY)
         atomic_json(staged / "settings.json", data)
         atomic_json(staged / "uscha-install.json", marker_data)
@@ -401,6 +409,7 @@ def install_claude(home, mode, dry_run, operations):
             (skills_root / KIT_VERSION_COPY, staged / "skills" / KIT_VERSION_COPY,
              backups / "skills" / KIT_VERSION_COPY),
             (hook, staged / "hooks" / HOOK_NAME, backups / "hooks" / HOOK_NAME),
+            (pr_hook, staged / "hooks" / PR_HOOK_NAME, backups / "hooks" / PR_HOOK_NAME),
             (settings, staged / "settings.json", backups / "settings.json"),
             (install_marker, staged / "uscha-install.json", backups / "uscha-install.json"),
         ])
@@ -572,6 +581,7 @@ def target_status(home, target):
             marketplace_ok = False
         checks = {"skills_present": skills_present, "manifest": manifest_ok, "marketplace_registered": marketplace_ok}
         guard = "advisory"   # Codex has no hooks mechanism (verified: .codex-plugin has no "hooks")
+        pr_guard = "advisory"
     elif target in SKILL_ROOTS:
         # Agent-Skills targets: the skills live FLAT under that agent's root; no manifest, no
         # hook. INV-GOLDEN-01 is therefore ADVISORY on all of them -- none exposes a blocking
@@ -583,18 +593,25 @@ def target_status(home, target):
         skills_present = [skill for skill in SKILLS if (skills_root / skill / "SKILL.md").is_file()]
         checks = {"skills_present": skills_present}
         guard = "advisory"
+        pr_guard = "advisory"
     else:
         root = home / ".claude"
         skills_root, marker_path = root / "skills", root / "uscha-install.json"
         hook, settings_path = root / "hooks" / HOOK_NAME, root / "settings.json"
+        pr_hook = root / "hooks" / PR_HOOK_NAME
         skills_present = [skill for skill in SKILLS if (skills_root / skill / "SKILL.md").is_file()]
         try:
-            settings_ok = hook_registered(load_json(settings_path, "Claude settings.json"), hook_command(hook))
+            settings_data = load_json(settings_path, "Claude settings.json")
+            settings_ok = hook_registered(settings_data, hook_command(hook))
+            pr_ok = hook_registered(settings_data, hook_command(pr_hook), PR_HOOK_NAME)
         except InstallError:
-            settings_ok = False
-        checks = {"skills_present": skills_present, "hook_file": hook.is_file(), "hook_registered": settings_ok}
+            settings_ok = pr_ok = False
+        checks = {"skills_present": skills_present, "hook_file": hook.is_file(), "hook_registered": settings_ok,
+                  "pr_hook_file": pr_hook.is_file(), "pr_hook_registered": pr_ok}
         # INV-GOLDEN-01 is MECHANICAL on Claude only when the PreToolUse hook is registered.
         guard = "enforced" if settings_ok else "advisory"
+        # ADR-058: the PR gate is mechanical only when its hook file AND registration are present.
+        pr_guard = "enforced" if pr_ok and pr_hook.is_file() else "advisory"
     marker_valid, installed_version = marker_ok(marker_path, target)
     checks["marker"] = marker_valid
     checks["source_version_match"] = installed_version == source_version()
@@ -602,6 +619,7 @@ def target_status(home, target):
     return {"healthy": healthy, "installed": healthy, "install_root": str(root), "installed_version": installed_version,
             "source_version": source_version(), "version_match": installed_version == source_version(), "checks": checks,
             "golden_guard": guard,   # per-target INV-GOLDEN-01: enforced (mechanical) | advisory
+            "pr_guard": pr_guard,    # per-target ADR-058 PR gate: enforced (mechanical) | advisory
             "content_integrity": "not measured; checks verify presence, registration, marker, and version only"}
 
 
@@ -1261,7 +1279,7 @@ def settings_without_hook(path):
         keep = []
         for item in items:
             c = item.get("command") if isinstance(item, dict) else None
-            if isinstance(c, str) and HOOK_NAME in c:
+            if isinstance(c, str) and any(name in c for name in HOOK_NAMES):
                 removed += 1
             else:
                 keep.append(item)
@@ -1343,6 +1361,7 @@ def uninstall_target(target, home, dry_run, operations, force):
             drop(skills_root / skill, "uscha skill")
         drop(skills_root / KIT_VERSION_COPY, "kit version beside the installed skills")
         drop(root / "hooks" / HOOK_NAME, "INV-GOLDEN-01 hook")
+        drop(root / "hooks" / PR_HOOK_NAME, "ADR-058 PR-gate hook")
         drop(marker_path, "install marker")
         settings_path = root / "settings.json"
         try:

@@ -97,12 +97,12 @@ with tempfile.TemporaryDirectory(prefix=".uscha-ledger-integrity-", dir=pathlib.
     assert_second_resolve_preserves_bytes(
         root, "production-finding",
         ("production-finding", "--repo", "app", "--title", "prod defect", "--evidence", "log:1"),
-        ("production-finding", "--id", "PF-001", "--resolve", "--note", "triaged"),
+        ("production-finding", "--id", "PF-001", "--resolve", "--human", "tester", "--note", "triaged"),
     )
     assert_second_resolve_preserves_bytes(
         root, "spec-doubt",
         ("spec-doubt", "--repo", "app", "--note", "contract mismatch"),
-        ("spec-doubt", "--id", "SD-001", "--resolve", "--decision", "SPEC amended"),
+        ("spec-doubt", "--id", "SD-001", "--resolve", "--decision", "SPEC amended", "--human", "tester", "--note", "why"),
     )
 
     ledger = root / "spec-change-request.ledger.json"
@@ -111,7 +111,7 @@ with tempfile.TemporaryDirectory(prefix=".uscha-ledger-integrity-", dir=pathlib.
     assert run(root, "init", "--config", str(cfg), "--out", str(ledger)).returncode == 0
     assert run(root, "production-finding", "--ledger", str(ledger), "--repo", "app", "--title", "source", "--evidence", "log:2").returncode == 0
     assert run(root, "spec-change-request", "--ledger", str(ledger), "--repo", "app", "--source", "PF-001", "--requested-change", "amend", "--evidence", "log:3").returncode == 0
-    resolve_scr = ("spec-change-request", "--id", "SCR-001", "--resolve", "--decision", "accepted", "--amended", "SPEC.md")
+    resolve_scr = ("spec-change-request", "--id", "SCR-001", "--resolve", "--decision", "accepted", "--amended", "SPEC.md", "--human", "tester", "--note", "why")
     assert run(root, *resolve_scr, "--ledger", str(ledger)).returncode == 0
     before = ledger.read_bytes()
     result = run(root, *resolve_scr, "--ledger", str(ledger))
@@ -129,7 +129,7 @@ with tempfile.TemporaryDirectory(prefix=".uscha-ledger-integrity-", dir=pathlib.
     data.pop("integrity", None)  # deliberate legacy fixture mutation: accept it explicitly
     legacy.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     before = legacy.read_bytes()
-    result = run(root, "production-finding", "--ledger", str(legacy), "--id", "PF-001", "--resolve", "--note", "triaged")
+    result = run(root, "production-finding", "--ledger", str(legacy), "--id", "PF-001", "--resolve", "--human", "tester", "--note", "triaged")
     assert result.returncode != 0, (result.stdout, result.stderr)
     assert "fail-closed" in (result.stdout + result.stderr), (result.stdout, result.stderr)
     assert legacy.read_bytes() == before, "legacy missing status resolve mutated ledger"

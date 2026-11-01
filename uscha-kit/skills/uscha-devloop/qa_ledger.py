@@ -28,7 +28,9 @@ Usage (see `--help` on each subcommand):
   qa_ledger.py converged   --repo backend-api --tools-per-cycle 3
   qa_ledger.py oscillation --repo backend-api --tool code-review
   qa_ledger.py escalate    --repo backend-api --reason "cap hit without convergence"
-  qa_ledger.py resolve-escalation --repo backend-api [--note "human reviewed and closed"]
+  qa_ledger.py resolve-escalation --repo backend-api --human NAME --note "how it was closed"
+  qa_ledger.py pr-gate     [--cwd DIR]          # read-only: the PR hook's verdict
+  qa_ledger.py pr-opened-not-ready --repo backend-api --requested-by NAME --note "..."
   qa_ledger.py summary     [--json]
   qa_ledger.py readiness   [--acceptance ACCEPTANCE.md] [--json]
   qa_ledger.py execution-policy [--phase qa] [--json]
@@ -1917,6 +1919,45 @@ SUPPORTED_REPO_TYPES = {
 
 def _has_text(value):
     return isinstance(value, str) and bool(value.strip())
+
+
+# ADR-058 (2.12.0): the environment markers a known agent harness sets in the shell it gives the
+# agent. A human act refuses when one is present. The table is MEASURED, not guessed: Claude Code's
+# Bash tool carries CLAUDECODE=1 (2026-10-20). A harness with no known marker is UNMEASURED, never
+# trusted -- `--human` is a declaration there, not a proof.
+AGENT_SHELL_MARKERS = ("CLAUDECODE",)
+
+
+def _agent_marker():
+    for name in AGENT_SHELL_MARKERS:
+        if _has_text(os.environ.get(name)):
+            return name
+    return None
+
+
+def _human_act(args, what, example):
+    """The gate on the four commands that lift `escalated` (ADR-058 §5): a NAME and a REASON are
+    typed, and the process is not an agent's shell. Refused before anything is read or written,
+    exit 2. Returns the declared actor."""
+    if not _has_text(getattr(args, "human", None)) or not _has_text(getattr(args, "note", None)):
+        print("[qa_ledger] %s is a HUMAN act: it needs --human NAME --note TEXT (who decided, "
+              "and why). Run it in your own terminal:\n    %s" % (what, example),
+              file=sys.stderr)
+        sys.exit(2)
+    marker = _agent_marker()
+    if marker:
+        print("[qa_ledger] %s REFUSED: this process carries %s=%s -- it is an agent's shell, and "
+              "lifting an escalation is a human act. Agent: STOP, show this command to the human "
+              "and ask them to run it in their own terminal:\n    %s"
+              % (what, marker, os.environ.get(marker), example), file=sys.stderr)
+        sys.exit(2)
+    return args.human.strip()
+
+
+def _stamp_human(row, args, actor):
+    row["resolved_by"] = actor
+    row["resolution_note"] = args.note
+    row["human_declared"] = True
 
 
 # risk_profile (kit 1.45.0, ADR-001): a NAMED PRESET, not a fixed engine gate. It expands
@@ -4019,11 +4060,14 @@ def cmd_production_finding(args):
         if not _has_text(args.note):
             raise SystemExit(
                 "[qa_ledger] production-finding --resolve requires a nonempty --note")
+        actor = _human_act(args, "production-finding --resolve",
+                           "qa_ledger.py production-finding --id %s --resolve --human <NAME> "
+                           "--note \"<disposition>\"" % args.id)
         row = _find_by_id(rows, args.id, "production finding")
         _require_open_resolution(row, "production finding")
         row["status"] = "resolved"
         row["resolved_at"] = _now()
-        row["resolution_note"] = args.note
+        _stamp_human(row, args, actor)
         _touch_event(ledger, "production-finding:resolve", row["id"], row.get("repo"))
         _save(args.ledger, ledger)
         print("[qa_ledger] production-finding %s resolved -- %s" %
@@ -4056,12 +4100,15 @@ def cmd_spec_doubt(args):
         if not _has_text(args.decision):
             raise SystemExit(
                 "[qa_ledger] spec-doubt --resolve requires a nonempty --decision")
+        actor = _human_act(args, "spec-doubt --resolve",
+                           "qa_ledger.py spec-doubt --id %s --resolve --decision \"<decision>\" "
+                           "--human <NAME> --note \"<why>\"" % args.id)
         row = _find_by_id(rows, args.id, "spec-doubt")
         _require_open_resolution(row, "spec-doubt")
         row["status"] = "resolved"
         row["resolved_at"] = _now()
         row["decision"] = args.decision
-        row["resolution_note"] = args.note
+        _stamp_human(row, args, actor)
         _touch_event(ledger, "spec-doubt:resolve", row["id"], row.get("repo"))
         _save(args.ledger, ledger)
         print("[qa_ledger] spec-doubt %s resolved -- %s" %
@@ -4106,12 +4153,15 @@ def cmd_spec_change_request(args):
                 "a nonempty --note"
                 + (" or --amended replacement reference"
                    if args.decision == "superseded" else ""))
+        actor = _human_act(args, "spec-change-request --resolve",
+                           "qa_ledger.py spec-change-request --id %s --resolve --decision %s "
+                           "--human <NAME> --note \"<why>\"" % (args.id, args.decision))
         row = _find_by_id(rows, args.id, "spec-change-request")
         _require_open_resolution(row, "spec-change-request")
         row["status"] = "resolved"
         row["resolved_at"] = _now()
         row["decision"] = args.decision
-        row["resolution_note"] = args.note
+        _stamp_human(row, args, actor)
         row["amended"] = args.amended
         _touch_event(ledger, "spec-change-request:resolve", row["id"], row.get("repo"))
         _save(args.ledger, ledger)
@@ -5188,6 +5238,95 @@ def cmd_phase(args):
         print(f"  ! '{args.require}' is required and the FACTS say '{state}' — "
               f"state is not negotiated, it is built")
     sys.exit(0 if ok else 1)
+
+
+def _pr_ready_verdict(ledger, name, k=3):
+    """(ok, state, evidence, spike) -- exactly what `phase --require pr-ready` decides."""
+    node = _repo_node(ledger, name)
+    qa_order = ledger["config"].get("defaults", {}).get("qa_tools_order")
+    state, evidence = _derive_phase(ledger, name, node, k, qa_order)
+    spike = None
+    if name != "integration":
+        try:
+            path = _repo_cfg(ledger, name).get("path", ".")
+        except SystemExit:
+            path = None
+        spike = _spike_branch(path) if path else None
+    return state == "pr-ready" and not spike, state, evidence, spike
+
+
+def _find_ledger_up(start):
+    d = os.path.realpath(start)
+    while True:
+        cand = os.path.join(d, "QA-LEDGER.json")
+        if os.path.isfile(cand):
+            return cand
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+def cmd_pr_gate(args):
+    """READ-ONLY verdict for the PR hook (ADR-058 §3): find QA-LEDGER.json up from --cwd, map the
+    cwd to the configured repos whose path contains it (realpath on both sides; none matched ->
+    every repo), and say whether each is pr-ready. Exit 0 = every mapped repo is pr-ready, or there
+    is no ledger (the hook is global); 1 = at least one is not."""
+    cwd = os.path.realpath(args.cwd or os.getcwd())
+    path = _find_ledger_up(cwd)
+    if path is None:
+        print(json.dumps({"ledger": None, "ok": True, "repos": [],
+                          "note": "no QA-LEDGER.json up from %s: not a uscha project" % cwd},
+                         indent=2, ensure_ascii=False))
+        sys.exit(0)
+    base = os.path.dirname(path)
+    os.chdir(base)              # configured repo paths are relative to the project root
+    ledger = _load(path)
+    names = list(ledger.get("repos", {}))
+    matched = []
+    for n in names:
+        try:
+            rp = os.path.realpath(os.path.join(base, _repo_cfg(ledger, n).get("path", ".")))
+        except SystemExit:
+            continue
+        if cwd == rp or cwd.startswith(rp.rstrip(os.sep) + os.sep):
+            matched.append(n)
+    out = []
+    for n in (matched or names):
+        ok, state, evidence, spike = _pr_ready_verdict(ledger, n)
+        out.append({"repo": n, "ready": ok, "phase": state, "missing": [] if ok else evidence,
+                    "spike_branch": spike})
+    verdict = all(r["ready"] for r in out)
+    print(json.dumps({"ledger": path, "ok": verdict, "matched": bool(matched), "repos": out},
+                     indent=2, ensure_ascii=False))
+    sys.exit(0 if verdict else 1)
+
+
+def cmd_pr_opened_not_ready(args):
+    """Record that the agent opened a DRAFT PR while the gate was red (ADR-058 §2): an exception,
+    in ADR-044's vocabulary (origin: agent). It changes no derived state; readiness and the
+    retrospective print it as an exception, never as normal."""
+    ledger = _load(args.ledger)
+    ok, state, evidence, _spike = _pr_ready_verdict(ledger, args.repo)
+    if ok:
+        print("[qa_ledger] %s is pr-ready: a PR opened now is not an exception -- nothing "
+              "recorded." % args.repo)
+        return
+    try:
+        rpath = _repo_cfg(ledger, args.repo).get("path", ".")
+    except SystemExit:
+        rpath = "."
+    head = _seal_git(rpath, "rev-parse", "HEAD")
+    ev = {"kind": "pr-opened-not-ready", "repo": args.repo, "at": _now(),
+          "commit": head.stdout.strip() if head is not None and head.returncode == 0 else None,
+          "phase": state, "missing": evidence, "requested_by": args.requested_by,
+          "note": args.note, "url": args.url, "origin": "agent"}
+    ledger.setdefault("events", []).append(ev)
+    _touch_event(ledger, "pr-opened-not-ready", None, args.repo)
+    _save(args.ledger, ledger)
+    print("[qa_ledger] %s: pr-opened-not-ready recorded (phase %s, %d missing fact(s)) -- an "
+          "EXCEPTION: the PR stays a draft until the gate is green; 'ready for review' is the "
+          "human's act in the forge." % (args.repo, state, len(evidence)))
 
 
 def cmd_converged(args):
@@ -7354,6 +7493,9 @@ def cmd_curate(args):
     prev = _curation_verdicts(ledger, args.repo).get(args.obs)
     human = args.human or os.environ.get("USERNAME") or os.environ.get("USER") or "unknown"
     rec = {"obs_id": args.obs, "verdict": args.verdict, "human": human,
+           # ADR-058: the OS-user default stays (the `uscha top` VERDICTS flow is a human at the
+           # keyboard); what the record now says is WHERE the name came from
+           "human_source": "flag" if args.human else "os-user",
            "at": _now(), "note": args.note, "repo": args.repo}
     ledger.setdefault("curation", []).append(rec)
     _save(args.ledger, ledger)
@@ -10391,6 +10533,9 @@ def cmd_escalate(args):
 def cmd_resolve_escalation(args):
     """Close open escalations for a repo. Closing the human gate is a RECORDED
     event (resolved_at), not an implication — the readiness cap holds until then."""
+    actor = _human_act(args, "resolve-escalation",
+                       "qa_ledger.py resolve-escalation --repo %s --human <NAME> --note "
+                       "\"<how it was closed>\"" % args.repo)
     ledger = _load(args.ledger)
     open_esc = [e for e in ledger.get("escalations", [])
                 if e.get("repo") == args.repo and not e.get("resolved_at")]
@@ -10399,11 +10544,11 @@ def cmd_resolve_escalation(args):
         return
     for e in open_esc:
         e["resolved_at"] = _now()
-        if args.note:
-            e["resolution_note"] = args.note
+        _stamp_human(e, args, actor)
     ledger["step_counter"] += 1
     ledger["steps"].append({"n": ledger["step_counter"], "at": _now(),
-                            "kind": "escalation-resolved", "repo": args.repo})
+                            "kind": "escalation-resolved", "repo": args.repo,
+                            "resolved_by": actor})
     _save(args.ledger, ledger)
     print(f"[qa_ledger] {args.repo}: {len(open_esc)} escalation(s) resolved — "
           f"readiness cap lifted.")
@@ -12912,6 +13057,21 @@ def cmd_readiness(args):
     if _ao["n_unconfirmed"]:
         print(f"--- origin: {_ao['n_unconfirmed']} agent-origin item(s) unconfirmed"
               f"   (spec-check names them)")
+    # ADR-058: a human act recorded before 2.12.0 has no actor -- named, never inferred
+    _legacy_acts = [r for key in ("escalations", "production_findings", "spec_doubts",
+                                  "spec_change_requests")
+                    for r in ledger.get(key, []) or []
+                    if isinstance(r, dict) and r.get("resolved_at") and not r.get("resolved_by")]
+    if _legacy_acts:
+        print(f"--- human acts: {len(_legacy_acts)} resolution(s) with the actor not recorded "
+              f"(resolved before 2.12.0 required --human)")
+    # ADR-058 §2: a draft PR the agent opened while the gate was red is an EXCEPTION, on its own
+    for _ev in [e for e in ledger.get("events", []) or []
+                if isinstance(e, dict) and e.get("kind") == "pr-opened-not-ready"]:
+        print(f"--- EXCEPTION pr-opened-not-ready: {_ev.get('repo')} at "
+              f"{(_ev.get('commit') or 'no commit')[:8]}, phase {_ev.get('phase')}, "
+              f"{len(_ev.get('missing') or [])} missing fact(s); requested by "
+              f"{_ev.get('requested_by') or 'unknown'} ({_ev.get('origin')})")
     # ADR-048: operability gets its own line, CONDITIONAL on a record existing -- a ledger that
     # never ran the check prints exactly what it printed before. The gates rollup above already
     # counts the record correctly (ok / blocking / advisory); what it cannot say is WHICH of the
@@ -16038,6 +16198,20 @@ def build_parser():
     prv.add_argument("--json", action="store_true")
     prv.set_defaults(func=cmd_review_start)
 
+    ppg = sub.add_parser("pr-gate", help="read-only: is every repo mapped to --cwd pr-ready? "
+                         "(the PR hook's verdict, ADR-058)")
+    ppg.add_argument("--cwd", default=None)
+    ppg.set_defaults(func=cmd_pr_gate)
+
+    ppo = sub.add_parser("pr-opened-not-ready", help="record a DRAFT PR the agent opened while "
+                         "the gate was red: an exception, never normal (ADR-058)")
+    add_ledger(ppo)
+    ppo.add_argument("--repo", required=True)
+    ppo.add_argument("--requested-by", default=None)
+    ppo.add_argument("--note", default=None)
+    ppo.add_argument("--url", default=None)
+    ppo.set_defaults(func=cmd_pr_opened_not_ready)
+
     pg = sub.add_parser("ingest-gate",
                         help="parse Checkstyle/PMD/SpotBugs/FindSecBugs reports and "
                              "log static-gate steps automatically")
@@ -16372,7 +16546,10 @@ def build_parser():
                               "lifts the readiness cap)")
     add_ledger(pre)
     pre.add_argument("--repo", required=True)
-    pre.add_argument("--note", default=None)
+    pre.add_argument("--note", default=None,
+                     help="why it was closed (required: a human act names its reason)")
+    pre.add_argument("--human", default=None,
+                     help="who closed it (required; refused from an agent's shell, ADR-058)")
     pre.set_defaults(func=cmd_resolve_escalation)
 
     plg = sub.add_parser(
@@ -16487,6 +16664,8 @@ def build_parser():
     ppf.add_argument("--evidence", default=None,
                      help="short evidence pointer; do not paste secrets or PII")
     ppf.add_argument("--note", default=None)
+    ppf.add_argument("--human", default=None,
+                    help="with --resolve: who decided (required; refused from an agent's shell)")
     ppf.add_argument("--resolve", action="store_true")
     ppf.set_defaults(func=cmd_production_finding)
 
@@ -16501,6 +16680,8 @@ def build_parser():
     psd.add_argument("--severity", default="HIGH", choices=SEVERITY_ORDER)
     psd.add_argument("--spec", default=None, help="SPEC/AC/ADR pointer involved")
     psd.add_argument("--note", default=None)
+    psd.add_argument("--human", default=None,
+                    help="with --resolve: who decided (required; refused from an agent's shell)")
     psd.add_argument("--evidence", default=None)
     psd.add_argument("--decision", default=None,
                      help="human decision when resolving (SPEC amended, accepted-as-is, ...)")
@@ -16519,6 +16700,8 @@ def build_parser():
     pscr.add_argument("--spec", default=None, help="SPEC/AC pointer to amend")
     pscr.add_argument("--adr", default=None, help="ADR pointer to amend")
     pscr.add_argument("--note", default=None)
+    pscr.add_argument("--human", default=None,
+                    help="with --resolve: who decided (required; refused from an agent's shell)")
     pscr.add_argument("--resolve", action="store_true")
     pscr.add_argument("--decision", default=None, choices=["accepted", "rejected", "superseded"],
                       help="human decision when resolving")

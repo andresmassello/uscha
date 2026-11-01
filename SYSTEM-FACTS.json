@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 59,
+    "count": 61,
     "list": [
       "bench",
       "bench-curate",
@@ -68,6 +68,8 @@
       "oscillation",
       "phase",
       "pit-check",
+      "pr-gate",
+      "pr-opened-not-ready",
       "production-finding",
       "promote",
       "qa-tools-check",

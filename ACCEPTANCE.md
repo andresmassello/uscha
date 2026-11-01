@@ -1956,3 +1956,36 @@ the engine drives under an isolated HOME.
   the file gone.
 - [ ] AC-GI-65 - TLC (model as shipped): a stale review of v1 closes the v0 debt, the deferral is
   removed, and a clean verdict on v0 still contradicts the record (Memory).
+
+## Human acts and the PR gate (ADR-058, 2.12.0) - closes on green `AC-GI-nn` smoke assertions
+
+The gap: the v2.9.0 audit's A-F6 -- `escalate` then `resolve-escalation` with no actor lifted the
+human gate, run from the agent's own shell -- and a field finding: an agent opened a
+ready-for-review PR while the ledger read `qa`. 2.12.0 makes the four escalation-lifting commands
+a declared, recorded human act that refuses inside a known agent shell, and puts a PreToolUse hook
+between the agent and a ready-for-review PR. Measured by T175 through the real engine, the real
+hook script (JSON payload probes, nothing executed) and the real installer, under an isolated HOME.
+
+- [ ] AC-GI-40 - the A-F6 reproduction: `resolve-escalation` without `--human` exits 2, writes
+  nothing, and `phase --require pr-ready` stays red; with `--human Ana --note ...` it records
+  `resolved_by`, `resolution_note` and `human_declared: true`, and the gate opens.
+- [ ] AC-GI-41 - `resolve-escalation` and the `--resolve` of `production-finding`, `spec-doubt`
+  and `spec-change-request` each refuse under `CLAUDECODE=1` (exit 2, ledger bytes unchanged,
+  the marker named), and each succeeds from a shell without it.
+- [ ] AC-GI-42 - a resolution recorded before 2.12.0 (no actor) loads and `readiness` names it
+  "actor not recorded"; `curate` records `human_source: flag` with `--human` and `os-user`
+  without.
+- [ ] AC-GI-43 - while red, the hook blocks `gh pr create` without `--draft`, `gh pr ready` (also
+  inside a chained command), a forge MCP create without `draft: true` or with `draft: false`, and
+  an MCP update that sets `draft: false` -- exit 2, naming `pr-ready`.
+- [ ] AC-GI-44 - `--draft`, `-d` and MCP `draft: true` pass while red; an MCP update that leaves
+  `draft` alone, a push and a non-forge tool pass; every PR shape passes when the repo is
+  `pr-ready`.
+- [ ] AC-GI-45 - no `QA-LEDGER.json` up the cwd -> allow; a ledger with the engine missing ->
+  block naming the path; an unparseable payload -> block; a cwd inside a configured repo maps to
+  it.
+- [ ] AC-GI-46 - `pr-opened-not-ready` records one event (`origin: agent`, phase, missing facts),
+  `readiness` prints it as an EXCEPTION, and `phase` prints the same before and after.
+- [ ] AC-GI-48 - `install --target claude` copies and registers both hooks beside a foreign one,
+  `doctor` reports `"pr_guard": "enforced"`, and `uninstall` removes both files and entries and
+  keeps the foreign hook.

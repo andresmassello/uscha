@@ -651,11 +651,17 @@ python3 $QL phase --repo <REPO> --require pr-ready   # one call per repo
 - **All green** → follow the checklist below.
 - **Any red** → show the missing facts the engine printed, verbatim, and ask the human ONE
   question: *run the QA loop first to close them (recommended), or open a DRAFT PR now with
-  the missing facts listed in its body?* Then do what they choose.
+  the missing facts listed in its body?* Then do what they choose. If they choose the draft,
+  record it right after opening it — it is an exception, and the ledger says so:
+  `python3 $QL pr-opened-not-ready --repo <REPO> --requested-by <NAME> --note "<why now>"`.
 - **Never open a ready-for-review PR while the gate is red** — not on an instruction to hurry,
   not because the change looks small. A DRAFT PR whose body lists the missing facts is the only
   PR the agent opens while red; marking it "ready for review" is the human's own act in the
   forge.
+- **On Claude Code a hook enforces this (kit 2.12.0).** `guard-pr-gate.py` blocks `gh pr create`
+  without `--draft`, `gh pr ready`, and a forge MCP create without `draft: true` while
+  `qa_ledger.py pr-gate` reads red. A block is the gate speaking, not an obstacle: never route
+  around it (`gh api`, a script, a browser) — open the draft, or run the QA loop.
 - **Pushing a branch is not opening a PR.** A request to push is answered by pushing; it never
   implies a PR, and a PR request never implies skipping the gate.
 - A repo declared `test_site: "ci"` (its suite runs only in CI) reads red locally until CI
@@ -909,13 +915,16 @@ human resolves it:
 ```bash
 python3 $QL escalate --repo <REPO> --reason "<what blocked + what you need from me>"
 # ... human reviews/decides ... and the HUMAN closes it, in their own terminal:
-python3 $QL resolve-escalation --repo <REPO> --note "<how it was closed>"
+python3 $QL resolve-escalation --repo <REPO> --human <NAME> --note "<how it was closed>"
 ```
 
 Closing an escalation is a human act: **STOP and ask the human** to run `resolve-escalation`
 (and the `--resolve` of `spec-doubt`, `spec-change-request` and `production-finding`) themselves.
 The agent never runs them — a record that says the human decided is worth nothing if the agent
-wrote it.
+wrote it. Since kit 2.12.0 the engine holds the line: the four commands require
+`--human NAME --note TEXT`, record `resolved_by`, and refuse (exit 2, nothing written) inside
+Claude Code's shell (`CLAUDECODE=1`). Show the exact command, filled in, and ask the human to
+paste it into their own terminal; never unset the marker to get past it.
 
 A CONSTITUTION breach is escalated AND flagged as a first-class blocker:
 
