@@ -1895,3 +1895,48 @@ the human-act flags and the PR hook) is proposed for 2.11.0 and has no criterion
   first or a DRAFT PR; never a ready-for-review PR while red; pushing a branch is not opening a
   PR), the proactive report of a QA step that could not run, `test-run --repo` as the only way
   evidence is produced, and "STOP and ask the human" for closing an escalation.
+
+## Nothing vanishes (ADR-056 R2', ADR-057, 2.11.0) - closes on green `AC-GI-nn` smoke assertions
+
+The gap: a TLA+ model check (`docs/gate-integrity/models/`) broke the first design of the
+gated-finding debt with an honest agent -- flag v0, fix, log, review v1 clean, revert to v0,
+re-test: `pr-ready` on the code a tool had flagged -- because a QA step carried the tree it was
+LOGGED at and nothing anchored convergence to the tree on disk. 2.11.0 witnesses each review when
+it starts and reads the debt off reviewed trees; the seal, which covered `repos[0]` only (the
+v2.9.0 audit's A-F9), now covers every configured repo. Measured by T174 over real temp git repos
+the engine drives under an isolated HOME.
+
+- [ ] AC-GI-30 - the audit's A-F9: a crash committed into the SECOND repo after its evidence makes
+  `check-terminado` exit 1 with `mobile-app: UNSEALED` and the stale-seal reason prefixed
+  `[mobile-app]`, while `backend-api: SEALED` stays on its own line.
+- [ ] AC-GI-32 - two sealed repos: exit 0, one SEALED line per repo, and `top --json`
+  `terminado.sealed` carries `ok: true` and a `repos[]` of two.
+- [ ] AC-GI-33 - a second repo that was never snapshotted reads UNMEASURED (exit 2), named:
+  `[mobile-app] no snapshot recorded yet` (it used to read SEALED).
+- [ ] AC-GI-34 - one configured repo keeps the 2.10 payload shape exactly: the keys `ok`,
+  `reasons`, `commit`, `repo`, `note`, no `repos`, no `[name]` prefix.
+- [ ] AC-GI-35 - nested paths (a repo at `.`, another under it): sealed while untouched; an inner
+  source change breaks both seals, each named on its own line.
+- [ ] AC-GI-36 - a docs-only commit after the evidence keeps every repo sealed, each with ADR-039's
+  note.
+- [ ] AC-GI-50 - TLC path M1 (flag v0, fix, log, review v1 clean, revert to v0, re-test): `phase`
+  exits 1, "saw a different source than the tree now" naming the file. The SHIPPED PROBE: the
+  v2.10.1 engine, driven the same way, reaches `pr-ready`. Without the tag in git this reads
+  UNMEASURED.
+- [ ] AC-GI-51 - TLC path M2 (the review saw v1, the agent reverts BEFORE logging): the step
+  carries the reviewed tree from its `review-start`, and Anchor refuses the clean verdict on v0.
+- [ ] AC-GI-52 - TLC path Lies (after the debt closed on v1, a clean verdict on the flagged content
+  v0): Memory -- "the record contradicts itself", NOT converged.
+- [ ] AC-GI-53 - the audit's A-F2 (the same tool and iteration re-logged clean with no review): the
+  re-log is recorded unwitnessed and `phase` names it; nothing converges.
+- [ ] AC-GI-54 - a real fix (review flags v0, fix, re-test, log, review the fixed tree clean, log)
+  reaches `pr-ready`: the rules are not vacuous.
+- [ ] AC-GI-55 - a deferral (`ISSUES-DEFERRED.md` changed between the two reviews) closes the debt,
+  `pr-ready` holds, and `readiness` prints "1 gated finding(s) deferred, not fixed".
+- [ ] AC-GI-56 - a docs-only commit after convergence keeps it converged (Anchor compares
+  source-relevant content only).
+- [ ] AC-GI-57 - a ledger whose steps the v2.10.1 engine wrote (no review) loads and converges as
+  before, and `readiness` names the steps that predate witnessed reviews. Without the tag in git
+  this reads UNMEASURED.
+- [ ] AC-GI-58 - `log-step --review` naming an unknown review, another tool's review or an
+  already-logged review is recorded unwitnessed with the reason, and never counts.

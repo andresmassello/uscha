@@ -2940,7 +2940,10 @@ def _deferred_sha(repo_path, ledger_path=None):
 def cmd_review_start(args):
     """Record the tree a QA review starts on (ADR-056 R2'). Runs nothing, reviews nothing."""
     ledger = _load(args.ledger)
-    _repo_node(ledger, args.repo)
+    node = _repo_node(ledger, args.repo)
+    # the same rule log-step enforces: an older iteration cannot start a review that would
+    # supersede newer state (refused before anything is written)
+    _validate_iteration(node, args.tool, args.iteration)
     entry = _scope_entry(ledger, args.repo)
     path, rtype = entry.get("path", "."), entry.get("type", "maven")
     reviews = ledger.setdefault(REVIEWS_KEY, [])
@@ -2978,7 +2981,7 @@ def _review_link(ledger, args):
 def _review_verdicts(agent, tools, wit):
     """(reasons, info) of ADR-056 R2' for the tools of a cycle. Legacy steps (no `reviewed`, no
     `unwitnessed`: written before 2.11.0) are not judged here -- 2.10 semantics."""
-    reasons, info = [], {"deferred_not_fixed": 0, "legacy_steps": 0}
+    reasons, info = [], {"deferred_not_fixed": 0, "legacy_steps": 0, "no_tree_closures": 0}
     info["legacy_steps"] = sum(1 for s in agent
                                if "reviewed" not in s and "unwitnessed" not in s)
     if wit is None:
@@ -3014,6 +3017,14 @@ def _review_verdicts(agent, tools, wit):
             for c in witnessed[i + 1:]:
                 if (c.get("gated_reported") or 0) != 0:
                     continue
+                if not isinstance(g["reviewed"].get("tree"), dict) or \
+                        not isinstance(c["reviewed"].get("tree"), dict):
+                    # no git (or no commit) when one of the two reviews started: movement is
+                    # UNMEASURABLE, so the debt degrades to 2.10 semantics -- a later clean step
+                    # closes it -- and readiness says so (ADR-039's no-git posture: degrade, name)
+                    closer = (c, None)
+                    info["no_tree_closures"] += 1
+                    break
                 same, m = same_state(g["reviewed"], c["reviewed"])
                 if not same and (m or g["reviewed"].get("deferred_sha256")
                                  != c["reviewed"].get("deferred_sha256")):
@@ -3024,7 +3035,7 @@ def _review_verdicts(agent, tools, wit):
                                "later clean review of a different source or of a changed %s"
                                % (t, g.get("gated_reported"), g.get("n"), g.get("review"),
                                   DEFERRED_FILE))
-            elif not closer[1]:
+            elif closer[1] == []:
                 info["deferred_not_fixed"] += g.get("gated_reported") or 0
         # Memory: a clean verdict on exactly the content an earlier review flagged
         if isinstance(latest.get("reviewed"), dict) and (latest.get("gated_reported") or 0) == 0:
@@ -10607,6 +10618,8 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
                      if (live.get("r2") or {}).get("deferred_not_fixed") else {}),
                   **({"steps_predate_reviews": (live.get("r2") or {})["legacy_steps"]}
                      if (live.get("r2") or {}).get("legacy_steps") else {}),
+                  **({"debts_closed_without_tree": (live.get("r2") or {})["no_tree_closures"]}
+                     if (live.get("r2") or {}).get("no_tree_closures") else {}),
                   # only surfaced when golden_required is in play, so a config with neither
                   # risk_profile nor golden_required has byte-identical facts to before (1.45.0)
                   **({"golden_missing": golden_missing}
@@ -12654,6 +12667,9 @@ def cmd_readiness(args):
         if r["facts"].get("gated_deferred_not_fixed"):
             print(f"  · {rname}: {r['facts']['gated_deferred_not_fixed']} gated finding(s) "
                   f"deferred, not fixed (ISSUES-DEFERRED.md)")
+        if r["facts"].get("debts_closed_without_tree"):
+            print(f"  · {rname}: {r['facts']['debts_closed_without_tree']} gated finding debt(s) "
+                  f"closed without a comparable tree (no git): movement was not measured")
         if r["facts"].get("steps_predate_reviews"):
             print(f"  · {rname}: {r['facts']['steps_predate_reviews']} QA step(s) predate "
                   f"witnessed reviews (2.11.0) and keep 2.10 semantics")

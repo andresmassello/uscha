@@ -7,7 +7,7 @@ governs:
 ---
 # ADR-038: TERMINADO is sealed to the exact code state — evidence files are content-hashed at ingest, and DONE is not DONE while the seal is broken (INV-T1, ported into the engine)
 
-## Status: Accepted (1.92.0; option B chosen by the maintainer 2026-08-19) — **amended 1.93.0: tolerant seal** — **amended 2.10.0 by ADR-055: a named report must be born of a recorded run that is still current**
+## Status: Accepted (1.92.0; option B chosen by the maintainer 2026-08-19) — **amended 1.93.0: tolerant seal** — **amended 2.10.0 by ADR-055: a named report must be born of a recorded run that is still current** — **amended 2.11.0 by ADR-057: the seal covers every configured repo**
 
 > **Amended in 1.93.0 (ADR-039): the seal tolerates non-source commits.** `sealed.ok` no
 > longer requires `HEAD == evidence_origin.commit`. HEAD may differ from the snapshot's commit

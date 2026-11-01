@@ -142,6 +142,10 @@ addresses a specific finding. Movement plus a fresh witnessed review is the clai
   engine as a RED case (FIXTURES §2b); a path the engine does not reproduce means the model is
   wrong until shown otherwise.
 
+- **No git.** A reviewed tree cannot be compared without git, so the debt degrades to 2.10
+  semantics there (a later clean step closes it) and `readiness` names each such closure; Anchor
+  and Memory are skipped for the same reason. Decided while implementing (the model assumes git).
+
 ## 7. Delivery
 
 | Area | Engine | Suite | Docs/SKILL | Total |

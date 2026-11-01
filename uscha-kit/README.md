@@ -221,6 +221,27 @@ the committed ledger. What stays trusted is the declared command: provenance pro
 ran at this tree and wrote these bytes", never that the command tests anything -- it is a config
 line a reviewer reads, and a `tests > 0` with `test_loc == 0` contradiction is flagged (advisory).
 
+## Witnessed QA reviews (ADR-056 R2', 2.11.0) - which tree did the reviewer see?
+
+`log-step` counts are narration, and until 2.11.0 a step also carried the tree it was LOGGED at,
+not the tree the tool REVIEWED -- the SKILL's order (review, fix, test, log) makes those differ on
+every pass that fixes something. A TLA+ model check found the consequence: flag v0, fix, review v1
+clean, revert to v0, re-test, and the loop read `pr-ready` on the code a tool had flagged, with no
+lie anywhere. So a pass now starts with `qa_ledger.py review-start --repo R --tool T --iteration
+N`, which stamps the tree the review starts on and prints `RV-n`, and is logged with `log-step
+--review RV-n`. A step without one is unwitnessed and never counts. Convergence then reads three
+rules off reviewed trees: the latest review of each tool saw the source on disk now (a late edit
+means that tool runs again); a gated finding closes only on a later clean review of different
+source or of a changed `ISSUES-DEFERRED.md` (reported as "deferred, not fixed"); and a clean
+verdict on exactly the content an earlier review flagged contradicts the record. What this does
+NOT prove: that the review ran, or that a fix addresses a given finding -- only that every verdict
+is about the tree it claims, and that the verdicts do not contradict each other. Ledgers from
+before 2.11.0 keep their steps' 2.10 semantics until a tool's first witnessed step.
+
+`check-terminado` and `top --json` seal EVERY configured repo since 2.11.0 (ADR-057): one verdict
+line per repo, the exit code of the aggregate, and a `repos[]` detail only when there are several
+(a single-repo payload is byte-identical to 2.10).
+
 ## Evidence origin (ADR-007) - green, but green at *what*?
 
 Freshness compares file mtimes, so the ledger could say "tests green" without being able to

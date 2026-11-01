@@ -131,10 +131,11 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
    the spec package. No code until the package exists.
 2. **Build.** `/uscha-devloop` implements against the SPEC, with tests as a guardrail.
 3. **QA loop.** Independent review passes (maker ≠ checker) run until the change
-   **converges** — findings at or above the severity gate are to be fixed, the rest go to
-   `ISSUES-DEFERRED.md` with their evidence (the gate reads each pass's own report of its
-   gated findings; measuring that a gated finding left only by a fix or a deferral is
-   proposed, ADR-056). Converge, don't chase zero.
+   **converges** — findings at or above the severity gate are fixed, the rest go to
+   `ISSUES-DEFERRED.md` with their evidence. Since 2.11.0 the engine witnesses each review
+   (`review-start` stamps the tree it starts on): a gated finding closes only on a later clean
+   review of different source or of a changed `ISSUES-DEFERRED.md`, and the last review of each
+   tool must have seen the code on disk now (ADR-056). Converge, don't chase zero.
 4. **Readiness.** One score, one screen: acceptance (measured) 30 · static gate 20 ·
    ADR 15 · coverage 15 · convergence 10 · integration 10, with hard caps that say *why*
    they bit and whether the threshold was your requirement or the kit's default.

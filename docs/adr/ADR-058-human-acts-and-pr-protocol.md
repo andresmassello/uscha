@@ -10,7 +10,7 @@ governs:
 ---
 # ADR-058: Human acts are DECLARED and RECORDED, kept out of the agent's shell — and a PR request runs the gate first
 
-## Status: Proposed — **the SKILL text (PR-request protocol, proactive report of a QA step that could not run, STOP and ask the human) shipped in 2.10.0; `--human`/`--note`, the agent-marker refusal and the PR hook proposed for 2.11.0**
+## Status: Proposed — **the SKILL text (PR-request protocol, proactive report of a QA step that could not run, STOP and ask the human) shipped in 2.10.0; `--human`/`--note`, the agent-marker refusal and the PR hook proposed for 2.12.0**
 
 ## Context
 

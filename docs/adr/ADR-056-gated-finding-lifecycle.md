@@ -7,7 +7,7 @@ governs:
 ---
 # ADR-056: A gated finding leaves the ledger only through MEASURED movement — and an unverified QA step never counts, never hides
 
-## Status: Proposed — **R1 (an unverified step never counts, never hides) shipped in 2.10.0; R2' (witnessed reviews, anchored convergence, the debt on reviewed trees, redesigned after a model check) proposed for 2.11.0**
+## Status: Accepted (R1 in 2.10.0; R2' -- witnessed reviews, anchored convergence, the debt on reviewed trees, Memory -- in 2.11.0, redesigned after a model check)
 
 ## Context
 

@@ -9,7 +9,7 @@ governs:
 ---
 # ADR-057: The seal covers EVERY configured repo, and `phase` re-derives freshness at read time (amends ADR-038)
 
-## Status: Proposed — **read-time freshness in `phase` and `_converged` shipped in 2.10.0; the every-repo seal proposed for 2.11.0**
+## Status: Accepted (read-time freshness in `phase` and `_converged` in 2.10.0; the every-repo seal in 2.11.0)
 
 ## Context
 
