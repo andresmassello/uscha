@@ -60,6 +60,26 @@ Base: F1-03 (attested, pr-ready).
 | F2-09 | legacy | v2.9.0 ledger with a gated step superseded by a clean one (no stamps) | loads; converges as in 2.9.0; `readiness` names "1 pre-2.10 step superseded without measured accounting" (AC-GI-27) |
 | F2-10 | GREEN | window mode, every step verified and clean, k=3 | CONVERGED exactly as 2.9.0 (no regression) (AC-GI-22) |
 
+## 2b. G2 R2' — witnessed reviews, Anchor, Memory (ADR-056 as redesigned in SPEC-2.11.0.md)
+
+The §2 rows F2-01 and F2-04..F2-09 were written for the R2 that `models/GatedDebt.tla` broke; they
+are superseded by the rows below (F2-02, F2-03 and F2-10 shipped in 2.10.0 as AC-GI-21/-22). The
+first four rows are the TLC paths, replayed against the real engine as RED cases. Base: `base-py`
+with a declared test command, every QA tool declared external; "review(T)" = `review-start --repo
+backend-api --tool T --iteration N`, then the agent's tool pass, then `log-step ... --review RV-n`.
+
+| ID | Kind | Commands | Expected |
+|---|---|---|---|
+| F2-11 | **RED (TLC M1)** | `test-run` (v0); review(T) flags v0 (gated 1); fix to v1; `log-step --review` gated 1; review(T) on v1 clean, logged; `git checkout` back to v0; `test-run` | `phase` exit 1: "the last review ... saw a different source than the tree now"; the shipped probe (v2.10.1 engine, same tree, steps logged without `--review`) reaches `pr-ready` (AC-GI-50) |
+| F2-12 | **RED (TLC M2)** | review(T) starts on v1 (clean); the agent reverts to v0 BEFORE logging; logs the clean step | the step carries the REVIEWED tree (v1): Anchor refuses on v0; the open debt from a v0 flag stays open (AC-GI-51) |
+| F2-13 | **RED (TLC Lies)** | after F2-11's flag on v0, a `review-start` on v0 then `log-step --review ... --gated-reported 0` (a clean pass that contradicts the flag) | Memory: "reports 0 gated findings on exactly the content step #n flagged" -- NOT converged (AC-GI-52) |
+| F2-14 | **RED (A-F2)** | gated step, then the same tool+iteration re-logged 0/0 with no `--review` | the re-log is unwitnessed: it never counts and never hides; the debt stays open (AC-GI-53) |
+| F2-15 | GREEN (vacuity) | review flags v0; fix to v2; `test-run`; log gated; review v2 clean; log clean | CONVERGED, `pr-ready` (AC-GI-54) |
+| F2-16 | GREEN (deferral) | review flags v0; add an entry to `ISSUES-DEFERRED.md`; review v0 again, logged clean | CONVERGED; `readiness` prints "1 gated finding deferred, not fixed"; Memory does not fire (the deferred file differs) (AC-GI-55) |
+| F2-17 | GREEN | a docs-only commit after convergence | still CONVERGED (Anchor compares source-relevant content only) (AC-GI-56) |
+| F2-18 | legacy | a v2.10.1 ledger (steps without `reviewed`) | loads; converges as in 2.10.1 until a witnessed step of the tool exists; `readiness` names "N steps predate witnessed reviews" (AC-GI-57) |
+| F2-19 | refusal | `log-step --review RV-9` naming an unknown, closed, or other-tool review | recorded unwitnessed, named; never counts (AC-GI-58) |
+
 ## 3. G3 — every repo, at read time (ADR-057)
 
 Base `two-repo`: repos `backend-api` (`backend-api/`) and `mobile-app` (`mobile-app/`), both

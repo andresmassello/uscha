@@ -128,6 +128,10 @@ provenance field, one line each; the `--run` contract of ADR-008 is unchanged.
 
 ### 3.3 G2 — the gated-finding lifecycle (ADR-056)
 
+> **Superseded for 2.11.0 (R2 only):** a TLA+ model check broke the R2 below with an honest
+> agent; the redesign (witnessed reviews, Anchor, Memory) is `SPEC-2.11.0.md` §3, and the model is
+> `models/`. R1 shipped in 2.10.0 as written.
+
 **R1 — unverified never counts, and never hides (plain fixes of ADR-051:99-100 as written).**
 - Ordered mode (3944-3957): the cycle is built from the **latest seen** step per listed tool,
   not the latest verified. If that step is `unverified`, the tool is blocked with its own

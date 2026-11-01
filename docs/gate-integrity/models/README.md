@@ -1,5 +1,8 @@
 # Model check of ADR-056 R2 (the gated-finding debt) -- input for 2.11.0
 
+The design that came out of it is `../SPEC-2.11.0.md` §3 (R2'); its RED cases are
+`../FIXTURES.md` §2b.
+
 A TLA+ model of the design in `../SPEC.md` §3.3, checked with TLC BEFORE 2.11.0 writes the
 code. It is a design artifact: nothing here ships, and nothing here is a claim about the engine
 (repo rule 2). Each path TLC finds becomes a RED case in the suite once the code exists, and is
