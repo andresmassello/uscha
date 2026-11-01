@@ -261,7 +261,7 @@ wrun() {
 }
 # rstep <log-step args> -- since 2.11.0 (ADR-056 R2') a QA step counts only when it is WITNESSED:
 # `review-start` stamps the tree the review starts on and `log-step --review RV-n` carries it. A
-# block that logs a QA pass it means to count calls this instead of `rstep`; the args are
+# block that logs a QA pass it means to count calls this instead of `run log-step`; the args are
 # log-step's own, and the four review-start needs are read out of them.
 rstep() {
   local led="" repo="" tool="" it="" prev="" a rv
@@ -20889,9 +20889,11 @@ def project(prefix, repos=(("api", "api"),), order=("cr",)):
     for name, path in repos:
         write(os.path.join(d, path, "mod.py"), "v = 0" + NL)
         write(os.path.join(d, path, "run.py"), EMIT)
+    defaults = {"qa_tools_external": list(order), "test_command_python": [XPY, "run.py"]}
+    if order:
+        defaults["qa_tools_order"] = list(order)       # none -> window mode
     write(os.path.join(d, "uscha.config.json"), json.dumps(
-        {"defaults": {"qa_tools_order": list(order), "qa_tools_external": list(order),
-                      "test_command_python": [XPY, "run.py"]},
+        {"defaults": defaults,
          "repos": [{"name": n, "path": p, "type": "python"} for n, p in repos],
          "integration": {"enabled": False}}, indent=2) + NL)
     write(os.path.join(d, ".gitignore"), "__pycache__/" + NL)
@@ -21056,6 +21058,93 @@ def measure():
                            and "already logged" in s3 and cv.returncode != 0)
     why["AC-GI-58"] = "s1=%r s2=%r s3=%r cv=%s" % (s1, s2, s3, cv.returncode)
 
+    # ------------- the 2.11.0 fresh review: four more paths, each now a RED case -------------
+    # --- AC-GI-59: window mode (no qa_tools_order) -- a tool's debt does not leave with the
+    # window: cr flags v0, then jd reviews v0 clean three times
+    d = project("window", order=())
+    cfg = json.loads(io.open(os.path.join(d, "uscha.config.json"), encoding="utf-8").read())
+    cfg["defaults"]["qa_tools_external"] = ["cr", "jd"]
+    write(os.path.join(d, "uscha.config.json"), json.dumps(cfg, indent=2) + NL)
+    trun(d)
+    rv = review(d, 1); log(d, 1, 3, rv)
+    for it in (1, 2, 3):
+        rv = review(d, it, tool="jd"); log(d, it, 0, rv, tool="jd")
+    ph = phase(d)
+    res["AC-GI-59"] = bool(ph.returncode == 1 and "cr: 3 gated finding(s)" in ph.stdout)
+    why["AC-GI-59"] = "rc=%s %r" % (ph.returncode, ph.stdout[-250:])
+
+    # --- AC-GI-60: a GATED step logged without --review still opens a debt (on the state it was
+    # logged at), and log-step says on stderr that the step is unwitnessed
+    d = project("unwit-gated")
+    trun(d)
+    lg = log(d, 1, 3)
+    rv = review(d, 1); log(d, 1, 0, rv)
+    ph = phase(d)
+    res["AC-GI-60"] = bool(ph.returncode == 1 and "is UNWITNESSED" in lg.stdout
+                           and "cr: 3 gated finding(s)" in ph.stdout)
+    why["AC-GI-60"] = "rc=%s log=%r" % (ph.returncode, lg.stdout[-200:])
+
+    # --- AC-GI-61: removing a deferral after it closed a debt un-defers it -- Anchor compares
+    # ISSUES-DEFERRED.md too
+    d = project("undefer")
+    trun(d)
+    rv = review(d, 1); log(d, 1, 1, rv)
+    write(os.path.join(d, "ISSUES-DEFERRED.md"), "- cr: deferred" + NL)
+    rv = review(d, 2); log(d, 2, 0, rv)
+    before = phase(d).returncode
+    os.remove(os.path.join(d, "ISSUES-DEFERRED.md"))
+    ph = phase(d)
+    res["AC-GI-61"] = bool(before == 0 and ph.returncode == 1
+                           and "ISSUES-DEFERRED.md changed since the last review" in ph.stdout)
+    why["AC-GI-61"] = "before=%s after=%s %r" % (before, ph.returncode, ph.stdout[-200:])
+
+    # --- AC-GI-62: what a review saw is wider than ADR-039's source filter: an honest fix of a
+    # flagged tracked template converges, and an unreviewed .py edit under a reports/ package
+    # after convergence is refused
+    d = project("content")
+    write(os.path.join(d, "api", "templates", "page.html"), "<p>bug</p>" + NL)
+    commit_all(d, "template")
+    trun(d)
+    rv = review(d, 1)
+    write(os.path.join(d, "api", "templates", "page.html"), "<p>fixed</p>" + NL)
+    log(d, 1, 1, rv)
+    rv = review(d, 2); log(d, 2, 0, rv)
+    fixed = phase(d)
+    write(os.path.join(d, "api", "reports", "service.py"), "x = 1" + NL)
+    commit_all(d, "service under a reports package")
+    unreviewed = phase(d)
+    res["AC-GI-62"] = bool(fixed.returncode == 0 and unreviewed.returncode == 1
+                           and "api/reports/service.py" in unreviewed.stdout)
+    why["AC-GI-62"] = "fixed rc=%s %r | unreviewed rc=%s %r" % (
+        fixed.returncode, fixed.stdout[-150:], unreviewed.returncode, unreviewed.stdout[-150:])
+
+    # ------- the 2.11.0 model extension (Undefer, LogUnwitnessedGated): two more TLC paths -------
+    # --- AC-GI-64: removing ISSUES-DEFERRED.md is not deferring -- a gated step logged while a
+    # deferral was on disk is not closed by a clean review of the same source once it is gone
+    d = project("undefer-close")
+    write(os.path.join(d, "ISSUES-DEFERRED.md"), "- cr: deferred" + NL)
+    trun(d)
+    log(d, 1, 1)
+    os.remove(os.path.join(d, "ISSUES-DEFERRED.md"))
+    rv = review(d, 2); log(d, 2, 0, rv)
+    ph = phase(d)
+    res["AC-GI-64"] = bool(ph.returncode == 1 and "still open" in ph.stdout)
+    why["AC-GI-64"] = "rc=%s %r" % (ph.returncode, ph.stdout[-250:])
+
+    # --- AC-GI-65: TLC's shortest path once the closure rule held -- a stale review of v1 closes
+    # the v0 debt, the deferral is removed, and a clean verdict on v0 must still contradict the
+    # gated one (Memory: with no deferral on disk, removing one is not new content)
+    d = project("undefer-memory")
+    write(os.path.join(d, "ISSUES-DEFERRED.md"), "- cr: deferred" + NL)
+    setv(d, 1); rv1 = review(d, 1); setv(d, 0)
+    trun(d)
+    log(d, 1, 1); log(d, 1, 0, rv1)
+    os.remove(os.path.join(d, "ISSUES-DEFERRED.md"))
+    rv = review(d, 2); log(d, 2, 0, rv)
+    ph = phase(d)
+    res["AC-GI-65"] = bool(ph.returncode == 1 and "the record contradicts itself" in ph.stdout)
+    why["AC-GI-65"] = "rc=%s %r" % (ph.returncode, ph.stdout[-250:])
+
     # ------------------------------ the seal, every repo (ADR-057) ------------------------------
     two = (("backend-api", "backend-api"), ("mobile-app", "mobile-app"))
     t = project("seal-one-snap", repos=two)
@@ -21094,6 +21183,19 @@ def measure():
                            and "backend-api: SEALED" in ct.stdout
                            and "[mobile-app] stale seal: source changed" in ct.stdout)
     why["AC-GI-30"] = "rc=%s %r" % (ct.returncode, ct.stdout[-300:])
+
+    # --- AC-GI-63: the summary line names the repo that decided the aggregate -- the broken one,
+    # not an unmeasured one listed before it
+    u = project("seal-lead", repos=two)
+    trun(u, "mobile-app")
+    commit_all(u, "evidence")
+    write(os.path.join(u, "mobile-app", "mod.py"), "v = 9" + NL)
+    commit_all(u, "change")
+    ct = q(u, "check-terminado")
+    res["AC-GI-63"] = bool(ct.returncode == 1 and "backend-api: UNMEASURED" in ct.stdout
+                           and "check-terminado: UNSEALED" in ct.stdout
+                           and "(repo mobile-app)" in ct.stdout)
+    why["AC-GI-63"] = "rc=%s %r" % (ct.returncode, ct.stdout[-250:])
 
     # --- AC-GI-34: one repo -> the 2.10 shape, byte for byte: no repos key, no prefix
     one = project("seal-single")
@@ -21135,7 +21237,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T174" in
-  OK*) PASS=$((PASS+1)); echo "  ok   nothing vanishes (AC-GI-30, -32..36, -50..58): $T174";;
+  OK*) PASS=$((PASS+1)); echo "  ok   nothing vanishes (AC-GI-30, -32..36, -50..63): $T174";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T174";;
 esac
 }
@@ -21496,7 +21598,7 @@ FAMILIES = (
     # AC-GI-50 is the SHIPPED PROBE and AC-GI-57 drives a ledger the v2.10.1 engine wrote -- both
     # read the tag out of git, so without it they report None = UNMEASURED, never a silent pass.
     (".nv-cases.json", "nothing-vanishes", "T174",                    # ADR-056 R2', ADR-057, 2.11.0
-     ("AC-GI-30",) + _seq("AC-GI", 32, 36) + _seq("AC-GI", 50, 58)),
+     ("AC-GI-30",) + _seq("AC-GI", 32, 36) + _seq("AC-GI", 50, 65)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

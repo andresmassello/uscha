@@ -1940,3 +1940,19 @@ the engine drives under an isolated HOME.
   this reads UNMEASURED.
 - [ ] AC-GI-58 - `log-step --review` naming an unknown review, another tool's review or an
   already-logged review is recorded unwitnessed with the reason, and never counts.
+- [ ] AC-GI-59 - window mode (no `qa_tools_order`): a tool's gated debt does not leave with the
+  window -- `cr` flags v0, `jd` reviews v0 clean three times, `phase` exits 1 naming
+  "cr: 3 gated finding(s)".
+- [ ] AC-GI-60 - a GATED step logged without `--review` opens a debt on the state it was logged at;
+  `log-step` says the step is UNWITNESSED and a later clean review of the same source does not
+  close it.
+- [ ] AC-GI-61 - deleting `ISSUES-DEFERRED.md` after a deferral closed a debt un-converges the loop:
+  "ISSUES-DEFERRED.md changed since the last review".
+- [ ] AC-GI-62 - what a review saw is wider than ADR-039's source filter: an honest fix of a flagged
+  tracked template converges, and an unreviewed `.py` under a `reports/` package is named.
+- [ ] AC-GI-63 - with two repos, the summary line names the repo that decided the aggregate.
+- [ ] AC-GI-64 - TLC (model as shipped): removing `ISSUES-DEFERRED.md` is not deferring -- a gated
+  step logged while a deferral was on disk stays open after a clean review of the same source with
+  the file gone.
+- [ ] AC-GI-65 - TLC (model as shipped): a stale review of v1 closes the v0 debt, the deferral is
+  removed, and a clean verdict on v0 still contradicts the record (Memory).

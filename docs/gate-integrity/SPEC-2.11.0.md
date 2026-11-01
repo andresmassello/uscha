@@ -1,4 +1,4 @@
-# SPEC 2.11.0 — "nothing vanishes" (governed by ADR-056, -057, -058; Proposed)
+# SPEC 2.11.0 — "nothing vanishes" (ADR-056 R2' and ADR-057 Accepted; ADR-058 Proposed for 2.12.0)
 
 > Placement: the 2.11.0 slice of the gate-integrity feature (`SPEC.md` is the whole design;
 > 2.10.0 shipped G1, G3a, G2-R1 and the G4 SKILL text). This file supersedes `SPEC.md` §3.3 R2,
@@ -48,8 +48,8 @@ Two causes, both structural:
   tree, so a revert counts as movement and closes the debt.
 
 What TLC does not break at the same bounds is three pieces together (§3): **Witness** + **Anchor**
-(honest agent: 761,424 distinct states, no violation) + **Memory** (an agent that logs counts no
-review produced: 1,607,868 distinct states, no violation). The vacuity control
+(honest agent: 926,106 distinct states, no violation) + **Memory** (an agent that logs counts no
+review produced: 1,914,237 distinct states, no violation). The vacuity control
 (`NeverFixedAndReady`, which must break) breaks: a legitimate fix and a deferral still reach
 `pr-ready`, so the green is not vacuous. Limits of the check are in §6.
 
@@ -66,7 +66,8 @@ review produced: 1,607,868 distinct states, no violation). The vacuity control
 - `log-step` gains **`--review RV-n`**. A step that names an open review of the same repo, tool
   and iteration carries that review's `tree` and `deferred_sha256` as the **reviewed** state; the
   review is closed by that step (one step per review). The step keeps its own log-time stamp
-  beside it (useful to the retrospective, never read by the gate).
+  beside it; the gate reads it only for an unwitnessed GATED step, whose debt opens on the state
+  it was logged at (§3.3).
 - A step with no `--review`, or naming an unknown, closed or mismatched review, is recorded
   **unwitnessed** and treated like an unverified step (R1, shipped): it never counts and never
   hides. Legacy steps (pre-2.11, no `reviewed` key) keep their 2.10 semantics and are named once in
@@ -86,16 +87,21 @@ a change; a revert to a different tree is.
 
 - A witnessed step of tool T with `gated_reported = G > 0` opens a debt on its **reviewed** state
   (tree + `deferred_sha256`). The reviewed state IS the "before" — no heuristic baseline.
+- An unwitnessed step of T with `G > 0` opens a debt too, on the state it was LOGGED at: a gated
+  verdict is never discarded for lacking a witness.
 - The debt closes when a later witnessed step of T reports `gated_reported == 0` on a reviewed
   state that differs from the debt's: different source-relevant content (a fix) or a different
-  `ISSUES-DEFERRED.md` (a deferral; `readiness` prints "N gated findings deferred, not fixed").
+  `ISSUES-DEFERRED.md` that is PRESENT at the clean review (a deferral; `readiness` prints "N gated
+  findings deferred, not fixed"). Removing the file is not deferring (model finding 3, §6).
 - An open debt blocks convergence in both modes, outside any window, named with tool, count, step
   and review id. `--fixed` / `--deferred` never close a debt (narration, SKILL two-tier contract).
 
 ### 3.4 Memory: a clean verdict cannot contradict the record
 
 A witnessed clean step of T whose reviewed state (source content AND `ISSUES-DEFERRED.md`) equals
-the reviewed state of an earlier gated step of T counts for nothing: `"code-review: step #15
+the reviewed state of an earlier gated step of T counts for nothing -- and so does one on the
+same source with NO `ISSUES-DEFERRED.md`, whatever deferral the gated step saw (model finding 4,
+§6): `"code-review: step #15
 reports 0 gated findings on exactly the content step #12 flagged with 3 -- the record contradicts
 itself; fix, or defer in ISSUES-DEFERRED.md"`. This is what holds against an agent that narrates a
 clean pass it never ran (the model's `Lies`); its cost is §5 Q6.
@@ -141,6 +147,13 @@ addresses a specific finding. Movement plus a fresh witnessed review is the clai
 - The model describes the DESIGN. Once 2.11.0 exists, each TLC path is replayed against the real
   engine as a RED case (FIXTURES §2b); a path the engine does not reproduce means the model is
   wrong until shown otherwise.
+
+- **The model as shipped.** A fresh review of the code found two moves outside the first model
+  (removing a deferral; logging a gated step with no review). `V211 = TRUE` adds both; TLC broke
+  the rule twice more (`models/README.md` findings 3 and 4), both fixed in the engine and replayed
+  as `AC-GI-64` and `AC-GI-65`. `shipped-2.11.0.cfg`: 46,976,202 distinct states, no error; its
+  vacuity control breaks. A deferral is binary in the model and a file hash in the engine: editing
+  `ISSUES-DEFERRED.md` while keeping it non-empty still reads as a deferral.
 
 - **No git.** A reviewed tree cannot be compared without git, so the debt degrades to 2.10
   semantics there (a later clean step closes it) and `readiness` names each such closure; Anchor

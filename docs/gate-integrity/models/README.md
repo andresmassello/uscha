@@ -38,14 +38,39 @@ wrong until shown otherwise.
 - **Memory**: a clean step on content the ledger already saw flagged contradicts the record and
   counts for nothing.
 
-`proposed-honest.cfg` (Witness + Anchor + Memory, honest agent): 761,424 distinct states, no
+`proposed-honest.cfg` (Witness + Anchor + Memory, honest agent): 926,106 distinct states, no
 error -- Witness + Anchor alone already hold for an honest agent. `proposed-lying-agent.cfg`
-(the agent may log counts no review produced): 1,607,868 distinct states, no error; Memory is
-what closes it. `proposed-vacuity-control.cfg` checks `NeverFixedAndReady`, which MUST break: a
+(the agent may log counts no review produced): 1,914,237 distinct states, no error; Memory is
+what closes it. (The first run read 761,424 and 1,607,868; the counts grew when the model gained
+the `flagged` ground truth and the deferral state a review starts on. Same verdicts.) `proposed-vacuity-control.cfg` checks `NeverFixedAndReady`, which MUST break: a
 legitimate fix and a deferral still reach `pr-ready`, so the green above is not vacuous.
 
 Cost to decide: with Memory, a tool's false positive on unchanged code stays blocked until it is
 deferred -- which is what the method already asks.
+
+## The design as shipped in 2.11.0 (`V211 = TRUE`)
+
+A fresh review of the 2.11.0 code found two moves the first model did not allow: the agent may
+**remove** a deferral it added (`Undefer`), and may log a **gated** step with no review
+(`LogUnwitnessedGated`; the engine opens a debt on the state it was logged at). Extended with both,
+TLC broke the rule twice more -- each fixed in the engine and replayed as a RED case in T174:
+
+3. **Removing a deferral read as deferring** (`AC-GI-64`): defer, log a gated step, remove the
+   deferral, review the same source clean. The two reviewed states differ only in
+   `ISSUES-DEFERRED.md`, and "the deferral file changed" closed the debt. Fix: a deferral closes a
+   debt only when the clean review SAW a deferral file.
+4. **A stale review closes the debt, then removing the deferral makes the clean verdict "new"**
+   (`AC-GI-65`, 10 steps): a review of v1 starts, the source returns to v0, a gated step is logged
+   on v0, the v1 review is logged clean (different source: the debt closes), the deferral is
+   removed, and a clean verdict on v0 no longer equals the gated one (deferral state differs), so
+   Memory let it through. Fix: with no deferral file on disk a clean verdict on a flagged source
+   contradicts the record whatever deferral state the gated verdict saw.
+
+`shipped-2.11.0.cfg` (everything TRUE, lying agent): **46,976,202 distinct states, no error**.
+`shipped-2.11.0-vacuity.cfg` checks `NeverFixedAndReady`, which breaks: a deferral still reaches
+`pr-ready`. Limit the binary model cannot express: in the engine a deferral is the sha256 of a
+file, so editing `ISSUES-DEFERRED.md` (present, different) to drop one entry while keeping others
+still reads as a deferral -- the engine cannot tell which finding a line defers.
 
 ## Reproduce
 
@@ -53,6 +78,7 @@ deferred -- which is what the method already asks.
 curl -sSLo tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
 # sha256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
 java -cp tla2tools.jar tlc2.TLC -config as-specified.cfg GatedDebt.tla
+java -cp tla2tools.jar tlc2.TLC -config shipped-2.11.0.cfg -workers 2 GatedDebt.tla   # ~7 min
 ```
 
 The chart comes from the `statechart` skill of `cursor/plugins` (pstack, MIT), run with

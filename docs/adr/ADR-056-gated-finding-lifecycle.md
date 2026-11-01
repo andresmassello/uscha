@@ -43,11 +43,14 @@ the devloop SKILL (SKILL.md:24-26) already calls `log-step` counts "self-reporte
   like an unverified step (R1), never counts and never hides.
 - **Anchor.** Convergence requires, per tool, that its latest witnessed step reviewed a tree with
   the same source-relevant content as the tree now (read-time, ADR-055's comparison).
-- **Debt.** A witnessed gated step opens a debt on its reviewed state; a later witnessed clean
-  step of the same tool on a different reviewed state (source moved, or `ISSUES-DEFERRED.md`
-  moved -- printed as a deferral) closes it. `--fixed`/`--deferred` never close it.
+- **Debt.** A witnessed gated step opens a debt on its reviewed state (an unwitnessed gated step,
+  on the state it was logged at); a later witnessed clean step of the same tool on a different
+  reviewed state (source moved, or a PRESENT `ISSUES-DEFERRED.md` that moved -- printed as a
+  deferral) closes it. Removing the file is not deferring. `--fixed`/`--deferred` never close it.
+  An open debt blocks in both modes, outside any window.
 - **Memory.** A witnessed clean step on exactly the reviewed state an earlier gated step of the
-  same tool flagged contradicts the record and counts for nothing.
+  same tool flagged -- or on the same source with no `ISSUES-DEFERRED.md` at all -- contradicts
+  the record and counts for nothing.
 - **Legacy**: steps without a reviewed state keep 2.10 semantics until the tool's first witnessed
   step; `readiness` names them.
 
@@ -104,7 +107,9 @@ the tool REVIEWED, so the "baseline" heuristic counted a revert as movement (M2)
 + Deferring a gated finding stays possible and becomes visible.
 - Movement proves the code moved, not that it moved because of that finding; a trivial edit
   satisfies R2. The re-review of the moved code is what judges the fix — stated as a limit.
-- `log-step` costs one `git status` + one batched `git hash-object` per call.
+- Each QA pass costs one more call (`review-start`), and `review-start` and `log-step` each cost
+  one `git status` + one batched `git hash-object`.
+- A tool's false positive on unchanged code blocks until it is deferred (owner Q6).
 
 ## Out of scope
 
@@ -113,8 +118,9 @@ diffs finding ids, :2787); `oscillation` semantics.
 
 ## Acceptance
 
-R1 shipped in 2.10.0 as AC-GI-21 (B-F1) and AC-GI-22 (B-F2) in `ACCEPTANCE.md`. R2' (draft,
-rule 8; ids chosen not to collide with the shipped AC-GI-20): AC-GI-50..58, one per row of
-`docs/gate-integrity/FIXTURES.md` §2b -- the TLC paths M1, M2 and Lies and the A-F2 re-log as RED
-cases with a shipped probe against v2.10.1; the vacuity, deferral, docs-only and legacy rows as
-GREEN; a malformed `--review` as a named refusal.
+R1 shipped in 2.10.0 as AC-GI-21 (B-F1) and AC-GI-22 (B-F2) in `ACCEPTANCE.md`. R2' shipped in
+2.11.0 as AC-GI-50..62 and -64..65, one per row of `docs/gate-integrity/FIXTURES.md` §2b -- the TLC
+paths M1, M2 and Lies and the A-F2 re-log as RED cases with a shipped probe against v2.10.1; the
+vacuity, deferral, docs-only and legacy rows as GREEN; a malformed `--review` as a named refusal;
+the fresh review's four bypasses (59..62) and the two paths TLC found once the model allowed
+removing a deferral and logging a gated step with no review (64, 65).

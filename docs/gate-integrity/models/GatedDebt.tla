@@ -19,14 +19,18 @@
 (* Memory = TRUE: a clean step whose reviewed tree has the same content as *)
 (* a tree the ledger already saw flagged contradicts the record: it counts *)
 (* for nothing.                                                            *)
+(* V211 = TRUE: the design as SHIPPED in 2.11.0 after the fresh review -- *)
+(* the agent may also UNDO a deferral and log a gated step with no review *)
+(* (both were outside the first model); an unwitnessed gated step opens a *)
+(* debt on its logged state; Anchor also compares ISSUES-DEFERRED.md.     *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences
 
-CONSTANTS MaxLog, Anchor, Lies, Witness, Memory
+CONSTANTS MaxLog, Anchor, Lies, Witness, Memory, V211
 
 Versions == 0..2
 Buggy == {0}
-NoReview == [src |-> 99, gated |-> 99]
+NoReview == [src |-> 99, gated |-> 99, def |-> 99]
 
 VARIABLES src, deferred, log, pending, flagged
 vars == <<src, deferred, log, pending, flagged>>
@@ -38,7 +42,7 @@ Init ==
   /\ pending = NoReview
   /\ flagged = {}
 
-Rec(kind, g) == [kind |-> kind, src |-> src, def |-> deferred, gated |-> g]
+Rec(kind, g) == [kind |-> kind, src |-> src, def |-> deferred, gated |-> g, wit |-> FALSE]
 
 \* the agent edits the code: a fix, an unrelated change, or a revert
 Edit(v) ==
@@ -61,11 +65,14 @@ TestRun ==
 \* a QA tool reviews the code on disk; its verdict waits to be logged
 Review ==
   /\ pending = NoReview
-  /\ pending' = [src |-> src, gated |-> IF src \in Buggy THEN 1 ELSE 0]
+  \* the deferral state is read when the review STARTS, as review-start reads it in the engine
+  /\ pending' = [src |-> src, gated |-> IF src \in Buggy THEN 1 ELSE 0, def |-> deferred]
   /\ UNCHANGED <<src, deferred, log, flagged>>
 
 \* log-step with the counts the review produced (the SKILL order: fix, test, log)
-StepRec(g) == IF Witness THEN [kind |-> "step", src |-> pending.src, def |-> deferred, gated |-> g]
+StepRec(g) == IF Witness THEN [kind |-> "step", src |-> pending.src,
+                               def |-> IF V211 THEN pending.def ELSE deferred, gated |-> g,
+                               wit |-> TRUE]
               ELSE Rec("step", g)
 
 LogHonest ==
@@ -86,9 +93,27 @@ LogClaimClean ==
   /\ pending' = NoReview
   /\ UNCHANGED <<src, deferred, flagged>>
 
+\* V211: the agent removes a deferral it added
+Undefer ==
+  /\ V211
+  /\ deferred = 1
+  /\ deferred' = 0
+  /\ UNCHANGED <<src, log, pending, flagged>>
+
+\* V211: a gated step logged with NO review (honest count, no review-start): the ledger knows the
+\* logged version is flagged
+LogUnwitnessedGated ==
+  /\ V211
+  /\ src \in Buggy
+  /\ Len(log) < MaxLog
+  /\ log' = Append(log, Rec("step", 1))
+  /\ flagged' = flagged \cup {src}
+  /\ UNCHANGED <<src, deferred, pending>>
+
 Next ==
   \/ \E v \in Versions : Edit(v)
   \/ Defer \/ TestRun \/ Review \/ LogHonest \/ LogClaimClean
+  \/ Undefer \/ LogUnwitnessedGated
 
 Spec == Init /\ [][Next]_vars
 
@@ -100,23 +125,30 @@ Max(S) == CHOOSE m \in S : \A k \in S : k <= m
 
 \* the baseline of a gated step: the newest stamp recorded before it; none -> the step itself
 Base(i) == IF Witness THEN i ELSE IF i > 1 THEN i - 1 ELSE i   \* witnessed: the reviewed tree IS the before
-Moved(a, b) == a.src /= b.src \/ a.def /= b.def
+\* V211: a changed deferral file closes a debt only when the clean review SAW a deferral --
+\* removing one is not a deferral (TLC found the removal path: Defer, log gated, Undefer, clean)
+Moved(a, b) == a.src /= b.src \/ (a.def /= b.def /\ (V211 => b.def /= 0))
 
 DebtOpen(i) ==
   /\ IsStep(i)
   /\ log[i].gated > 0
   /\ ~\E c \in (i + 1)..Len(log) :
-        IsStep(c) /\ log[c].gated = 0 /\ Moved(log[Base(i)], log[c])
+        IsStep(c) /\ log[c].gated = 0 /\ (V211 => log[c].wit)
+        /\ Moved(log[IF V211 /\ ~log[i].wit THEN i ELSE Base(i)], log[c])
 
 \* a clean step that contradicts an earlier gated verdict on the same content
 Contradicts(c) == \E i \in 1..(c - 1) :
-  IsStep(i) /\ log[i].gated > 0 /\ log[i].src = log[c].src /\ log[i].def = log[c].def
+  IsStep(i) /\ log[i].gated > 0 /\ log[i].src = log[c].src
+  \* V211: with no deferral on disk the clean verdict is on the same content as ANY earlier
+  \* gated verdict on that source -- removing a deferral does not make it new content
+  /\ (log[i].def = log[c].def \/ (V211 /\ log[c].def = 0))
 
 Converged ==
   /\ Steps /= {}
   /\ log[Max(Steps)].gated = 0
   /\ ~\E i \in 1..Len(log) : DebtOpen(i)
   /\ (Anchor => log[Max(Steps)].src = src)
+  /\ (V211 => log[Max(Steps)].wit /\ log[Max(Steps)].def = deferred)
   /\ (Memory => ~Contradicts(Max(Steps)))
 
 TestsCurrent == Runs /= {} /\ log[Max(Runs)].src = src

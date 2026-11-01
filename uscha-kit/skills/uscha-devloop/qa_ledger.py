@@ -2746,12 +2746,22 @@ class _Witness(object):
         return not moved
 
     def between(self, a, b):
-        """`_src_moved` between two recorded stamps, memoised per pair (gate reads compare the
-        same reviewed trees many times)."""
-        key = json.dumps([a, b], sort_keys=True)
+        """`_review_moved` between two REVIEW stamps (ADR-056 R2'), memoised per pair."""
+        key = json.dumps(["review", a, b], sort_keys=True)
         if key not in self._moved:
-            self._moved[key] = _src_moved(self.path, self.rtype, a, b)
+            self._moved[key] = _review_moved(self.path, self.rtype, a, b, _LAST_LEDGER_PATH)
         return self._moved[key]
+
+    def rnow(self):
+        """The review stamp of the tree now, taken once per read."""
+        if getattr(self, "_rnow", False) is False:
+            self._rnow = _review_stamp(self.path, self.rtype, _LAST_LEDGER_PATH)
+        return self._rnow
+
+    def deferred_now(self):
+        if getattr(self, "_dnow", False) is False:
+            self._dnow = _deferred_sha(self.path, _LAST_LEDGER_PATH)
+        return self._dnow
 
     def declared(self):
         if self._declared is False:
@@ -2937,6 +2947,102 @@ def _deferred_sha(repo_path, ledger_path=None):
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
 
 
+def _review_exclusions(repo_path, rtype, ledger_path, work):
+    """Git-root-relative paths that are a REVIEW's own footprint, never review content: the
+    ledger, every ISSUES-DEFERRED.md (compared on its own), and the report set the engine
+    ingests (test-run rewrites it between a review and the step that logs it)."""
+    out = set()
+    cands = [ledger_path] if ledger_path else []
+    cands += [os.path.join(repo_path, f) for f in _witness_inventory(repo_path, rtype)]
+    for c in cands:
+        rel = _seal_rel(work, c)
+        if rel:
+            out.add(rel)
+    return out
+
+
+def _review_relevant(path, rtype, tracked, excluded):
+    """Does a change to this path change what a QA review looked at? Wider than ADR-039's
+    `_src_relevant` on purpose (the 2.11.0 fresh review): a reviewer reads templates and config,
+    so a TRACKED file counts whatever its extension, and a source-extension file counts wherever
+    it lives (a package named `reports`/`build` included). Not review content: the review's own
+    footprint (`excluded`), ISSUES-DEFERRED.md, untracked non-source files (build output,
+    bytecode), and non-source files under a `reports` directory."""
+    if path in excluded:
+        return False
+    parts = path.split("/")
+    name = parts[-1].lower()
+    if parts[-1] == DEFERRED_FILE:
+        return False
+    allowed = _SRC_EXT | SOURCE_EXT.get(rtype or "", set()) | _HARNESS_EXT
+    is_src = os.path.splitext(name)[1] in allowed or name in _HARNESS_NAMES
+    if "reports" in parts[:-1] and not is_src:
+        return False
+    return is_src or tracked
+
+
+def _review_stamp(repo_path, rtype, ledger_path):
+    """The REVIEW content state of a repo (ADR-056 R2'): `{commit, src_dirty, scope: "review"}`
+    over `_review_relevant` paths -- the same shape as ADR-055's `_tree_stamp`, a different
+    filter. None without git or without a commit."""
+    work = _repo_git_toplevel(repo_path)
+    head = _seal_git(repo_path, "rev-parse", "HEAD")
+    if not work or head is None or not head.stdout.strip():
+        return None
+    st = _seal_git(repo_path, "-c", "core.quotepath=false", "status", "--porcelain",
+                   "-uall", "--", ".")
+    if st is None:
+        return None
+    excluded = _review_exclusions(repo_path, rtype, ledger_path, work)
+    keep = set()
+    for line in st.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        tracked = line[:2] != "??"
+        for part in _porcelain_paths(line):
+            if _review_relevant(part, rtype, tracked, excluded):
+                keep.add(part)
+    dirty, present = {}, []
+    for pth in sorted(keep):
+        if os.path.isfile(os.path.join(work, pth)):
+            present.append(pth)
+        else:
+            dirty[pth] = "deleted"
+    if present:
+        try:
+            r = subprocess.run(["git", "hash-object", "--stdin-paths"], cwd=work,
+                               input="\n".join(present) + "\n", capture_output=True,
+                               text=True, encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        shas = r.stdout.split()
+        if r.returncode != 0 or len(shas) != len(present):
+            return None
+        dirty.update(zip(present, shas))
+    return {"commit": head.stdout.strip(), "src_dirty": dirty, "scope": "review"}
+
+
+def _review_moved(repo_path, rtype, a, b, ledger_path):
+    """Paths whose review content differs between two review stamps; [] = the same content,
+    None = cannot be answered (a missing stamp, an unreachable commit)."""
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return None
+    work = _repo_git_toplevel(repo_path)
+    if not work:
+        return None
+    excluded = _review_exclusions(repo_path, rtype, ledger_path, work)
+    paths = set(a.get("src_dirty") or {}) | set(b.get("src_dirty") or {})
+    if a.get("commit") != b.get("commit"):
+        d = _seal_git(repo_path, "-c", "core.quotepath=false", "diff", "--name-only",
+                      a["commit"], b["commit"], "--", ".")
+        if d is None:
+            return None
+        paths |= {p for p in _git_path_list(d.stdout)
+                  if _review_relevant(p, rtype, True, excluded)}
+    return sorted(p for p in paths
+                  if _stamp_blob(repo_path, a, p) != _stamp_blob(repo_path, b, p))
+
+
 def cmd_review_start(args):
     """Record the tree a QA review starts on (ADR-056 R2'). Runs nothing, reviews nothing."""
     ledger = _load(args.ledger)
@@ -2948,7 +3054,8 @@ def cmd_review_start(args):
     path, rtype = entry.get("path", "."), entry.get("type", "maven")
     reviews = ledger.setdefault(REVIEWS_KEY, [])
     rec = {"id": "RV-%d" % (len(reviews) + 1), "repo": args.repo, "tool": args.tool,
-           "iteration": args.iteration, "at": _now(), "tree": _tree_stamp(path, rtype),
+           "iteration": args.iteration, "at": _now(),
+           "tree": _review_stamp(path, rtype, args.ledger),
            "deferred_sha256": _deferred_sha(path, args.ledger), "closed_by": None}
     reviews.append(rec)
     _save(args.ledger, ledger)
@@ -2978,70 +3085,103 @@ def _review_link(ledger, args):
     return rv, None
 
 
-def _review_verdicts(agent, tools, wit):
-    """(reasons, info) of ADR-056 R2' for the tools of a cycle. Legacy steps (no `reviewed`, no
-    `unwitnessed`: written before 2.11.0) are not judged here -- 2.10 semantics."""
-    reasons, info = [], {"deferred_not_fixed": 0, "legacy_steps": 0, "no_tree_closures": 0}
-    info["legacy_steps"] = sum(1 for s in agent
-                               if "reviewed" not in s and "unwitnessed" not in s)
+def _review_verdicts(agent, cycle_tools, wit):
+    """(reasons, info) of ADR-056 R2'. Anchor reads the tools of the cycle; the debt and Memory
+    read EVERY tool that ever logged a step (the 2.11.0 fresh review: a tool outside the window,
+    or not listed in qa_tools_order, used to take its debt out of sight). A gated step opens a
+    debt on its REVIEWED state when witnessed, else on its LOGGED state; legacy steps (written
+    before 2.11.0) have neither and keep 2.10 semantics."""
+    reasons = []
+    info = {"deferred_not_fixed": 0, "no_tree_closures": 0,
+            "legacy_steps": sum(1 for s in agent if "reviewed" not in s
+                                and "unwitnessed" not in s)}
     if wit is None:
         return reasons, info
+
+    def state(s):
+        if isinstance(s.get("reviewed"), dict):
+            return s["reviewed"]
+        if isinstance(s.get("logged"), dict):
+            return s["logged"]
+        return None
 
     def same_state(a, b):
         m = wit.between(a.get("tree"), b.get("tree"))
         return m == [] and a.get("deferred_sha256") == b.get("deferred_sha256"), m
 
-    for t in tools:
+    for t in cycle_tools:
+        steps = [s for s in agent if s.get("tool") == t]
+        latest = steps[-1] if steps else None
+        if latest is None or not isinstance(latest.get("reviewed"), dict):
+            continue
+        # Anchor: the latest review of this tool saw the content on disk now -- source AND the
+        # deferral file (deleting a deferral after it closed a debt un-defers the finding)
+        now = wit.rnow()
+        moved = wit.between(latest["reviewed"].get("tree"), now)
+        if moved is None and now is not None:
+            reasons.append("%s: the last review (%s, step #%s) recorded no comparable tree "
+                           "-- run the review again" % (t, latest.get("review"), latest.get("n")))
+        elif moved:
+            reasons.append("%s: the last review (%s, step #%s) saw a different source than the "
+                           "tree now: %s -- run the review again"
+                           % (t, latest.get("review"), latest.get("n"), moved[0]))
+        if latest["reviewed"].get("deferred_sha256") != wit.deferred_now():
+            reasons.append("%s: %s changed since the last review (%s, step #%s) -- run the "
+                           "review again" % (t, DEFERRED_FILE, latest.get("review"),
+                                             latest.get("n")))
+
+    for t in sorted({s.get("tool") for s in agent}):
         steps = [s for s in agent if s.get("tool") == t]
         witnessed = [s for s in steps if isinstance(s.get("reviewed"), dict)]
-        if not steps or not witnessed:
-            continue
-        latest = steps[-1]
-        # Anchor: the latest review of this tool saw the source that is on disk now
-        if isinstance(latest.get("reviewed"), dict):
-            now = wit.now()
-            moved = wit.between(latest["reviewed"].get("tree"), now)
-            if moved is None and now is not None:
-                reasons.append("%s: the last review (%s, step #%s) recorded no comparable tree "
-                               "-- run the review again"
-                               % (t, latest.get("review"), latest.get("n")))
-            elif moved:
-                reasons.append("%s: the last review (%s, step #%s) saw a different source than "
-                               "the tree now: %s -- run the review again"
-                               % (t, latest.get("review"), latest.get("n"), moved[0]))
-        # the debt, on reviewed states
-        for i, g in enumerate(witnessed):
+        # the debt
+        for i, g in enumerate(steps):
             if (g.get("gated_reported") or 0) <= 0:
                 continue
+            later = [c for c in witnessed if steps.index(c) > i
+                     and (c.get("gated_reported") or 0) == 0]
+            gs = state(g)
+            if gs is None:
+                # a legacy gated step: nothing to compare; a later witnessed clean review
+                # closes it as 2.10 would, and readiness names that it was not measured
+                if later:
+                    info["no_tree_closures"] += 1
+                continue
             closer = None
-            for c in witnessed[i + 1:]:
-                if (c.get("gated_reported") or 0) != 0:
-                    continue
-                if not isinstance(g["reviewed"].get("tree"), dict) or \
-                        not isinstance(c["reviewed"].get("tree"), dict):
-                    # no git (or no commit) when one of the two reviews started: movement is
-                    # UNMEASURABLE, so the debt degrades to 2.10 semantics -- a later clean step
-                    # closes it -- and readiness says so (ADR-039's no-git posture: degrade, name)
+            for c in later:
+                cs = c["reviewed"]
+                if not isinstance(gs.get("tree"), dict) or not isinstance(cs.get("tree"), dict):
+                    # no git when one of the two was stamped: movement is UNMEASURABLE, so
+                    # the debt degrades to 2.10 semantics, named (ADR-039's no-git posture)
                     closer = (c, None)
                     info["no_tree_closures"] += 1
                     break
-                same, m = same_state(g["reviewed"], c["reviewed"])
-                if not same and (m or g["reviewed"].get("deferred_sha256")
-                                 != c["reviewed"].get("deferred_sha256")):
+                same, m = same_state(gs, cs)
+                # a deferral closes a debt only when the clean review SAW a deferral file:
+                # removing ISSUES-DEFERRED.md is not deferring (model check, removal path)
+                if not same and (m or (cs.get("deferred_sha256") is not None and
+                                       gs.get("deferred_sha256") != cs.get("deferred_sha256"))):
                     closer = (c, m)
                     break
             if closer is None:
                 reasons.append("%s: %s gated finding(s) from step #%s (%s) still open -- no "
-                               "later clean review of a different source or of a changed %s"
-                               % (t, g.get("gated_reported"), g.get("n"), g.get("review"),
-                                  DEFERRED_FILE))
+                               "later clean witnessed review of different content or of a "
+                               "changed %s" % (t, g.get("gated_reported"), g.get("n"),
+                                               g.get("review") or "unwitnessed", DEFERRED_FILE))
             elif closer[1] == []:
                 info["deferred_not_fixed"] += g.get("gated_reported") or 0
-        # Memory: a clean verdict on exactly the content an earlier review flagged
-        if isinstance(latest.get("reviewed"), dict) and (latest.get("gated_reported") or 0) == 0:
-            for g in witnessed[:-1]:
-                if (g.get("gated_reported") or 0) > 0 and \
-                        same_state(g["reviewed"], latest["reviewed"])[0]:
+        # Memory: a clean verdict on exactly the content an earlier step flagged
+        latest = steps[-1] if steps else None
+        if latest is not None and isinstance(latest.get("reviewed"), dict) and \
+                (latest.get("gated_reported") or 0) == 0:
+            for g in steps[:-1]:
+                gs = state(g)
+                if (g.get("gated_reported") or 0) <= 0 or gs is None or \
+                        not isinstance(gs.get("tree"), dict):
+                    continue
+                same, m = same_state(gs, latest["reviewed"])
+                # with no deferral file on disk the clean verdict is on the same content as
+                # ANY earlier gated verdict on that source: removing a deferral is not new
+                if same or (m == [] and latest["reviewed"].get("deferred_sha256") is None):
                     reasons.append("%s: step #%s reports 0 gated findings on exactly the content "
                                    "step #%s flagged with %s -- the record contradicts itself; "
                                    "fix, or defer in %s"
@@ -3535,6 +3675,13 @@ def cmd_log_step(args):
         record["unverified"] = True
     # ADR-056 R2' (2.11.0): the step carries the tree the tool REVIEWED, from its review-start
     rv, rv_problem = _review_link(ledger, args)
+    entry_ = _scope_entry(ledger, args.repo)
+    # the state the step was LOGGED at, on every new step: an unwitnessed GATED step still opens
+    # a debt on it (the 2.11.0 fresh review: A-F2 in reverse order -- a gated step logged
+    # without --review, then a clean witnessed review of the same tree)
+    record["logged"] = {"tree": _review_stamp(entry_.get("path", "."),
+                                              entry_.get("type", "maven"), args.ledger),
+                        "deferred_sha256": _deferred_sha(entry_.get("path", "."), args.ledger)}
     if rv is not None:
         record["review"] = rv["id"]
         record["reviewed"] = {"tree": rv.get("tree"),
@@ -3555,9 +3702,11 @@ def cmd_log_step(args):
           + ("" if res["source"] != "MISSING" else
              " (unverified: tool not installed -- does not count toward convergence)")
           # witnessed steps name their review; an unwitnessed one prints exactly what 2.10 printed
-          # (the human-approved devloop-entry golden pins this line) and is named by
-          # `converged` / `phase`, where it matters
+          # on stdout (the human-approved devloop-entry golden pins that line) and says why on
+          # stderr, at the moment it is logged
           + (" review=%s" % rv["id"] if rv is not None else ""))
+    if rv is None:
+        sys.stderr.write("[qa_ledger] step #%s is UNWITNESSED: %s\n" % (record["n"], rv_problem))
 
 
 def cmd_ingest_gate(args):
@@ -11820,8 +11969,8 @@ def _sealed_state(ledger, ledger_path):
     """INV-T1 for EVERY configured repo (ADR-057, 2.11.0; the synthetic `integration` scope is
     not a repo). One repo -> exactly `_seal_repo`'s block, byte-identical to 2.10 (no prefix, no
     `repos` key). Several -> the AGGREGATE: `ok` False if any repo is False, else None if any is
-    None, else True; `repo`/`commit`/`note` of the first repo whose verdict is not True (else of
-    the first repo); reasons prefixed `[name]`; and a `repos[]` detail key, one block per repo.
+    None, else True; `repo`/`commit`/`note` of the first broken repo, else the first unmeasured
+    one, else the first; reasons prefixed `[name]`; and a `repos[]` detail key, one block per repo.
     Until 2.11.0 only `repos[0]` was sealed, so a crash committed into the second repo after its
     evidence read SEALED (the v2.9.0 audit's A-F9)."""
     repos = [r for r in ((ledger.get("config", {}) or {}).get("repos") or [])
@@ -11838,7 +11987,10 @@ def _sealed_state(ledger, ledger_path):
     blocks = [_seal_repo(ledger, ledger_path, rc, footprint) for rc in repos]
     oks = [b["ok"] for b in blocks]
     agg_ok = False if False in oks else (None if None in oks else True)
-    lead = next((b for b in blocks if b["ok"] is not True), blocks[0])
+    # the summary names the repo that DECIDED the aggregate: the first broken one, else the
+    # first unmeasured one (the 2.11.0 fresh review: "UNSEALED (repo <an unmeasured one>)")
+    lead = next((b for b in blocks if b["ok"] is False),
+                next((b for b in blocks if b["ok"] is None), blocks[0]))
     return {"ok": agg_ok,
             "reasons": ["[%s] %s" % (b["repo"], r) for b in blocks for r in b["reasons"]],
             "commit": lead["commit"], "repo": lead["repo"], "note": lead["note"],

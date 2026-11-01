@@ -71,7 +71,7 @@ backend-api --tool T --iteration N`, then the agent's tool pass, then `log-step 
 | ID | Kind | Commands | Expected |
 |---|---|---|---|
 | F2-11 | **RED (TLC M1)** | `test-run` (v0); review(T) flags v0 (gated 1); fix to v1; `log-step --review` gated 1; review(T) on v1 clean, logged; `git checkout` back to v0; `test-run` | `phase` exit 1: "the last review ... saw a different source than the tree now"; the shipped probe (v2.10.1 engine, same tree, steps logged without `--review`) reaches `pr-ready` (AC-GI-50) |
-| F2-12 | **RED (TLC M2)** | review(T) starts on v1 (clean); the agent reverts to v0 BEFORE logging; logs the clean step | the step carries the REVIEWED tree (v1): Anchor refuses on v0; the open debt from a v0 flag stays open (AC-GI-51) |
+| F2-12 | **RED (TLC M2)** | review(T) starts on v1 (clean); the agent reverts to v0 BEFORE logging; logs the clean step | the step carries the REVIEWED tree (v1): the clean verdict on v1 closes the v0 debt, and Anchor refuses it on v0 -- the last review did not see the tree on disk (AC-GI-51) |
 | F2-13 | **RED (TLC Lies)** | after F2-11's flag on v0, a `review-start` on v0 then `log-step --review ... --gated-reported 0` (a clean pass that contradicts the flag) | Memory: "reports 0 gated findings on exactly the content step #n flagged" -- NOT converged (AC-GI-52) |
 | F2-14 | **RED (A-F2)** | gated step, then the same tool+iteration re-logged 0/0 with no `--review` | the re-log is unwitnessed: it never counts and never hides; the debt stays open (AC-GI-53) |
 | F2-15 | GREEN (vacuity) | review flags v0; fix to v2; `test-run`; log gated; review v2 clean; log clean | CONVERGED, `pr-ready` (AC-GI-54) |
@@ -79,6 +79,13 @@ backend-api --tool T --iteration N`, then the agent's tool pass, then `log-step 
 | F2-17 | GREEN | a docs-only commit after convergence | still CONVERGED (Anchor compares source-relevant content only) (AC-GI-56) |
 | F2-18 | legacy | a v2.10.1 ledger (steps without `reviewed`) | loads; converges as in 2.10.1 until a witnessed step of the tool exists; `readiness` names "N steps predate witnessed reviews" (AC-GI-57) |
 | F2-19 | refusal | `log-step --review RV-9` naming an unknown, closed, or other-tool review | recorded unwitnessed, named; never counts (AC-GI-58) |
+| F2-20 | **RED (fresh review)** | window mode: cr flags v0 (gated 3); jd reviews v0 clean three times | NOT converged: "cr: 3 gated finding(s) ... still open" -- a debt does not leave with the window (AC-GI-59) |
+| F2-21 | **RED (fresh review)** | a gated step logged with no `--review`; a witnessed clean review of the same source | the debt opens on the LOGGED state and stays open; `log-step` names the step UNWITNESSED (AC-GI-60) |
+| F2-22 | **RED (fresh review)** | a deferral closes a debt (converged); then `ISSUES-DEFERRED.md` is deleted | NOT converged: "ISSUES-DEFERRED.md changed since the last review" (AC-GI-61) |
+| F2-23 | GREEN + RED | a tracked template flagged, fixed, reviewed clean; then an unreviewed `.py` under a `reports/` package | the fix converges; the unreviewed file is named (the review stamp is wider than ADR-039's source filter) (AC-GI-62) |
+| F2-24 | **RED (fresh review)** | two repos, the second broken or unmeasured | the summary line names the repo that decided the aggregate (AC-GI-63) |
+| F2-25 | **RED (TLC, V211)** | `ISSUES-DEFERRED.md` present; gated step logged; file removed; witnessed clean review of the same source | the debt stays open: removing a deferral is not deferring (AC-GI-64) |
+| F2-26 | **RED (TLC, V211)** | deferral present; review of v1 starts; source back to v0; gated step logged on v0; the v1 review logged clean; deferral removed; v0 reviewed clean | Memory: "the record contradicts itself" (AC-GI-65) |
 
 ## 3. G3 — every repo, at read time (ADR-057)
 

@@ -36,6 +36,26 @@ read time, never of reviews). The design below is the one TLC does not break at 
 - **The devloop SKILL** (both twins): every QA pass starts with `review-start` and is logged with
   `--review`; the three rules are stated so the agent does not try to work around them.
 
+## Closed before release (fresh review and the model as shipped)
+
+A fresh reviewer read the first cut of the code and found four ways around it; each is now a RED
+case. A debt did not survive the window in window mode (AC-GI-59); a gated step logged without
+`--review` was simply discarded instead of opening a debt on the state it was logged at (AC-GI-60);
+deleting `ISSUES-DEFERRED.md` after a deferral closed a debt went unnoticed -- Anchor now compares
+that file too (AC-GI-61); and the review stamp used ADR-039's source filter, which a tracked
+template or a `.py` under a `reports/` package slipped past -- what a review saw is now every
+tracked file plus untracked source, minus the ledger and the evidence (AC-GI-62). The summary line
+of a multi-repo seal also names the repo that decided it (AC-GI-63).
+
+The TLA+ model was then extended with the two moves the reviewer exercised (removing a deferral;
+logging a gated step with no review). TLC broke the rule twice more: removing the deferral file
+read as deferring and closed the debt (AC-GI-64), and once that held, a stale review closed the
+debt and removing the deferral made a clean verdict on the flagged source look like new content
+(AC-GI-65). Both rules are fixed in the engine: a deferral closes a debt only when the clean review
+saw the file, and with no deferral file on disk a clean verdict on a flagged source contradicts the
+record. The model as shipped (`shipped-2.11.0.cfg`): 46,976,202 distinct states, no error; its
+vacuity control still breaks.
+
 ## Behavior changes on upgrade (read before upgrading)
 
 - **A `log-step` without `--review` no longer counts toward convergence.** Scripts and agents that log
@@ -71,6 +91,8 @@ read time, never of reviews). The design below is the one TLC does not break at 
   tree (no git): movement was not measured"); Anchor and Memory need git for the same reason.
   `review-start` also refuses an iteration older than the newest step of the tool, as `log-step`
   does, before it writes anything.
+- A deferral is a file hash: editing `ISSUES-DEFERRED.md` to drop one entry while keeping others
+  still reads as a deferral -- the engine cannot tell which finding a line defers.
 - The model check is bounded (3 code versions, one tool, one repo, at most 5 ledger records). The
   design is written per tool and per repo so the bound maps onto it; that is an argument, not a
   check. Each TLC path is replayed against the real engine (T174).
@@ -79,11 +101,12 @@ read time, never of reviews). The design below is the one TLC does not break at 
 
 ## How it is pinned
 
-`AC-GI-30, -32..36, -50..58` (smoke T174): the three TLC paths (M1, M2, Lies) and the audit's A-F2 as
+`AC-GI-30, -32..36, -50..65` (smoke T174): the three TLC paths (M1, M2, Lies) and the audit's A-F2 as
 RED cases, a SHIPPED PROBE (AC-GI-50: the v2.10.1 engine reaches `pr-ready` on the M1 path), the
 vacuity, deferral and docs-only GREEN cases, a v2.10.1 ledger, malformed `--review`; and the seal
 over two repos (A-F9, both sealed, one never snapshotted, nested paths, a docs-only commit) plus
-the single-repo payload shape.
+the single-repo payload shape; the fresh review's bypasses (59..63) and the two paths of the model
+as shipped (64, 65).
 
 ## Evidence
 
