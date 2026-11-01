@@ -93,4 +93,4 @@ retrospective prints the exception was removed, because `summary` does not.
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 466 checks · 0 fail; acceptance 439/440.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="431" failures="0" errors="0" skipped="1" timestamp="2026-11-01T02:05:57.653282Z">
+<testsuite name="uscha-acceptance" tests="440" failures="0" errors="0" skipped="1" timestamp="2026-11-01T03:53:21.853889Z">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -859,6 +859,24 @@
   <testcase classname="uscha.acceptance" name="AC-GI-64_nothing-vanishes">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-GI-65_nothing-vanishes">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-40_human-acts-pr-gate">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-41_human-acts-pr-gate">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-42_human-acts-pr-gate">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-43_human-acts-pr-gate">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-44_human-acts-pr-gate">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-45_human-acts-pr-gate">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-46_human-acts-pr-gate">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-48_human-acts-pr-gate">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-GI-49_human-acts-pr-gate">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
     <skipped message="shallow clone or no git: ancestry unmeasurable"/>
