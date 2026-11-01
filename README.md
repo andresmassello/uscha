@@ -56,7 +56,7 @@ binary on PATH reads "binary found, not wired into Claude". The MCP check reads 
 configuration, for `--target codex` too. It only reports: it installs nothing, asks nothing and
 runs none of the commands it prints, and it never changes an exit code.
 
-**Kit v2.10.1** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
+**Kit v2.11.0** <!-- uscha:version --> · [uscha.dev](https://uscha.dev) ·
 [changelog](https://github.com/andresmassello/uscha/blob/main/uscha-kit/CHANGELOG.md)
 (the per-release changelogs live in the repo, not in the npm tarball)
 
