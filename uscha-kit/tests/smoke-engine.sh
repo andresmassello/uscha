@@ -21681,8 +21681,13 @@ STUB = NL.join([
     "            print(" + chr(34) + "Error: Invariant %s is violated." + chr(34) + " % w[3])",
     "            print(" + chr(34) + "State 1: <Initial predicate>" + chr(34) + ")",
     "            print(" + chr(34) + "State 2: <TheStep>" + chr(34) + ")",
+    "        elif w[2] == " + chr(34) + "initial" + chr(34) + ":",
+    "            print(" + chr(34) + "Error: Invariant %s is violated by the initial state." + chr(34) + " % w[3])",
+    "            print(" + chr(34) + "State 1: <Initial predicate>" + chr(34) + ")",
     "        elif w[2] == " + chr(34) + "ok" + chr(34) + ":",
     "            print(" + chr(34) + "Model checking completed. No error has been found." + chr(34) + ")",
+    "        elif w[2] == " + chr(34) + "exit" + chr(34) + ":",
+    "            sys.exit(int(w[3]))",
 ]) + NL
 
 
@@ -21711,7 +21716,7 @@ def adr(d, num, model_lines):
 
 
 def repo(prefix, manifest=None, cfgs=None, acc="- [ ] AC-X-01 - a" + NL,
-         smoke="AC-X-01" + NL):
+         smoke="res[" + chr(34) + "AC-X-01" + chr(34) + "] = True" + NL):
     d = tmp(prefix)
     write(os.path.join(d, "ACCEPTANCE.md"), "# A" + NL + NL + acc)
     write(os.path.join(d, "uscha-kit", "tests", "smoke-engine.sh"), smoke)
@@ -21728,8 +21733,9 @@ def man(configs, adr_id="ADR-060"):
     return {"schema": "uscha/models@1", "adr": adr_id, "module": "M.tla", "configs": configs}
 
 
-GOOD_CFGS = {"ci-ok.cfg": "SPECIFICATION Spec" + NL + "\\* stub: ok" + NL,
-             "ci-vac.cfg": "SPECIFICATION Spec" + NL + "\\* stub: violated Never" + NL}
+GOOD_CFGS = {"ci-ok.cfg": "SPECIFICATION Spec" + NL + "INVARIANT Safe" + NL + "\\* stub: ok" + NL,
+             "ci-vac.cfg": "SPECIFICATION Spec" + NL + "INVARIANT Never" + NL
+                           + "\\* stub: violated Never" + NL}
 GOOD = [{"cfg": "ci-ok.cfg", "tier": "ci", "expect": "no-error"},
         {"cfg": "ci-vac.cfg", "tier": "ci", "expect": "violated: Never", "vacuity": True,
          "replays": ["AC-X-01"]}]
@@ -21743,10 +21749,20 @@ def measure():
     old_only = mc("check", "--root", d)
     adr(d, 60, [])
     new = mc("check", "--root", d)
+    # the review's names: no slug, four digits, lower case, and a stray file in docs/adr
+    d2 = repo("names")
+    for name in ("ADR-061.md", "ADR-1000-x.md", "adr-0600-x.md"):
+        write(os.path.join(d2, "docs", "adr", name), "# no frontmatter" + NL)
+    write(os.path.join(d2, "docs", "adr", "notes.md"), "# notes" + NL)
+    names = mc("check", "--root", d2)
     res["AC-MC-01"] = bool(old_only.returncode == 0 and new.returncode == 1
-                           and "ADR-060-thing.md" in new.stdout and "ADR-010" not in new.stdout)
-    why["AC-MC-01"] = "old rc=%s new rc=%s %r" % (old_only.returncode, new.returncode,
-                                                  new.stdout[-200:])
+                           and "ADR-060-thing.md" in new.stdout and "ADR-010" not in new.stdout
+                           and names.returncode == 1
+                           and all(n in names.stdout for n in ("ADR-061.md", "ADR-1000-x.md",
+                                                               "adr-0600-x.md", "notes.md")))
+    why["AC-MC-01"] = "old rc=%s new rc=%s %r names rc=%s %r" % (
+        old_only.returncode, new.returncode, new.stdout[-160:], names.returncode,
+        names.stdout[-300:])
 
     # --- AC-MC-02: not-needed by the agent is an unconfirmed agent-origin item until confirmed;
     # a not-needed with no reason is red
@@ -21766,9 +21782,17 @@ def measure():
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout
     adr(d, 61, ["model: not-needed --"])
     bare = mc("check", "--root", d)
+    d3 = repo("values")
+    adr(d3, 60, ["model: " + chr(34) + "not-needed -- quoted, still a reason" + chr(34)])
+    quoted = mc("check", "--root", d3)
+    adr(d3, 61, ["model: not-neededforsure"])
+    adr(d3, 62, ["model: not-needed -- one", "model: required"])
+    odd = mc("check", "--root", d3)
     res["AC-MC-02"] = bool(chk.returncode == 0 and "1 agent-origin item(s) unconfirmed" in rd1
                            and "agent-origin item(s) unconfirmed" not in rd2
-                           and bare.returncode == 1 and "without a reason" in bare.stdout)
+                           and bare.returncode == 1 and "without a reason" in bare.stdout
+                           and quoted.returncode == 0 and odd.returncode == 1
+                           and "not-neededforsure" in odd.stdout and "duplicate" in odd.stdout)
     why["AC-MC-02"] = "check rc=%s rd1 origin=%s rd2 origin=%s bare rc=%s" % (
         chk.returncode, "agent-origin" in rd1, "agent-origin" in rd2, bare.returncode)
 
@@ -21782,6 +21806,25 @@ def measure():
     d = repo("no-vacuity", man([GOOD[0], dict(GOOD[1], vacuity=False)]), GOOD_CFGS)
     adr(d, 60, REQ)
     novac = mc("check", "--root", d)
+    # the review's empty-but-valid manifests: only the vacuity config in CI, a no-error config that
+    # checks only TypeOK, a counterexample that replays nothing, and a manifest outside docs/*/models
+    d = repo("only-vac", man([dict(GOOD[0], tier="deep"), GOOD[1]]), GOOD_CFGS)
+    adr(d, 60, REQ)
+    onlyvac = mc("check", "--root", d)
+    d = repo("typeok", man(GOOD), dict(GOOD_CFGS, **{
+        "ci-ok.cfg": "SPECIFICATION Spec" + NL + "INVARIANT TypeOK" + NL}))
+    adr(d, 60, REQ)
+    typeok = mc("check", "--root", d)
+    d = repo("no-replay", man(GOOD + [{"cfg": "ci-vac.cfg", "tier": "ci",
+                                       "expect": "violated: Never"}]), GOOD_CFGS)
+    adr(d, 60, REQ)
+    noreplay = mc("check", "--root", d)
+    d = repo("outside", man(GOOD), GOOD_CFGS)
+    write(os.path.join(d, "elsewhere", "models.json"),
+          io.open(os.path.join(d, "docs", "feat", "models", "models.json"),
+                  encoding="utf-8").read())
+    adr(d, 60, ["model: required", "model_manifest: elsewhere/models.json"])
+    outside = mc("check", "--root", d)
     d = repo("good", man(GOOD), GOOD_CFGS)
     adr(d, 60, REQ)
     good = mc("check", "--root", d)
@@ -21789,6 +21832,10 @@ def measure():
     res["AC-MC-03"] = bool(nomani.returncode == 1 and "does not exist" in nomani.stdout
                            and noci.returncode == 1 and "no `ci` config" in noci.stdout
                            and novac.returncode == 1 and "vacuity" in novac.stdout
+                           and onlyvac.returncode == 1 and "safety invariant" in onlyvac.stdout
+                           and typeok.returncode == 1 and "safety invariant" in typeok.stdout
+                           and noreplay.returncode == 1 and "replays no AC id" in noreplay.stdout
+                           and outside.returncode == 1 and "never run" in outside.stdout
                            and good.returncode == 0)
     why["AC-MC-03"] = "nomani=%s noci=%s novac=%s good=%s %r" % (
         nomani.returncode, noci.returncode, novac.returncode, good.returncode,
@@ -21801,9 +21848,16 @@ def measure():
     d = repo("no-smoke", man(GOOD), GOOD_CFGS, smoke="nothing" + NL)
     adr(d, 60, REQ)
     nosmoke = mc("check", "--root", d)
-    res["AC-MC-04"] = bool(noacc.returncode == 1 and "not in ACCEPTANCE.md" in noacc.stdout
+    # prose and a comment are not a criterion; AC-X-0 is not AC-X-01
+    d = repo("prose", man(GOOD), GOOD_CFGS, acc="See AC-X-01 in the prose." + NL,
+             smoke="# AC-X-01 is mentioned in a comment" + NL)
+    adr(d, 60, REQ)
+    prose = mc("check", "--root", d)
+    res["AC-MC-04"] = bool(noacc.returncode == 1 and "not a criterion" in noacc.stdout
                            and nosmoke.returncode == 1
-                           and "does not measure" in nosmoke.stdout)
+                           and "does not measure" in nosmoke.stdout
+                           and prose.returncode == 1 and "not a criterion" in prose.stdout
+                           and "does not measure" in prose.stdout)
     why["AC-MC-04"] = "noacc=%s %r nosmoke=%s %r" % (noacc.returncode, noacc.stdout[-120:],
                                                      nosmoke.returncode, nosmoke.stdout[-120:])
 
@@ -21820,11 +21874,21 @@ def measure():
         "ci-ok.cfg": "SPECIFICATION Spec" + NL + "\\* stub: sleep 1.5" + NL
                      + "\\* stub: ok" + NL}))
     slow = mc("run", "--root", d, "--tier", "ci", "--tlc-cmd", cmd, "--limit", "1")
+    d = repo("exit", man(GOOD), dict(GOOD_CFGS, **{
+        "ci-ok.cfg": "SPECIFICATION Spec" + NL + "INVARIANT Safe" + NL + "\\* stub: ok" + NL
+                     + "\\* stub: exit 3" + NL}))
+    badexit = mc("run", "--root", d, "--tier", "ci", "--tlc-cmd", cmd)
+    d = repo("init-vac", man(GOOD), dict(GOOD_CFGS, **{
+        "ci-vac.cfg": "SPECIFICATION Spec" + NL + "INVARIANT Never" + NL
+                      + "\\* stub: initial Never" + NL}))
+    initvac = mc("run", "--root", d, "--tier", "ci", "--tlc-cmd", cmd)
     real = mc("check", "--root", root)
     res["AC-MC-05"] = bool(ok.returncode == 0 and "2 ci config(s) run, 0 red" in ok.stdout
                            and broken.returncode == 1 and "expected no-error" in broken.stdout
                            and "State 2: <TheStep>" in broken.stdout
                            and slow.returncode == 1 and "measured limit" in slow.stdout
+                           and badexit.returncode == 1 and "exit 3" in badexit.stdout
+                           and initvac.returncode == 1 and "INITIAL state" in initvac.stdout
                            and real.returncode == 0)
     why["AC-MC-05"] = "ok=%s broken=%s %r slow=%s real=%s %r" % (
         ok.returncode, broken.returncode, broken.stdout[-160:], slow.returncode,
@@ -21851,8 +21915,21 @@ def measure():
                                                              + NL}))
     adr(d, 60, REQ)
     stale = mc("check", "--root", d)
+    # current inputs recorded -> quiet; then the .cfg alone changes -> the advisory comes back
+    import hashlib
+    base = os.path.join(d, "docs", "feat", "models")
+    h = hashlib.sha256()
+    for f in ("M.tla", "deep.cfg"):
+        h.update(io.open(os.path.join(base, f), "rb").read())
+        h.update(bytes(1))
+    deep["measured"]["inputs_sha256"] = h.hexdigest()
+    write(os.path.join(base, "models.json"), json.dumps(man(GOOD + [deep]), indent=2) + NL)
+    fresh = mc("check", "--root", d)
+    write(os.path.join(base, "deep.cfg"), "SPECIFICATION Spec" + NL + "CONSTANTS N = 1" + NL)
+    cut = mc("check", "--root", d)
     res["AC-MC-07"] = bool(stale.returncode == 0 and "advisory" in stale.stdout
-                           and "predates" in stale.stdout)
+                           and "predates" in stale.stdout and "predates" not in fresh.stdout
+                           and cut.returncode == 0 and "predates" in cut.stdout)
     why["AC-MC-07"] = "rc=%s %r" % (stale.returncode, stale.stdout[-200:])
 
     # --- AC-MC-08: the CI models job runs the ci tier against the pinned jar inside the smoke
@@ -21862,10 +21939,13 @@ def measure():
     pub = io.open(os.path.join(root, ".github", "workflows", "publish.yml"),
                   encoding="utf-8").read()
     job = wf.split(NL + "  models:", 1)[1] if (NL + "  models:") in wf else ""
+    job_head = job.split("steps:", 1)[0]
     res["AC-MC-08"] = bool(job and "model-check.py run --tier ci" in job
                            and "sha256sum" in job and "continue-on-error" not in job
+                           and "|| true" not in job and NL + "    if:" not in job_head
                            and "select(.name==" in pub and "smoke" in pub
-                           and "conclusion" in pub)
+                           and "conclusion" in pub
+                           and "model-check.py run --tier ci" in pub)
     why["AC-MC-08"] = "models job present=%s run=%s pin=%s" % (
         bool(job), "model-check.py run --tier ci" in job, "sha256sum" in job)
 

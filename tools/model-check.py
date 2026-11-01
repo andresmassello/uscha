@@ -39,7 +39,8 @@ TIMEOUT_S = 120                  # hard stop per config
 SCHEMA = "uscha/models@1"
 EXPECT_RX = re.compile(r"^(no-error|violated:\s*([A-Za-z_][A-Za-z0-9_]*))$")
 VIOLATED_RX = re.compile(r"Invariant\s+([A-Za-z_][A-Za-z0-9_]*)\s+is violated")
-ADR_RX = re.compile(r"ADR-(\d{3})-[^/\\]*\.md$")
+ADR_RX = re.compile(r"^ADR-(\d+)(?:-[^/\\]*)?\.md$", re.I)
+NOT_ADRS = {"index.md", "readme.md"}
 
 
 def rel(root, p):
@@ -56,18 +57,49 @@ def sha256_file(p):
 
 def frontmatter(path):
     """The `key: value` lines of a leading `---` block (top-level keys only)."""
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        lines = fh.read().split("\n")
+    with open(path, encoding="utf-8-sig", errors="replace") as fh:
+        lines = fh.read().replace("\r\n", "\n").split("\n")
     if not lines or lines[0].strip() != "---":
         return None
-    out = {}
+    out, dup = {}, []
     for line in lines[1:]:
         if line.strip() == "---":
+            if dup:
+                out["__duplicate__"] = dup
             return out
         m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$", line)
         if m:
-            out[m.group(1)] = m.group(2).strip()
+            v = m.group(2).strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in "\x22\x27":
+                v = v[1:-1].strip()
+            if m.group(1) in out:
+                dup.append(m.group(1))
+            out[m.group(1)] = v
     return None
+
+
+def cfg_invariants(path):
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return re.findall(r"^\s*INVARIANTS?\s+([A-Za-z_][A-Za-z0-9_]*)", fh.read(), re.M)
+
+
+def inputs_sha256(module_path, cfg_path):
+    """What a recorded deep run was measured against: the module AND its config (2.13.0 review --
+    a .cfg cut to MaxLog = 1 must not keep an old result looking current)."""
+    h = hashlib.sha256()
+    for p in (module_path, cfg_path):
+        with open(p, "rb") as fh:
+            h.update(fh.read())
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def norm_expect(e):
+    e = (e or "").strip()
+    m = EXPECT_RX.match(e)
+    if not m:
+        return None
+    return "no-error" if m.group(1) == "no-error" else "violated: " + m.group(2)
 
 
 def load_manifest(path):
@@ -100,39 +132,55 @@ def check_manifest(root, path, acceptance, smoke, findings, advisories):
     configs = m.get("configs") if isinstance(m.get("configs"), list) else []
     if not configs:
         findings.append("%s: no configs" % where)
-    has_ci = has_vacuity = False
+    has_ci = has_vacuity = has_safety = False
     for c in configs:
         cfg = c.get("cfg") if isinstance(c, dict) else None
         tag = "%s: %s" % (where, cfg)
         if not isinstance(cfg, str) or not os.path.isfile(os.path.join(base, cfg)):
             findings.append("%s: the .cfg does not exist" % tag)
             continue
-        tier, expect = c.get("tier"), c.get("expect")
+        tier, expect = c.get("tier"), norm_expect(c.get("expect"))
         if tier not in ("ci", "deep"):
             findings.append("%s: tier is %r, expected ci or deep" % (tag, tier))
-        if not isinstance(expect, str) or not EXPECT_RX.match(expect.strip()):
+        if expect is None:
             findings.append("%s: expect is %r, expected no-error or violated: <Invariant>"
-                            % (tag, expect))
+                            % (tag, c.get("expect")))
+            continue
+        invs = cfg_invariants(os.path.join(base, cfg))
         if tier == "ci":
             has_ci = True
-            if c.get("vacuity") and isinstance(expect, str) and expect.startswith("violated"):
+            if c.get("vacuity") and expect.startswith("violated"):
                 has_vacuity = True
+            # a ci no-error config must check a SAFETY invariant, not only the type shape
+            if expect == "no-error" and not c.get("vacuity") and \
+                    [i for i in invs if i.lower() != "typeok"]:
+                has_safety = True
+        if expect.startswith("violated") and not c.get("vacuity") and not c.get("replays"):
+            findings.append("%s: a counterexample config replays no AC id -- every "
+                            "counterexample the design answered names its RED case" % tag)
         if c.get("vacuity") and not (isinstance(expect, str) and expect.startswith("violated")):
             findings.append("%s: a vacuity config must expect a violation -- a vacuity "
                             "control that cannot break proves nothing" % tag)
         for ac in c.get("replays") or []:
-            if not re.search(r"(?<![A-Z0-9-])" + re.escape(ac) + r"(?![0-9])", acceptance):
-                findings.append("%s: replays %s, which is not in ACCEPTANCE.md" % (tag, ac))
-            if ac not in smoke:
+            # a criterion is its CHECKBOX line, and the suite measures it as res["ID"] --
+            # prose or a comment mentioning the id is neither (2.13.0 review)
+            if not re.search(r"^\s*- \[[ xX]\] " + re.escape(ac) + r"(?![0-9A-Za-z])",
+                             acceptance, re.M):
+                findings.append("%s: replays %s, which is not a criterion in ACCEPTANCE.md"
+                                % (tag, ac))
+            if not re.search(r"res\[\s*\x22" + re.escape(ac) + r"\x22\s*\]", smoke):
                 findings.append("%s: replays %s, which the smoke suite does not measure"
                                 % (tag, ac))
         if tier == "deep" and mod_path and os.path.isfile(mod_path):
             meas = c.get("measured") or {}
-            if meas.get("model_sha256") != sha256_file(mod_path):
-                advisories.append("%s: the recorded deep run predates the current %s -- run it "
-                                  "again by hand and record the result" % (tag, module))
+            if meas.get("inputs_sha256") != inputs_sha256(mod_path, os.path.join(base, cfg)):
+                advisories.append("%s: the recorded deep run predates the current %s or .cfg "
+                                  "-- run it again by hand and record the result" % (tag, module))
     if configs and not has_ci:
         findings.append("%s: no `ci` config -- nothing would run in CI" % where)
+    if configs and not has_safety:
+        findings.append("%s: no `ci` config expects no-error on a safety invariant (one other "
+                        "than TypeOK) -- CI would check nothing the design promises" % where)
     if configs and not has_vacuity:
         findings.append("%s: no `ci` vacuity config (an invariant that MUST break) -- a green "
                         "could be green because nothing can happen" % where)
@@ -151,20 +199,32 @@ def cmd_check(args):
         checked[os.path.realpath(path)] = check_manifest(root, path, acceptance, smoke,
                                                          findings, advisories)
     n_adr = 0
-    for path in sorted(glob.glob(os.path.join(root, "docs", "adr", "ADR-*.md"))):
-        m = ADR_RX.search(path)
-        if not m or int(m.group(1)) < FIRST_GATED_ADR:
+    known = set(checked)
+    for path in sorted(glob.glob(os.path.join(root, "docs", "adr", "*.md"))):
+        name = os.path.basename(path)
+        if name.lower() in NOT_ADRS:
+            continue
+        m = ADR_RX.match(name)
+        if not m:
+            findings.append("%s: not named ADR-NNN-<slug>.md -- the rule cannot tell which ADR "
+                            "it is (rename it)" % rel(root, path))
+            continue
+        if int(m.group(1)) < FIRST_GATED_ADR:
             continue
         n_adr += 1
-        adr = "ADR-" + m.group(1)
+        adr = "ADR-%03d" % int(m.group(1))
         fm = frontmatter(path)
+        if fm and fm.get("__duplicate__"):
+            findings.append("%s: duplicate frontmatter key(s) %s" % (rel(root, path),
+                                                                    ", ".join(fm["__duplicate__"])))
         value = (fm or {}).get("model")
+        word = value.split()[0] if value else ""
         if not value:
             findings.append("%s: no `model:` in its frontmatter -- declare `model: required` "
                             "(with `model_manifest:`) or `model: not-needed -- <reason>` "
                             "(repo rule 12, ADR-059)" % rel(root, path))
             continue
-        if value.startswith("required"):
+        if word == "required":
             mpath = (fm or {}).get("model_manifest")
             if not mpath:
                 findings.append("%s: `model: required` without `model_manifest:`"
@@ -174,13 +234,16 @@ def cmd_check(args):
             if not os.path.isfile(full):
                 findings.append("%s: model_manifest %s does not exist" % (rel(root, path), mpath))
                 continue
+            if full not in known:
+                findings.append("%s: model_manifest %s is not under docs/<feature>/models/ -- CI "
+                                "only runs manifests there, so this one would never run"
+                                % (rel(root, path), mpath))
+                continue
             man = checked.get(full)
-            if man is None and full not in checked:
-                man = check_manifest(root, full, acceptance, smoke, findings, advisories)
             if man is not None and man.get("adr") != adr:
                 findings.append("%s: its manifest names %r, not %s"
                                 % (rel(root, path), man.get("adr"), adr))
-        elif value.startswith("not-needed"):
+        elif word == "not-needed":
             reason = re.sub(r"\(origin:[^)]*\)", "", value[len("not-needed"):])
             if not re.search(r"[A-Za-z0-9]", reason):
                 findings.append("%s: `model: not-needed` without a reason" % rel(root, path))
@@ -206,11 +269,13 @@ def verdict_of(output):
 
 
 def trace_head(output, n=15):
+    """The counterexample's first lines; for any other failure the LAST lines, where TLC puts
+    the real cause (a semantic error is reported before its "Parsing failed" summary)."""
     lines = output.splitlines()
     for i, line in enumerate(lines):
-        if line.startswith("Error:") or "is violated" in line:
+        if "is violated" in line:
             return lines[i:i + n]
-    return lines[-n:]
+    return lines[-25:]
 
 
 def cmd_run(args):
@@ -264,7 +329,14 @@ def cmd_run(args):
                 red.append("%s: past the %ds timeout -- tighten the bounds or mark it deep"
                            % (tag, args.timeout))
                 continue
-            got, want = verdict_of(out), c.get("expect", "").strip()
+            got, want = verdict_of(out), norm_expect(c.get("expect"))
+            # TLC exits 0 only when it found nothing; a "no error" line with a non-zero exit is
+            # not a verdict (2.13.0 review)
+            if got == "no-error" and r.returncode != 0:
+                got = "tlc-error (exit %s)" % r.returncode
+            if c.get("vacuity") and got == want and not re.search(r"^State 2:", out, re.M):
+                got = "vacuity broken in the INITIAL state (a length-1 counterexample proves only "
+                got += "that Init exists)"
             line = "%s: %s in %.1fs" % (tag, got, elapsed)
             if got != want:
                 red.append("%s, expected %s\n    %s" % (line, want,

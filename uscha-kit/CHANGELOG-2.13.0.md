@@ -15,7 +15,7 @@ exists).
   without the field, a `required` one without a well-formed manifest, a manifest without a `ci`
   config or without a vacuity config (an invariant that MUST break), and a replayed AC id that
   `ACCEPTANCE.md` or the smoke suite does not carry. A deep run recorded against an older `.tla`
-  is an advisory.
+  or `.cfg` is an advisory.
 - **`tools/model-check.py run --tier ci|deep`** runs a manifest's configs with TLC v1.7.4, after
   checking the jar against its pinned sha256, and compares each verdict with `expect`; a mismatch
   prints the trace's first lines, and a `ci` config over 60 s (or past 120 s) is red, named.
@@ -27,6 +27,20 @@ exists).
   teeth configs that MUST break, each naming the RED case that replays it (AC-GI-50/51, -52, -64,
   -65) -- and six `deep` configs at MaxLog=5 with their recorded results. The model gained
   `DeferFix` and `MemoryFix` so the fixes TLC forced are named in it.
+
+## Closed before release (fresh review)
+
+A fresh reviewer found six real ways around the first cut, each reproduced; all are fixed and
+pinned in T176. A manifest named by `model_manifest:` outside `docs/<feature>/models/` passed the
+check but was never run (AC-MC-03). ADR files named `ADR-061.md`, `ADR-1000-x.md` or `adr-0600-x.md`
+skipped the rule, and a stray file in `docs/adr/` was ignored (AC-MC-01). A manifest could be valid
+and say nothing: only the vacuity config in CI, a `no-error` config checking only `TypeOK`, a
+counterexample that replays no AC id, or a vacuity "broken" in the initial state (AC-MC-03, -05). A
+replayed id matched prose, a comment, or a longer id (AC-MC-04). `publish.yml`'s fallback path (no
+smoke run for the tag) never ran TLC; it now does, with the same pin (AC-MC-08). And TLC's exit code
+was ignored, a semantic error's cause was cut from the trace, `violated:X` never matched,
+`not-neededforsure` passed as a reason, a duplicate `model:` won silently, and the deep-run hash
+covered the `.tla` but not its `.cfg` (AC-MC-02, -05, -07).
 
 ## Found while building it
 

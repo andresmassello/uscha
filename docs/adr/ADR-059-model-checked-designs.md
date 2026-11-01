@@ -78,9 +78,9 @@ Option B, at repo level first (scope C). Promotion into the kit is a later ADR.
    measured**; the job's timeout is 120 s per config; exceeding it is red, naming the config
    ("tighten it or mark it deep"), never a flake. The job **blocks**: `publish.yml` does not
    publish while it is red.
-4. **The `deep` tier is run by hand**; its result (date, distinct states, verdict) is recorded in
-   the model's README as a local measurement, never as a gate. The suite warns -- advisory -- when
-   the `.tla` changed after the recorded deep run.
+4. **The `deep` tier is run by hand**; its result (date, distinct states, verdict, and the sha256 of
+   the module and its `.cfg`) is recorded in the manifest's `measured` field as a local
+   measurement, never as a gate. The suite warns -- advisory -- when either changed since.
 5. **The suite's check needs no Java** and runs in all six cells: the field on every ADR >= 059; a
    `required` ADR's manifest present and well-formed, with a `ci` and a vacuity config; every AC id
    the manifest names present in `ACCEPTANCE.md` and measured by the smoke suite.
@@ -98,7 +98,7 @@ Option B, at repo level first (scope C). Promotion into the kit is a later ADR.
 | an AC id in the manifest absent from `ACCEPTANCE.md` or the smoke suite | red in the main suite |
 | an ADR >= 059 without `model:` | red in the main suite, naming the ADR |
 | `model: not-needed` written by the agent, unconfirmed | an unconfirmed agent-origin item, printed by `readiness` (ADR-044's advisory line) |
-| deep result older than the latest change to the `.tla` | advisory warning, names the model |
+| deep result recorded against an older `.tla` or `.cfg` | advisory warning, names the config |
 
 ## Measured before deciding (2026-11-01, GatedDebt, TLC v1.7.4, 2 workers, the suite running alongside)
 

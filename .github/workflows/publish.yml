@@ -193,6 +193,32 @@ jobs:
         if: steps.prior.outputs.reuse != 'true'
         run: bash uscha-kit/tests/smoke-engine.sh
 
+      # ADR-059 (2.13.0): on the fallback path the smoke run's `models` job did not run either, so
+      # the models are checked HERE with the same pinned TLC -- "a red model blocks the publish"
+      # must hold on both paths (2.13.0 review). Same pin as smoke.yml's models job.
+      - name: Set up Java (Temurin 21) for the models (fallback only)
+        if: steps.prior.outputs.reuse != 'true'
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Model-check every manifest (fallback only)
+        if: steps.prior.outputs.reuse != 'true'
+        shell: bash
+        env:
+          TLC_VERSION: "1.7.4"
+          TLC_SHA256: "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
+        run: |
+          set -e
+          mkdir -p .tlc
+          url="https://github.com/tlaplus/tlaplus/releases/download/v${TLC_VERSION}/tla2tools.jar"
+          curl -fsSL -o .tlc/tla2tools.jar "$url" || { sleep 5; curl -fsSL -o .tlc/tla2tools.jar "$url"; }
+          echo "${TLC_SHA256}  .tlc/tla2tools.jar" | sha256sum -c -
+          python tools/model-check.py check
+          python tools/model-check.py run --tier ci --jar .tlc/tla2tools.jar
+          rm -rf .tlc
+
       # The receipt names WHICH run it leaned on. It used to assert "6/6 cells", which was true
       # only because every run was six; now that a branch push runs three, the honest receipt is
       # the ref the run was triggered on -- a tag run IS the six-cell grid by smoke.yml's rule.

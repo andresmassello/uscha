@@ -2011,20 +2011,26 @@ from an extracted kit every case reads UNMEASURED. Measured by T176 over temp fi
 stub TLC; the real TLC run is the CI `models` job.
 
 - [ ] AC-MC-01 - an ADR numbered >= 059 without `model:` makes `model-check.py check` exit 1 naming
-  it; an ADR numbered below 059 is not read.
+  it, whatever its spelling (`ADR-061.md`, `ADR-1000-x.md`, `adr-0600-x.md`); a file in `docs/adr/`
+  not named `ADR-NNN-<slug>.md` is refused; an ADR numbered below 059 is not read.
 - [ ] AC-MC-02 - `model: not-needed -- <reason> (origin: agent)` passes the check and `readiness`
   counts it as an unconfirmed agent-origin item until `confirmed: YYYY-MM-DD` is appended; a
-  `not-needed` with no reason is refused.
-- [ ] AC-MC-03 - `model: required` whose manifest does not exist, a manifest with no `ci` config,
-  and one with no `ci` vacuity config are each refused, named; a complete one passes.
-- [ ] AC-MC-04 - an AC id a config replays that is absent from `ACCEPTANCE.md`, or that the smoke
-  suite does not carry, is refused.
+  `not-needed` with no reason, `not-neededforsure` and a duplicate `model:` are refused; a quoted
+  value is read.
+- [ ] AC-MC-03 - `model: required` whose manifest does not exist or sits outside
+  `docs/<feature>/models/`, a manifest with no `ci` config, no `ci` vacuity config, no `ci`
+  no-error config on a safety invariant other than `TypeOK`, or a counterexample config that
+  replays no AC id are each refused, named; a complete one passes.
+- [ ] AC-MC-04 - an AC id a config replays must be a checkbox criterion in `ACCEPTANCE.md` and a
+  `res["<id>"]` the smoke suite sets; prose or a comment mentioning it is refused.
 - [ ] AC-MC-05 - `run` passes when every verdict matches `expect`, is red with the trace's first
-  lines when one does not, and is red for a config over the measured limit; the repo's own
-  manifests pass `check`.
+  lines when one does not, is red for a config over the measured limit, for a "no error" with a
+  non-zero exit, and for a vacuity broken in the initial state; the repo's own manifests pass
+  `check`.
 - [ ] AC-MC-06 - a jar whose sha256 is not the pin is refused, and Java never runs.
-- [ ] AC-MC-07 - a deep run recorded against an older `.tla` prints an advisory and the exit code
-  stays 0.
+- [ ] AC-MC-07 - a deep run recorded against an older `.tla` or `.cfg` prints an advisory and the
+  exit code stays 0; recorded against the current ones, it is quiet.
 - [ ] AC-MC-08 - the smoke workflow carries a `models` job that verifies the pinned jar and runs
-  `model-check.py run --tier ci` with no `continue-on-error`, and `publish.yml` refuses on the smoke
-  run's conclusion -- a red model is a red run, so nothing is published.
+  `model-check.py run --tier ci` with no `if:`, no `continue-on-error` and no `|| true`;
+  `publish.yml` refuses on the smoke run's conclusion, and its fallback path (no smoke run for the
+  tag) runs the same pinned model-check -- a red model publishes nothing on either path.

@@ -56,7 +56,7 @@
         "date": "2026-11-01",
         "distinct_states": 46976202,
         "tlc": "1.7.4",
-        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+        "inputs_sha256": "7386c584e311fa9f6f7799ccaf5af6d0e933c50a0f746033685e35708ed13bd6"
       }
     },
     {
@@ -67,7 +67,7 @@
         "date": "2026-11-01",
         "distinct_states": 1948,
         "tlc": "1.7.4",
-        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+        "inputs_sha256": "2f99d2759f08bcb7736f3c740bda5656f7ee080bcefebaabd61f02ce289ce7ee"
       },
       "vacuity": true
     },
@@ -79,8 +79,12 @@
         "date": "2026-11-01",
         "distinct_states": 8213,
         "tlc": "1.7.4",
-        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
-      }
+        "inputs_sha256": "cc480799c0e03678ed403334df1b5720fb9b5fb1df0c94ed14a5914d63020e71"
+      },
+      "replays": [
+        "AC-GI-50",
+        "AC-GI-51"
+      ]
     },
     {
       "cfg": "proposed-honest.cfg",
@@ -90,7 +94,7 @@
         "date": "2026-11-01",
         "distinct_states": 926106,
         "tlc": "1.7.4",
-        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+        "inputs_sha256": "f188917b03060cc0e9b9ff2d9d0d89f77a6e80ffab540cd0a8e41cf830f0b52f"
       }
     },
     {
@@ -101,7 +105,7 @@
         "date": "2026-11-01",
         "distinct_states": 1914237,
         "tlc": "1.7.4",
-        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+        "inputs_sha256": "d323b1782578f9b072ecdb4fe8b46894fa2f7a356bececb7a96546fb59727ac9"
       }
     },
     {
@@ -112,7 +116,7 @@
         "date": "2026-11-01",
         "distinct_states": 2902,
         "tlc": "1.7.4",
-        "model_sha256": "ed501badbe0582491ef763a4b6d04e65ffe0e9b2236645cf3beaec12495b7fda"
+        "inputs_sha256": "3dfe8231c2f1c78bb196ec18ca73717d2f5ccf661a9b3d8214cdd2522df9ba5f"
       },
       "vacuity": true
     }

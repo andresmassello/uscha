@@ -125,8 +125,8 @@ itself.
    field, a broken manifest, or a replayed AC id that ACCEPTANCE or the suite does not carry; the
    CI `models` job runs the `ci` tier with TLC v1.7.4 pinned by sha256 (60 s per config, 120 s
    timeout) and is part of the smoke run, so a red model blocks the publish. The `deep` tier is run
-   by hand and recorded in the manifest (`measured`, with the `.tla`'s sha256 -- a newer `.tla` is an
-   advisory). A green model proves no violation OF THE MODEL at its bounds; the RED replays are the
+   by hand and recorded in the manifest (`measured`, with the sha256 of the module and its `.cfg` -- a
+   newer one is an advisory). A green model proves no violation OF THE MODEL at its bounds; the RED replays are the
    only link to the engine, and every claim says so (rule 2).
 
 ## Running the suite fast (2.8.0, ADR-053; parallel by default since 2.9.0, ADR-054)
