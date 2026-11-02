@@ -1,0 +1,36 @@
+{
+  "schema": "uscha/models@1",
+  "adr": "ADR-060",
+  "note": "ADR-060, written before the code (repo rule 12). The teeth configs (ci-hash-rule, ci-no-confirm) join the manifest with the RED cases that replay them (AC-DI-07, AC-DI-04); until those exist they are run by hand.",
+  "module": "DeferralById.tla",
+  "configs": [
+    {
+      "cfg": "ci-proposed.cfg",
+      "tier": "ci",
+      "expect": "no-error"
+    },
+    {
+      "cfg": "ci-vacuity-accepted.cfg",
+      "tier": "ci",
+      "expect": "violated: NeverAcceptedAndReady",
+      "vacuity": true
+    },
+    {
+      "cfg": "ci-vacuity-fixed.cfg",
+      "tier": "ci",
+      "expect": "violated: NeverFixedAndReady",
+      "vacuity": true
+    },
+    {
+      "cfg": "deep-proposed-partial.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-02",
+        "distinct_states": 14676480,
+        "tlc": "1.7.4",
+        "inputs_sha256": "78d5302a8c33236f1629a3e84e3ab41d8ddf5255c8078951d21a2754fa230c0a"
+      }
+    }
+  ]
+}
