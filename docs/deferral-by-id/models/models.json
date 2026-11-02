@@ -31,6 +31,18 @@
         "tlc": "1.7.4",
         "inputs_sha256": "78d5302a8c33236f1629a3e84e3ab41d8ddf5255c8078951d21a2754fa230c0a"
       }
+    },
+    {
+      "cfg": "deep-not-read-now-4.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "note": "read-now OFF: Anchor and Memory alone hold the rule here; the engine keeps read-now as defense in depth",
+      "measured": {
+        "date": "2026-11-02",
+        "distinct_states": 29611512,
+        "tlc": "1.7.4",
+        "inputs_sha256": "8d3f7cd211569a7ccf88be6ccb3ed6b26df8dad43cefe8228f986105c40e5f02"
+      }
     }
   ]
 }

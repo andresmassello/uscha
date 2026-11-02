@@ -81,8 +81,9 @@ Measured 2026-11-02, TLC v1.7.4, 2 workers:
 | vacuity: a confirmed, present deferral still ships | MaxLog=3 | violated (as it must) |
 | vacuity: a real fix still ships | MaxLog=3 | violated (as it must) |
 
-Read-now (decision 4's "and in the file now") is not needed for the rule at these bounds: Anchor
-(the last review saw the file now) and Memory already refuse a removed deferral. The engine keeps it
+Read-now (decision 4's "and in the file now") is not needed for the rule at these bounds -- nor one
+record deeper (MaxLog=4, read-now OFF: no error, 29,611,512 states, 278 s): Anchor (the last review
+saw the file now) and Memory already refuse a removed deferral. The engine keeps it
 as defense in depth, as 2.13.0 found for the deferral-closure fix.
 
 ## Reasons
