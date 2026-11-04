@@ -15,8 +15,10 @@
       "tier": "deep",
       "expect": "no-error",
       "measured": {
-        "date": "pending",
-        "note": "re-run after the 2.14.0 review's model changes"
+        "date": "2026-11-04",
+        "distinct_states": 4530168,
+        "tlc": "1.7.4",
+        "inputs_sha256": "43d90d5b0fb4c9def7226be5a018179d039d485561f01b79f19ed86ce9da1684"
       }
     },
     {
@@ -66,8 +68,10 @@
       "tier": "deep",
       "expect": "no-error",
       "measured": {
-        "date": "pending",
-        "note": "re-run after the 2.14.0 review's model changes"
+        "date": "2026-11-04",
+        "distinct_states": 111004608,
+        "tlc": "1.7.4",
+        "inputs_sha256": "c975fa2e7441637027d9afbeca751a50ecf1db8362163d23780832f9d1372825"
       }
     },
     {
@@ -76,8 +80,10 @@
       "expect": "no-error",
       "note": "the agent may also log a gated step without ids",
       "measured": {
-        "date": "pending",
-        "note": "re-run after the 2.14.0 review's model changes"
+        "date": "2026-11-04",
+        "distinct_states": 14104440,
+        "tlc": "1.7.4",
+        "inputs_sha256": "bc578a6b8b0200f19457897fab72d586a1b98dd7c9167be077ed4c555f95bbc2"
       }
     }
   ]

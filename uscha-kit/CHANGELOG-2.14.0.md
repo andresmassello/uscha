@@ -41,7 +41,8 @@ manifest runs in the CI `models` job: the design in two bounded worlds (no error
 two vacuity controls, and three teeth configs that MUST break, each in about 2 s -- the 2.11-2.13
 whole-file rule (replayed by AC-DI-07), a deferral with no human confirmation (AC-DI-04) and a
 confirmation not scoped to its step (AC-DI-11). The deep tier (source edits, gated steps without
-ids, a partially fixed version) is recorded in the manifest.
+ids, a partially fixed version) is recorded in the manifest: no error at 4.5 M, 14.1 M and
+111.0 M states.
 
 ## Closed before release (fresh review)
 

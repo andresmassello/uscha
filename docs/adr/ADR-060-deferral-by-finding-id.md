@@ -95,7 +95,9 @@ Measured 2026-11-04, TLC v1.7.4, 2 workers (`ci` = run by the CI `models` job, b
 | a `defers:` line without human confirmation (`Confirm = FALSE`) | ci | **violated** in 2 s -- AC-DI-04 |
 | a confirmation not scoped to its step (`Scoped = FALSE`) | ci | **violated** in 2 s -- AC-DI-11 |
 | vacuity: a confirmed, present deferral still ships; a real fix still ships | ci | violated (as they must) |
-| the design with edits; with gated steps without ids; with the partial version | deep | recorded in the manifest |
+| the design with source edits (MaxLog=3) | deep | no error, 4,530,168 states, 48 s |
+| ... and gated steps logged without ids | deep | no error, 14,104,440 states, 146 s |
+| ... and the partially fixed version | deep | no error, 111,004,608 states, 30 min |
 
 Read-now (decision 4's "and in the file now") was not needed for the rule at the first model's
 bounds (MaxLog=4, read-now off: no error, 29,611,512 states): Anchor and Memory already refuse a
