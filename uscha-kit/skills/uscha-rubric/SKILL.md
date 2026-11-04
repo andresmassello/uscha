@@ -4,7 +4,7 @@ description: >
   Grade the change against the versioned RUBRIC.md (the ACCEPTANCE of the
   non-testable: conventions, error-handling sanity, API ergonomics, doc quality)
   and ingest the verdict into the ledger. This skill is a THIN ADAPTER for
-  Claude Code: the portable core is templates/rubric-grader-prompt.md (works on
+  Claude Code: the portable core is templates/rubric-grader-prompt.md, shipped in this skill's folder (works on
   Codex, Gemini CLI, Cursor, raw API, or a human) + the vendor-neutral JSON
   contract that `qa_ledger.py rubric-ingest` validates. Advisory by default;
   gates only when the human declares it. Invoke for "grade the rubric",
@@ -104,7 +104,8 @@ Keep the CONTENT in the conversation's language, but keep the labels (`CLOSED`, 
 ## Protocol
 
 1. **Locate the rubric**: `defaults.rubric.file` in `uscha.config.json`, else
-   `./RUBRIC.md`. If absent, offer to create one from `templates/RUBRIC.md` and STOP
+   `./RUBRIC.md`. If absent, offer to create one from `templates/RUBRIC.md` -- in THIS skill's
+   folder, next to this SKILL.md (it travels with the skill; kit 2.15.0) -- and STOP
    (the criteria are the human's to approve — propose, don't impose).
 2. **Validate structure first** (facts block):
 
@@ -116,8 +117,8 @@ QL="./.claude/skills/uscha-devloop/qa_ledger.py"
 python3 $QL spec-check --rubric RUBRIC.md    # exit 1 = fix the rubric before grading
 ```
 
-3. **Grade with ISOLATED context** — follow `templates/rubric-grader-prompt.md` to
-   the letter: read ONLY the diff + RUBRIC.md (not the maker's reasoning, not the PR
+3. **Grade with ISOLATED context** — follow `templates/rubric-grader-prompt.md` (this
+   skill's folder) to the letter: read ONLY the diff + RUBRIC.md (not the maker's reasoning, not the PR
    body). For every criterion emit `pass|fail`; **evidence `file:line` is mandatory
    for any verdict that affects the score** (a positive's pass, a negative's fail) —
    without it the engine discards the verdict. Anchors calibrate you; when in doubt,

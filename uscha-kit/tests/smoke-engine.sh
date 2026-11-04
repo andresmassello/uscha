@@ -22722,6 +22722,89 @@ esac
 }
 pj_unit T178 pj_t178
 
+pj_t179() {
+echo "== T179 (2.15.0): every template a SKILL.md points to travels with the installed skill =="
+# Found in a real project (2026-11-04): the installed uscha-rubric skill said "create one from
+# templates/RUBRIC.md", but the installer copies the skill folder only and init never copies
+# RUBRIC.md, so neither the rubric template nor the grader prompt existed anywhere the agent could
+# read. Each case runs the real installer into an isolated HOME and reads what it wrote.
+T179=$(pyin "$KIT" <<'PY'
+import hashlib, io, os, re, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+INSTALLER = os.path.join(kit, "install-uscha.py")
+res, why = {}, {}
+home = tempfile.mkdtemp(prefix="uscha-tp-home-")
+ENV = dict(os.environ, HOME=home, USERPROFILE=home, PYTHONIOENCODING="utf-8")
+for k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"):
+    ENV.pop(k, None)
+REF = re.compile(r"templates/[A-Za-z0-9_.][A-Za-z0-9_./-]*[A-Za-z0-9_]")
+try:
+    inst = subprocess.run([sys.executable, INSTALLER, "install", "--target", "claude",
+                           "--home", home], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, env=ENV)
+    sk_root = os.path.join(home, ".claude", "skills")
+    # --- AC-TP-01: every templates/... path an installed SKILL.md names exists in that skill
+    missing, seen = [], 0
+    for tree in (sk_root, os.path.join(kit, "skills")):
+        for name in sorted(os.listdir(tree)) if os.path.isdir(tree) else []:
+            sk = os.path.join(tree, name, "SKILL.md")
+            if not os.path.isfile(sk):
+                continue
+            for ref in sorted(set(REF.findall(io.open(sk, encoding="utf-8").read()))):
+                seen += 1
+                if not os.path.isfile(os.path.join(tree, name, *ref.split("/"))):
+                    missing.append("%s/%s: %s" % (os.path.basename(os.path.dirname(tree)), name, ref))
+    res["AC-TP-01"] = bool(inst.returncode == 0 and seen and not missing)
+    why["AC-TP-01"] = "install=%s refs=%d missing=%r" % (inst.returncode, seen, missing[:6])
+    # --- AC-TP-02: each copy a skill carries is byte-identical to the kit's canonical template
+    drift, copies = [], 0
+    canon_root = os.path.join(kit, "templates")
+    for tree in (os.path.join(kit, ".claude", "skills"), os.path.join(kit, "skills")):
+        for name in sorted(os.listdir(tree)):
+            tdir = os.path.join(tree, name, "templates")
+            for dp, _dn, fns in os.walk(tdir):
+                for fn in fns:
+                    p = os.path.join(dp, fn)
+                    rel = os.path.relpath(p, tdir)
+                    cands = [os.path.join(canon_root, rel), os.path.join(canon_root, "docs", "adr", fn),
+                             os.path.join(canon_root, "scripts", fn)]
+                    canon = next((c for c in cands if os.path.isfile(c)), None)
+                    copies += 1
+                    if canon is None or io.open(p, "rb").read() != io.open(canon, "rb").read():
+                        drift.append("%s/%s" % (name, rel.replace(os.sep, "/")))
+    res["AC-TP-02"] = bool(copies >= 4 and not drift)
+    why["AC-TP-02"] = "copies=%d drift=%r" % (copies, drift[:6])
+    # --- AC-TP-03: doctor's hint for a declared-but-absent rubric names a file that exists
+    proj = tempfile.mkdtemp(prefix="uscha-tp-proj-")
+    io.open(os.path.join(proj, "uscha.config.json"), "w", encoding="utf-8").write(
+        '{"project": "p", "defaults": {"rubric": {"file": "RUBRIC.md"}}, "repos": []}\n')
+    eng = os.path.join(sk_root, "uscha-devloop", "qa_ledger.py")
+    doc = subprocess.run([sys.executable, eng, "doctor"], cwd=proj, stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT, text=True, env=ENV)
+    shutil.rmtree(proj, ignore_errors=True)
+    hint = [ln for ln in doc.stdout.splitlines() if "RUBRIC.md" in ln and "create it from" in ln]
+    paths = re.findall(r"from (\S+RUBRIC\.md)", " ".join(hint))
+    res["AC-TP-03"] = bool(paths and all(os.path.isfile(p) for p in paths))
+    why["AC-TP-03"] = "hint=%r" % (hint[:2] or doc.stdout[-200:])
+finally:
+    shutil.rmtree(home, ignore_errors=True)
+
+sidecar(kit, ".tp-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T179" in
+  OK*) PASS=$((PASS+1)); echo "  ok   skill templates travel with the skill (AC-TP-01..03): $T179";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T179";;
+esac
+}
+pj_unit T179 pj_t179
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -23091,6 +23174,8 @@ FAMILIES = (
     # tag, or from an extracted kit, they report None = UNMEASURED
     (".mk-cases.json", "model-check-in-kit", "T178",                  # ADR-061, 2.15.0
      _seq("AC-MK", 1, 14)),
+    (".tp-cases.json", "skill-templates", "T179",                     # 2.15.0
+     _seq("AC-TP", 1, 3)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

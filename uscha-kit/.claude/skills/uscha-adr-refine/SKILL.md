@@ -143,7 +143,7 @@ it's already fully answered. Keep a running list of OPEN GAPS and resolved decis
    The answers distil into the stack ADR with the dates INSIDE it, as the machine-readable
    `lifecycle:` frontmatter block (`component` / `version` / `eol` / `source` / `checked`,
    ISO dates; `eol: unknown` is allowed and reads as a NAMED absence, never a pass) — see
-   `templates/docs/adr/ADR-stack-template.md`. The SPEC declares the milestone it is
+   `templates/ADR-stack-template.md` in this skill's folder. The SPEC declares the milestone it is
    compared against: frontmatter `go_live: YYYY-MM-DD` or a `**Go-live:** YYYY-MM-DD` line.
    `qa_ledger.py spec-check` then reports, per component, `ok` / `expires before go-live` /
    `no EOL cited` / `no source cited` — ADVISORY, it never gates. It can see that a date

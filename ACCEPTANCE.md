@@ -2114,3 +2114,18 @@ HOME, with a stub TLC so no case needs Java.
   `phase`, `model-check`).
 - [ ] AC-MK-14 - re-running `uscha init` after the first ADR keeps the declared `model_check` block, so
   the generated config is unchanged and no conflict is reported.
+
+## Skill templates travel with the skill (2.15.0) - closes on green `AC-TP-nn` smoke assertions
+
+The gap, found in a real project: the installed `uscha-rubric` skill said "create one from
+`templates/RUBRIC.md`", but the installer copies each skill's folder and nothing else, and `init`
+never copies a rubric -- so the template, and the grader prompt the skill grades with, existed
+nowhere the agent could read. `uscha-adr-refine`, `uscha-discovery` and `uscha-devloop` had the same
+kind of reference. Measured by T179 over a real `install --target claude` into an isolated HOME.
+
+- [ ] AC-TP-01 - every `templates/...` path an installed `SKILL.md` names (both skill trees) exists
+  inside that skill's own folder.
+- [ ] AC-TP-02 - each template a skill carries is byte-identical to the kit's canonical copy under
+  `uscha-kit/templates/`, so the copies cannot drift.
+- [ ] AC-TP-03 - `doctor`, for a declared rubric that is absent, names a template path that exists on
+  that install.

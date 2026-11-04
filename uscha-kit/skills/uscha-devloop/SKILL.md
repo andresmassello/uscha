@@ -204,8 +204,8 @@ fields in the config are relative to where you run `init`.
 
 For migration/legacy (risk profile E) work, also wire the golden invariant once:
 install `hooks/block-approved-writes.py` as a `PreToolUse` hook in
-`settings.json`, and add `*.approved.* binary` to `.gitattributes` (ships in
-`templates/.gitattributes`) so line endings can't lie in the byte-compare.
+`settings.json`, and add `*.approved.* binary` to `.gitattributes` (`uscha init`
+writes it) so line endings can't lie in the byte-compare.
 
 ### QA-tool pre-flight (ADR-051; run BEFORE Phase 0a)
 
@@ -748,8 +748,8 @@ runs advisory — a check either answered or it did not. Name a check `AC-nn ...
 tag grammar a JUnit testcase name uses) and a green check inside a passing report closes
 that criterion MEASURED; a failed one vetoes it, exactly like a red test.
 `log-gate --kind smoke --verdict pass|fail|not-run` is the parity door for a smoke
-measured elsewhere. `uscha-kit/templates/scripts/smoke-report-example.json` is the
-reference report. If the human runs the smoke by hand, they still write the report: a
+measured elsewhere. `templates/smoke-report-example.json` in this skill's
+folder is the reference report. If the human runs the smoke by hand, they still write the report: a
 checklist a human ticked is evidence, a checklist an agent narrated is not.
 
 **The PR body cites the gate** (phase 6): paste the `smoke-ingest` verdict line —

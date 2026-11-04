@@ -16723,6 +16723,15 @@ def _installed_skill_roots(args):
     return [(t, os.path.join(home, *parts)) for t, parts in SKILL_INSTALL_ROOTS]
 
 
+def _rubric_template_path():
+    """Where the rubric template is on THIS install: it travels in the uscha-rubric skill's folder,
+    next to this engine's (kit 2.15.0). Named by its absolute path so the hint can be followed;
+    the bare kit-relative name only when the skill is not beside the engine."""
+    p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uscha-rubric",
+                     "templates", "RUBRIC.md")
+    return p if os.path.isfile(p) else "the uscha-rubric skill's templates/RUBRIC.md"
+
+
 def cmd_doctor(args):
     checks = []   # (nivel 'ok'|'warn'|'error', titulo, detalle)
 
@@ -16987,13 +16996,13 @@ def cmd_doctor(args):
                     rb_block = _rubric_structure(rub_cfg["file"])
                     if rb_block:
                         warn(f"rubrica {rub_cfg['file']} con estructura invalida",
-                             "; ".join(rb_block) + " - ver templates/RUBRIC.md")
+                             "; ".join(rb_block) + " - ver " + _rubric_template_path())
                     else:
                         ok(f"rubrica declarada: {rub_cfg['file']}"
                            + (" (GATE declared)" if rub_cfg.get("gate") is True else " (advisory)"))
                 else:
                     warn(f"rubrica declarada pero ausente: {rub_cfg['file']}",
-                         "install: create it from templates/RUBRIC.md (weighted RB-nn "
+                         "install: create it from " + _rubric_template_path() + " (weighted RB-nn "
                          "criteria + threshold)")
             ledger_path = args.ledger
             if os.path.isfile(ledger_path):

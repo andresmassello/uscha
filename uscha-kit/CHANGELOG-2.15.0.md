@@ -35,6 +35,22 @@ mechanism to every project, as the project's choice.
 - **This repo**: `tools/model-check.py` is now a thin wrapper over the engine (the same command line,
   the repo's boundary ADR-059 and its suite, nothing recorded); the CI `models` job stays its gate.
 
+## Also fixed: skill templates travel with the skill
+
+Found in a real project: the installed `uscha-rubric` skill said "create one from
+`templates/RUBRIC.md`", but the installer copies each skill's folder only and `init` never copies a
+rubric, so the template and the grader prompt existed nowhere the agent could read. The agent
+reverse-engineered the format from the engine's parser and wrote its own template into the global
+install. Now each skill carries the templates it names, in its own `templates/` folder:
+`uscha-rubric` (`RUBRIC.md`, `rubric-grader-prompt.md`), `uscha-adr-refine` and `uscha-discovery`
+(`ADR-stack-template.md`), `uscha-devloop` (`smoke-report-example.json`). `uscha-kit/templates/`
+stays the canonical source; the copies are byte-identical (AC-TP-02). `doctor` names the rubric
+template's real path on that install. Pinned by `AC-TP-01..03` (smoke T179), red first.
+
+**After upgrading,** reinstall the skills (`install --target ...`). If an agent wrote its own
+`uscha-rubric/templates/RUBRIC.md` into the installed skill, the reinstall replaces it with the
+kit's; a project's own `RUBRIC.md` is never touched.
+
 ## Behavior changes on upgrade (read before upgrading)
 
 - None for an existing project until it declares `model_check.from_adr`: `readiness` and `phase`
