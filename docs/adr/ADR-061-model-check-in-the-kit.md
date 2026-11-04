@@ -10,7 +10,7 @@ model: not-needed -- it reuses the witnessed-run pattern of ADR-055 and an advis
 ---
 # ADR-061: The kit ships the model check -- every ADR from a declared point on decides whether it needs a model, and a witnessed TLC run is evidence the project can make a gate
 
-## Status: Proposed — decided by the owner on 2026-11-04 (an `adr-refine` interview); to be built in 2.15.0. Promotes ADR-059 (repo-level) into the kit.
+## Status: Accepted (2.15.0) — decided by the owner on 2026-11-04 (an `adr-refine` interview). Promotes ADR-059 (repo-level) into the kit.
 
 ## Context
 
@@ -42,18 +42,24 @@ declares it. Chosen: ii, the posture of ADR-043 (simplicity) and `golden_require
 3. **A run is witnessed** (ADR-055's pattern): `--run` records, per config, the manifest, the
    config, the sha256 of the module and the config, the verdict, the time and the TLC version, in
    the ledger (`model_runs`). A record whose inputs changed since is stale.
-4. **The boundary is declared.** The rule applies from `model_check.from_adr` (`ADR-NNN`). `init`
-   writes it for a new project (`ADR-001`); for a project that already has ADRs, `doctor` proposes
-   the next free number and the human writes it. Without the key nothing is read: a project that
-   never opted in sees exactly what it saw before.
+4. **The boundary is declared.** The rule applies from `model_check.from_adr` (`ADR-NNN`). `uscha
+   init` writes it into the generated config: `ADR-001` on a repo with no ADRs, the next free
+   number on one that has them (decided while implementing: running `init` is the human's act, and
+   "from the next one" is the same boundary `doctor` would propose). For a project initialised
+   before 2.15.0, `doctor` proposes the next free number and the human writes it. Without the key
+   nothing is read: a project that never opted in sees exactly what it saw before.
 5. **Advisory by default.** `readiness` names, only when present: ADRs from the boundary without
    `model:`; broken manifests; `required` models with no recorded run, a stale one, or a red one; an
    unconfirmed agent-written `not-needed` (ADR-044's line already). With
    `model_check.mode: gate`, any of them blocks `pr-ready`, named.
 6. **The shipped `adr-refine` asks the question** when the project declares `from_adr`, and the
    `CLAUDE.md` template carries the rule; the agent may write `not-needed`, marked `origin: agent`.
-7. **This repo keeps its gate**: it declares `from_adr: ADR-059` and `mode: gate`, and the CI
-   `models` job keeps running the `ci` tier.
+7. **This repo keeps ADR-059's arrangement** (decided while implementing): `tools/model-check.py`
+   is a wrapper that passes the repo's boundary (`ADR-059`) and suite to the engine and records
+   nothing; the CI `models` job stays the gate; the repo's own `uscha.config.json` declares no
+   `model_check`, so its `readiness` is unchanged. Declaring it would make readiness name every
+   model "not run", because the release ritual does not run TLC (the release machine need not have
+   Java).
 
 ## Reasons
 
@@ -84,7 +90,7 @@ declares it. Chosen: ii, the posture of ADR-043 (simplicity) and `golden_require
 - Patterns: ADR-055's witnessed run; ADR-043's advisory-unless-declared; ADR-044's marker.
 - Tests: the RED cases below, each red against 2.14.1 first.
 
-## Verification (draft criteria, promoted into ACCEPTANCE.md when built -- rule 8)
+## Verification (promoted into ACCEPTANCE.md in 2.15.0)
 
 - [ ] AC-MK-01 -- without `model_check.from_adr` a project's `readiness` and `phase` read exactly as
   in 2.14.1 (byte-identical lines), whatever its ADRs say.
@@ -98,7 +104,7 @@ declares it. Chosen: ii, the posture of ADR-043 (simplicity) and `golden_require
   `.cfg` afterwards makes `readiness` name it stale.
 - [ ] AC-MK-06 -- a red recorded run is named by `readiness`; with `mode: gate` it blocks `pr-ready`
   naming the config, and with the default mode it does not.
-- [ ] AC-MK-07 -- `init` writes `model_check.from_adr: ADR-001` for a new project; `doctor` proposes
-  the next free ADR number for one that has ADRs and does not write it.
+- [ ] AC-MK-07 -- `uscha init` writes `model_check.from_adr`: `ADR-001` on a repo with no ADRs, the
+  next free number on one that has them; `doctor` proposes it to a project that has ADRs and no key.
 - [ ] AC-MK-08 -- both `adr-refine` SKILL twins and `templates/CLAUDE.md` carry the question and the
   rule.

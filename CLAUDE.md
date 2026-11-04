@@ -121,6 +121,8 @@ itself.
    requires it -- the shipped skill is not changed until a later ADR promotes the rule into the
    kit. A manifest declares per `.cfg` the expected verdict, a `ci` or `deep` tier, a vacuity
    config that MUST break, and the AC id of the RED case that replays each counterexample.
+   Since 2.15.0 (ADR-061) the logic lives in the engine (`qa_ledger.py model-check`) and
+   `tools/model-check.py` is a thin wrapper passing this repo's boundary and suite.
    `python tools/model-check.py check` (no Java, smoke T176, all six cells) refuses a missing
    field, a broken manifest, or a replayed AC id that ACCEPTANCE or the suite does not carry; the
    CI `models` job runs the `ci` tier with TLC v1.7.4 pinned by sha256 (60 s per config, 120 s

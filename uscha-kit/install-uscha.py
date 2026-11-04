@@ -9,6 +9,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import re
 import tempfile
 import time
 import uuid
@@ -984,6 +985,19 @@ def _kit_value(block, key, prefix=""):
     return block[key]
 
 
+def next_adr_number(repo):
+    """The number the next ADR of this repo will take (ADR-061): one past the highest
+    `docs/adr/ADR-NNN*.md`, or 1."""
+    nums = []
+    adr_dir = repo / "docs" / "adr"
+    if adr_dir.is_dir():
+        for f in adr_dir.iterdir():
+            m = re.match(r"^ADR-(\d+)", f.name, re.I)
+            if m and f.suffix.lower() == ".md":
+                nums.append(int(m.group(1)))
+    return (max(nums) + 1) if nums else 1
+
+
 def project_config_bytes(repo):
     """The project's uscha.config.json, GENERATED rather than copied (kit 2.0.0).
 
@@ -1030,7 +1044,11 @@ def project_config_bytes(repo):
               # integration dimension out of readiness entirely
               # integration dimension out of readiness entirely. Only the switch: the
               # contract command is a build-system guess the kit refuses to make
-              "integration": {"enabled": True}}
+              "integration": {"enabled": True},
+              # ADR-061 (2.15.0): every ADR from this one on decides whether it needs a model --
+              # ADR-001 on a repo with no ADRs, the next free number on one that has them, so
+              # nothing already written is retrofitted. Advisory unless "mode": "gate".
+              "model_check": {"from_adr": "ADR-%03d" % next_adr_number(repo)}}
     # byte-identical across runs on the same repo + kit, so a second `init` reports `unchanged`
     # instead of a conflict; LF explicitly, like every other artifact the kit writes.
     return (json.dumps(config, indent=2, ensure_ascii=False) + "\n").encode("utf-8")

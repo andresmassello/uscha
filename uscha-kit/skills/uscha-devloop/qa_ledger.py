@@ -5414,6 +5414,11 @@ def _derive_phase(ledger, name, node, k, qa_order):
             reasons.append("falta clean-room verde para %s (evidencia del arbol no "
                            "certifica el commit)" % _head[:8])
             conv = False
+    # ADR-061: a project that declared model_check.mode: gate -- a model problem blocks pr-ready
+    _mks = _mk_status(ledger, _LAST_LEDGER_PATH) if conv else None
+    if _mks and _mks["mode"] == "gate" and _mks["problems"]:
+        reasons.extend("model-check: " + p for p in _mks["problems"][:4])
+        conv = False
     if conv and tests_measured_green and not tests_red and blk == 0:
         evidence = ["ciclo de agente limpio", "tests verdes (medidos)",
                     "0 BLOCKER/CRITICAL abiertos"]
@@ -5651,6 +5656,477 @@ def cmd_confirm_deferral(args):
     _save(args.ledger, ledger)
     print("[qa_ledger] %s: deferral of %s confirmed by %s -- it closes the debt once a clean "
           "review sees its `defers:` line" % (args.repo, args.id, actor))
+
+
+# --------------------------------------------------------------------------- #
+# model-check (ADR-061, 2.15.0; the kit's copy of ADR-059's repo rule)
+# --------------------------------------------------------------------------- #
+# Every ADR from a DECLARED point on (`model_check.from_adr`) decides in its frontmatter whether it
+# needs a model; a `required` one points at a `docs/<feature>/models/models.json` manifest whose
+# configs declare the verdict TLC must give. `model-check` checks all that WITHOUT Java;
+# `model-check --run` runs TLC (the project's java + a sha256-pinned jar) and records each run in
+# the ledger (`model_runs`), stale once its module or .cfg changes. Advisory in readiness unless
+# the project declares `model_check.mode: gate`. A project that never declares `from_adr` sees
+# nothing here. What a green model proves: no violation OF THE MODEL at its bounds.
+MODEL_RUNS_KEY = "model_runs"
+import shlex as _mk_shlex
+import time as _mk_time
+
+_MK_TLC_VERSION = "1.7.4"
+_MK_TLC_URL = ("https://github.com/tlaplus/tlaplus/releases/download/v%s/tla2tools.jar"
+           % _MK_TLC_VERSION)
+_MK_TLC_SHA256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
+_MK_LIMIT_S = 60                     # measured budget per `ci` config
+_MK_TIMEOUT_S = 120                  # hard stop per config
+_MK_SCHEMA = "uscha/models@1"
+_MK_EXPECT_RX = re.compile(r"^(no-error|violated:\s*([A-Za-z_][A-Za-z0-9_]*))$")
+_MK_VIOLATED_RX = re.compile(r"Invariant\s+([A-Za-z_][A-Za-z0-9_]*)\s+is violated")
+_MK_ADR_RX = re.compile(r"^ADR-(\d+)(?:-[^/\\]*)?\.md$", re.I)
+_MK_NOT_ADRS = {"index.md", "readme.md"}
+
+
+def _mk_rel(root, p):
+    return os.path.relpath(p, root).replace(os.sep, "/")
+
+
+def _mk_sha256_file(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _mk_frontmatter(path):
+    """The `key: value` lines of a leading `---` block (top-level keys only)."""
+    with open(path, encoding="utf-8-sig", errors="replace") as fh:
+        lines = fh.read().replace("\r\n", "\n").split("\n")
+    if not lines or lines[0].strip() != "---":
+        return None
+    out, dup = {}, []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            if dup:
+                out["__duplicate__"] = dup
+            return out
+        m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$", line)
+        if m:
+            v = m.group(2).strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in "\x22\x27":
+                v = v[1:-1].strip()
+            if m.group(1) in out:
+                dup.append(m.group(1))
+            out[m.group(1)] = v
+    return None
+
+
+def _mk_cfg_invariants(path):
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        return re.findall(r"^\s*INVARIANTS?\s+([A-Za-z_][A-Za-z0-9_]*)", fh.read(), re.M)
+
+
+def _mk_inputs_sha256(module_path, cfg_path):
+    """What a recorded deep run was measured against: the module AND its config (2.13.0 review --
+    a .cfg cut to MaxLog = 1 must not keep an old result looking current)."""
+    h = hashlib.sha256()
+    for p in (module_path, cfg_path):
+        with open(p, "rb") as fh:
+            h.update(fh.read())
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def _mk_norm_expect(e):
+    e = (e or "").strip()
+    m = _MK_EXPECT_RX.match(e)
+    if not m:
+        return None
+    return "no-error" if m.group(1) == "no-error" else "violated: " + m.group(2)
+
+
+def _mk_load_manifest(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh), None
+    except (OSError, ValueError) as exc:
+        return None, str(exc)
+
+
+def _mk_manifests(root):
+    return sorted(glob.glob(os.path.join(root, "docs", "**", "models", "models.json"),
+                            recursive=True))
+
+
+def _mk_check_manifest(root, path, acceptance, smoke, findings, advisories):
+    """Findings for one manifest; returns the manifest (or None)."""
+    m, err = _mk_load_manifest(path)
+    where = _mk_rel(root, path)
+    if m is None:
+        findings.append("%s: unreadable manifest (%s)" % (where, err))
+        return None
+    if m.get("schema") != _MK_SCHEMA:
+        findings.append("%s: schema is %r, expected %r" % (where, m.get("schema"), _MK_SCHEMA))
+    base = os.path.dirname(path)
+    module = m.get("module")
+    mod_path = os.path.join(base, module) if isinstance(module, str) else None
+    if not mod_path or not os.path.isfile(mod_path):
+        findings.append("%s: module %r does not exist" % (where, module))
+    configs = m.get("configs") if isinstance(m.get("configs"), list) else []
+    if not configs:
+        findings.append("%s: no configs" % where)
+    has_ci = has_vacuity = has_safety = False
+    for c in configs:
+        cfg = c.get("cfg") if isinstance(c, dict) else None
+        tag = "%s: %s" % (where, cfg)
+        if not isinstance(cfg, str) or not os.path.isfile(os.path.join(base, cfg)):
+            findings.append("%s: the .cfg does not exist" % tag)
+            continue
+        tier, expect = c.get("tier"), _mk_norm_expect(c.get("expect"))
+        if tier not in ("ci", "deep"):
+            findings.append("%s: tier is %r, expected ci or deep" % (tag, tier))
+        if expect is None:
+            findings.append("%s: expect is %r, expected no-error or violated: <Invariant>"
+                            % (tag, c.get("expect")))
+            continue
+        invs = _mk_cfg_invariants(os.path.join(base, cfg))
+        if tier == "ci":
+            has_ci = True
+            if c.get("vacuity") and expect.startswith("violated"):
+                has_vacuity = True
+            # a ci no-error config must check a SAFETY invariant, not only the type shape
+            if expect == "no-error" and not c.get("vacuity") and \
+                    [i for i in invs if i.lower() != "typeok"]:
+                has_safety = True
+        if expect.startswith("violated") and not c.get("vacuity") and not c.get("replays"):
+            findings.append("%s: a counterexample config replays no AC id -- every "
+                            "counterexample the design answered names its RED case" % tag)
+        if c.get("vacuity") and not (isinstance(expect, str) and expect.startswith("violated")):
+            findings.append("%s: a vacuity config must expect a violation -- a vacuity "
+                            "control that cannot break proves nothing" % tag)
+        for ac in c.get("replays") or []:
+            # a criterion is its CHECKBOX line, and the suite measures it as res["ID"] --
+            # prose or a comment mentioning the id is neither (2.13.0 review)
+            if not re.search(r"^\s*- \[[ xX]\] " + re.escape(ac) + r"(?![0-9A-Za-z])",
+                             acceptance, re.M):
+                findings.append("%s: replays %s, which is not a criterion in ACCEPTANCE.md"
+                                % (tag, ac))
+            # the suite check runs only when the project names its suite (model_check.suite /
+            # --suite): the id must appear there QUOTED (as res["ID"] does) -- a comment or prose
+            # mentioning it is not a measurement (2.13.0 review)
+            if smoke is not None and not re.search(
+                    r"[\x22\x27]" + re.escape(ac) + r"[\x22\x27]", smoke):
+                findings.append("%s: replays %s, which the smoke suite does not measure"
+                                % (tag, ac))
+        if tier == "deep" and mod_path and os.path.isfile(mod_path):
+            meas = c.get("measured") or {}
+            if meas.get("inputs_sha256") != _mk_inputs_sha256(mod_path, os.path.join(base, cfg)):
+                advisories.append("%s: the recorded deep run predates the current %s or .cfg "
+                                  "-- run it again by hand and record the result" % (tag, module))
+    if configs and not has_ci:
+        findings.append("%s: no `ci` config -- nothing would run in CI" % where)
+    if configs and not has_safety:
+        findings.append("%s: no `ci` config expects no-error on a safety invariant (one other "
+                        "than TypeOK) -- CI would check nothing the design promises" % where)
+    if configs and not has_vacuity:
+        findings.append("%s: no `ci` vacuity config (an invariant that MUST break) -- a green "
+                        "could be green because nothing can happen" % where)
+    return m
+
+
+def _mk_verdict_of(output):
+    m = _MK_VIOLATED_RX.search(output)
+    if m:
+        return "violated: " + m.group(1)
+    if "No error has been found" in output:
+        return "no-error"
+    return "tlc-error"
+
+
+def _mk_trace_head(output, n=15):
+    """The counterexample's first lines; for any other failure the LAST lines, where TLC puts
+    the real cause (a semantic error is reported before its "Parsing failed" summary)."""
+    lines = output.splitlines()
+    for i, line in enumerate(lines):
+        if "is violated" in line:
+            return lines[i:i + n]
+    return lines[-25:]
+
+
+
+
+def _mk_config(ledger_path=None):
+    """The project's `model_check` block: the LIVE uscha.config.json wins, else the frozen copy."""
+    live = _live_project_config(QA_LIVE_CONFIG, ledger_path)
+    if live is not None:
+        try:
+            with open(live, encoding="utf-8") as fh:
+                mc = (json.load(fh) or {}).get("model_check")
+            if isinstance(mc, dict):
+                return mc
+        except (OSError, ValueError):
+            return None
+    if ledger_path and os.path.isfile(ledger_path):
+        try:
+            with open(ledger_path, encoding="utf-8") as fh:
+                mc = ((json.load(fh) or {}).get("config") or {}).get("model_check")
+            return mc if isinstance(mc, dict) else None
+        except (OSError, ValueError):
+            return None
+    return None
+
+
+def _mk_from_number(value):
+    m = re.match(r"^ADR-(\d+)$", str(value or "").strip(), re.I)
+    return int(m.group(1)) if m else None
+
+
+def _mk_adr_numbers(root):
+    out = []
+    for path in glob.glob(os.path.join(root, "docs", "adr", "*.md")):
+        m = _MK_ADR_RX.match(os.path.basename(path))
+        if m:
+            out.append(int(m.group(1)))
+    return sorted(out)
+
+
+def _mk_scan(root, from_n, suite=None, acceptance_file="ACCEPTANCE.md"):
+    """ADR-059's rules from ADR `from_n` on: (findings, advisories, checked manifests, the
+    required (adr, manifest path) pairs, ADRs read)."""
+    findings, advisories = [], []
+    acc_path = os.path.join(root, acceptance_file)
+    acceptance = open(acc_path, encoding="utf-8").read() if os.path.isfile(acc_path) else ""
+    smoke = None
+    if suite:
+        sp = suite if os.path.isabs(suite) else os.path.join(root, suite)
+        smoke = open(sp, encoding="utf-8").read() if os.path.isfile(sp) else ""
+    checked = {}
+    for path in _mk_manifests(root):
+        checked[os.path.realpath(path)] = _mk_check_manifest(root, path, acceptance, smoke,
+                                                             findings, advisories)
+    n_adr, required = 0, []
+    known = set(checked)
+    for path in sorted(glob.glob(os.path.join(root, "docs", "adr", "*.md"))):
+        name = os.path.basename(path)
+        if name.lower() in _MK_NOT_ADRS:
+            continue
+        m = _MK_ADR_RX.match(name)
+        if not m:
+            findings.append("%s: not named ADR-NNN-<slug>.md -- the rule cannot tell which ADR "
+                            "it is (rename it)" % _mk_rel(root, path))
+            continue
+        if int(m.group(1)) < from_n:
+            continue
+        n_adr += 1
+        adr = "ADR-%03d" % int(m.group(1))
+        fm = _mk_frontmatter(path)
+        if fm and fm.get("__duplicate__"):
+            findings.append("%s: duplicate frontmatter key(s) %s"
+                            % (_mk_rel(root, path), ", ".join(fm["__duplicate__"])))
+        value = (fm or {}).get("model")
+        word = value.split()[0] if value else ""
+        if not value:
+            findings.append("%s: no `model:` in its frontmatter -- declare `model: required` "
+                            "(with `model_manifest:`) or `model: not-needed -- <reason>` "
+                            "(ADR-059, ADR-061)" % _mk_rel(root, path))
+            continue
+        if word == "required":
+            mpath = (fm or {}).get("model_manifest")
+            if not mpath:
+                findings.append("%s: `model: required` without `model_manifest:`"
+                                % _mk_rel(root, path))
+                continue
+            full = os.path.realpath(os.path.join(root, mpath))
+            if not os.path.isfile(full):
+                findings.append("%s: model_manifest %s does not exist"
+                                % (_mk_rel(root, path), mpath))
+                continue
+            if full not in known:
+                findings.append("%s: model_manifest %s is not under docs/<feature>/models/ -- CI "
+                                "only runs manifests there, so this one would never run"
+                                % (_mk_rel(root, path), mpath))
+                continue
+            man = checked.get(full)
+            if man is not None and man.get("adr") != adr:
+                findings.append("%s: its manifest names %r, not %s"
+                                % (_mk_rel(root, path), man.get("adr"), adr))
+            required.append((adr, full))
+        elif word == "not-needed":
+            reason = re.sub(r"\(origin:[^)]*\)", "", value[len("not-needed"):])
+            if not re.search(r"[A-Za-z0-9]", reason):
+                findings.append("%s: `model: not-needed` without a reason" % _mk_rel(root, path))
+        else:
+            findings.append("%s: `model:` is %r -- expected required or not-needed"
+                            % (_mk_rel(root, path), value))
+    return findings, advisories, checked, required, n_adr
+
+
+def _mk_runs_status(root, ledger, required, checked):
+    """For every `ci` config of every required manifest: the latest recorded run, judged now --
+    'not run', 'stale' (its module or .cfg changed since), 'red', or 'ok'."""
+    runs = ledger.get(MODEL_RUNS_KEY) or []
+    out = []
+    for adr, full in required:
+        m = checked.get(full) or {}
+        base = os.path.dirname(full)
+        mod = os.path.join(base, m.get("module") or "")
+        for c in m.get("configs") or []:
+            if c.get("tier") != "ci" or not isinstance(c.get("cfg"), str):
+                continue
+            key = (_mk_rel(root, full), c["cfg"])
+            last = None
+            for r in runs:
+                if (r.get("manifest"), r.get("cfg")) == key:
+                    last = r
+            tag = "%s %s" % (adr, c["cfg"])
+            if last is None:
+                out.append(("not run", tag))
+            elif not (os.path.isfile(mod) and os.path.isfile(os.path.join(base, c["cfg"]))) or \
+                    last.get("inputs_sha256") != _mk_inputs_sha256(mod, os.path.join(base,
+                                                                                    c["cfg"])):
+                out.append(("stale", tag))
+            elif not last.get("ok"):
+                out.append(("red", tag))
+            else:
+                out.append(("ok", tag))
+    return out
+
+
+def _mk_status(ledger, ledger_path):
+    """What readiness and phase read: None when the project never declared `from_adr`."""
+    mc = _mk_config(ledger_path)
+    from_n = _mk_from_number((mc or {}).get("from_adr"))
+    if from_n is None:
+        return None
+    root = os.path.dirname(os.path.abspath(ledger_path)) if ledger_path else os.getcwd()
+    acc = (ledger.get("config") or {}).get("defaults", {}).get("acceptance_file") or "ACCEPTANCE.md"
+    findings, advisories, checked, required, n_adr = _mk_scan(root, from_n, mc.get("suite"), acc)
+    runs = _mk_runs_status(root, ledger, required, checked)
+    problems = list(findings) + ["%s: %s" % (tag, st) for st, tag in runs if st != "ok"]
+    return {"mode": "gate" if mc.get("mode") == "gate" else "advisory", "from_adr": from_n,
+            "findings": findings, "advisories": advisories, "runs": runs,
+            "problems": problems, "adrs_read": n_adr}
+
+
+def cmd_model_check(args):
+    """ADR-061: check (no Java) or --run (TLC) the project's models."""
+    root = os.path.realpath(args.root or (os.path.dirname(os.path.abspath(args.ledger))
+                                          if args.ledger and os.path.isfile(args.ledger)
+                                          else os.getcwd()))
+    mc = _mk_config(args.ledger) or {}
+    from_n = _mk_from_number(args.from_adr or mc.get("from_adr"))
+    if from_n is None:
+        print("MODEL-CHECK: no model_check.from_adr declared (uscha.config.json) and no "
+              "--from-adr -- nothing to check. Declare the ADR the rule starts at (ADR-061).")
+        return 0
+    if not args.run:
+        findings, advisories, checked, required, n_adr = _mk_scan(
+            root, from_n, args.suite or mc.get("suite"))
+        for a in advisories:
+            print("MODEL-CHECK advisory: " + a)
+        for f in findings:
+            print("MODEL-CHECK: " + f)
+        print("MODEL-CHECK: %d manifest(s), %d ADR(s) >= %03d checked, %d finding(s), %d advisory"
+              % (len(checked), n_adr, from_n, len(findings), len(advisories)))
+        sys.exit(1 if findings else 0)
+    # --run
+    if args.tlc_cmd:
+        base_cmd = _mk_shlex.split(args.tlc_cmd)
+    else:
+        jar = args.jar or mc.get("jar")
+        pin = mc.get("jar_sha256") or _MK_TLC_SHA256
+        if not jar or not os.path.isfile(jar):
+            print("MODEL-CHECK: no tla2tools.jar at %r -- UNMEASURED: download v%s from %s and "
+                  "pass --jar (or model_check.jar)" % (jar, _MK_TLC_VERSION, _MK_TLC_URL))
+            sys.exit(2)
+        got = _mk_sha256_file(jar)
+        if got != pin:
+            print("MODEL-CHECK: %s has sha256 %s, the pin is %s -- refusing to run an unverified "
+                  "model checker" % (jar, got, pin))
+            sys.exit(1)
+        java = args.java or mc.get("java") or "java"
+        if shutil.which(java) is None and not os.path.isfile(java):
+            print("MODEL-CHECK: no Java at %r -- the models are UNMEASURED, not passed. Install a "
+                  "JDK 11+ (or set model_check.java)." % java)
+            sys.exit(2)
+        base_cmd = [java, "-XX:+UseParallelGC", "-cp", os.path.realpath(jar), "tlc2.TLC",
+                    "-workers", "auto"]
+    ledger = None
+    if args.ledger and os.path.isfile(args.ledger) and not args.no_record:
+        ledger = _load(args.ledger)
+    red, ran, records = [], 0, []
+    for path in _mk_manifests(root):
+        m, err = _mk_load_manifest(path)
+        if m is None:
+            red.append("%s: unreadable manifest (%s)" % (_mk_rel(root, path), err))
+            continue
+        base = os.path.dirname(path)
+        for c in m.get("configs") or []:
+            if c.get("tier") != args.tier:
+                continue
+            ran += 1
+            tag = "%s: %s" % (_mk_rel(root, path), c.get("cfg"))
+            meta = tempfile.mkdtemp(prefix="uscha-tlc-")
+            cmd = base_cmd + ["-config", c["cfg"]] + (
+                [] if args.tlc_cmd else ["-metadir", meta]) + [m.get("module", "")]
+            t0 = _mk_time.time()
+            r, timed_out = None, False
+            try:
+                r = subprocess.run(cmd, cwd=base, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                   errors="replace", timeout=args.timeout)
+                out = r.stdout
+            except subprocess.TimeoutExpired as exc:
+                out = exc.stdout or ""
+                if isinstance(out, bytes):
+                    out = out.decode("utf-8", "replace")
+                timed_out = True
+            except OSError as exc:
+                red.append("%s: TLC could not start (%s)" % (tag, exc))
+                continue
+            finally:
+                shutil.rmtree(meta, ignore_errors=True)
+            elapsed = _mk_time.time() - t0
+            want = _mk_norm_expect(c.get("expect"))
+            if timed_out:
+                got = "timeout"
+            else:
+                got = _mk_verdict_of(out)
+                if got == "no-error" and r.returncode != 0:
+                    got = "tlc-error (exit %s)" % r.returncode
+                if c.get("vacuity") and got == want and not re.search(r"^State 2:", out, re.M):
+                    got = ("vacuity broken in the INITIAL state (a length-1 counterexample proves "
+                           "only that Init exists)")
+            ok = got == want and not (args.tier == "ci" and elapsed > args.limit)
+            mod = os.path.join(base, m.get("module") or "")
+            records.append({"at": _now(), "manifest": _mk_rel(root, path), "cfg": c["cfg"],
+                            "tier": args.tier, "expect": want, "verdict": got, "ok": ok,
+                            "elapsed_s": round(elapsed, 1),
+                            "tlc": "stub" if args.tlc_cmd else _MK_TLC_VERSION,
+                            "inputs_sha256": _mk_inputs_sha256(mod, os.path.join(base, c["cfg"]))
+                            if os.path.isfile(mod) else None})
+            line = "%s: %s in %.1fs" % (tag, got, elapsed)
+            if timed_out:
+                red.append("%s: past the %ds timeout -- tighten the bounds or mark it deep"
+                           % (tag, args.timeout))
+            elif got != want:
+                red.append("%s, expected %s\n    %s" % (line, want,
+                                                        "\n    ".join(_mk_trace_head(out))))
+            elif not ok:
+                red.append("%s -- over the %ds measured limit: tighten the bounds or mark it "
+                           "deep" % (line, args.limit))
+            else:
+                print("MODEL-CHECK ok   " + line)
+    for r_ in red:
+        print("MODEL-CHECK FAIL " + r_)
+    print("MODEL-CHECK: %d %s config(s) run, %d red" % (ran, args.tier, len(red)))
+    if ledger is not None and records:
+        ledger.setdefault(MODEL_RUNS_KEY, []).extend(records)
+        _save(args.ledger, ledger)
+    if ran == 0:
+        print("MODEL-CHECK: nothing ran -- no %s config in any manifest is not a pass"
+              % args.tier)
+        sys.exit(1)
+    sys.exit(1 if red else 0)
 
 
 def cmd_converged(args):
@@ -13419,6 +13895,16 @@ def cmd_readiness(args):
     if _ao["n_unconfirmed"]:
         print(f"--- origin: {_ao['n_unconfirmed']} agent-origin item(s) unconfirmed"
               f"   (spec-check names them)")
+    # ADR-061: the models, only for a project that declared model_check.from_adr
+    _mks = _mk_status(ledger, args.ledger)
+    if _mks and (_mks["problems"] or _mks["advisories"]):
+        print(f"--- models ({_mks['mode']}, from ADR-{_mks['from_adr']:03d}): "
+              f"{len(_mks['problems'])} problem(s)"
+              + (" -- they BLOCK pr-ready" if _mks["mode"] == "gate" else " -- advisory"))
+        for p_ in _mks["problems"][:6]:
+            print(f"  ! {p_}")
+        for a_ in _mks["advisories"][:3]:
+            print(f"  · {a_}")
     # ADR-058: a human act recorded before 2.12.0 has no actor -- named, never inferred
     _legacy_acts = [r for key in ("escalations", "production_findings", "spec_doubts",
                                   "spec_change_requests")
@@ -16421,6 +16907,19 @@ def cmd_doctor(args):
              "-- `qa-tools-check` is the gate that BLOCKS on this fact")
 
     # --- veredicto ----------------------------------------------------------
+    # ADR-061: propose the model-check boundary to a project that has ADRs and declared none
+    try:
+        _mkc = _mk_config(getattr(args, "ledger", None))
+    except Exception:
+        _mkc = None
+    if not (_mkc or {}).get("from_adr"):
+        _nums = _mk_adr_numbers(os.getcwd())
+        if _nums:
+            warn("model_check.from_adr not declared (ADR-061)",
+                 "this project has ADRs up to ADR-%03d; to make every NEW ADR decide whether it "
+                 "needs a model, add \"model_check\": {\"from_adr\": \"ADR-%03d\"} to "
+                 "uscha.config.json (advisory unless \"mode\": \"gate\")"
+                 % (_nums[-1], _nums[-1] + 1))
     n_ok = sum(1 for lv, _, _ in checks if lv == "ok")
     n_warn = sum(1 for lv, _, _ in checks if lv == "warn")
     n_err = sum(1 for lv, _, _ in checks if lv == "error")
@@ -16563,6 +17062,24 @@ def build_parser():
     prv.add_argument("--iteration", type=int, required=True)
     prv.add_argument("--json", action="store_true")
     prv.set_defaults(func=cmd_review_start)
+
+    pmk = sub.add_parser("model-check", help="ADR-061: check every ADR from model_check.from_adr "
+                         "and every models.json manifest (no Java); --run runs TLC and records it")
+    pmk.add_argument("--ledger", default=DEFAULT_LEDGER)
+    pmk.add_argument("--root", default=None)
+    pmk.add_argument("--from-adr", default=None)
+    pmk.add_argument("--suite", default=None,
+                     help="the suite file each replayed AC id must appear in, quoted")
+    pmk.add_argument("--run", action="store_true")
+    pmk.add_argument("--tier", choices=("ci", "deep"), default="ci")
+    pmk.add_argument("--jar", default=None)
+    pmk.add_argument("--java", default=None)
+    pmk.add_argument("--tlc-cmd", default=None)
+    pmk.add_argument("--timeout", type=int, default=120)
+    pmk.add_argument("--limit", type=int, default=60)
+    pmk.add_argument("--no-record", action="store_true",
+                     help="run without recording in the ledger (the repo's CI wrapper)")
+    pmk.set_defaults(func=cmd_model_check)
 
     pcd = sub.add_parser("confirm-deferral", help="HUMAN act: confirm the deferral of one "
                          "gated finding id (ADR-060); refused in an agent's shell")

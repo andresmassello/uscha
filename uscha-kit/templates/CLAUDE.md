@@ -49,6 +49,12 @@ each change lives in `SPEC.md` / `docs/adr/` / `ACCEPTANCE.md`, not here.
    "ok" confirms none of them. `qa_ledger.py spec-check` names the unconfirmed ones with
    file:line and `readiness` counts them on their own line — both advisory: they change no
    exit code and cap no score.
+11. **A design with state and rules decides whether it needs a model** (ADR-061). From the ADR
+   `uscha.config.json` names in `model_check.from_adr` on, every ADR declares in its frontmatter
+   `model: required` (with `model_manifest:`) or `model: not-needed -- <reason>`. `qa_ledger.py
+   model-check` checks the field and the manifests without Java; `model-check --run` runs TLC
+   (your JDK + the pinned `tla2tools.jar`) and records the run. `readiness` names what is missing;
+   it blocks `pr-ready` only if the project declares `model_check.mode: gate`.
 
 ## Truth hierarchy
 

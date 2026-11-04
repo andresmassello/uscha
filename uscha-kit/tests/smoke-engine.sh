@@ -22322,6 +22322,295 @@ esac
 }
 pj_unit T177 pj_t177
 
+pj_t178() {
+echo "== T178 (ADR-061, 2.15.0): the kit ships the model check -- from a declared ADR on, advisory unless the project makes it a gate =="
+# ADR-059's rule was repo-level; the engine now owns it as `qa_ledger.py model-check`. Each case
+# drives the real engine over a temp project under an isolated HOME, with a stub TLC
+# (--tlc-cmd) so no case needs Java. AC-MK-01 compares with the v2.14.1 engine (UNMEASURED without
+# the tag); AC-MK-03 compares the repo wrapper with the engine (UNMEASURED outside the repo).
+T178=$(pyin "$KIT" <<'PY'
+import hashlib, io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+INSTALLER = os.path.join(kit, "install-uscha.py")
+PREV_TAG = "v2.14.1"
+NL, DQ = chr(10), chr(34)
+TMPS = []
+res, why = {}, {}
+HOME_ISO = tempfile.mkdtemp(prefix="uscha-mk-home-")
+TMPS.append(HOME_ISO)
+ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
+for _k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "USCHA_JOBS"):
+    ENV.pop(_k, None)
+XPY = sys.executable.replace(chr(92), "/")
+EMIT = NL.join([
+    "import os, time",
+    "os.makedirs(" + DQ + "reports" + DQ + ", exist_ok=True)",
+    "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit.xml" + DQ + "), " + DQ + "w"
+    + DQ + ").write(" + DQ + "<testsuite tests=" + DQ + " + chr(34) + " + DQ + "1" + DQ
+    + " + chr(34) + " + DQ + " timestamp=" + DQ + " + chr(34) + repr(time.time()) + chr(34) + "
+    + DQ + "><testcase name=" + DQ + " + chr(34) + " + DQ + "t" + DQ + " + chr(34) + " + DQ
+    + "/></testsuite>" + DQ + ")",
+]) + NL
+# a stand-in for TLC: the .cfg carries the verdict
+STUB = NL.join([
+    "import sys",
+    "cfg = sys.argv[sys.argv.index(" + DQ + "-config" + DQ + ") + 1]",
+    "for line in open(cfg).read().splitlines():",
+    "    w = line.split()",
+    "    if len(w) >= 3 and w[1] == " + DQ + "stub:" + DQ + ":",
+    "        if w[2] == " + DQ + "violated" + DQ + ":",
+    "            print(" + DQ + "Error: Invariant %s is violated." + DQ + " % w[3])",
+    "            print(" + DQ + "State 1: <Initial predicate>" + DQ + ")",
+    "            print(" + DQ + "State 2: <Next>" + DQ + ")",
+    "        elif w[2] == " + DQ + "ok" + DQ + ":",
+    "            print(" + DQ + "Model checking completed. No error has been found." + DQ + ")",
+]) + NL
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix="uscha-mk-" + prefix + "-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def sh(d, *argv):
+    return subprocess.run(list(argv), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, encoding="utf-8", errors="replace", env=ENV)
+
+
+def q(d, *argv, **kw):
+    return subprocess.run([sys.executable, kw.get("eng", ENG)] + list(argv), cwd=d,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace", env=ENV)
+
+
+def cfg(d, model_check=None):
+    c = {"defaults": {"qa_tools_external": ["cr"], "qa_tools_order": ["cr"],
+                      "test_command_python": [XPY, "run.py"], "acceptance_file": "ACCEPTANCE.md"},
+         "repos": [{"name": "api", "path": "api", "type": "python"}],
+         "integration": {"enabled": False}}
+    if model_check is not None:
+        c["model_check"] = model_check
+    write(os.path.join(d, "uscha.config.json"), json.dumps(c, indent=2) + NL)
+
+
+def project(prefix, model_check=None):
+    """a pr-ready project: test-run, one witnessed clean review"""
+    d = tmp(prefix)
+    write(os.path.join(d, "api", "mod.py"), "v = 0" + NL)
+    write(os.path.join(d, "api", "run.py"), EMIT)
+    write(os.path.join(d, "ACCEPTANCE.md"), "# A" + NL + NL + "- [ ] AC-X-01 - a" + NL)
+    cfg(d, model_check)
+    write(os.path.join(d, ".gitignore"), "__pycache__/" + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        sh(d, *argv)
+    sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "base")
+    q(d, "init", "--config", "uscha.config.json")
+    q(d, "test-run", "--repo", "api")
+    rv = json.loads(q(d, "review-start", "--repo", "api", "--tool", "cr", "--iteration", "1",
+                      "--json").stdout)["id"]
+    q(d, "log-step", "--repo", "api", "--tool", "cr", "--iteration", "1", "--reported", "0",
+      "--gated-reported", "0", "--tests-passed", "true", "--review", rv)
+    return d
+
+
+def adr(d, num, model_lines):
+    write(os.path.join(d, "docs", "adr", "ADR-%03d-thing.md" % num),
+          NL.join(["---"] + model_lines + ["---"]) + NL + "# ADR-%03d: a thing" % num + NL + NL
+          + "## Status: Proposed" + NL)
+
+
+def model(d, verdicts):
+    """a feature model with a ci no-error config, a ci vacuity config, the stub verdicts"""
+    base = os.path.join(d, "docs", "feat", "models")
+    write(os.path.join(base, "M.tla"), "---- MODULE M ----" + NL + "====" + NL)
+    write(os.path.join(base, "ci-ok.cfg"), "SPECIFICATION Spec" + NL + "INVARIANT Safe" + NL
+          + "\\* stub: " + verdicts[0] + NL)
+    write(os.path.join(base, "ci-vac.cfg"), "SPECIFICATION Spec" + NL + "INVARIANT Never" + NL
+          + "\\* stub: " + verdicts[1] + NL)
+    write(os.path.join(base, "models.json"), json.dumps(
+        {"schema": "uscha/models@1", "adr": "ADR-002", "module": "M.tla", "configs": [
+            {"cfg": "ci-ok.cfg", "tier": "ci", "expect": "no-error"},
+            {"cfg": "ci-vac.cfg", "tier": "ci", "expect": "violated: Never", "vacuity": True}]},
+        indent=2) + NL)
+    adr(d, 2, ["model: required", "model_manifest: docs/feat/models/models.json"])
+    return base
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def measure():
+    stub = os.path.join(tmp("stub"), "tlc.py")
+    write(stub, STUB)
+    tlc = XPY + " " + stub.replace(chr(92), "/")
+
+    # --- AC-MK-01: a project that never declares model_check reads exactly as in 2.14.1
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    d = project("undeclared")
+    adr(d, 1, [])
+    model(d, ("violated Safe", "ok"))       # a red model the project never opted into
+    if prev is None:
+        res["AC-MK-01"] = None
+        why["AC-MK-01"] = PREV_TAG + " engine not reachable"
+    else:
+        pe = os.path.join(tmp("prev"), "qa_ledger.py")
+        write(pe, prev)
+        same = all(q(d, *a).stdout == q(d, *a, eng=pe).stdout
+                   for a in (["readiness"], ["phase", "--repo", "api", "--require", "pr-ready"]))
+        res["AC-MK-01"] = bool(same and "model" not in q(d, "readiness").stdout.lower())
+        why["AC-MK-01"] = "same=%s" % same
+
+    # --- AC-MK-02: from_adr set -- an ADR at/after it without model: is named (advisory), one
+    # before it is not read, and phase does not change
+    d = project("from-adr", {"from_adr": "ADR-002"})
+    ph0 = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    adr(d, 1, [])
+    adr(d, 2, [])
+    rd = q(d, "readiness")
+    ph1 = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    res["AC-MK-02"] = bool("ADR-002-thing.md" in rd.stdout and "ADR-001" not in rd.stdout
+                           and ph0.returncode == 0 and ph1.returncode == 0)
+    why["AC-MK-02"] = "ph0=%s ph1=%s rd=%r" % (ph0.returncode, ph1.returncode, rd.stdout[-250:])
+
+    # --- AC-MK-03: the repo wrapper is a thin layer over the engine -- same output, same exit
+    wrapper = os.path.join(root, "tools", "model-check.py")
+    if not os.path.isfile(wrapper):
+        res["AC-MK-03"] = None
+        why["AC-MK-03"] = "tools/model-check.py absent (not the repo)"
+    else:
+        d = tmp("wrap")
+        write(os.path.join(d, "ACCEPTANCE.md"), "# A" + NL)
+        write(os.path.join(d, "uscha-kit", "tests", "smoke-engine.sh"), "x" + NL)
+        adr(d, 60, ["model: required", "model_manifest: docs/feat/models/models.json"])
+        w = subprocess.run([sys.executable, wrapper, "check", "--root", d], stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True, env=ENV)
+        e = q(d, "model-check", "--root", d, "--from-adr", "ADR-059", "--suite",
+              os.path.join("uscha-kit", "tests", "smoke-engine.sh"))
+        res["AC-MK-03"] = bool(w.returncode == e.returncode == 1 and w.stdout == e.stdout
+                               and "does not exist" in e.stdout)
+        why["AC-MK-03"] = "wrapper=%s engine=%s %r | %r" % (w.returncode, e.returncode,
+                                                            w.stdout[-150:], e.stdout[-150:])
+
+    # --- AC-MK-04: a jar that is not the pin runs nothing; a pinned jar without java reads
+    # UNMEASURED (exit 2), never a pass
+    d = project("jar", {"from_adr": "ADR-002"})
+    model(d, ("ok", "violated Never"))
+    jar = os.path.join(tmp("jar"), "tla2tools.jar")
+    write(jar, "not the pinned jar" + NL)
+    bad = q(d, "model-check", "--run", "--tier", "ci", "--jar", jar)
+    sha = hashlib.sha256(io.open(jar, "rb").read()).hexdigest()
+    cfg(d, {"from_adr": "ADR-002", "jar_sha256": sha})
+    nojava = q(d, "model-check", "--run", "--tier", "ci", "--jar", jar, "--java",
+               os.path.join(tmp("nojava"), "no-such-java"))
+    led = json.loads(io.open(os.path.join(d, "QA-LEDGER.json"), encoding="utf-8").read())
+    res["AC-MK-04"] = bool(bad.returncode == 1 and "refusing to run" in bad.stdout
+                           and nojava.returncode == 2 and "UNMEASURED" in nojava.stdout
+                           and not led.get("model_runs"))
+    why["AC-MK-04"] = "bad=%s %r nojava=%s %r" % (bad.returncode, bad.stdout[-120:],
+                                                 nojava.returncode, nojava.stdout[-150:])
+
+    # --- AC-MK-05: a run is recorded with its inputs' sha256; editing the .cfg makes it stale
+    d = project("record", {"from_adr": "ADR-002"})
+    base = model(d, ("ok", "violated Never"))
+    run = q(d, "model-check", "--run", "--tier", "ci", "--tlc-cmd", tlc)
+    led = json.loads(io.open(os.path.join(d, "QA-LEDGER.json"), encoding="utf-8").read())
+    runs = led.get("model_runs") or []
+    fresh = q(d, "readiness").stdout
+    with io.open(os.path.join(base, "ci-ok.cfg"), "a", encoding="utf-8") as fh:
+        fh.write("CONSTANTS N = 1" + NL)
+    stale = q(d, "readiness").stdout
+    res["AC-MK-05"] = bool(run.returncode == 0 and len(runs) == 2
+                           and all(r.get("inputs_sha256") and r.get("ok") for r in runs)
+                           and "stale" not in fresh and "stale" in stale
+                           and "ci-ok.cfg" in stale)
+    why["AC-MK-05"] = "run=%s %r runs=%d fresh=%r stale=%r" % (
+        run.returncode, run.stdout[-120:], len(runs), fresh[-150:], stale[-200:])
+
+    # --- AC-MK-06: a red run is named; advisory leaves phase alone, gate blocks naming the cfg
+    d = project("red", {"from_adr": "ADR-002"})
+    model(d, ("violated Safe", "violated Never"))
+    q(d, "model-check", "--run", "--tier", "ci", "--tlc-cmd", tlc)
+    rd = q(d, "readiness").stdout
+    adv = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    cfg(d, {"from_adr": "ADR-002", "mode": "gate"})
+    gate = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    res["AC-MK-06"] = bool("ci-ok.cfg" in rd and "red" in rd.lower() and adv.returncode == 0
+                           and gate.returncode == 1 and "ci-ok.cfg" in gate.stdout)
+    why["AC-MK-06"] = "rd=%r adv=%s gate=%s %r" % (rd[-200:], adv.returncode, gate.returncode,
+                                                  gate.stdout[-200:])
+
+    # --- AC-MK-07: install-uscha init writes from_adr -- ADR-001 for a repo with no ADRs, the
+    # next free number for one that has them; doctor proposes it when the key is absent
+    fresh = tmp("init-new")
+    sh(fresh, "git", "init", "-q")
+    i1 = subprocess.run([sys.executable, INSTALLER, "init", "--repo", fresh], stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT, text=True, env=ENV)
+    c1 = json.load(io.open(os.path.join(fresh, "uscha.config.json"), encoding="utf-8"))
+    old = tmp("init-old")
+    sh(old, "git", "init", "-q")
+    write(os.path.join(old, "docs", "adr", "ADR-007-x.md"), "# x" + NL)
+    subprocess.run([sys.executable, INSTALLER, "init", "--repo", old], stdout=subprocess.PIPE,
+                   stderr=subprocess.STDOUT, text=True, env=ENV)
+    c2 = json.load(io.open(os.path.join(old, "uscha.config.json"), encoding="utf-8"))
+    d = project("doctor")
+    adr(d, 4, [])
+    doc = q(d, "doctor")
+    res["AC-MK-07"] = bool((c1.get("model_check") or {}).get("from_adr") == "ADR-001"
+                           and (c2.get("model_check") or {}).get("from_adr") == "ADR-008"
+                           and "model_check.from_adr" in doc.stdout and "ADR-005" in doc.stdout)
+    why["AC-MK-07"] = "new=%r old=%r doctor=%r" % (c1.get("model_check"), c2.get("model_check"),
+                                                   doc.stdout[-200:])
+
+    # --- AC-MK-08: the shipped adr-refine twins and the CLAUDE.md template carry the rule
+    texts = [io.open(os.path.join(kit, p), encoding="utf-8").read() for p in (
+        os.path.join(".claude", "skills", "uscha-adr-refine", "SKILL.md"),
+        os.path.join("skills", "uscha-adr-refine", "SKILL.md"),
+        os.path.join("templates", "CLAUDE.md"))]
+    res["AC-MK-08"] = all("model: required" in t and "not-needed" in t
+                          and "model_check.from_adr" in t for t in texts)
+    why["AC-MK-08"] = "carry=%r" % [("model: required" in t and "model_check.from_adr" in t)
+                                    for t in texts]
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".mk-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T178" in
+  OK*) PASS=$((PASS+1)); echo "  ok   model check in the kit (AC-MK-01..08): $T178";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T178";;
+esac
+}
+pj_unit T178 pj_t178
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -22687,6 +22976,10 @@ FAMILIES = (
     # without the tag, or from an extracted kit, they report None = UNMEASURED
     (".di-cases.json", "deferral-by-id", "T177",                      # ADR-060, 2.14.0
      _seq("AC-DI", 1, 13)),
+    # AC-MK-01 compares with the v2.14.1 engine and AC-MK-03 with the repo wrapper: without the
+    # tag, or from an extracted kit, they report None = UNMEASURED
+    (".mk-cases.json", "model-check-in-kit", "T178",                  # ADR-061, 2.15.0
+     _seq("AC-MK", 1, 8)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

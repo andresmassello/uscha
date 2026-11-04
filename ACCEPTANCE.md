@@ -2071,3 +2071,30 @@ temp git repos the real engine drives under an isolated HOME.
 - [ ] AC-DI-12 - a confirmation row typed into the ledger without a declared human counts for
   nothing, and removing `gated_ids` from a 2.14 step does not bring the whole-file rule back.
 - [ ] AC-DI-13 - a `defers:` line inside an HTML comment or a code fence defers nothing.
+
+## Model check in the kit (ADR-061, 2.15.0) - closes on green `AC-MK-nn` smoke assertions
+
+The gap: ADR-059 made the decision to model a checked field in THIS repo only, and deferred the kit
+until a second real case existed; DeferralById (2.14.0) was that case. 2.15.0 moves the logic into
+the engine (`qa_ledger.py model-check`) and makes it a project's choice: from a declared ADR on,
+advisory unless the project declares a gate. Measured by T178 over temp projects under an isolated
+HOME, with a stub TLC so no case needs Java.
+
+- [ ] AC-MK-01 - a project that never declares `model_check` reads exactly as with the v2.14.1 engine
+  (`readiness` and `phase` byte-identical), even with an ADR without the field and a red model on
+  disk. Without the tag in git this reads UNMEASURED.
+- [ ] AC-MK-02 - with `from_adr` declared, `readiness` names an ADR at or after it without `model:`,
+  does not read one before it, and `phase` is unchanged (advisory).
+- [ ] AC-MK-03 - `tools/model-check.py check` and `qa_ledger.py model-check` with the repo's boundary
+  and suite give the same output and exit code. Outside the repo this reads UNMEASURED.
+- [ ] AC-MK-04 - `model-check --run` with a jar that is not the pin exits 1 and runs nothing; with a
+  pinned jar and no Java it exits 2 naming UNMEASURED, and nothing is recorded.
+- [ ] AC-MK-05 - a run (stub TLC) is recorded in `model_runs` with each config's verdict and the
+  sha256 of its module and `.cfg`; editing the `.cfg` afterwards makes `readiness` name it stale.
+- [ ] AC-MK-06 - a red recorded run is named by `readiness`; `phase --require pr-ready` stays green in
+  the default (advisory) mode and is refused naming the config with `model_check.mode: gate`.
+- [ ] AC-MK-07 - `uscha init` writes `model_check.from_adr`: `ADR-001` on a repo with no ADRs,
+  `ADR-008` on one whose last ADR is ADR-007; `doctor` proposes the next free number to a project
+  that has ADRs and no key.
+- [ ] AC-MK-08 - both `uscha-adr-refine` SKILL twins and `templates/CLAUDE.md` carry the question
+  and the rule (`model: required`, `not-needed`, `model_check.from_adr`).

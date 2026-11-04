@@ -163,6 +163,16 @@ it's already fully answered. Keep a running list of OPEN GAPS and resolved decis
    (tests green, documented, metrics published, runbook) AND success metrics (p95,
    cost ceiling, zero orphaned records). Each item must be verifiable, not a feeling.
 8. **Dependencies.** Which other specs/systems/credentials this needs to exist first.
+9. **Model (kit 2.15.0, ADR-061) -- when the project declares `model_check.from_adr`** in its
+   `uscha.config.json`. Ask: *does this decision have state and rules an agent could walk around
+   (a lifecycle, a gate, something that opens and closes)?* Recommend an answer. The ADR records it
+   in its frontmatter: `model: required` with `model_manifest: docs/<feature>/models/models.json`
+   (a TLA+ model written BEFORE the code, whose manifest declares each config's expected verdict, a
+   `ci` config, a vacuity config that MUST break, and the AC id of the RED case that replays each
+   counterexample), or `model: not-needed -- <reason>`. If YOU write `not-needed`, mark it
+   `(origin: agent)` until the human confirms it. `qa_ledger.py model-check` reads the field and
+   the manifest without Java; `readiness` names what is missing (advisory unless the project
+   declares `model_check.mode: gate`).
 
 After each batch, reflect: "Decided: … / Still open: …". Move on only when the
 current topic is closed.

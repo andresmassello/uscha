@@ -250,6 +250,20 @@ comment, closes nothing; a gated step logged without ids closes only by a fix; s
 ids are narrated like the counts: what is guaranteed is that the deferred id is the reported one
 and that a human confirmed it.
 
+## Model-checked designs (ADR-061, 2.15.0) - did anyone check the design before the code?
+
+A design with state and rules -- a lifecycle, a gate, something that opens and closes -- can be
+model-checked with TLA+ before it is built. From the ADR a project names in
+`model_check.from_adr` (`uscha init` writes it: `ADR-001`, or the next free number), every ADR
+declares `model: required` (with a `docs/<feature>/models/models.json` manifest) or `model:
+not-needed -- <reason>`. `qa_ledger.py model-check` checks the field and the manifests without Java;
+`model-check --run` runs TLC -- your JDK 11+ and `tla2tools.jar` v1.7.4, verified by sha256 (without
+them the models read UNMEASURED) -- and records each run in the ledger, stale once its module or
+config changes. `readiness` names what is missing; with `"mode": "gate"` it blocks `pr-ready`. A
+green model proves no violation OF THE MODEL at its bounds; the RED case each counterexample replays
+is the only link to the code. Born in this repo (ADR-059): in 2.11.0 and 2.14.0 the models found
+holes neither the code nor a fresh reviewer had seen.
+
 `check-terminado` and `top --json` seal EVERY configured repo since 2.11.0 (ADR-057): one verdict
 line per repo, the exit code of the aggregate, and a `repos[]` detail only when there are several
 (a single-repo payload is byte-identical to 2.10).
@@ -1003,7 +1017,7 @@ python3 $QL readiness
 
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - confirm-deferral - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (62 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - confirm-deferral - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - model-check - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (63 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this
