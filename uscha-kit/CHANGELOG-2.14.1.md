@@ -18,4 +18,4 @@ releases shipped. Each decision item was checked against the engine, the skills 
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 468 checks · 0 fail; acceptance 461/462.
