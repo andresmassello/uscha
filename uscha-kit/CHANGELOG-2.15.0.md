@@ -61,7 +61,8 @@ A fresh review of the first cut found ways through the gate; each is now a RED c
 - **The port weakened the repo's suite rule** (any quoted id counted, a prose mention included). The
   wrapper passes the 2.13.0 pattern again.
 - **Smaller:** the kit's own `ADR-stack-template.md` blocked a gated project; a `[]` manifest ended in
-  a traceback; a symlinked ledger path; a re-run of `init` after the first ADR reported a conflict;
+  a traceback; a symlinked ledger path, and on Windows a temp dir in 8.3 form (`RUNNER~1`) that read
+  every recorded run as "not run" (CI caught it; both sides are now `realpath`); a re-run of `init` after the first ADR reported a conflict;
   `readiness` said "they BLOCK" with zero problems; the acceptance file is read from the config.
 
 ## Honest limits
