@@ -10,7 +10,7 @@ governs:
 ---
 # ADR-048: Operability is a MEASURED dimension — CI, release, RUNBOOK and seed are facts in the tree, not phase-8 prose
 
-## Status: Proposed
+## Status: Accepted (2.2.0)
 
 ## Context
 
@@ -171,6 +171,10 @@ Family `AC-OP-01..09`, measured by smoke **T165** over real temp projects:
 - **AC-OP-08** — the RED PROBE: the `v2.1.0` engine has no `operability` subcommand, refuses
   `log-gate --kind operability` at the parser, and its `doctor --json` knows no
   `operability.gate`. `None` = UNMEASURED without git.
+- **AC-OP-09** — a knob TURNED OFF by hand is an `override`, whatever the profile supplies: on a
+  frozen config under `risk_profile: E`, a hand-declared `operability.gate: false` reports gate off
+  with origin `override` (added by the fresh review of 2.2.0; it was in `ACCEPTANCE.md` and the
+  suite but missing from this list).
 
 ## Alternatives considered
 

@@ -9,7 +9,7 @@ governs:
 ---
 # ADR-043: The simplicity score ADVISES by default — only a declared budget can make it gate, and `max_nesting` is named as the indentation proxy it is
 
-## Status: Proposed
+## Status: Accepted (2.1.0)
 
 ## Context
 

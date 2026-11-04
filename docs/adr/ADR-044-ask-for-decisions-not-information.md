@@ -11,7 +11,7 @@ governs:
 ---
 # ADR-044: The agent asks for DECISIONS, never for INFORMATION — and a decision the human never made carries `origin: agent` until they confirm it, item by item
 
-## Status: Proposed
+## Status: Accepted (2.2.0)
 
 ## Context
 

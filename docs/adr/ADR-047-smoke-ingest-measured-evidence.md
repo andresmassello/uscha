@@ -9,7 +9,7 @@ governs:
 ---
 # ADR-047: The smoke run is measured evidence — executed, never narrated
 
-## Status: Proposed
+## Status: Accepted (2.2.0)
 
 ## Context
 

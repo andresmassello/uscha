@@ -11,7 +11,7 @@ governs:
 ---
 # ADR-045: The generated orientation block carries the kit version, and the release script re-renders it — so an installed skill can be DATED
 
-## Status: Proposed
+## Status: Accepted (2.2.0)
 
 ## Context
 

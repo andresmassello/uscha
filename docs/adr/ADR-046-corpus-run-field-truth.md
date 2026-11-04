@@ -10,7 +10,7 @@ governs:
 ---
 # ADR-046: Field truth for greenfield — a REAL-INPUT corpus is an evidence class, measured as a gate the project declares
 
-## Status: Proposed
+## Status: Accepted (2.2.0)
 
 ## Context
 

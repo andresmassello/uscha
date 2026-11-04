@@ -5,7 +5,7 @@ governs:
 ---
 # ADR-035: The facts `uscha top` renders as `—` in v0.1 are deferred on purpose — each needs new append-only engine persistence, and this ADR records the shape so the field is wired before it is re-claimed, never the other way round
 
-## Status: Proposed
+## Status: Proposed — **a deferral record: item 6 shipped as ADR-036 (1.87.0); items 1-5 (first-seen timestamp, count burn-up, drift_pct, designed spec_pin, general-project TRACED) not built**
 
 ## Context
 ADR-032 types five fields nullable because the ledger cannot honestly compute them today, and the
