@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="476" failures="0" errors="0" skipped="1" timestamp="2026-11-04T19:49:07.247999Z">
+<testsuite name="uscha-acceptance" tests="479" failures="0" errors="0" skipped="1" timestamp="2026-11-04T21:50:28.678834Z">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -949,6 +949,12 @@
   <testcase classname="uscha.acceptance" name="AC-MK-13_model-check-in-kit">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-MK-14_model-check-in-kit">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-TP-01_skill-templates">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-TP-02_skill-templates">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-TP-03_skill-templates">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
     <skipped message="shallow clone or no git: ancestry unmeasurable"/>
