@@ -5687,7 +5687,9 @@ _MK_NOT_ADRS = {"index.md", "readme.md"}
 
 
 def _mk_rel(root, p):
-    return os.path.relpath(p, root).replace(os.sep, "/")
+    # realpath BOTH sides: a Windows runner reports a temp dir in 8.3 form from one API and long
+    # form from another, and the recorded key then never matches (CI, 2.15.0 -- "not run")
+    return os.path.relpath(os.path.realpath(p), os.path.realpath(root)).replace(os.sep, "/")
 
 
 def _mk_sha256_file(p):
