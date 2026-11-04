@@ -10,7 +10,7 @@
       "name": "uscha",
       "source": "./uscha-kit",
       "description": "9 skills (uscha-*) + qa_ledger.py (63 subcommands, stdlib + universal installer + npm/npx router). Facts block, guesses advise; the human approves.",
-      "version": "2.14.1",
+      "version": "2.15.0",
       "author": {
         "name": "Andres Massello"
       },
