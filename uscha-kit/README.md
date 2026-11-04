@@ -244,8 +244,9 @@ Since 2.14.0 (ADR-060) a gated finding is deferred BY ITS ID: `log-step --gated-
 gated findings, `ISSUES-DEFERRED.md` carries one `- defers: <tool>/<id> -- <why>` line per deferred
 one, and the debt closes by deferral only when every id also has a `confirm-deferral` -- a HUMAN
 act recorded in the ledger and refused in an agent's shell -- with its line present at the clean
-review and now. Any other change to the file closes nothing; a gated step logged without ids closes
-only by a fix; steps from before 2.14.0 keep the whole-file rule and `readiness` names them. The
+review and now. A confirmation covers the gated steps logged before it -- a later finding reusing
+the id needs its own. Any other change to the file, or a line inside a code fence or an HTML
+comment, closes nothing; a gated step logged without ids closes only by a fix; steps from before 2.14.0 keep the whole-file rule and `readiness` names them. The
 ids are narrated like the counts: what is guaranteed is that the deferred id is the reported one
 and that a human confirmed it.
 

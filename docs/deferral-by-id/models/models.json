@@ -1,13 +1,29 @@
 {
   "schema": "uscha/models@1",
   "adr": "ADR-060",
-  "note": "ADR-060, written before the code (repo rule 12): the shipped design, two vacuity controls, and two teeth configs that MUST break -- the 2.11-2.13 whole-file rule and a deferral with no human confirmation -- each replayed by its RED case.",
+  "note": "ADR-060, written before the code (repo rule 12): the shipped design (two bounds), two vacuity controls, and three teeth configs that MUST break -- the 2.11-2.13 whole-file rule, a deferral with no human confirmation, and a confirmation not scoped to the step it confirms (the 2.14.0 fresh review's id-reuse hole) -- each replayed by its RED case.",
   "module": "DeferralById.tla",
   "configs": [
     {
-      "cfg": "ci-proposed.cfg",
+      "cfg": "ci-proposed-no-edits.cfg",
       "tier": "ci",
-      "expect": "no-error"
+      "expect": "no-error",
+      "note": "the agent narrates, logs without ids and deletes defers: lines; no source edits (those are in the deep tier)"
+    },
+    {
+      "cfg": "deep-proposed.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "pending",
+        "note": "re-run after the 2.14.0 review's model changes"
+      }
+    },
+    {
+      "cfg": "ci-scoped-narrow.cfg",
+      "tier": "ci",
+      "expect": "no-error",
+      "note": "no edits, no deletions: one record deeper (MaxLog=4) within the CI budget"
     },
     {
       "cfg": "ci-vacuity-accepted.cfg",
@@ -38,26 +54,30 @@
       ]
     },
     {
+      "cfg": "ci-unscoped-confirm.cfg",
+      "tier": "ci",
+      "expect": "violated: NoUnacceptedFindingShips",
+      "replays": [
+        "AC-DI-11"
+      ]
+    },
+    {
       "cfg": "deep-proposed-partial.cfg",
       "tier": "deep",
       "expect": "no-error",
       "measured": {
-        "date": "2026-11-02",
-        "distinct_states": 14676480,
-        "tlc": "1.7.4",
-        "inputs_sha256": "78d5302a8c33236f1629a3e84e3ab41d8ddf5255c8078951d21a2754fa230c0a"
+        "date": "pending",
+        "note": "re-run after the 2.14.0 review's model changes"
       }
     },
     {
-      "cfg": "deep-not-read-now-4.cfg",
+      "cfg": "deep-proposed-noids.cfg",
       "tier": "deep",
       "expect": "no-error",
-      "note": "read-now OFF: Anchor and Memory alone hold the rule here; the engine keeps read-now as defense in depth",
+      "note": "the agent may also log a gated step without ids",
       "measured": {
-        "date": "2026-11-02",
-        "distinct_states": 29611512,
-        "tlc": "1.7.4",
-        "inputs_sha256": "8d3f7cd211569a7ccf88be6ccb3ed6b26df8dad43cefe8228f986105c40e5f02"
+        "date": "pending",
+        "note": "re-run after the 2.14.0 review's model changes"
       }
     }
   ]

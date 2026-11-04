@@ -22227,6 +22227,63 @@ def measure():
     res["AC-DI-09"] = bool(r.returncode == 2 and ledger_bytes(d) == b and "F-9" in r.stdout)
     why["AC-DI-09"] = "rc=%s %r" % (r.returncode, r.stdout[-200:])
 
+    # --- AC-DI-11 (fresh review): review tools restart their numbering -- an OLD confirmation of
+    # cr/F-1 must not close a NEW finding that reuses the id; the human can confirm it again
+    d = gated_then_clean("reuse", lines=("- defers: cr/F-1 -- the first one",),
+                         confirm_ids=("cr/F-1",))
+    first = phase(d).returncode
+    write(os.path.join(d, "api", "mod.py"), "v = 1" + NL)
+    sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "edit")
+    q(d, "test-run", "--repo", "api")
+    rv = review(d, 3); log(d, 3, 1, rv, "F-1")
+    rv = review(d, 4); log(d, 4, 0, rv)
+    reused = phase(d)
+    again = confirm(d, "cr/F-1")
+    rv = review(d, 5); log(d, 5, 0, rv)
+    after = phase(d)
+    res["AC-DI-11"] = bool(first == 0 and reused.returncode == 1 and "cr/F-1" in reused.stdout
+                           and again.returncode == 0 and "already" not in again.stdout
+                           and after.returncode == 0)
+    why["AC-DI-11"] = "first=%s reused=%s %r again=%s %r after=%s" % (
+        first, reused.returncode, reused.stdout[-160:], again.returncode, again.stdout[-120:],
+        after.returncode)
+
+    # --- AC-DI-12 (fresh review): a confirmation row typed into the ledger (no declared human)
+    # counts for nothing, and dropping gated_ids from a 2.14 step does not bring the
+    # whole-file rule back
+    d = gated_then_clean("forged", lines=("- defers: cr/F-1 -- accepted",))
+    led = json.loads(ledger_bytes(d).decode("utf-8"))
+    led.pop("integrity", None)
+    led.setdefault("deferral_confirmations", []).append({"id": "cr/F-1", "repo": "api"})
+    write(os.path.join(d, "QA-LEDGER.json"), json.dumps(led, indent=2) + NL)
+    forged = phase(d)
+    d = project("dropped-ids")
+    rv = review(d, 1); log(d, 1, 1, rv, "F-1")
+    led = json.loads(ledger_bytes(d).decode("utf-8"))
+    led.pop("integrity", None)
+    led["repos"]["api"]["iterations"][-1].pop("gated_ids", None)
+    write(os.path.join(d, "QA-LEDGER.json"), json.dumps(led, indent=2) + NL)
+    defers(d, "a comma,")
+    rv = review(d, 2); log(d, 2, 0, rv)
+    dropped = phase(d)
+    res["AC-DI-12"] = bool(forged.returncode == 1 and dropped.returncode == 1)
+    why["AC-DI-12"] = "forged=%s %r dropped=%s %r" % (forged.returncode, forged.stdout[-150:],
+                                                      dropped.returncode, dropped.stdout[-150:])
+
+    # --- AC-DI-13 (fresh review): a defers: line inside an HTML comment or a code fence is
+    # documentation, not a deferral
+    hidden = {}
+    for label, body in (("comment", ("<!-- - defers: cr/F-1 -- hidden -->",)),
+                        ("fence", ("~~~", "- defers: cr/F-1 -- hidden", "~~~"))):
+        d = project("hidden-" + label)
+        rv = review(d, 1); log(d, 1, 1, rv, "F-1")
+        defers(d, *body)
+        confirm(d, "cr/F-1")
+        rv = review(d, 2); log(d, 2, 0, rv)
+        hidden[label] = phase(d).returncode
+    res["AC-DI-13"] = hidden == {"comment": 1, "fence": 1}
+    why["AC-DI-13"] = "rc=%r" % hidden
+
     # --- AC-DI-10: the model -- ADR-060's manifest passes the check, and its teeth configs replay
     # AC-DI-07 (the hash rule) and AC-DI-04 (no human confirmation)
     mc = os.path.join(root, "tools", "model-check.py")
@@ -22240,7 +22297,7 @@ def measure():
         m = json.load(io.open(man, encoding="utf-8"))
         replays = {a for c in m.get("configs") or [] for a in c.get("replays") or []}
         res["AC-DI-10"] = bool(chk.returncode == 0 and m.get("adr") == "ADR-060"
-                               and {"AC-DI-07", "AC-DI-04"} <= replays)
+                               and {"AC-DI-07", "AC-DI-04", "AC-DI-11"} <= replays)
         why["AC-DI-10"] = "check=%s replays=%r %r" % (chk.returncode, sorted(replays),
                                                      chk.stdout[-200:])
 
@@ -22259,7 +22316,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T177" in
-  OK*) PASS=$((PASS+1)); echo "  ok   deferral by id (AC-DI-01..10): $T177";;
+  OK*) PASS=$((PASS+1)); echo "  ok   deferral by id (AC-DI-01..13): $T177";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T177";;
 esac
 }
@@ -22629,7 +22686,7 @@ FAMILIES = (
     # AC-DI-08 drives a ledger the v2.13.0 engine wrote and AC-DI-10 reads the repo's manifest:
     # without the tag, or from an extracted kit, they report None = UNMEASURED
     (".di-cases.json", "deferral-by-id", "T177",                      # ADR-060, 2.14.0
-     _seq("AC-DI", 1, 10)),
+     _seq("AC-DI", 1, 13)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

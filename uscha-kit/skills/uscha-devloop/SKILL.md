@@ -455,7 +455,9 @@ ledger, so do not try to work around them:
   closes only by a fix. Deferring a GATED finding is the human's decision, never yours: write the
   `defers:` line, then **STOP and ask the human** to run, in their own terminal,
   `python3 $QL confirm-deferral --repo <REPO> --id <tool>/<id> --human <NAME> --note "<why>"` --
-  it refuses in your shell, and a `confirmed:` you type in the markdown closes nothing.
+  it refuses in your shell, and a `confirmed:` you type in the markdown closes nothing. A
+  confirmation covers the findings logged before it: a later finding that reuses the id needs a new
+  one.
 - **Memory**: a clean verdict on exactly the content an earlier review flagged contradicts the
   record and does not count. Fix it, or defer it.
 

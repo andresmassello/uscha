@@ -17,6 +17,8 @@ repo rule 12 (ADR-059): the design was model-checked BEFORE the code.
 - **`qa_ledger.py confirm-deferral --repo R --id <tool>/<id> --human NAME --note TEXT`** -- a human
   act (ADR-058's mechanism): recorded in the ledger, refused under a known agent-shell marker, and
   refused for an id no gated step reported. A `confirmed:` typed in the markdown closes nothing.
+  A confirmation confirms the gated steps logged BEFORE it: a later finding that reuses the id
+  (review tools restart their numbering) needs its own, which the human can give.
 - **The debt closes by deferral only when every id has a confirmation AND its `defers:` line is in
   the file the clean review saw AND in the file now.** Partially confirmed, it stays open naming the
   ids still missing; unconfirmed, `readiness` prints "N gated deferral(s) awaiting human
@@ -35,11 +37,24 @@ repo rule 12 (ADR-059): the design was model-checked BEFORE the code.
 `docs/deferral-by-id/models/DeferralById.tla`, written before the code (one tool, two findings,
 witnessed reviews; the agent adds and removes `defers:` lines, may log a gated step without ids
 and may narrate a clean verdict; confirmation is a human action the agent cannot take). Its
-manifest runs in the CI `models` job: the design (no error, 13 s), two vacuity controls, and two
-teeth configs that MUST break -- the 2.11-2.13 whole-file rule (replayed by AC-DI-07) and a
-deferral with no human confirmation (AC-DI-04). Deep runs, recorded: with a partially fixed
-version, no error at 14,676,480 states; with read-now off, no error at 29,611,512 states (Anchor and
-Memory already hold; the engine keeps read-now as defense in depth).
+manifest runs in the CI `models` job: the design in two bounded worlds (no error, 21 s and 16 s),
+two vacuity controls, and three teeth configs that MUST break, each in about 2 s -- the 2.11-2.13
+whole-file rule (replayed by AC-DI-07), a deferral with no human confirmation (AC-DI-04) and a
+confirmation not scoped to its step (AC-DI-11). The deep tier (source edits, gated steps without
+ids, a partially fixed version) is recorded in the manifest.
+
+## Closed before release (fresh review)
+
+A fresh reviewer found five problems, all reproduced, now fixed and pinned. **A confirmation never
+expired**: it was keyed only by `tool/id`, so after an edit a NEW finding that reused `F-1` was
+closed by the OLD confirmation, and the human could not confirm the new one ("already confirmed").
+Confirmations now record the step counter and confirm only earlier steps (AC-DI-11). **The model
+had missed it** because it treated an id as one finding for good; it now records when a
+confirmation was given, and the unscoped version is a teeth config. A confirmation row typed into
+the ledger without a declared human closed a debt, and removing `gated_ids` from a 2.14 step brought
+the whole-file rule back (AC-DI-12). A `defers:` line inside a code fence or an HTML comment counted
+(AC-DI-13). And the refusal message spoke of "lifting an escalation", an empty id list printed as a
+blank, and long lists were cut without "+N more".
 
 ## Behavior changes on upgrade (read before upgrading)
 
@@ -61,7 +76,11 @@ Memory already hold; the engine keeps read-now as defense in depth).
   deferred id is the reported one, and a human confirmed it -- not that the finding is what the id
   says. Tying ids to `ingest-gate`'s measured finding ids is a later ADR.
 - `--human` proves a name and a reason were typed outside a known agent shell, not identity
-  (ADR-058).
+  (ADR-058). The ledger is a file the agent can write: a confirmation forged by hand WITH a declared
+  human, after removing the ledger's `integrity` field, is indistinguishable from a real one -- a
+  deliberate, visible act, not one the engine can prove did not happen.
+- Without git a fix cannot be measured, so (as since 2.11.0) a later clean review closes a gated
+  debt and `readiness` names it; the id rules apply in full where the tree can be compared.
 
 ## Correction to 2.13.0
 
@@ -71,7 +90,7 @@ carries the measured figures.
 
 ## How it is pinned
 
-`AC-DI-01..10` (smoke T177), each red against 2.13.0 before the code existed (AC-DI-02's refusal
+`AC-DI-01..13` (smoke T177), each red against 2.13.0 before the code existed (AC-DI-02's refusal
 arm also measured with a valid list, which 2.13.0 did not accept).
 
 ## Evidence

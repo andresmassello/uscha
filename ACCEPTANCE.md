@@ -2063,4 +2063,11 @@ temp git repos the real engine drives under an isolated HOME.
   the tag in git this reads UNMEASURED.
 - [ ] AC-DI-09 - `confirm-deferral` for an id no gated step reported exits 2, ledger unchanged.
 - [ ] AC-DI-10 - ADR-060's manifest passes `model-check.py check`, and its teeth configs (the
-  whole-file rule; no human confirmation) replay AC-DI-07 and AC-DI-04.
+  whole-file rule; no human confirmation; an unscoped confirmation) replay AC-DI-07, AC-DI-04 and
+  AC-DI-11.
+- [ ] AC-DI-11 - a confirmation confirms the gated steps logged BEFORE it: after an edit, a new gated
+  step that reuses the id `cr/F-1` stays open despite the old confirmation, and the human can
+  confirm the new finding.
+- [ ] AC-DI-12 - a confirmation row typed into the ledger without a declared human counts for
+  nothing, and removing `gated_ids` from a 2.14 step does not bring the whole-file rule back.
+- [ ] AC-DI-13 - a `defers:` line inside an HTML comment or a code fence defers nothing.

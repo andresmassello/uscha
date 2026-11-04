@@ -1955,8 +1955,8 @@ def _human_act(args, what, example):
     marker = _agent_marker()
     if marker:
         print("[qa_ledger] %s REFUSED: this process carries %s=%s -- it is an agent's shell, and "
-              "lifting an escalation is a human act. Agent: STOP, show this command to the human "
-              "and ask them to run it in their own terminal:\n    %s"
+              "this is a human act. Agent: STOP, show this command to the human and ask them to "
+              "run it in their own terminal:\n    %s"
               % (what, marker, os.environ.get(marker), example), file=sys.stderr)
         sys.exit(2)
     return args.human.strip()
@@ -2850,7 +2850,7 @@ class _Witness(object):
         return self._defnow
 
     def confirmed(self):
-        return _confirmed_deferrals(self.ledger, self.name)
+        return _confirmations(self.ledger, self.name)
 
     def declared(self):
         if self._declared is False:
@@ -3048,7 +3048,24 @@ def _defers_scan(repo_path, ledger_path=None, known_tools=None):
                 lines = fh.read().split("\n")
         except OSError:
             continue
+        in_fence = in_comment = False
         for n, raw in enumerate(lines, 1):
+            st = raw.strip()
+            # a fence or an HTML comment is DOCUMENTATION of the grammar, never a deferral
+            # (2.14.0 fresh review: a commented-out line still read as present)
+            if st.startswith("```") or st.startswith("~~~"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            if in_comment:
+                if "-->" in raw:
+                    in_comment = False
+                continue
+            if "<!--" in raw:
+                if "-->" not in raw.split("<!--", 1)[1]:
+                    in_comment = True
+                continue
             m = _DEFERS_LINE.match(raw)
             if not m:
                 continue
@@ -3064,9 +3081,22 @@ def _defers_scan(repo_path, ledger_path=None, known_tools=None):
     return valid, malformed
 
 
-def _confirmed_deferrals(ledger, repo):
-    return {c.get("id") for c in ledger.get(CONFIRMATIONS_KEY) or []
-            if isinstance(c, dict) and c.get("repo") == repo}
+def _confirmations(ledger, repo):
+    """{tool/id: [after_step, ...]} -- the confirmations a DECLARED human gave (a row typed into the
+    ledger without `human_declared` and a name counts for nothing). `after_step` is the step
+    counter when it was given: it confirms the findings of gated steps logged BEFORE it, never a
+    later finding that reuses the id (review tools restart their numbering; 2.14.0 fresh review)."""
+    out = {}
+    for c in ledger.get(CONFIRMATIONS_KEY) or []:
+        if not isinstance(c, dict) or c.get("repo") != repo or c.get("human_declared") is not True \
+                or not _has_word(c.get("by")) or not isinstance(c.get("after_step"), int):
+            continue
+        out.setdefault(c.get("id"), []).append(c["after_step"])
+    return out
+
+
+def _confirmed_for(conf, key, step_n):
+    return any(a >= (step_n or 0) for a in conf.get(key) or [])
 
 
 def _known_tools(ledger, repo):
@@ -3294,12 +3324,18 @@ def _review_verdicts(agent, cycle_tools, wit):
     defers_now, info["malformed_defers"] = wit.defers_now()
     confirmed = wit.confirmed()
 
-    def missing_at(t, ids, c):
-        """The ids of a 2.14 gated step NOT accepted at clean step c: a human confirmation in the
-        ledger, a defers: line in the file c's review saw, and the line in the file now."""
+    def missing_at(t, ids, c, g):
+        """The ids of 2.14 gated step g NOT accepted at clean step c: a human confirmation given
+        after g was logged, a defers: line in the file c's review saw, and the line now."""
         seen = set((c.get("reviewed") or {}).get("defers") or [])
         return [k for k in ("%s/%s" % (t, x) for x in ids)
-                if not (k in confirmed and k in seen and k in defers_now)]
+                if not (_confirmed_for(confirmed, k, g.get("n")) and k in seen
+                        and k in defers_now)]
+
+    def is_new(g):
+        # a 2.14 step: it carries gated_ids, or its logged state carries the defers it saw --
+        # dropping gated_ids from such a step does not bring the whole-file rule back
+        return "gated_ids" in g or "defers" in (g.get("logged") or {})
 
     for t in sorted({s.get("tool") for s in agent}):
         steps = [s for s in agent if s.get("tool") == t]
@@ -3311,10 +3347,10 @@ def _review_verdicts(agent, cycle_tools, wit):
             later = [c for c in witnessed if steps.index(c) > i
                      and (c.get("gated_reported") or 0) == 0]
             gs = state(g)
-            if "gated_ids" in g and gs is not None:
+            if is_new(g) and gs is not None:
                 # ADR-060: a 2.14 step -- closes by a FIX (the reviewed source moved) or by the
                 # confirmed, present deferral of EVERY one of its ids; never by the file's hash
-                ids = g.get("gated_ids")
+                ids = g.get("gated_ids") or None
                 closed, last_missing = False, None
                 for c in later:
                     cs = c["reviewed"]
@@ -3328,7 +3364,7 @@ def _review_verdicts(agent, cycle_tools, wit):
                         closed = True
                         break
                     if ids:
-                        miss = missing_at(t, ids, c)
+                        miss = missing_at(t, ids, c, g)
                         if not miss:
                             closed = True
                             info["deferred_not_fixed"] += len(ids)
@@ -3346,7 +3382,9 @@ def _review_verdicts(agent, cycle_tools, wit):
                     continue
                 keys = last_missing if last_missing is not None else \
                     ["%s/%s" % (t, x) for x in ids]
-                waiting = [k for k in keys if k in defers_now and k not in confirmed]
+                keys = keys or ["(no ids recorded)"]
+                waiting = [k for k in keys
+                           if k in defers_now and not _confirmed_for(confirmed, k, g.get("n"))]
                 info["awaiting_confirmation"] += waiting
                 reasons.append("%s: gated finding(s) %s from step #%s (%s) still open -- fix "
                                "them, or defer each with a `- defers: <tool>/<id> -- <why>` line "
@@ -3395,12 +3433,12 @@ def _review_verdicts(agent, cycle_tools, wit):
                 if (g.get("gated_reported") or 0) <= 0 or gs is None or \
                         not isinstance(gs.get("tree"), dict):
                     continue
-                if "gated_ids" in g:
+                if is_new(g):
                     # ADR-060: on the same source, a clean verdict contradicts the gated one
                     # unless every id is accepted (confirmed, present then and now)
                     m = wit.between(gs.get("tree"), latest["reviewed"].get("tree"))
-                    if m == [] and (g.get("gated_ids") is None
-                                    or missing_at(t, g.get("gated_ids"), latest)):
+                    if m == [] and (not g.get("gated_ids")
+                                    or missing_at(t, g.get("gated_ids"), latest, g)):
                         reasons.append("%s: step #%s reports 0 gated findings on the source "
                                        "step #%s flagged with %s, whose deferrals are not all "
                                        "confirmed and present -- the record contradicts itself; "
@@ -5595,19 +5633,19 @@ def cmd_confirm_deferral(args):
     ledger = _load(args.ledger)
     node = _repo_node(ledger, args.repo)
     tool, fid = m.group(1), m.group(2)
-    reported = any(s.get("tool") == tool and fid in (s.get("gated_ids") or [])
-                   for s in node.get("iterations") or [])
-    if not reported:
+    reporting = [s.get("n") or 0 for s in node.get("iterations") or []
+                 if s.get("tool") == tool and fid in (s.get("gated_ids") or [])]
+    if not reporting:
         print("[qa_ledger] confirm-deferral REFUSED: no gated step of %s/%s reported the id %s "
               "-- a deferral confirms a finding the ledger knows" % (args.repo, tool, fid),
               file=sys.stderr)
         sys.exit(2)
-    if args.id in _confirmed_deferrals(ledger, args.repo):
-        print("[qa_ledger] confirm-deferral: %s is already confirmed -- nothing recorded"
-              % args.id)
+    if _confirmed_for(_confirmations(ledger, args.repo), args.id, max(reporting)):
+        print("[qa_ledger] confirm-deferral: %s is already confirmed for the newest gated step "
+              "that reported it -- nothing recorded" % args.id)
         return
     rec = {"id": args.id, "repo": args.repo, "at": _now(), "by": actor, "note": args.note,
-           "human_declared": True}
+           "human_declared": True, "after_step": ledger.get("step_counter", 0)}
     ledger.setdefault(CONFIRMATIONS_KEY, []).append(rec)
     _touch_event(ledger, "deferral-confirmed", args.id, args.repo)
     _save(args.ledger, ledger)
@@ -13284,16 +13322,21 @@ def cmd_readiness(args):
                   f"closed without a comparable tree (no git): movement was not measured")
         if r["facts"].get("deferrals_awaiting_confirmation"):
             ks = r["facts"]["deferrals_awaiting_confirmation"]
+            more = "" if len(ks) <= 4 else f" +{len(ks) - 4} more"
             print(f"  ! {rname}: {len(ks)} gated deferral(s) awaiting human confirmation "
-                  f"({', '.join(ks[:4])}) -- the human runs `confirm-deferral` in their own terminal")
+                  f"({', '.join(ks[:4])}{more}) -- the human runs `confirm-deferral` in their own "
+                  f"terminal")
         if r["facts"].get("gated_steps_without_ids"):
             print(f"  ! {rname}: {r['facts']['gated_steps_without_ids']} gated step(s) logged "
                   f"without --gated-ids: only a fix closes them (ADR-060)")
         if r["facts"].get("untyped_deferrals"):
             print(f"  · {rname}: {r['facts']['untyped_deferrals']} debt(s) closed by an untyped "
                   f"deferral (pre-2.14: the whole-file rule, not by finding id)")
-        for bad in (r["facts"].get("malformed_defers") or [])[:3]:
+        _mal = r["facts"].get("malformed_defers") or []
+        for bad in _mal[:3]:
             print(f"  ! {rname}: malformed defers: line {bad} -- it defers nothing")
+        if len(_mal) > 3:
+            print(f"  ! {rname}: +{len(_mal) - 3} more malformed defers: line(s)")
         if r["facts"].get("steps_predate_reviews"):
             print(f"  · {rname}: {r['facts']['steps_predate_reviews']} QA step(s) predate "
                   f"witnessed reviews (2.11.0) and keep 2.10 semantics")

@@ -18,10 +18,16 @@
 (* ReadNow = FALSE: the deferral is read at the clean review only.         *)
 (* NoIds = TRUE: the agent may log a gated step without its ids.           *)
 (* Lies = TRUE: the agent may log a clean verdict no review produced.      *)
+(* Scoped = TRUE: a confirmation counts only for steps logged before it   *)
+(* (2.14.0 fresh review: review tools restart their numbering, so an id   *)
+(* is reused by a later, different finding).                              *)
+(* Free = FALSE: no deletions; Edits = FALSE: no edits -- narrower worlds, *)
+(* so a config reaches a deeper log within the CI budget.                   *)
+(* (Free = FALSE also implies no edits.)                                   *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences, FiniteSets
 
-CONSTANTS MaxLog, Lies, NoIds, ById, Confirm, ReadNow, Partial
+CONSTANTS MaxLog, Lies, NoIds, ById, Confirm, ReadNow, Partial, Scoped, Free, Edits
 
 \* Partial = FALSE drops v1 (one finding of two fixed): the bounded `ci` tier; the deep tier has it
 Versions == IF Partial THEN 0..2 ELSE {0, 2}
@@ -63,8 +69,8 @@ Reported == UNION {log[k].ids : k \in {j \in 1..Len(log) : log[j].kind = "step"}
 HumanConfirm(i) ==
   /\ i \in defers
   /\ i \in Reported
-  /\ i \notin confirmed
-  /\ confirmed' = confirmed \cup {i}
+  /\ <<i, Len(log)>> \notin confirmed
+  /\ confirmed' = confirmed \cup {<<i, Len(log)>>}
   /\ UNCHANGED <<src, defers, log, pending, flagged>>
 
 TestRun ==
@@ -88,7 +94,7 @@ LogHonest ==
   /\ Len(log) < MaxLog
   /\ log' = Append(log, Step(pending.ids, FALSE))
   /\ pending' = NoReview
-  /\ flagged' = flagged \cup {<<pending.src, i>> : i \in pending.ids}
+  /\ flagged' = flagged \cup {<<pending.src, i, Len(log) + 1>> : i \in pending.ids}
   /\ UNCHANGED <<src, defers, confirmed>>
 
 \* a gated step with the honest count but NO ids (2a: logged, never closable by deferral)
@@ -99,7 +105,7 @@ LogNoIds ==
   /\ Len(log) < MaxLog
   /\ log' = Append(log, Step(pending.ids, TRUE))
   /\ pending' = NoReview
-  /\ flagged' = flagged \cup {<<pending.src, i>> : i \in pending.ids}
+  /\ flagged' = flagged \cup {<<pending.src, i, Len(log) + 1>> : i \in pending.ids}
   /\ UNCHANGED <<src, defers, confirmed>>
 
 \* narration: a clean verdict no review produced, on a witnessed review start
@@ -112,8 +118,8 @@ LogClaimClean ==
   /\ UNCHANGED <<src, defers, confirmed, flagged>>
 
 Next ==
-  \/ \E v \in Versions : Edit(v)
-  \/ \E i \in Ids : AddDefer(i) \/ RemoveDefer(i) \/ HumanConfirm(i)
+  \/ Free /\ Edits /\ \E v \in Versions : Edit(v)
+  \/ \E i \in Ids : AddDefer(i) \/ (Free /\ RemoveDefer(i)) \/ HumanConfirm(i)
   \/ TestRun \/ Review \/ LogHonest \/ LogNoIds \/ LogClaimClean
 
 Spec == Init /\ [][Next]_vars
@@ -126,8 +132,11 @@ Max(S) == CHOOSE m \in S : \A k \in S : k <= m
 
 \* an id is accepted when its deferral is confirmed (or, with Confirm = FALSE, merely written) and
 \* present -- in the file the clean review saw, and (ReadNow) in the file now
-Accepted(i, c) ==
-  /\ (Confirm => i \in confirmed)
+\* a confirmation of id i given AFTER gated step g was logged (Scoped), or any (not Scoped)
+ConfirmedFor(i, g) == \E t \in 0..MaxLog : <<i, t>> \in confirmed /\ (Scoped => t >= g)
+
+Accepted(i, g, c) ==
+  /\ (Confirm => ConfirmedFor(i, g))
   /\ i \in log[c].defs
   /\ (ReadNow => i \in defers)
 
@@ -136,7 +145,7 @@ Accepted(i, c) ==
 \* not ById -- the 2.11 rule: the deferral file seen at c is present and differs from g's
 ClosedAt(g, c) ==
   \/ log[c].src /= log[g].src
-  \/ (ById /\ ~log[g].noids /\ \A i \in log[g].ids : Accepted(i, c))
+  \/ (ById /\ ~log[g].noids /\ \A i \in log[g].ids : Accepted(i, g, c))
   \/ (~ById /\ log[c].defs /= {} /\ log[c].defs /= log[g].defs)
 
 DebtOpen(g) ==
@@ -147,7 +156,7 @@ DebtOpen(g) ==
 \* Memory: a clean verdict on the source an earlier step flagged, with its ids not all accepted
 Contradicts(c) == \E g \in 1..(c - 1) :
   /\ IsStep(g) /\ log[g].ids /= {} /\ log[g].src = log[c].src
-  /\ ~(ById /\ ~log[g].noids /\ \A i \in log[g].ids : Accepted(i, c))
+  /\ ~(ById /\ ~log[g].noids /\ \A i \in log[g].ids : Accepted(i, g, c))
   /\ ~(~ById /\ log[c].defs /= {} /\ log[c].defs /= log[g].defs)
 
 Converged ==
@@ -165,13 +174,16 @@ PrReady == Converged /\ TestsCurrent
 TypeOK ==
   /\ src \in Versions
   /\ defers \subseteq Ids
-  /\ confirmed \subseteq Ids
+  /\ confirmed \subseteq Ids \X (0..MaxLog)
 
+\* every finding the ledger flagged on the version that ships was accepted by a human AFTER the
+\* step that flagged it, and its deferral is still on file
 NoUnacceptedFindingShips ==
-  PrReady => \A i \in Ids : <<src, i>> \in flagged => (i \in confirmed /\ i \in defers)
+  PrReady => \A f \in flagged : f[1] = src =>
+               ((\E t \in 0..MaxLog : <<f[2], t>> \in confirmed /\ t >= f[3]) /\ f[2] \in defers)
 
 \* vacuity: MUST break -- a confirmed, present deferral of a flagged finding still ships
-NeverAcceptedAndReady == ~(PrReady /\ \E i \in Ids : <<src, i>> \in flagged)
+NeverAcceptedAndReady == ~(PrReady /\ \E f \in flagged : f[1] = src)
 \* vacuity: MUST break -- a real fix still ships
 NeverFixedAndReady == ~(PrReady /\ src = 2 /\ flagged /= {})
 ====

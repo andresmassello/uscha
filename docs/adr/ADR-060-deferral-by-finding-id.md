@@ -51,7 +51,11 @@ known agent shell. Chosen: iii.
 3. **Confirmation is a human act** (ADR-058's mechanism): `qa_ledger.py confirm-deferral --id
    <tool>/<id> --human NAME --note TEXT` records `{id, by, note, at, human_declared}` in the ledger,
    refuses under a known agent-shell marker, and refuses an id no gated step reported. A `confirmed:`
-   typed in the markdown does not count for a gated deferral.
+   typed in the markdown does not count for a gated deferral. **A confirmation confirms the gated
+   steps logged BEFORE it** (it records the step counter, `after_step`): review tools restart their
+   numbering, so a later finding that reuses `F-1` is a different finding and needs its own
+   confirmation -- which the human can give (2.14.0 fresh review). Only rows with a declared human
+   (`human_declared: true` and a name) count.
 4. **The debt closes by deferral** when EVERY gated id of the step has a confirmed confirmation AND a
    `defers:` line present in the file the clean review saw AND in the file now (read at read time,
    like Anchor). Partially confirmed: the debt stays open for the ids still missing, named.
@@ -59,8 +63,12 @@ known agent shell. Chosen: iii.
    line removed later re-opens the debt.
 5. **The hash of the whole file no longer closes a debt** for steps that carry ids. It stays as
    Anchor's input (a changed file means the last review is not current).
-6. **Legacy:** steps logged before 2.14.0 (no `gated_ids` key) keep the 2.11 rule, and `readiness`
-   names them ("closed by an untyped deferral (pre-2.14)"). Nothing green turns red on upgrade.
+6. **Legacy:** steps logged before 2.14.0 keep the 2.11 rule, and `readiness` names them ("closed by
+   an untyped deferral (pre-2.14)"). Nothing green turns red on upgrade. A step is 2.14 when it
+   carries `gated_ids` OR its logged state carries the `defers` it saw, so removing `gated_ids` from
+   a 2.14 step does not bring the whole-file rule back.
+7. **Only live lines count:** a `defers:` line inside a code fence or an HTML comment is
+   documentation and defers nothing.
 
 ## Model (repo rule 12)
 
@@ -68,23 +76,30 @@ known agent shell. Chosen: iii.
 witnessed reviews and Anchor as shipped; the agent adds and removes `defers:` lines, may log a gated
 step without ids and may narrate a clean verdict; confirmation is a separate human action the agent
 cannot take. The rule: `pr-ready` never holds on a version with a finding the ledger knows was
-flagged, unless that finding's deferral is confirmed AND present.
+flagged, unless a human confirmed that finding's deferral AFTER the step that flagged it, and the
+line is still on file.
 
-Measured 2026-11-02, TLC v1.7.4, 2 workers:
+**The model was wrong once, and the fresh review found it.** Its first version treated an id as one
+finding for good, so it could not express a later finding reusing `F-1`; an old confirmation then
+closed the new finding in the engine. The model now records WHEN a confirmation was given and which
+step flagged each finding, and the unscoped confirmation is a teeth config that breaks in 2 s. The
+lesson is the method's own: a green model says nothing outside what the model can express.
 
-| config | bounds | verdict |
+Measured 2026-11-04, TLC v1.7.4, 2 workers (`ci` = run by the CI `models` job, blocking):
+
+| config | tier | verdict |
 |---|---|---|
-| the design above | MaxLog=3, no partial version | no error, 1,538,424 states, 13 s |
-| the design above | MaxLog=3, with the partial version | no error, 14,676,480 states, 131 s |
-| the 2.11-2.13 hash rule (`ById = FALSE`) | MaxLog=3 | **violated** in 1 s |
-| a `defers:` line without human confirmation (`Confirm = FALSE`) | MaxLog=3 | **violated** in 1 s |
-| vacuity: a confirmed, present deferral still ships | MaxLog=3 | violated (as it must) |
-| vacuity: a real fix still ships | MaxLog=3 | violated (as it must) |
+| the design, no source edits (MaxLog=3; the agent narrates, logs without ids, deletes lines) | ci | no error, 1,953,200 states, 21 s |
+| the design in a narrower world (no edits, no deletions; MaxLog=4) | ci | no error, 1,091,255 states, 12-16 s |
+| the 2.11-2.13 whole-file rule (`ById = FALSE`) | ci | **violated** in 2 s -- replayed by AC-DI-07 |
+| a `defers:` line without human confirmation (`Confirm = FALSE`) | ci | **violated** in 2 s -- AC-DI-04 |
+| a confirmation not scoped to its step (`Scoped = FALSE`) | ci | **violated** in 2 s -- AC-DI-11 |
+| vacuity: a confirmed, present deferral still ships; a real fix still ships | ci | violated (as they must) |
+| the design with edits; with gated steps without ids; with the partial version | deep | recorded in the manifest |
 
-Read-now (decision 4's "and in the file now") is not needed for the rule at these bounds -- nor one
-record deeper (MaxLog=4, read-now OFF: no error, 29,611,512 states, 278 s): Anchor (the last review
-saw the file now) and Memory already refuse a removed deferral. The engine keeps it
-as defense in depth, as 2.13.0 found for the deferral-closure fix.
+Read-now (decision 4's "and in the file now") was not needed for the rule at the first model's
+bounds (MaxLog=4, read-now off: no error, 29,611,512 states): Anchor and Memory already refuse a
+removed deferral. The engine keeps it as defense in depth.
 
 ## Reasons
 
@@ -99,6 +114,14 @@ as defense in depth, as 2.13.0 found for the deferral-closure fix.
 - **What an id proves:** nothing about the finding. Ids are narrated by the agent (`--gated-ids`),
   like the counts. What the design guarantees is consistency -- the deferred id is the reported one,
   and a human confirmed it -- not that the finding is what the id says.
+- **The ledger is a file the agent can write.** A confirmation row forged by hand without a declared
+  human counts for nothing, but one forged WITH `human_declared: true` and a name after removing the
+  ledger's `integrity` field is indistinguishable from a real one. The defense is ADR-058's: the
+  command refuses in the agent's shell, and a hand edit of the ledger is a deliberate act visible in
+  the agent's command text and in git. It is not a cryptographic proof.
+- **Without git** a fix cannot be measured, so -- as since 2.11.0 (ADR-039's posture) -- a later
+  clean review closes a gated debt and `readiness` names it ("closed without a comparable tree").
+  The id rules apply in full only where the tree can be compared.
 
 ## Out of scope
 
