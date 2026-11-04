@@ -96,4 +96,4 @@ arm also measured with a valid list, which 2.13.0 did not accept).
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 468 checks · 0 fail; acceptance 461/462.
