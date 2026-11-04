@@ -1,7 +1,7 @@
 {
   "schema": "uscha/models@1",
   "adr": "ADR-060",
-  "note": "ADR-060, written before the code (repo rule 12). The teeth configs (ci-hash-rule, ci-no-confirm) join the manifest with the RED cases that replay them (AC-DI-07, AC-DI-04); until those exist they are run by hand.",
+  "note": "ADR-060, written before the code (repo rule 12): the shipped design, two vacuity controls, and two teeth configs that MUST break -- the 2.11-2.13 whole-file rule and a deferral with no human confirmation -- each replayed by its RED case.",
   "module": "DeferralById.tla",
   "configs": [
     {
@@ -20,6 +20,22 @@
       "tier": "ci",
       "expect": "violated: NeverFixedAndReady",
       "vacuity": true
+    },
+    {
+      "cfg": "ci-hash-rule.cfg",
+      "tier": "ci",
+      "expect": "violated: NoUnacceptedFindingShips",
+      "replays": [
+        "AC-DI-07"
+      ]
+    },
+    {
+      "cfg": "ci-no-confirm.cfg",
+      "tier": "ci",
+      "expect": "violated: NoUnacceptedFindingShips",
+      "replays": [
+        "AC-DI-04"
+      ]
     },
     {
       "cfg": "deep-proposed-partial.cfg",

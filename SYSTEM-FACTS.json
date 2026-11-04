@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 61,
+    "count": 62,
     "list": [
       "bench",
       "bench-curate",
@@ -41,6 +41,7 @@
       "cleanroom",
       "compile-ingest",
       "compile-validate",
+      "confirm-deferral",
       "converged",
       "corpus-run",
       "curate",

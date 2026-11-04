@@ -95,7 +95,7 @@ and see which file, which test, and when.
 | `/uscha-mirador` | Bird's-eye HTML dashboard: readiness, trail, acceptance, loops |
 | `/uscha-status` | One-line progress readout, in chat |
 
-**A measurement engine** (`qa_ledger.py`, 61 subcommands, Python stdlib) that ingests
+**A measurement engine** (`qa_ledger.py`, 62 subcommands, Python stdlib) that ingests
 evidence from **11 language stacks** — maven, gradle, ant, python, node, go, rust, dotnet,
 cpp, swift, flutter — and computes a readiness score with hard caps and visible provenance.
 
@@ -135,8 +135,9 @@ else `doctor` reports `advisory` rather than implying a guard it cannot see.
    **converges** — findings at or above the severity gate are fixed, the rest go to
    `ISSUES-DEFERRED.md` with their evidence. Since 2.11.0 the engine witnesses each review
    (`review-start` stamps the tree it starts on): a gated finding closes only on a later clean
-   review of different source or of a changed `ISSUES-DEFERRED.md`, and the last review of each
-   tool must have seen the code on disk now (ADR-056). Converge, don't chase zero.
+   review of different source, or -- since 2.14.0 -- by the deferral of its own id, confirmed by a
+   human (ADR-060); and the last review of each tool must have seen the code on disk now
+   (ADR-056). Converge, don't chase zero.
 4. **Readiness.** One score, one screen: acceptance (measured) 30 · static gate 20 ·
    ADR 15 · coverage 15 · convergence 10 · integration 10, with hard caps that say *why*
    they bit and whether the threshold was your requirement or the kit's default.
@@ -208,7 +209,7 @@ automatic tool can perform: a human verdict.
    from the compiled code: 0.815 measured (12 archetypes) — names AND behaviour
 ```
 
-**What each arrow is, in the engine (61 subcommands, all measured):**
+**What each arrow is, in the engine (62 subcommands, all measured):**
 
 | Leg | Subcommands | What it establishes |
 |---|---|---|

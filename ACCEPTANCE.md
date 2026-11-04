@@ -1993,7 +1993,7 @@ hook script (JSON payload probes, nothing executed) and the real installer, unde
   the repo (`"path": "../api"`) is found; with two repos, a cwd in the green one passes, a cwd in
   the red one blocks naming it, and the project root reads every repo.
 - [ ] AC-GI-46 - `pr-opened-not-ready` without `--requested-by`/`--note` exits 2; with them it records one event (`origin: agent`, phase, missing facts),
-  `readiness` prints it as an EXCEPTION, and `phase` prints the same before and after.
+  `readiness` and (since 2.14.0) `summary` print it as an EXCEPTION, and `phase` prints the same before and after.
 - [ ] AC-GI-48 - `install --target claude` copies and registers both hooks beside a foreign one,
   `doctor` reports `"pr_guard": "enforced"`, and `uninstall` removes both files and entries and
   keeps the foreign hook.
@@ -2034,3 +2034,33 @@ stub TLC; the real TLC run is the CI `models` job.
   `model-check.py run --tier ci` with no `if:`, no `continue-on-error` and no `|| true`;
   `publish.yml` refuses on the smoke run's conclusion, and its fallback path (no smoke run for the
   tag) runs the same pinned model-check -- a red model publishes nothing on either path.
+
+## Deferral by finding id (ADR-060, 2.14.0) - closes on green `AC-DI-nn` smoke assertions
+
+The gap: since 2.11.0 a gated finding's debt closed "by deferral" on ANY change to a present
+`ISSUES-DEFERRED.md` -- removing one entry, adding a comma, deferring another tool's finding -- and
+the agent did it alone. A TLA+ model written before the code (`docs/deferral-by-id/models/`) broke
+that rule and a rule without a human confirmation in one second each. 2.14.0 ties each deferral to
+its finding's id and its closing power to a human's recorded confirmation. Measured by T177 over
+temp git repos the real engine drives under an isolated HOME.
+
+- [ ] AC-DI-01 - a gated step logged without `--gated-ids` is recorded, its debt closes by no
+  deferral, and `phase` and `readiness` name it ("without --gated-ids").
+- [ ] AC-DI-02 - `--gated-ids` with a duplicate, or with a count other than `--gated-reported`, exits
+  2 with the ledger unchanged; a valid list is recorded sorted on the step.
+- [ ] AC-DI-03 - an unconfirmed `- defers: <tool>/<id> -- <why>` line closes nothing: `phase` names
+  the id and `readiness` says "awaiting human confirmation".
+- [ ] AC-DI-04 - a `confirmed:` typed in the markdown closes nothing; `confirm-deferral` exits 2
+  under `CLAUDECODE=1`; run by a human it records the confirmation, and the next clean review closes
+  the debt.
+- [ ] AC-DI-05 - with two of three ids confirmed and present, the debt stays open naming the third.
+- [ ] AC-DI-06 - removing a confirmed `defers:` line after the debt closed, then reviewing again,
+  re-opens the debt naming the id (the 2.11.0 hole).
+- [ ] AC-DI-07 - any other change to the file (another tool's deferral, a comma) closes nothing --
+  where 2.13.0 closed it.
+- [ ] AC-DI-08 - a ledger the v2.13.0 engine wrote (a gated step without ids, closed by the
+  whole-file rule) loads and stays converged, and `readiness` names the untyped deferral. Without
+  the tag in git this reads UNMEASURED.
+- [ ] AC-DI-09 - `confirm-deferral` for an id no gated step reported exits 2, ledger unchanged.
+- [ ] AC-DI-10 - ADR-060's manifest passes `model-check.py check`, and its teeth configs (the
+  whole-file rule; no human confirmation) replay AC-DI-07 and AC-DI-04.

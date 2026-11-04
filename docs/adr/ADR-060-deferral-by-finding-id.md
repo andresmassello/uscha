@@ -9,7 +9,7 @@ model_manifest: docs/deferral-by-id/models/models.json
 ---
 # ADR-060: A gated finding is deferred BY ITS ID, and only a human's recorded confirmation lets that deferral close its debt
 
-## Status: Proposed — decided by the owner on 2026-11-02 (an `adr-refine` interview); to be built in 2.14.0. Amends ADR-056 R2' (the debt's deferral rule).
+## Status: Accepted (2.14.0) — decided by the owner on 2026-11-02 (an `adr-refine` interview). Amends ADR-056 R2' (the debt's deferral rule).
 
 ## Context
 
@@ -116,7 +116,7 @@ as defense in depth, as 2.13.0 found for the deferral-closure fix.
   shape; ADR-056 R2's read-time Anchor.
 - Tests: the RED cases below, each red against 2.13.0 first; each TLC counterexample replayed as one.
 
-## Verification (draft criteria, promoted into ACCEPTANCE.md when built -- rule 8)
+## Verification (promoted into ACCEPTANCE.md in 2.14.0)
 
 - [ ] AC-DI-01 -- a gated step without `--gated-ids` is recorded, its debt closes by no deferral, and
   `readiness` names it.

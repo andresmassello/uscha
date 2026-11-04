@@ -2842,6 +2842,16 @@ class _Witness(object):
             self._dnow = _deferred_sha(self.path, _LAST_LEDGER_PATH)
         return self._dnow
 
+    def defers_now(self):
+        """(valid tool/id keys, malformed lines) of the defers: lines on disk now (ADR-060)."""
+        if getattr(self, "_defnow", False) is False:
+            self._defnow = _defers_scan(self.path, _LAST_LEDGER_PATH,
+                                        _known_tools(self.ledger, self.name))
+        return self._defnow
+
+    def confirmed(self):
+        return _confirmed_deferrals(self.ledger, self.name)
+
     def declared(self):
         if self._declared is False:
             self._declared = _resolve_test_command(self.ledger, self.name,
@@ -3006,6 +3016,68 @@ REVIEWS_KEY = "reviews"
 DEFERRED_FILE = "ISSUES-DEFERRED.md"
 
 
+# ADR-060 (2.14.0): a gated finding is deferred BY ITS ID. The only lines the engine reads in
+# ISSUES-DEFERRED.md are `- defers: <tool>/<id> -- <why>`; everything else stays free prose.
+_DEFERS_LINE = re.compile(r"^\s*[-*]\s*defers:\s*(.*?)\s*$", re.I)
+_DEFERS_BODY = re.compile(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.:-]+)\s+--\s+(.*[A-Za-z0-9].*)$")
+CONFIRMATIONS_KEY = "deferral_confirmations"
+
+
+def _deferred_files(repo_path, ledger_path=None):
+    seen, out = set(), []
+    cands = [os.path.join(repo_path, DEFERRED_FILE)]
+    if ledger_path:
+        cands.append(os.path.join(os.path.dirname(os.path.abspath(ledger_path)), DEFERRED_FILE))
+    for c in cands:
+        real = os.path.realpath(c)
+        if real in seen or not os.path.isfile(c):
+            continue
+        seen.add(real)
+        out.append(c)
+    return out
+
+
+def _defers_scan(repo_path, ledger_path=None, known_tools=None):
+    """(valid, malformed): the `tool/id` keys the `defers:` lines name, and the lines that start
+    like one but do not parse (no reason, a bad id, or -- when `known_tools` is given -- a tool
+    this repo never logged). A malformed line defers nothing; readiness names it."""
+    valid, malformed = set(), []
+    for f in _deferred_files(repo_path, ledger_path):
+        try:
+            with open(f, encoding="utf-8", errors="replace") as fh:
+                lines = fh.read().split("\n")
+        except OSError:
+            continue
+        for n, raw in enumerate(lines, 1):
+            m = _DEFERS_LINE.match(raw)
+            if not m:
+                continue
+            body = re.sub(r"\(origin:[^)]*\)\s*$", "", m.group(1)).strip()
+            b = _DEFERS_BODY.match(body)
+            where = "%s:%d" % (os.path.basename(f), n)
+            if not b:
+                malformed.append("%s (expected `- defers: <tool>/<id> -- <why>`)" % where)
+            elif known_tools is not None and b.group(1) not in known_tools:
+                malformed.append("%s (unknown tool %r)" % (where, b.group(1)))
+            else:
+                valid.add("%s/%s" % (b.group(1), b.group(2)))
+    return valid, malformed
+
+
+def _confirmed_deferrals(ledger, repo):
+    return {c.get("id") for c in ledger.get(CONFIRMATIONS_KEY) or []
+            if isinstance(c, dict) and c.get("repo") == repo}
+
+
+def _known_tools(ledger, repo):
+    node = (ledger.get("repos") or {}).get(repo) or {}
+    tools = {s.get("tool") for s in node.get("iterations") or [] if s.get("category") == "agent"}
+    d = (ledger.get("config") or {}).get("defaults") or {}
+    for key in ("qa_tools_order", "qa_tools_external"):
+        tools |= set(d.get(key) or [])
+    return {t for t in tools if t}
+
+
 def _deferred_sha(repo_path, ledger_path=None):
     """sha256 over the ISSUES-DEFERRED.md files a deferral can land in (the repo path, and the
     project root beside the ledger), or None when there is none. Content, not mtime."""
@@ -3142,7 +3214,8 @@ def cmd_review_start(args):
     rec = {"id": "RV-%d" % (len(reviews) + 1), "repo": args.repo, "tool": args.tool,
            "iteration": args.iteration, "at": _now(),
            "tree": _review_stamp(path, rtype, args.ledger),
-           "deferred_sha256": _deferred_sha(path, args.ledger), "closed_by": None}
+           "deferred_sha256": _deferred_sha(path, args.ledger),
+           "defers": sorted(_defers_scan(path, args.ledger)[0]), "closed_by": None}
     reviews.append(rec)
     _save(args.ledger, ledger)
     if args.json:
@@ -3180,7 +3253,9 @@ def _review_verdicts(agent, cycle_tools, wit):
     reasons = []
     info = {"deferred_not_fixed": 0, "no_tree_closures": 0,
             "legacy_steps": sum(1 for s in agent if "reviewed" not in s
-                                and "unwitnessed" not in s)}
+                                and "unwitnessed" not in s),
+            "awaiting_confirmation": [], "no_ids_open": 0, "untyped_deferrals": 0,
+            "malformed_defers": []}
     if wit is None:
         return reasons, info
 
@@ -3216,6 +3291,16 @@ def _review_verdicts(agent, cycle_tools, wit):
                            "review again" % (t, DEFERRED_FILE, latest.get("review"),
                                              latest.get("n")))
 
+    defers_now, info["malformed_defers"] = wit.defers_now()
+    confirmed = wit.confirmed()
+
+    def missing_at(t, ids, c):
+        """The ids of a 2.14 gated step NOT accepted at clean step c: a human confirmation in the
+        ledger, a defers: line in the file c's review saw, and the line in the file now."""
+        seen = set((c.get("reviewed") or {}).get("defers") or [])
+        return [k for k in ("%s/%s" % (t, x) for x in ids)
+                if not (k in confirmed and k in seen and k in defers_now)]
+
     for t in sorted({s.get("tool") for s in agent}):
         steps = [s for s in agent if s.get("tool") == t]
         witnessed = [s for s in steps if isinstance(s.get("reviewed"), dict)]
@@ -3226,6 +3311,51 @@ def _review_verdicts(agent, cycle_tools, wit):
             later = [c for c in witnessed if steps.index(c) > i
                      and (c.get("gated_reported") or 0) == 0]
             gs = state(g)
+            if "gated_ids" in g and gs is not None:
+                # ADR-060: a 2.14 step -- closes by a FIX (the reviewed source moved) or by the
+                # confirmed, present deferral of EVERY one of its ids; never by the file's hash
+                ids = g.get("gated_ids")
+                closed, last_missing = False, None
+                for c in later:
+                    cs = c["reviewed"]
+                    if not isinstance(gs.get("tree"), dict) or not isinstance(cs.get("tree"),
+                                                                              dict):
+                        closed = True
+                        info["no_tree_closures"] += 1
+                        break
+                    m = wit.between(gs.get("tree"), cs.get("tree"))
+                    if m:
+                        closed = True
+                        break
+                    if ids:
+                        miss = missing_at(t, ids, c)
+                        if not miss:
+                            closed = True
+                            info["deferred_not_fixed"] += len(ids)
+                            break
+                        last_missing = miss
+                if closed:
+                    continue
+                if ids is None:
+                    info["no_ids_open"] += 1
+                    reasons.append("%s: %s gated finding(s) from step #%s (%s) still open -- "
+                                   "logged without --gated-ids, so only a fix closes them "
+                                   "(ADR-060)"
+                                   % (t, g.get("gated_reported"), g.get("n"),
+                                      g.get("review") or "unwitnessed"))
+                    continue
+                keys = last_missing if last_missing is not None else \
+                    ["%s/%s" % (t, x) for x in ids]
+                waiting = [k for k in keys if k in defers_now and k not in confirmed]
+                info["awaiting_confirmation"] += waiting
+                reasons.append("%s: gated finding(s) %s from step #%s (%s) still open -- fix "
+                               "them, or defer each with a `- defers: <tool>/<id> -- <why>` line "
+                               "and a human `confirm-deferral`%s, then review again"
+                               % (t, ", ".join(keys), g.get("n"),
+                                  g.get("review") or "unwitnessed",
+                                  (" (awaiting human confirmation: %s)" % ", ".join(waiting))
+                                  if waiting else ""))
+                continue
             if gs is None:
                 # a legacy gated step: nothing to compare; a later witnessed clean review
                 # closes it as 2.10 would, and readiness names that it was not measured
@@ -3255,6 +3385,7 @@ def _review_verdicts(agent, cycle_tools, wit):
                                                g.get("review") or "unwitnessed", DEFERRED_FILE))
             elif closer[1] == []:
                 info["deferred_not_fixed"] += g.get("gated_reported") or 0
+                info["untyped_deferrals"] += 1
         # Memory: a clean verdict on exactly the content an earlier step flagged
         latest = steps[-1] if steps else None
         if latest is not None and isinstance(latest.get("reviewed"), dict) and \
@@ -3263,6 +3394,20 @@ def _review_verdicts(agent, cycle_tools, wit):
                 gs = state(g)
                 if (g.get("gated_reported") or 0) <= 0 or gs is None or \
                         not isinstance(gs.get("tree"), dict):
+                    continue
+                if "gated_ids" in g:
+                    # ADR-060: on the same source, a clean verdict contradicts the gated one
+                    # unless every id is accepted (confirmed, present then and now)
+                    m = wit.between(gs.get("tree"), latest["reviewed"].get("tree"))
+                    if m == [] and (g.get("gated_ids") is None
+                                    or missing_at(t, g.get("gated_ids"), latest)):
+                        reasons.append("%s: step #%s reports 0 gated findings on the source "
+                                       "step #%s flagged with %s, whose deferrals are not all "
+                                       "confirmed and present -- the record contradicts itself; "
+                                       "fix, or defer each id"
+                                       % (t, latest.get("n"), g.get("n"),
+                                          g.get("gated_reported")))
+                        break
                     continue
                 same, m = same_state(gs, latest["reviewed"])
                 # with no deferral file on disk the clean verdict is on the same content as
@@ -3717,6 +3862,19 @@ def cmd_log_step(args):
     node = _repo_node(ledger, args.repo)
     _validate_iteration(node, args.tool, args.iteration)
     _validate_log_step_counts(args)
+    # ADR-060: a gated step names its finding ids -- exactly --gated-reported distinct ones.
+    # Refused before anything is written; WITHOUT ids the step is recorded, and its debt can
+    # close only by a fix (gated_ids: None).
+    gated_ids = None
+    if getattr(args, "gated_ids", None) is not None:
+        gated_ids = [x.strip() for x in args.gated_ids.split(",") if x.strip()]
+        bad = [x for x in gated_ids if not re.match(r"^[A-Za-z0-9_.:-]+$", x)]
+        if bad or len(set(gated_ids)) != len(gated_ids) or len(gated_ids) != args.gated_reported:
+            print("[qa_ledger] log-step REFUSED: --gated-ids must name exactly --gated-reported "
+                  "(%d) DISTINCT ids [A-Za-z0-9_.:-]; got %r (ADR-060)"
+                  % (args.gated_reported, gated_ids), file=sys.stderr)
+            sys.exit(2)
+        gated_ids = sorted(gated_ids)
     ledger["step_counter"] += 1
     fp = None
     ids = None
@@ -3748,6 +3906,10 @@ def cmd_log_step(args):
         "files_changed": args.files_changed,
         "fingerprint": fp,
         "finding_ids": ids,
+        # ADR-060: present on every step from 2.14.0 on (its ABSENCE marks a legacy step);
+        # None on a gated step logged without ids
+        "gated_ids": gated_ids if gated_ids is not None else ([] if args.gated_reported == 0
+                                                               else None),
         "note": args.note,
         "source": res["source"],
     }
@@ -3767,11 +3929,14 @@ def cmd_log_step(args):
     # without --review, then a clean witnessed review of the same tree)
     record["logged"] = {"tree": _review_stamp(entry_.get("path", "."),
                                               entry_.get("type", "maven"), args.ledger),
-                        "deferred_sha256": _deferred_sha(entry_.get("path", "."), args.ledger)}
+                        "deferred_sha256": _deferred_sha(entry_.get("path", "."), args.ledger),
+                        "defers": sorted(_defers_scan(entry_.get("path", "."),
+                                                      args.ledger)[0])}
     if rv is not None:
         record["review"] = rv["id"]
         record["reviewed"] = {"tree": rv.get("tree"),
-                              "deferred_sha256": rv.get("deferred_sha256")}
+                              "deferred_sha256": rv.get("deferred_sha256"),
+                              "defers": rv.get("defers")}
         rv["closed_by"] = record["n"]
     else:
         record["unwitnessed"] = rv_problem
@@ -5413,6 +5578,41 @@ def cmd_pr_opened_not_ready(args):
     print("[qa_ledger] %s: pr-opened-not-ready recorded (phase %s, %d missing fact(s)) -- an "
           "EXCEPTION: the PR stays a draft until the gate is green; 'ready for review' is the "
           "human's act in the forge." % (args.repo, state, len(evidence)))
+
+
+def cmd_confirm_deferral(args):
+    """A HUMAN act (ADR-060 + ADR-058): confirm the deferral of ONE gated finding id. Recorded in
+    the ledger, refused in a known agent shell, and only for an id some gated step of this repo
+    reported. The `defers:` line in ISSUES-DEFERRED.md says what and why; this says who decided."""
+    m = re.match(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.:-]+)$", args.id or "")
+    if not m:
+        print("[qa_ledger] confirm-deferral: --id must be <tool>/<id> (got %r)" % args.id,
+              file=sys.stderr)
+        sys.exit(2)
+    actor = _human_act(args, "confirm-deferral",
+                       "qa_ledger.py confirm-deferral --repo %s --id %s --human <NAME> --note "
+                       "\"<why the risk is accepted>\"" % (args.repo, args.id))
+    ledger = _load(args.ledger)
+    node = _repo_node(ledger, args.repo)
+    tool, fid = m.group(1), m.group(2)
+    reported = any(s.get("tool") == tool and fid in (s.get("gated_ids") or [])
+                   for s in node.get("iterations") or [])
+    if not reported:
+        print("[qa_ledger] confirm-deferral REFUSED: no gated step of %s/%s reported the id %s "
+              "-- a deferral confirms a finding the ledger knows" % (args.repo, tool, fid),
+              file=sys.stderr)
+        sys.exit(2)
+    if args.id in _confirmed_deferrals(ledger, args.repo):
+        print("[qa_ledger] confirm-deferral: %s is already confirmed -- nothing recorded"
+              % args.id)
+        return
+    rec = {"id": args.id, "repo": args.repo, "at": _now(), "by": actor, "note": args.note,
+           "human_declared": True}
+    ledger.setdefault(CONFIRMATIONS_KEY, []).append(rec)
+    _touch_event(ledger, "deferral-confirmed", args.id, args.repo)
+    _save(args.ledger, ledger)
+    print("[qa_ledger] %s: deferral of %s confirmed by %s -- it closes the debt once a clean "
+          "review sees its `defers:` line" % (args.repo, args.id, actor))
 
 
 def cmd_converged(args):
@@ -10749,6 +10949,12 @@ def cmd_summary(args):
             "test_to_prod_loc_ratio": round(agg_test_loc / agg_prod, 2) if agg_prod else None,
         },
     }
+    # ADR-058 s2, owed since 2.12.0: the retrospective prints a red-gate draft PR as an EXCEPTION
+    # (the key appears only when one exists, so every other summary is byte-identical)
+    exc = [e for e in ledger.get("events") or []
+           if isinstance(e, dict) and e.get("kind") == "pr-opened-not-ready"]
+    if exc:
+        summary["exceptions"] = exc
     if args.json:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
         return
@@ -10769,6 +10975,11 @@ def cmd_summary(args):
               f"(PF {cal['production_findings']['total']}, "
               f"SD {cal['spec_doubts']['total']}, "
               f"SCR {cal['spec_change_requests']['total']})")
+    for e in exc:
+        print(f"EXCEPTION pr-opened-not-ready: {e.get('repo')} at "
+              f"{(e.get('commit') or 'no commit')[:8]}, phase {e.get('phase')}, "
+              f"{len(e.get('missing') or [])} missing fact(s); requested by "
+              f"{e.get('requested_by') or 'unknown'} ({e.get('origin')})")
     print("--- by tool (reported / fixed / %fixed / deferred / suppressed) ---")
     for t, x in summary["by_tool"].items():
         print(f"  {t:14s} {x['reported']:5d} / {x['fixed']:5d} / "
@@ -11008,6 +11219,16 @@ def _repo_readiness(ledger, name, node, weights, caps, zero_at, k):
                      if (live.get("r2") or {}).get("legacy_steps") else {}),
                   **({"debts_closed_without_tree": (live.get("r2") or {})["no_tree_closures"]}
                      if (live.get("r2") or {}).get("no_tree_closures") else {}),
+                  # 2.14.0 (ADR-060): surfaced only when present
+                  **({"deferrals_awaiting_confirmation":
+                      sorted(set((live.get("r2") or {})["awaiting_confirmation"]))}
+                     if (live.get("r2") or {}).get("awaiting_confirmation") else {}),
+                  **({"gated_steps_without_ids": (live.get("r2") or {})["no_ids_open"]}
+                     if (live.get("r2") or {}).get("no_ids_open") else {}),
+                  **({"untyped_deferrals": (live.get("r2") or {})["untyped_deferrals"]}
+                     if (live.get("r2") or {}).get("untyped_deferrals") else {}),
+                  **({"malformed_defers": (live.get("r2") or {})["malformed_defers"]}
+                     if (live.get("r2") or {}).get("malformed_defers") else {}),
                   # only surfaced when golden_required is in play, so a config with neither
                   # risk_profile nor golden_required has byte-identical facts to before (1.45.0)
                   **({"golden_missing": golden_missing}
@@ -13061,6 +13282,18 @@ def cmd_readiness(args):
         if r["facts"].get("debts_closed_without_tree"):
             print(f"  · {rname}: {r['facts']['debts_closed_without_tree']} gated finding debt(s) "
                   f"closed without a comparable tree (no git): movement was not measured")
+        if r["facts"].get("deferrals_awaiting_confirmation"):
+            ks = r["facts"]["deferrals_awaiting_confirmation"]
+            print(f"  ! {rname}: {len(ks)} gated deferral(s) awaiting human confirmation "
+                  f"({', '.join(ks[:4])}) -- the human runs `confirm-deferral` in their own terminal")
+        if r["facts"].get("gated_steps_without_ids"):
+            print(f"  ! {rname}: {r['facts']['gated_steps_without_ids']} gated step(s) logged "
+                  f"without --gated-ids: only a fix closes them (ADR-060)")
+        if r["facts"].get("untyped_deferrals"):
+            print(f"  · {rname}: {r['facts']['untyped_deferrals']} debt(s) closed by an untyped "
+                  f"deferral (pre-2.14: the whole-file rule, not by finding id)")
+        for bad in (r["facts"].get("malformed_defers") or [])[:3]:
+            print(f"  ! {rname}: malformed defers: line {bad} -- it defers nothing")
         if r["facts"].get("steps_predate_reviews"):
             print(f"  · {rname}: {r['facts']['steps_predate_reviews']} QA step(s) predate "
                   f"witnessed reviews (2.11.0) and keep 2.10 semantics")
@@ -16262,6 +16495,10 @@ def build_parser():
     pl.add_argument("--iteration", type=int, required=True)
     pl.add_argument("--reported", type=int, default=0)
     pl.add_argument("--gated-reported", type=int, default=0)
+    pl.add_argument("--gated-ids", default=None,
+                    help="the ids of the gated findings, comma-separated, exactly "
+                         "--gated-reported of them (ADR-060); without them the debt closes "
+                         "only by a fix")
     pl.add_argument("--fixed", type=int, default=0)
     pl.add_argument("--deferred", type=int, default=0)
     pl.add_argument("--suppressed", type=int, default=0)
@@ -16283,6 +16520,15 @@ def build_parser():
     prv.add_argument("--iteration", type=int, required=True)
     prv.add_argument("--json", action="store_true")
     prv.set_defaults(func=cmd_review_start)
+
+    pcd = sub.add_parser("confirm-deferral", help="HUMAN act: confirm the deferral of one "
+                         "gated finding id (ADR-060); refused in an agent's shell")
+    add_ledger(pcd)
+    pcd.add_argument("--repo", required=True)
+    pcd.add_argument("--id", required=True, help="<tool>/<finding id>")
+    pcd.add_argument("--human", default=None)
+    pcd.add_argument("--note", default=None)
+    pcd.set_defaults(func=cmd_confirm_deferral)
 
     ppg = sub.add_parser("pr-gate", help="read-only: is every repo mapped to --cwd pr-ready? "
                          "(the PR hook's verdict, ADR-058)")

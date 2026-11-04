@@ -233,11 +233,21 @@ N`, which stamps the tree the review starts on and prints `RV-n`, and is logged 
 --review RV-n`. A step without one is unwitnessed and never counts. Convergence then reads three
 rules off reviewed trees: the latest review of each tool saw the source on disk now (a late edit
 means that tool runs again); a gated finding closes only on a later clean review of different
-source or of a changed `ISSUES-DEFERRED.md` (reported as "deferred, not fixed"); and a clean
+source or -- for steps before 2.14.0 -- of a changed `ISSUES-DEFERRED.md` (since 2.14.0, by id: see below;
+reported as "deferred, not fixed"); and a clean
 verdict on exactly the content an earlier review flagged contradicts the record. What this does
 NOT prove: that the review ran, or that a fix addresses a given finding -- only that every verdict
 is about the tree it claims, and that the verdicts do not contradict each other. Ledgers from
 before 2.11.0 keep their steps' 2.10 semantics until a tool's first witnessed step.
+
+Since 2.14.0 (ADR-060) a gated finding is deferred BY ITS ID: `log-step --gated-ids` names the
+gated findings, `ISSUES-DEFERRED.md` carries one `- defers: <tool>/<id> -- <why>` line per deferred
+one, and the debt closes by deferral only when every id also has a `confirm-deferral` -- a HUMAN
+act recorded in the ledger and refused in an agent's shell -- with its line present at the clean
+review and now. Any other change to the file closes nothing; a gated step logged without ids closes
+only by a fix; steps from before 2.14.0 keep the whole-file rule and `readiness` names them. The
+ids are narrated like the counts: what is guaranteed is that the deferred id is the reported one
+and that a human confirmed it.
 
 `check-terminado` and `top --json` seal EVERY configured repo since 2.11.0 (ADR-057): one verdict
 line per repo, the exit code of the aggregate, and a `repos[]` detail only when there are several
@@ -992,7 +1002,7 @@ python3 $QL readiness
 
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (61 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - confirm-deferral - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (62 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

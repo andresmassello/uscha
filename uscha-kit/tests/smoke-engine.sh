@@ -20867,7 +20867,7 @@ res, why = {}, {}
 HOME_ISO = tempfile.mkdtemp(prefix="uscha-nv-home-")
 TMPS.append(HOME_ISO)
 ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
-for _k in ("CLAUDECODE", "USCHA_JOBS"):
+for _k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "USCHA_JOBS"):
     ENV.pop(_k, None)
 XPY = sys.executable.replace(chr(92), "/")
 # a declared test command that writes a fresh JUnit report on every run
@@ -20950,12 +20950,22 @@ def review(d, it, repo="api", tool="cr"):
     return json.loads(r.stdout)["id"]
 
 
-def log(d, it, gated, rv=None, repo="api", tool="cr", eng=ENG):
+def log(d, it, gated, rv=None, repo="api", tool="cr", eng=ENG, ids=None):
     argv = ["log-step", "--repo", repo, "--tool", tool, "--iteration", str(it), "--reported",
             str(gated), "--gated-reported", str(gated), "--tests-passed", "true"]
     if rv:
         argv += ["--review", rv]
+    if ids:
+        argv += ["--gated-ids", ids]
     return q(d, *argv, eng=eng)
+
+
+def defer_by_id(d, fid, repo="api"):
+    """2.14.0 (ADR-060): a deferral names its id and a HUMAN confirms it -- the whole-file rule
+    these cases were first written against no longer closes a debt for a step with ids"""
+    write(os.path.join(d, "ISSUES-DEFERRED.md"), "- defers: " + fid + " -- accepted" + NL)
+    return q(d, "confirm-deferral", "--repo", repo, "--id", fid, "--human", "tester",
+             "--note", "accepted")
 
 
 def phase(d, repo="api", eng=ENG):
@@ -21044,8 +21054,8 @@ def measure():
     # --- AC-GI-55: a deferral closes the debt and is printed as a deferral
     d = project("defer")
     trun(d)
-    rv = review(d, 1); log(d, 1, 1, rv)
-    write(os.path.join(d, "ISSUES-DEFERRED.md"), "- cr: one gated finding, deferred" + NL)
+    rv = review(d, 1); log(d, 1, 1, rv, ids="F-1")
+    defer_by_id(d, "cr/F-1")
     rv = review(d, 2); log(d, 2, 0, rv)
     ph = phase(d)
     rd = q(d, "readiness")
@@ -21125,8 +21135,8 @@ def measure():
     # ISSUES-DEFERRED.md too
     d = project("undefer")
     trun(d)
-    rv = review(d, 1); log(d, 1, 1, rv)
-    write(os.path.join(d, "ISSUES-DEFERRED.md"), "- cr: deferred" + NL)
+    rv = review(d, 1); log(d, 1, 1, rv, ids="F-1")
+    defer_by_id(d, "cr/F-1")
     rv = review(d, 2); log(d, 2, 0, rv)
     before = phase(d).returncode
     os.remove(os.path.join(d, "ISSUES-DEFERRED.md"))
@@ -21576,7 +21586,9 @@ def measure():
                            and ev[0].get("missing") and ev[0].get("phase")
                            and "exception" in rd.stdout.lower()
                            and "pr-opened-not-ready" in rd.stdout
-                           and ph_before.stdout == ph_after.stdout)
+                           and ph_before.stdout == ph_after.stdout
+                           # 2.14.0: the retrospective prints it too (owed since 2.12.0)
+                           and "EXCEPTION pr-opened-not-ready" in q(d, "summary").stdout)
     why["AC-GI-46"] = "rc=%s %r ev=%r readiness=%r" % (r.returncode, r.stdout[-150:], ev,
                                                       rd.stdout[-200:])
 
@@ -21976,6 +21988,283 @@ esac
 }
 pj_unit T176 pj_t176
 
+pj_t177() {
+echo "== T177 (ADR-060, 2.14.0): a gated finding is deferred by its id, and only a human's recorded confirmation closes its debt =="
+# Since 2.11.0 a debt closed "by deferral" on ANY change to a present ISSUES-DEFERRED.md: removing
+# one entry, adding a comma, or deferring another tool's finding closed it, and the agent did it
+# alone. Each case drives the real engine over temp git repos under an isolated HOME. AC-DI-08
+# drives a ledger the v2.13.0 engine wrote (UNMEASURED without the tag in git).
+T177=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+PREV_TAG = "v2.13.0"
+NL, DQ = chr(10), chr(34)
+TMPS = []
+res, why = {}, {}
+HOME_ISO = tempfile.mkdtemp(prefix="uscha-di-home-")
+TMPS.append(HOME_ISO)
+ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
+for _k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "USCHA_JOBS"):
+    ENV.pop(_k, None)
+AGENT = dict(ENV, CLAUDECODE="1")
+XPY = sys.executable.replace(chr(92), "/")
+EMIT = NL.join([
+    "import os, time",
+    "os.makedirs(" + DQ + "reports" + DQ + ", exist_ok=True)",
+    "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit.xml" + DQ + "), " + DQ + "w"
+    + DQ + ").write(" + DQ + "<testsuite tests=" + DQ + " + chr(34) + " + DQ + "1" + DQ
+    + " + chr(34) + " + DQ + " timestamp=" + DQ + " + chr(34) + repr(time.time()) + chr(34) + "
+    + DQ + "><testcase name=" + DQ + " + chr(34) + " + DQ + "t" + DQ + " + chr(34) + " + DQ
+    + "/></testsuite>" + DQ + ")",
+]) + NL
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix="uscha-di-" + prefix + "-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def sh(d, *argv):
+    return subprocess.run(list(argv), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, encoding="utf-8", errors="replace", env=ENV)
+
+
+def q(d, *argv, **kw):
+    return subprocess.run([sys.executable, kw.get("eng", ENG)] + list(argv), cwd=d,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace", env=kw.get("env", ENV))
+
+
+def project(prefix):
+    d = tmp(prefix)
+    write(os.path.join(d, "api", "mod.py"), "v = 0" + NL)
+    write(os.path.join(d, "api", "run.py"), EMIT)
+    write(os.path.join(d, "uscha.config.json"), json.dumps(
+        {"defaults": {"qa_tools_external": ["cr"], "qa_tools_order": ["cr"],
+                      "test_command_python": [XPY, "run.py"]},
+         "repos": [{"name": "api", "path": "api", "type": "python"}],
+         "integration": {"enabled": False}}, indent=2) + NL)
+    write(os.path.join(d, ".gitignore"), "__pycache__/" + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        sh(d, *argv)
+    sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "base")
+    q(d, "init", "--config", "uscha.config.json")
+    q(d, "test-run", "--repo", "api")
+    return d
+
+
+def review(d, it, eng=ENG):
+    r = q(d, "review-start", "--repo", "api", "--tool", "cr", "--iteration", str(it), "--json",
+          eng=eng)
+    return json.loads(r.stdout)["id"]
+
+
+def log(d, it, gated, rv, ids=None, eng=ENG):
+    argv = ["log-step", "--repo", "api", "--tool", "cr", "--iteration", str(it), "--reported",
+            str(gated), "--gated-reported", str(gated), "--tests-passed", "true", "--review", rv]
+    if ids is not None:
+        argv += ["--gated-ids", ids]
+    return q(d, *argv, eng=eng)
+
+
+def defers(d, *lines):
+    write(os.path.join(d, "api", "ISSUES-DEFERRED.md"),
+          "# Deferred" + NL + NL + "Free prose stays free." + NL + NL
+          + "".join(line + NL for line in lines))
+
+
+def confirm(d, fid, env=None):
+    return q(d, "confirm-deferral", "--repo", "api", "--id", fid, "--human", "Ana",
+             "--note", "risk accepted", env=env or ENV)
+
+
+def phase(d, eng=ENG):
+    return q(d, "phase", "--repo", "api", "--require", "pr-ready", eng=eng)
+
+
+def ledger_bytes(d):
+    return io.open(os.path.join(d, "QA-LEDGER.json"), "rb").read()
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def gated_then_clean(prefix, ids="F-1", lines=(), confirm_ids=(), n=1):
+    d = project(prefix)
+    rv = review(d, 1); log(d, 1, n, rv, ids)
+    if lines:
+        defers(d, *lines)
+    for fid in confirm_ids:
+        confirm(d, fid)
+    rv = review(d, 2); log(d, 2, 0, rv)
+    return d
+
+
+def measure():
+    # --- AC-DI-01: a gated step without --gated-ids closes by no deferral, named
+    d = gated_then_clean("no-ids", ids=None, lines=("- defers: cr/F-1 -- accepted",))
+    ph = phase(d)
+    rd = q(d, "readiness")
+    res["AC-DI-01"] = bool(ph.returncode == 1 and "without --gated-ids" in ph.stdout
+                           and "without --gated-ids" in rd.stdout)
+    why["AC-DI-01"] = "rc=%s %r rd=%r" % (ph.returncode, ph.stdout[-200:], rd.stdout[-200:])
+
+    # --- AC-DI-02: duplicate ids, or a count other than G, are refused before anything is written
+    d = project("bad-ids")
+    rv = review(d, 1)
+    b = ledger_bytes(d)
+    dup = log(d, 1, 2, rv, "F-1,F-1")
+    short = log(d, 1, 2, rv, "F-1")
+    unchanged = ledger_bytes(d) == b
+    good = log(d, 1, 2, rv, "F-1,F-2")
+    st = json.loads(ledger_bytes(d).decode("utf-8"))["repos"]["api"]["iterations"][-1]
+    res["AC-DI-02"] = bool(dup.returncode == 2 and short.returncode == 2 and unchanged
+                           and good.returncode == 0
+                           and st.get("gated_ids") == ["F-1", "F-2"])
+    why["AC-DI-02"] = "dup=%s %r short=%s" % (dup.returncode, dup.stdout[-150:], short.returncode)
+
+    # --- AC-DI-03: an unconfirmed defers line closes nothing, and readiness says so
+    d = gated_then_clean("unconfirmed", lines=("- defers: cr/F-1 -- accepted",))
+    ph = phase(d)
+    rd = q(d, "readiness")
+    res["AC-DI-03"] = bool(ph.returncode == 1 and "cr/F-1" in ph.stdout
+                           and "awaiting human confirmation" in rd.stdout)
+    why["AC-DI-03"] = "rc=%s %r rd=%r" % (ph.returncode, ph.stdout[-200:], rd.stdout[-250:])
+
+    # --- AC-DI-04: confirm-deferral (human) closes it; refused in the agent shell; a confirmed:
+    # typed in the markdown closes nothing
+    d = project("confirm")
+    rv = review(d, 1); log(d, 1, 1, rv, "F-1")
+    defers(d, "- defers: cr/F-1 -- accepted (origin: agent, confirmed: 2026-11-04)")
+    rv = review(d, 2); log(d, 2, 0, rv)
+    typed = phase(d)
+    agent = confirm(d, "cr/F-1", env=AGENT)
+    human = confirm(d, "cr/F-1")
+    rv = review(d, 3); log(d, 3, 0, rv)
+    ok = phase(d)
+    res["AC-DI-04"] = bool(typed.returncode == 1 and agent.returncode == 2
+                           and "CLAUDECODE" in agent.stdout and human.returncode == 0
+                           and ok.returncode == 0)
+    why["AC-DI-04"] = "typed=%s agent=%s human=%s %r ok=%s %r" % (
+        typed.returncode, agent.returncode, human.returncode, human.stdout[-120:],
+        ok.returncode, ok.stdout[-200:])
+
+    # --- AC-DI-05: partial -- two of three confirmed, the debt stays open naming the third
+    lines = ("- defers: cr/F-1 -- a", "- defers: cr/F-2 -- b", "- defers: cr/F-3 -- c")
+    d = gated_then_clean("partial", ids="F-1,F-2,F-3", lines=lines,
+                         confirm_ids=("cr/F-1", "cr/F-2"), n=3)
+    ph = phase(d)
+    res["AC-DI-05"] = bool(ph.returncode == 1 and "cr/F-3" in ph.stdout
+                           and "cr/F-1" not in ph.stdout.split("cr/F-3")[0][-60:])
+    why["AC-DI-05"] = "rc=%s %r" % (ph.returncode, ph.stdout[-250:])
+
+    # --- AC-DI-06: the 2.11 hole -- remove the confirmed line after the close, review again: the
+    # debt is open again, naming the id
+    d = gated_then_clean("removed", lines=("- defers: cr/F-1 -- accepted",),
+                         confirm_ids=("cr/F-1",))
+    closed = phase(d).returncode
+    defers(d, "- defers: cr/F-9 -- something else")
+    rv = review(d, 3); log(d, 3, 0, rv)
+    ph = phase(d)
+    res["AC-DI-06"] = bool(closed == 0 and ph.returncode == 1 and "cr/F-1" in ph.stdout)
+    why["AC-DI-06"] = "closed=%s after=%s %r" % (closed, ph.returncode, ph.stdout[-250:])
+
+    # --- AC-DI-07: any other change to the file -- a comma, another tool's deferral -- closes
+    # nothing (2.13.0 closed it: the file changed and was present)
+    d = project("other-change")
+    rv = review(d, 1); log(d, 1, 1, rv, "F-1")
+    defers(d, "- defers: jd/F-1 -- another tool's finding,")
+    rv = review(d, 2); log(d, 2, 0, rv)
+    ph = phase(d)
+    res["AC-DI-07"] = bool(ph.returncode == 1 and "cr/F-1" in ph.stdout)
+    why["AC-DI-07"] = "rc=%s %r" % (ph.returncode, ph.stdout[-250:])
+
+    # --- AC-DI-08: a ledger the v2.13.0 engine wrote (gated step without ids, closed by the hash)
+    # loads, keeps converging, and readiness names the untyped deferral
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-DI-08"] = None
+        why["AC-DI-08"] = PREV_TAG + " engine not reachable (no git, or the tag is absent)"
+    else:
+        pe = os.path.join(tmp("prev-eng"), "qa_ledger.py")
+        write(pe, prev)
+        d = project("legacy")
+        rv = review(d, 1, eng=pe); log(d, 1, 1, rv, eng=pe)
+        defers(d, "anything changed")
+        rv = review(d, 2, eng=pe); log(d, 2, 0, rv, eng=pe)
+        old = phase(d, eng=pe).returncode
+        now = phase(d)
+        rd = q(d, "readiness")
+        res["AC-DI-08"] = bool(old == 0 and now.returncode == 0
+                               and "untyped deferral" in rd.stdout)
+        why["AC-DI-08"] = "old=%s now=%s %r rd=%r" % (old, now.returncode, now.stdout[-150:],
+                                                     rd.stdout[-250:])
+
+    # --- AC-DI-09: confirm-deferral for an id no gated step reported is refused, nothing written
+    d = project("unreported")
+    rv = review(d, 1); log(d, 1, 1, rv, "F-1")
+    b = ledger_bytes(d)
+    r = confirm(d, "cr/F-9")
+    res["AC-DI-09"] = bool(r.returncode == 2 and ledger_bytes(d) == b and "F-9" in r.stdout)
+    why["AC-DI-09"] = "rc=%s %r" % (r.returncode, r.stdout[-200:])
+
+    # --- AC-DI-10: the model -- ADR-060's manifest passes the check, and its teeth configs replay
+    # AC-DI-07 (the hash rule) and AC-DI-04 (no human confirmation)
+    mc = os.path.join(root, "tools", "model-check.py")
+    man = os.path.join(root, "docs", "deferral-by-id", "models", "models.json")
+    if not (os.path.isfile(mc) and os.path.isfile(man)):
+        res["AC-DI-10"] = None
+        why["AC-DI-10"] = "the repo's tools/ or docs/ are absent (an extracted kit)"
+    else:
+        chk = subprocess.run([sys.executable, mc, "check"], cwd=root, stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, text=True, env=ENV)
+        m = json.load(io.open(man, encoding="utf-8"))
+        replays = {a for c in m.get("configs") or [] for a in c.get("replays") or []}
+        res["AC-DI-10"] = bool(chk.returncode == 0 and m.get("adr") == "ADR-060"
+                               and {"AC-DI-07", "AC-DI-04"} <= replays)
+        why["AC-DI-10"] = "check=%s replays=%r %r" % (chk.returncode, sorted(replays),
+                                                     chk.stdout[-200:])
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+
+sidecar(kit, ".di-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T177" in
+  OK*) PASS=$((PASS+1)); echo "  ok   deferral by id (AC-DI-01..10): $T177";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T177";;
+esac
+}
+pj_unit T177 pj_t177
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -22337,6 +22626,10 @@ FAMILIES = (
     # tools/model-check.py is repo-level: from an extracted kit every case reads None = UNMEASURED
     (".mc-cases.json", "model-checked-designs", "T176",               # ADR-059, 2.13.0
      _seq("AC-MC", 1, 8)),
+    # AC-DI-08 drives a ledger the v2.13.0 engine wrote and AC-DI-10 reads the repo's manifest:
+    # without the tag, or from an extracted kit, they report None = UNMEASURED
+    (".di-cases.json", "deferral-by-id", "T177",                      # ADR-060, 2.14.0
+     _seq("AC-DI", 1, 10)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

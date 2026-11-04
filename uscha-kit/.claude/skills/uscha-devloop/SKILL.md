@@ -448,8 +448,14 @@ ledger, so do not try to work around them:
 
 - **Anchor**: the latest review of each tool must have seen the source that is on disk now. Any
   source edit after the last pass (a late fix, a revert) means that tool runs again.
-- **Debt**: a gated finding closes only on a later clean review of a DIFFERENT source (a fix)
-  or of a changed `ISSUES-DEFERRED.md` (a deferral, which `readiness` reports as such).
+- **Debt**: a gated finding closes only on a later clean review of a DIFFERENT source (a fix),
+  or -- since kit 2.14.0 (ADR-060) -- by the deferral of ITS id: a `- defers: <tool>/<id> --
+  <why>` line in `ISSUES-DEFERRED.md` AND a human's `confirm-deferral`, both present at the clean
+  review and now. Name the gated ids when you log (`--gated-ids`); a gated step without them
+  closes only by a fix. Deferring a GATED finding is the human's decision, never yours: write the
+  `defers:` line, then **STOP and ask the human** to run, in their own terminal,
+  `python3 $QL confirm-deferral --repo <REPO> --id <tool>/<id> --human <NAME> --note "<why>"` --
+  it refuses in your shell, and a `confirmed:` you type in the markdown closes nothing.
 - **Memory**: a clean verdict on exactly the content an earlier review flagged contradicts the
   record and does not count. Fix it, or defer it.
 
@@ -469,6 +475,7 @@ After **each** tool pass:
 python3 $QL log-step --repo <REPO> --tool <code-review|judgment-day|improve> \
   --iteration <N> --review <RV-n from review-start> \
   --reported <total findings> --gated-reported <findings at/above gate> \
+  --gated-ids <one id per gated finding, comma-separated> \
   --fixed <fixed this pass> --deferred <sent to backlog> --suppressed <false positives> \
   --tests-passed <true|false> --files-changed <count> \
   --fingerprint <stable,finding,ids>   # enables oscillation detection
