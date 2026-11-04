@@ -362,6 +362,9 @@ Only when the task needs it:
   path for a newcomer.
 - **Extended discovery, brownfield extraction, the rubric, the dashboards** — the remaining
   skills under `uscha-kit/skills/`.
+- **A design with state and rules** (a lifecycle, a gate) — model it in TLA+ before the code:
+  the "Designs with a model" slide of [the method deck](uscha-claude-code-doc-EN.html) and
+  [ADR-061](adr/ADR-061-model-check-in-the-kit.md). `uscha init` already declared the boundary.
 - **Why any of this exists** — [`uscha-loop-vs-graph-EN.md`](uscha-loop-vs-graph-EN.md).
 - **The research** — the Diamond thesis, the bench and the paper, at
   [uscha.dev](https://uscha.dev). None of it is needed for the walkthrough above.

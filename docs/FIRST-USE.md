@@ -364,6 +364,9 @@ Solo cuando la tarea lo pida:
   entrada de cinco ADR para quien recién llega.
 - **Discovery extendido, extracción brownfield, la rúbrica, los tableros** — las skills
   restantes bajo `uscha-kit/skills/`.
+- **Un diseño con estado y reglas** (un ciclo de vida, un gate) — modélelo en TLA+ antes del
+  código: la diapositiva "Diseños con modelo" de [la presentación del método](uscha-claude-code-doc.html) y
+  [ADR-061](adr/ADR-061-model-check-in-the-kit.md). `uscha init` ya declaró el límite.
 - **Por qué existe todo esto** — [`uscha-loop-vs-graph.md`](uscha-loop-vs-graph.md).
 - **La investigación** — la tesis del diamante, el bench y el paper, en
   [uscha.dev](https://uscha.dev). Nada de eso hace falta para el recorrido de arriba.
