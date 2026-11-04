@@ -101,4 +101,4 @@ that nothing changes for a project that never opted in), 09..14 against the firs
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 470 checks · 0 fail; acceptance 478/479.
