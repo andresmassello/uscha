@@ -19,6 +19,8 @@ ENGINE = os.path.join(os.path.dirname(HERE), "uscha-kit", ".claude", "skills", "
                       "qa_ledger.py")
 FROM_ADR = "ADR-059"
 SUITE = os.path.join("uscha-kit", "tests", "smoke-engine.sh")
+# the 2.13.0 rule: a replayed id is a criterion the suite EMITS (res["AC-..."]), not a mention
+SUITE_PATTERN = r'res\[\s*["\x27]{id}["\x27]\s*\]'
 
 
 def main(argv=None):
@@ -36,7 +38,7 @@ def main(argv=None):
     pr.add_argument("--limit", type=int, default=60)
     a = p.parse_args(argv)
     cmd = [sys.executable, ENGINE, "model-check", "--root", a.root, "--from-adr", FROM_ADR,
-           "--suite", SUITE]
+           "--suite", SUITE, "--strict-names", "--suite-pattern", SUITE_PATTERN]
     if a.cmd == "run":
         cmd += ["--run", "--no-record", "--tier", a.tier, "--java", a.java,
                 "--timeout", str(a.timeout), "--limit", str(a.limit)]

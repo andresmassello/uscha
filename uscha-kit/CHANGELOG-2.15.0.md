@@ -13,18 +13,23 @@ mechanism to every project, as the project's choice.
   not-needed -- <reason>`; every manifest must declare a `ci` config, a vacuity config that MUST
   break, a safety invariant beyond `TypeOK`, and the AC id (a checkbox criterion in the acceptance
   file) of the RED case each counterexample replays. `--suite FILE` also requires each id quoted in
-  that suite.
+  that suite (`model_check.suite_pattern` / `--suite-pattern` set a stricter regex). A `*template*`
+  file in `docs/adr` is not read as an ADR.
 - **`model-check --run --tier ci|deep`** runs TLC with the project's JDK and `tla2tools.jar` v1.7.4
-  verified by sha256 (`model_check.jar` / `jar_sha256` / `java` override). Without a pinned jar or
-  without Java the models read **UNMEASURED** (exit 2), never passed. Each config's run is recorded
-  in the ledger (`model_runs`: verdict, time, and the sha256 of its module and `.cfg`), stale once
-  either changes; `--no-record` runs without recording.
+  verified by sha256 (`model_check.jar` / `jar_sha256` / `java` override), or the runner the project
+  declares in `model_check.tlc_cmd`. Without the jar, without Java, or when TLC cannot start, the
+  models read **UNMEASURED** (exit 2), never passed; a jar that is not the pin is refused (exit 1)
+  and runs nothing. Each config's run is recorded in the ledger (`model_runs`: verdict, time, runner,
+  and the sha256 of its module, its `.cfg` and its manifest entry), stale once any of them changes;
+  `--no-record` runs without recording.
 - **`readiness`** prints a `--- models` line only for a project that declared `from_adr`: ADRs
-  without the field, broken manifests, and required models not run, stale or red. **Advisory** by
-  default; with `"model_check": {"mode": "gate"}` they block `pr-ready`, named.
+  without the field, broken manifests, required models not run, stale or red, and agent-written
+  `not-needed` the human has not confirmed. **Advisory** by default; with `"model_check": {"mode":
+  "gate"}` they block `pr-ready`, named.
 - **`uscha init`** writes `"model_check": {"from_adr": ...}` into the generated config -- `ADR-001` on
   a repo with no ADRs, the next free number on one that has them, so nothing already written is
-  retrofitted. **`doctor`** proposes it to a project initialised before 2.15.0 that has ADRs.
+  retrofitted; a re-run keeps a block already declared. **`doctor`** proposes it to a project
+  initialised before 2.15.0 that has ADRs, and names a block it cannot read.
 - **The `uscha-adr-refine` skill** (both twins) asks the question when the project declares the
   boundary, and the `CLAUDE.md` template carries the rule.
 - **This repo**: `tools/model-check.py` is now a thin wrapper over the engine (the same command line,
@@ -39,6 +44,26 @@ mechanism to every project, as the project's choice.
 - The published subcommand count moves from 62 to 63 (`model-check`), with its row in both
   command-reference docs.
 
+## Closed before release (fresh review)
+
+A fresh review of the first cut found ways through the gate; each is now a RED case (AC-MK-09..14):
+
+- **Any `--tlc-cmd` was evidence.** A fake TLC printing the right lines passed a gate. Now only the
+  declared runner records -- the pinned jar or `model_check.tlc_cmd` -- and an old record from
+  another runner, or from a jar that is no longer the pin, reads "not run".
+- **A run survived a manifest edit.** Changing a config's `expect` after the run left it "ok". The
+  record now carries the entry's sha256; an edit makes it stale.
+- **An unconfirmed agent `not-needed` was never named**, although the ADR promised it. Now it is a
+  problem, a block under a gate.
+- **An unreadable block switched the check off silently.** A typo in `from_adr` or `"Gate"` with a
+  capital read as "never opted in". Now the block is named, fails closed under a gate, the mode is
+  read case-blind, and a live `"advisory"` cannot downgrade a gate frozen in the ledger.
+- **The port weakened the repo's suite rule** (any quoted id counted, a prose mention included). The
+  wrapper passes the 2.13.0 pattern again.
+- **Smaller:** the kit's own `ADR-stack-template.md` blocked a gated project; a `[]` manifest ended in
+  a traceback; a symlinked ledger path; a re-run of `init` after the first ADR reported a conflict;
+  `readiness` said "they BLOCK" with zero problems; the acceptance file is read from the config.
+
 ## Honest limits
 
 - A green model proves that TLC found no violation OF THE MODEL at its bounds. The RED case each
@@ -48,11 +73,14 @@ mechanism to every project, as the project's choice.
   release ritual does not run TLC.
 - The suite measures `--run`'s logic with a stub TLC; real verdicts are measured where a project
   runs it (in this repo, the CI `models` job).
+- A recorded run proves that the declared runner printed that verdict. The config and the ledger are
+  files the agent can write: declaring a fake `tlc_cmd` is a visible edit in git, not something the
+  engine can refuse.
 
 ## How it is pinned
 
-`AC-MK-01..08` (smoke T178), each red against 2.14.1 first except AC-MK-01, which pins that nothing
-changes for a project that never opted in.
+`AC-MK-01..14` (smoke T178), each red first -- 01..08 against 2.14.1 (except AC-MK-01, which pins
+that nothing changes for a project that never opted in), 09..14 against the first cut of 2.15.0.
 
 ## Evidence
 

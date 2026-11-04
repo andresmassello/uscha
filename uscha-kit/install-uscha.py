@@ -998,6 +998,18 @@ def next_adr_number(repo):
     return (max(nums) + 1) if nums else 1
 
 
+def _existing_model_check(repo):
+    """The `model_check` block the project's config already declares, kept as is: the boundary
+    is fixed once, so a re-run of `init` after the first ADR does not move it (and stays
+    byte-identical instead of reporting a conflict -- 2.15.0 fresh review)."""
+    try:
+        with open(repo / "uscha.config.json", encoding="utf-8") as fh:
+            mc = json.load(fh).get("model_check")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return mc if isinstance(mc, dict) and mc else None
+
+
 def project_config_bytes(repo):
     """The project's uscha.config.json, GENERATED rather than copied (kit 2.0.0).
 
@@ -1041,14 +1053,14 @@ def project_config_bytes(repo):
     config = {"_comment": GENERATED_CONFIG_NOTE, "version": source_version(),
               "project": repo.name, "defaults": defaults, "repos": repos,
               # top-level, not a default: engine default is disabled, which drops the
-              # integration dimension out of readiness entirely
               # integration dimension out of readiness entirely. Only the switch: the
               # contract command is a build-system guess the kit refuses to make
               "integration": {"enabled": True},
               # ADR-061 (2.15.0): every ADR from this one on decides whether it needs a model --
               # ADR-001 on a repo with no ADRs, the next free number on one that has them, so
               # nothing already written is retrofitted. Advisory unless "mode": "gate".
-              "model_check": {"from_adr": "ADR-%03d" % next_adr_number(repo)}}
+              "model_check": _existing_model_check(repo) or
+              {"from_adr": "ADR-%03d" % next_adr_number(repo)}}
     # byte-identical across runs on the same repo + kit, so a second `init` reports `unchanged`
     # instead of a conflict; LF explicitly, like every other artifact the kit writes.
     return (json.dumps(config, indent=2, ensure_ascii=False) + "\n").encode("utf-8")

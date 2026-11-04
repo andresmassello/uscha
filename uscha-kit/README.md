@@ -258,8 +258,9 @@ model-checked with TLA+ before it is built. From the ADR a project names in
 declares `model: required` (with a `docs/<feature>/models/models.json` manifest) or `model:
 not-needed -- <reason>`. `qa_ledger.py model-check` checks the field and the manifests without Java;
 `model-check --run` runs TLC -- your JDK 11+ and `tla2tools.jar` v1.7.4, verified by sha256 (without
-them the models read UNMEASURED) -- and records each run in the ledger, stale once its module or
-config changes. `readiness` names what is missing; with `"mode": "gate"` it blocks `pr-ready`. A
+them the models read UNMEASURED), or the runner you declare in `model_check.tlc_cmd` -- and records
+each run in the ledger, stale once its module, config or manifest entry changes (an ad-hoc
+`--tlc-cmd` runs but records nothing). `readiness` names what is missing; with `"mode": "gate"` it blocks `pr-ready`. A
 green model proves no violation OF THE MODEL at its bounds; the RED case each counterexample replays
 is the only link to the code. Born in this repo (ADR-059): in 2.11.0 and 2.14.0 the models found
 holes neither the code nor a fresh reviewer had seen.

@@ -2086,10 +2086,11 @@ HOME, with a stub TLC so no case needs Java.
 - [ ] AC-MK-02 - with `from_adr` declared, `readiness` names an ADR at or after it without `model:`,
   does not read one before it, and `phase` is unchanged (advisory).
 - [ ] AC-MK-03 - `tools/model-check.py check` and `qa_ledger.py model-check` with the repo's boundary
-  and suite give the same output and exit code. Outside the repo this reads UNMEASURED.
+  and suite give the same output and exit code, and the wrapper keeps the 2.13.0 rule: an id the suite
+  only quotes in prose (not emitted as `res["ID"]`) is refused. Outside the repo this reads UNMEASURED.
 - [ ] AC-MK-04 - `model-check --run` with a jar that is not the pin exits 1 and runs nothing; with a
   pinned jar and no Java it exits 2 naming UNMEASURED, and nothing is recorded.
-- [ ] AC-MK-05 - a run (stub TLC) is recorded in `model_runs` with each config's verdict and the
+- [ ] AC-MK-05 - a run (a stub TLC declared as `model_check.tlc_cmd`) is recorded in `model_runs` with each config's verdict and the
   sha256 of its module and `.cfg`; editing the `.cfg` afterwards makes `readiness` name it stale.
 - [ ] AC-MK-06 - a red recorded run is named by `readiness`; `phase --require pr-ready` stays green in
   the default (advisory) mode and is refused naming the config with `model_check.mode: gate`.
@@ -2098,3 +2099,18 @@ HOME, with a stub TLC so no case needs Java.
   that has ADRs and no key.
 - [ ] AC-MK-08 - both `uscha-adr-refine` SKILL twins and `templates/CLAUDE.md` carry the question
   and the rule (`model: required`, `not-needed`, `model_check.from_adr`).
+- [ ] AC-MK-09 - a run through an ad-hoc `--tlc-cmd` (not the declared `model_check.tlc_cmd`, not java
+  + the pinned jar) is not recorded: under a gate the model still reads "not run" and blocks; the
+  declared runner's red run then blocks as red.
+- [ ] AC-MK-10 - editing a config's entry in the manifest (its `expect`) after a recorded run makes
+  that run stale, and a gate blocks naming it.
+- [ ] AC-MK-11 - under a gate, an agent-written `model: not-needed (origin: agent)` without a valid
+  `confirmed: YYYY-MM-DD` blocks `pr-ready` naming the ADR; once confirmed it does not.
+- [ ] AC-MK-12 - a `model_check` block that cannot be read (`from_adr` not `ADR-NNN`) is named by
+  `phase` and `doctor` and fails closed when its mode says gate, read case-blind (`"Gate"`); a live
+  `"advisory"` does not downgrade a gate frozen in the ledger.
+- [ ] AC-MK-13 - the kit's `ADR-stack-template.md` does not block a gated project; a symlinked ledger
+  path reads the same verdict; a manifest that is `[]` never ends in a traceback (`readiness`,
+  `phase`, `model-check`).
+- [ ] AC-MK-14 - re-running `uscha init` after the first ADR keeps the declared `model_check` block, so
+  the generated config is unchanged and no conflict is reported.

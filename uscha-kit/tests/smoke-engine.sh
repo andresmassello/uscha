@@ -22505,8 +22505,27 @@ def measure():
                            stderr=subprocess.STDOUT, text=True, env=ENV)
         e = q(d, "model-check", "--root", d, "--from-adr", "ADR-059", "--suite",
               os.path.join("uscha-kit", "tests", "smoke-engine.sh"))
+        # the 2.13.0 rule the port must keep: the suite measures an id as res["ID"]; the id
+        # QUOTED in a prose comment is not a measurement (2.15.0 fresh review)
+        d2 = tmp("wrap-prose")
+        write(os.path.join(d2, "ACCEPTANCE.md"), "# A" + NL + NL + "- [ ] AC-Z-01 - a" + NL)
+        write(os.path.join(d2, "uscha-kit", "tests", "smoke-engine.sh"),
+              "# prose: " + DQ + "AC-Z-01" + DQ + NL)
+        mb = os.path.join(d2, "docs", "feat", "models")
+        write(os.path.join(mb, "M.tla"), "---- MODULE M ----" + NL + "====" + NL)
+        write(os.path.join(mb, "ok.cfg"), "INVARIANT Safe" + NL)
+        write(os.path.join(mb, "vac.cfg"), "INVARIANT Never" + NL)
+        write(os.path.join(mb, "models.json"), json.dumps(
+            {"schema": "uscha/models@1", "adr": "ADR-060", "module": "M.tla", "configs": [
+                {"cfg": "ok.cfg", "tier": "ci", "expect": "no-error"},
+                {"cfg": "vac.cfg", "tier": "ci", "expect": "violated: Never", "vacuity": True,
+                 "replays": ["AC-Z-01"]}]}) + NL)
+        adr(d2, 60, ["model: required", "model_manifest: docs/feat/models/models.json"])
+        prose = subprocess.run([sys.executable, wrapper, "check", "--root", d2],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=ENV)
         res["AC-MK-03"] = bool(w.returncode == e.returncode == 1 and w.stdout == e.stdout
-                               and "does not exist" in e.stdout)
+                               and "does not exist" in e.stdout and prose.returncode == 1
+                               and "does not measure" in prose.stdout)
         why["AC-MK-03"] = "wrapper=%s engine=%s %r | %r" % (w.returncode, e.returncode,
                                                             w.stdout[-150:], e.stdout[-150:])
 
@@ -22529,9 +22548,9 @@ def measure():
                                                  nojava.returncode, nojava.stdout[-150:])
 
     # --- AC-MK-05: a run is recorded with its inputs' sha256; editing the .cfg makes it stale
-    d = project("record", {"from_adr": "ADR-002"})
+    d = project("record", {"from_adr": "ADR-002", "tlc_cmd": tlc})
     base = model(d, ("ok", "violated Never"))
-    run = q(d, "model-check", "--run", "--tier", "ci", "--tlc-cmd", tlc)
+    run = q(d, "model-check", "--run", "--tier", "ci")
     led = json.loads(io.open(os.path.join(d, "QA-LEDGER.json"), encoding="utf-8").read())
     runs = led.get("model_runs") or []
     fresh = q(d, "readiness").stdout
@@ -22546,17 +22565,109 @@ def measure():
         run.returncode, run.stdout[-120:], len(runs), fresh[-150:], stale[-200:])
 
     # --- AC-MK-06: a red run is named; advisory leaves phase alone, gate blocks naming the cfg
-    d = project("red", {"from_adr": "ADR-002"})
+    d = project("red", {"from_adr": "ADR-002", "tlc_cmd": tlc})
     model(d, ("violated Safe", "violated Never"))
-    q(d, "model-check", "--run", "--tier", "ci", "--tlc-cmd", tlc)
+    q(d, "model-check", "--run", "--tier", "ci")
     rd = q(d, "readiness").stdout
     adv = q(d, "phase", "--repo", "api", "--require", "pr-ready")
-    cfg(d, {"from_adr": "ADR-002", "mode": "gate"})
+    cfg(d, {"from_adr": "ADR-002", "mode": "gate", "tlc_cmd": tlc})
     gate = q(d, "phase", "--repo", "api", "--require", "pr-ready")
     res["AC-MK-06"] = bool("ci-ok.cfg" in rd and "red" in rd.lower() and adv.returncode == 0
                            and gate.returncode == 1 and "ci-ok.cfg" in gate.stdout)
     why["AC-MK-06"] = "rd=%r adv=%s gate=%s %r" % (rd[-200:], adv.returncode, gate.returncode,
                                                   gate.stdout[-200:])
+
+
+    # ------------- the 2.15.0 fresh review: each way through the gate is now a RED case -------------
+    # --- AC-MK-09: an ad-hoc --tlc-cmd run is not evidence -- only the declared runner records
+    fake = os.path.join(tmp("fake"), "fake.py")
+    write(fake, "print(" + DQ + "Model checking completed. No error has been found." + DQ + ")"
+          + NL + "print(" + DQ + "Error: Invariant Never is violated." + DQ + ")" + NL
+          + "print(" + DQ + "State 2: x" + DQ + ")" + NL)
+    d = project("adhoc", {"from_adr": "ADR-002", "mode": "gate", "tlc_cmd": tlc})
+    model(d, ("violated Safe", "violated Never"))
+    q(d, "model-check", "--run", "--tier", "ci", "--tlc-cmd", XPY + " " + fake.replace(chr(92), "/"))
+    adhoc = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    q(d, "model-check", "--run", "--tier", "ci")
+    declared = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    res["AC-MK-09"] = bool(adhoc.returncode == 1 and "not run" in adhoc.stdout
+                           and declared.returncode == 1 and "red" in declared.stdout)
+    why["AC-MK-09"] = "adhoc=%s %r declared=%s %r" % (adhoc.returncode, adhoc.stdout[-150:],
+                                                     declared.returncode, declared.stdout[-150:])
+
+    # --- AC-MK-10: editing the manifest entry (its expect) makes the recorded run stale
+    d = project("entry", {"from_adr": "ADR-002", "mode": "gate", "tlc_cmd": tlc})
+    base = model(d, ("ok", "violated Never"))
+    q(d, "model-check", "--run", "--tier", "ci")
+    before = q(d, "phase", "--repo", "api", "--require", "pr-ready").returncode
+    mpath = os.path.join(base, "models.json")
+    m = json.load(io.open(mpath, encoding="utf-8"))
+    m["configs"][1]["expect"] = "violated: SomethingElse"
+    write(mpath, json.dumps(m, indent=2) + NL)
+    after = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    res["AC-MK-10"] = bool(before == 0 and after.returncode == 1 and "stale" in after.stdout)
+    why["AC-MK-10"] = "before=%s after=%s %r" % (before, after.returncode, after.stdout[-200:])
+
+    # --- AC-MK-11: an agent-written not-needed, unconfirmed, blocks in gate mode
+    d = project("unconfirmed", {"from_adr": "ADR-002", "mode": "gate"})
+    adr(d, 2, ["model: not-needed -- trivial (origin: agent)"])
+    unc = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    adr(d, 2, ["model: not-needed -- trivial (origin: agent, confirmed: 2026-11-04)"])
+    conf = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    res["AC-MK-11"] = bool(unc.returncode == 1 and "ADR-002" in unc.stdout and conf.returncode == 0)
+    why["AC-MK-11"] = "unconfirmed=%s %r confirmed=%s" % (unc.returncode, unc.stdout[-150:],
+                                                        conf.returncode)
+
+    # --- AC-MK-12: a model_check block that cannot be read is named, fail-closed under a gate;
+    # the mode is read case-blind; a live "advisory" cannot downgrade a frozen gate
+    d = project("unparsable", {"from_adr": "ADR 002", "mode": "Gate"})
+    bad = q(d, "phase", "--repo", "api", "--require", "pr-ready")
+    doc = q(d, "doctor")
+    d2 = project("downgrade", {"from_adr": "ADR-002", "mode": "gate"})
+    adr(d2, 2, [])
+    cfg(d2, {"from_adr": "ADR-002", "mode": "advisory"})
+    down = q(d2, "phase", "--repo", "api", "--require", "pr-ready")
+    res["AC-MK-12"] = bool(bad.returncode == 1 and "model_check" in bad.stdout
+                           and "model_check" in doc.stdout and down.returncode == 1)
+    why["AC-MK-12"] = "bad=%s %r doctor=%r down=%s" % (bad.returncode, bad.stdout[-150:],
+                                                      doc.stdout[-150:], down.returncode)
+
+    # --- AC-MK-13: robustness -- the kit's own ADR template does not block, a malformed manifest
+    # never crashes, and a symlinked ledger path reads the same verdict
+    d = project("robust", {"from_adr": "ADR-002", "mode": "gate", "tlc_cmd": tlc})
+    base = model(d, ("ok", "violated Never"))
+    q(d, "model-check", "--run", "--tier", "ci")
+    write(os.path.join(d, "docs", "adr", "ADR-stack-template.md"), "# template" + NL)
+    tpl = q(d, "phase", "--repo", "api", "--require", "pr-ready").returncode
+    link = os.path.join(tmp("link"), "proj")
+    linked = None
+    try:
+        os.symlink(d, link)
+        linked = q(link, "phase", "--repo", "api", "--require", "pr-ready", "--ledger",
+                   os.path.join(link, "QA-LEDGER.json")).returncode
+    except (OSError, NotImplementedError):
+        linked = tpl                 # no symlinks here (Windows without the privilege)
+    write(os.path.join(d, "docs", "other", "models", "models.json"), "[]" + NL)
+    crash = [q(d, *a) for a in (["readiness"], ["phase", "--repo", "api"], ["model-check"])]
+    res["AC-MK-13"] = bool(tpl == 0 and linked == 0
+                           and not any("Traceback" in c.stdout for c in crash))
+    why["AC-MK-13"] = "template=%s linked=%s crash=%r" % (
+        tpl, linked, [c.stdout[-80:] for c in crash if "Traceback" in c.stdout])
+
+    # --- AC-MK-14: re-running init after the first ADR keeps the config byte-identical
+    fresh2 = tmp("reinit")
+    sh(fresh2, "git", "init", "-q")
+    subprocess.run([sys.executable, INSTALLER, "init", "--repo", fresh2], stdout=subprocess.PIPE,
+                   stderr=subprocess.STDOUT, text=True, env=ENV)
+    write(os.path.join(fresh2, "docs", "adr", "ADR-001-x.md"), "# x" + NL)
+    again = subprocess.run([sys.executable, INSTALLER, "init", "--repo", fresh2, "--json"],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=ENV)
+    try:
+        _re = json.loads(again.stdout[again.stdout.index("{"):])
+    except ValueError:
+        _re = {}
+    res["AC-MK-14"] = bool(again.returncode == 0 and _re.get("conflicts") == [])
+    why["AC-MK-14"] = "rc=%s %r" % (again.returncode, again.stdout[-200:])
 
     # --- AC-MK-07: install-uscha init writes from_adr -- ADR-001 for a repo with no ADRs, the
     # next free number for one that has them; doctor proposes it when the key is absent
@@ -22605,7 +22716,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T178" in
-  OK*) PASS=$((PASS+1)); echo "  ok   model check in the kit (AC-MK-01..08): $T178";;
+  OK*) PASS=$((PASS+1)); echo "  ok   model check in the kit (AC-MK-01..14): $T178";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T178";;
 esac
 }
@@ -22979,7 +23090,7 @@ FAMILIES = (
     # AC-MK-01 compares with the v2.14.1 engine and AC-MK-03 with the repo wrapper: without the
     # tag, or from an extracted kit, they report None = UNMEASURED
     (".mk-cases.json", "model-check-in-kit", "T178",                  # ADR-061, 2.15.0
-     _seq("AC-MK", 1, 8)),
+     _seq("AC-MK", 1, 14)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

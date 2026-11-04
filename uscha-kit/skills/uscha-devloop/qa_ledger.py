@@ -5415,7 +5415,7 @@ def _derive_phase(ledger, name, node, k, qa_order):
                            "certifica el commit)" % _head[:8])
             conv = False
     # ADR-061: a project that declared model_check.mode: gate -- a model problem blocks pr-ready
-    _mks = _mk_status(ledger, _LAST_LEDGER_PATH) if conv else None
+    _mks = _mk_status(ledger, _LAST_LEDGER_PATH)
     if _mks and _mks["mode"] == "gate" and _mks["problems"]:
         reasons.extend("model-check: " + p for p in _mks["problems"][:4])
         conv = False
@@ -5669,6 +5669,7 @@ def cmd_confirm_deferral(args):
 # the project declares `model_check.mode: gate`. A project that never declares `from_adr` sees
 # nothing here. What a green model proves: no violation OF THE MODEL at its bounds.
 MODEL_RUNS_KEY = "model_runs"
+_MK_SUITE_PATTERN = [None]    # set per call: the regex (with {id}) a replayed id must match
 import shlex as _mk_shlex
 import time as _mk_time
 
@@ -5761,6 +5762,8 @@ def _mk_check_manifest(root, path, acceptance, smoke, findings, advisories):
     """Findings for one manifest; returns the manifest (or None)."""
     m, err = _mk_load_manifest(path)
     where = _mk_rel(root, path)
+    if m is not None and not isinstance(m, dict):
+        m, err = None, "not a JSON object"
     if m is None:
         findings.append("%s: unreadable manifest (%s)" % (where, err))
         return None
@@ -5814,7 +5817,8 @@ def _mk_check_manifest(root, path, acceptance, smoke, findings, advisories):
             # --suite): the id must appear there QUOTED (as res["ID"] does) -- a comment or prose
             # mentioning it is not a measurement (2.13.0 review)
             if smoke is not None and not re.search(
-                    r"[\x22\x27]" + re.escape(ac) + r"[\x22\x27]", smoke):
+                    (_MK_SUITE_PATTERN[0] or r"[\x22\x27]{id}[\x22\x27]").replace(
+                        "{id}", re.escape(ac)), smoke):
                 findings.append("%s: replays %s, which the smoke suite does not measure"
                                 % (tag, ac))
         if tier == "deep" and mod_path and os.path.isfile(mod_path):
@@ -5854,25 +5858,47 @@ def _mk_trace_head(output, n=15):
 
 
 
-def _mk_config(ledger_path=None):
-    """The project's `model_check` block: the LIVE uscha.config.json wins, else the frozen copy."""
+def _mk_blocks(ledger_path=None):
+    """(live block, frozen block): `model_check` in the LIVE uscha.config.json and in the ledger's
+    frozen config, each a dict, None (absent) or the string "unreadable"."""
+    def block(obj):
+        if not isinstance(obj, dict) or "model_check" not in obj:
+            return None
+        return obj["model_check"] if isinstance(obj["model_check"], dict) else "unreadable"
     live = _live_project_config(QA_LIVE_CONFIG, ledger_path)
+    lb = fb = None
     if live is not None:
         try:
             with open(live, encoding="utf-8") as fh:
-                mc = (json.load(fh) or {}).get("model_check")
-            if isinstance(mc, dict):
-                return mc
+                lb = block(json.load(fh))
         except (OSError, ValueError):
-            return None
+            lb = None
     if ledger_path and os.path.isfile(ledger_path):
         try:
             with open(ledger_path, encoding="utf-8") as fh:
-                mc = ((json.load(fh) or {}).get("config") or {}).get("model_check")
-            return mc if isinstance(mc, dict) else None
+                fb = block((json.load(fh) or {}).get("config"))
         except (OSError, ValueError):
-            return None
-    return None
+            fb = None
+    return lb, fb
+
+
+def _mk_config(ledger_path=None):
+    """The effective `model_check` block: the live one's keys win, the frozen copy fills the rest
+    -- except `mode`, where the STRICTER wins: a live "advisory" cannot downgrade a frozen gate
+    (2.15.0 fresh review). None when neither declares one."""
+    lb, fb = _mk_blocks(ledger_path)
+    if lb is None and fb is None:
+        return None
+    out = {}
+    for b in (fb, lb):
+        if isinstance(b, dict):
+            out.update(b)
+    modes = [str(b.get("mode") or "").strip().lower() for b in (lb, fb) if isinstance(b, dict)]
+    if "gate" in modes:
+        out["mode"] = "gate"
+    if "unreadable" in (lb, fb):
+        out["__unreadable__"] = True
+    return out
 
 
 def _mk_from_number(value):
@@ -5889,10 +5915,22 @@ def _mk_adr_numbers(root):
     return sorted(out)
 
 
-def _mk_scan(root, from_n, suite=None, acceptance_file="ACCEPTANCE.md"):
+def _mk_unconfirmed_agent(value):
+    """An agent-written `not-needed` the human has not confirmed (ADR-044's grammar)."""
+    m = re.search(r"\(origin:\s*agent\b([^)]*)\)", value or "", re.I)
+    if not m:
+        return False
+    c = re.search(r"confirmed:\s*(\d{4}-\d{2}-\d{2})", m.group(1))
+    return not (c and _lc_valid_date(c.group(1)))
+
+
+def _mk_scan(root, from_n, suite=None, acceptance_file="ACCEPTANCE.md", strict_names=False,
+             suite_pattern=None, unconfirmed=None):
     """ADR-059's rules from ADR `from_n` on: (findings, advisories, checked manifests, the
-    required (adr, manifest path) pairs, ADRs read)."""
+    required (adr, manifest path) pairs, ADRs read). `unconfirmed`, when a list, collects the
+    ADRs whose agent-written `not-needed` awaits a human."""
     findings, advisories = [], []
+    _MK_SUITE_PATTERN[0] = suite_pattern
     acc_path = os.path.join(root, acceptance_file)
     acceptance = open(acc_path, encoding="utf-8").read() if os.path.isfile(acc_path) else ""
     smoke = None
@@ -5911,8 +5949,12 @@ def _mk_scan(root, from_n, suite=None, acceptance_file="ACCEPTANCE.md"):
             continue
         m = _MK_ADR_RX.match(name)
         if not m:
-            findings.append("%s: not named ADR-NNN-<slug>.md -- the rule cannot tell which ADR "
-                            "it is (rename it)" % _mk_rel(root, path))
+            # a template (the kit ships docs/adr/ADR-stack-template.md) or another naming scheme
+            # is not an ADR this rule can number: named only where the project asks for strict
+            # names (this repo's wrapper), never a block elsewhere (2.15.0 fresh review)
+            if strict_names and "template" not in name.lower():
+                findings.append("%s: not named ADR-NNN-<slug>.md -- the rule cannot tell which "
+                                "ADR it is (rename it)" % _mk_rel(root, path))
             continue
         if int(m.group(1)) < from_n:
             continue
@@ -5954,23 +5996,47 @@ def _mk_scan(root, from_n, suite=None, acceptance_file="ACCEPTANCE.md"):
             reason = re.sub(r"\(origin:[^)]*\)", "", value[len("not-needed"):])
             if not re.search(r"[A-Za-z0-9]", reason):
                 findings.append("%s: `model: not-needed` without a reason" % _mk_rel(root, path))
+            elif unconfirmed is not None and _mk_unconfirmed_agent(value):
+                unconfirmed.append("%s: an agent-written `model: not-needed` awaits human "
+                                   "confirmation" % adr)
         else:
             findings.append("%s: `model:` is %r -- expected required or not-needed"
                             % (_mk_rel(root, path), value))
     return findings, advisories, checked, required, n_adr
 
 
-def _mk_runs_status(root, ledger, required, checked):
+def _mk_entry_sha(c):
+    return hashlib.sha256(json.dumps(c, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+
+
+def _mk_valid_run(r, mc):
+    """A recorded run is evidence only when it came from the project's DECLARED runner: the
+    pinned jar (its sha256 is the pin now), or the declared `model_check.tlc_cmd` (the same
+    command now). An ad-hoc --tlc-cmd is never recorded; an old record of another runner is not
+    evidence (2.15.0 fresh review: a fake TLC passed the gate)."""
+    pin = (mc or {}).get("jar_sha256") or _MK_TLC_SHA256
+    if r.get("runner") == "pinned-jar":
+        return r.get("jar_sha256") == pin
+    if r.get("runner") == "declared-cmd":
+        return bool((mc or {}).get("tlc_cmd")) and r.get("cmd") == (mc or {}).get("tlc_cmd")
+    return False
+
+
+def _mk_runs_status(root, ledger, required, checked, mc=None):
     """For every `ci` config of every required manifest: the latest recorded run, judged now --
-    'not run', 'stale' (its module or .cfg changed since), 'red', or 'ok'."""
-    runs = ledger.get(MODEL_RUNS_KEY) or []
+    'not run', 'stale' (its module, .cfg or manifest entry changed since), 'red', or 'ok'."""
+    runs = [r for r in ledger.get(MODEL_RUNS_KEY) or [] if isinstance(r, dict)
+            and _mk_valid_run(r, mc)]
     out = []
     for adr, full in required:
         m = checked.get(full) or {}
+        if not isinstance(m, dict):
+            continue
         base = os.path.dirname(full)
         mod = os.path.join(base, m.get("module") or "")
         for c in m.get("configs") or []:
-            if c.get("tier") != "ci" or not isinstance(c.get("cfg"), str):
+            if not isinstance(c, dict) or c.get("tier") != "ci" or not isinstance(c.get("cfg"),
+                                                                                   str):
                 continue
             key = (_mk_rel(root, full), c["cfg"])
             last = None
@@ -5982,7 +6048,8 @@ def _mk_runs_status(root, ledger, required, checked):
                 out.append(("not run", tag))
             elif not (os.path.isfile(mod) and os.path.isfile(os.path.join(base, c["cfg"]))) or \
                     last.get("inputs_sha256") != _mk_inputs_sha256(mod, os.path.join(base,
-                                                                                    c["cfg"])):
+                                                                                    c["cfg"])) \
+                    or last.get("entry_sha256") != _mk_entry_sha(c):
                 out.append(("stale", tag))
             elif not last.get("ok"):
                 out.append(("red", tag))
@@ -5991,20 +6058,43 @@ def _mk_runs_status(root, ledger, required, checked):
     return out
 
 
+def _mk_block_problems(mc):
+    """A declared block the engine cannot read is NAMED, never silently off."""
+    out = []
+    if mc.get("__unreadable__"):
+        out.append("model_check is not a JSON object in uscha.config.json")
+    if _mk_from_number(mc.get("from_adr")) is None:
+        out.append("model_check.from_adr %r cannot be read (expected ADR-NNN)"
+                   % (mc.get("from_adr"),))
+    if str(mc.get("mode") or "advisory").strip().lower() not in ("advisory", "gate"):
+        out.append("model_check.mode %r is neither advisory nor gate" % (mc.get("mode"),))
+    return out
+
+
 def _mk_status(ledger, ledger_path):
-    """What readiness and phase read: None when the project never declared `from_adr`."""
+    """What readiness and phase read: None when the project never declared a model_check block."""
     mc = _mk_config(ledger_path)
-    from_n = _mk_from_number((mc or {}).get("from_adr"))
-    if from_n is None:
+    if mc is None:
         return None
-    root = os.path.dirname(os.path.abspath(ledger_path)) if ledger_path else os.getcwd()
+    mode = "gate" if str(mc.get("mode") or "").strip().lower() == "gate" else "advisory"
+    bad = _mk_block_problems(mc)
+    from_n = _mk_from_number(mc.get("from_adr"))
+    if from_n is None:
+        # fail-closed under a gate, named either way (2.15.0 fresh review)
+        return {"mode": mode, "from_adr": None, "findings": bad, "advisories": [], "runs": [],
+                "problems": bad, "adrs_read": 0}
+    root = os.path.realpath(os.path.dirname(os.path.abspath(ledger_path))
+                            if ledger_path else os.getcwd())
     acc = (ledger.get("config") or {}).get("defaults", {}).get("acceptance_file") or "ACCEPTANCE.md"
-    findings, advisories, checked, required, n_adr = _mk_scan(root, from_n, mc.get("suite"), acc)
-    runs = _mk_runs_status(root, ledger, required, checked)
-    problems = list(findings) + ["%s: %s" % (tag, st) for st, tag in runs if st != "ok"]
-    return {"mode": "gate" if mc.get("mode") == "gate" else "advisory", "from_adr": from_n,
-            "findings": findings, "advisories": advisories, "runs": runs,
-            "problems": problems, "adrs_read": n_adr}
+    unconfirmed = []
+    findings, advisories, checked, required, n_adr = _mk_scan(
+        root, from_n, mc.get("suite"), acc, suite_pattern=mc.get("suite_pattern"),
+        unconfirmed=unconfirmed)
+    runs = _mk_runs_status(root, ledger, required, checked, mc)
+    problems = bad + list(findings) + unconfirmed + \
+        ["%s: %s" % (tag, st) for st, tag in runs if st != "ok"]
+    return {"mode": mode, "from_adr": from_n, "findings": findings, "advisories": advisories,
+            "runs": runs, "problems": problems, "adrs_read": n_adr}
 
 
 def cmd_model_check(args):
@@ -6013,14 +6103,27 @@ def cmd_model_check(args):
                                           if args.ledger and os.path.isfile(args.ledger)
                                           else os.getcwd()))
     mc = _mk_config(args.ledger) or {}
+    if args.from_adr is None and mc and _mk_block_problems(mc):
+        for b in _mk_block_problems(mc):
+            print("MODEL-CHECK: " + b)
+        sys.exit(1)
     from_n = _mk_from_number(args.from_adr or mc.get("from_adr"))
     if from_n is None:
         print("MODEL-CHECK: no model_check.from_adr declared (uscha.config.json) and no "
               "--from-adr -- nothing to check. Declare the ADR the rule starts at (ADR-061).")
         return 0
+    acc = "ACCEPTANCE.md"
+    if args.ledger and os.path.isfile(args.ledger):
+        try:
+            with open(args.ledger, encoding="utf-8") as fh:
+                acc = ((json.load(fh).get("config") or {}).get("defaults") or {}).get(
+                    "acceptance_file") or acc
+        except (OSError, ValueError, AttributeError):
+            pass
     if not args.run:
         findings, advisories, checked, required, n_adr = _mk_scan(
-            root, from_n, args.suite or mc.get("suite"))
+            root, from_n, args.suite or mc.get("suite"), acc, strict_names=args.strict_names,
+            suite_pattern=args.suite_pattern or mc.get("suite_pattern"))
         for a in advisories:
             print("MODEL-CHECK advisory: " + a)
         for f in findings:
@@ -6028,9 +6131,19 @@ def cmd_model_check(args):
         print("MODEL-CHECK: %d manifest(s), %d ADR(s) >= %03d checked, %d finding(s), %d advisory"
               % (len(checked), n_adr, from_n, len(findings), len(advisories)))
         sys.exit(1 if findings else 0)
-    # --run
+    # --run: the DECLARED runner records (model_check.tlc_cmd, or java + the pinned jar); an ad-hoc
+    # --tlc-cmd runs and prints but is never recorded -- it is not evidence (2.15.0 fresh review)
+    runner, record_extra = None, {}
     if args.tlc_cmd:
         base_cmd = _mk_shlex.split(args.tlc_cmd)
+        if args.tlc_cmd == mc.get("tlc_cmd"):
+            runner, record_extra = "declared-cmd", {"cmd": args.tlc_cmd}
+        else:
+            print("MODEL-CHECK: an ad-hoc --tlc-cmd runs but is NOT recorded -- declare the "
+                  "runner in model_check.tlc_cmd, or use java + the pinned jar")
+    elif mc.get("tlc_cmd") and not args.jar:
+        base_cmd = _mk_shlex.split(mc["tlc_cmd"])
+        runner, record_extra = "declared-cmd", {"cmd": mc["tlc_cmd"]}
     else:
         jar = args.jar or mc.get("jar")
         pin = mc.get("jar_sha256") or _MK_TLC_SHA256
@@ -6050,18 +6163,22 @@ def cmd_model_check(args):
             sys.exit(2)
         base_cmd = [java, "-XX:+UseParallelGC", "-cp", os.path.realpath(jar), "tlc2.TLC",
                     "-workers", "auto"]
+        runner, record_extra = "pinned-jar", {"jar_sha256": got}
     ledger = None
-    if args.ledger and os.path.isfile(args.ledger) and not args.no_record:
+    if args.ledger and os.path.isfile(args.ledger) and not args.no_record and runner:
         ledger = _load(args.ledger)
-    red, ran, records = [], 0, []
+    red, ran, records, unmeasured = [], 0, [], False
     for path in _mk_manifests(root):
         m, err = _mk_load_manifest(path)
+        if m is not None and not isinstance(m, dict):
+            m, err = None, "not a JSON object"
         if m is None:
             red.append("%s: unreadable manifest (%s)" % (_mk_rel(root, path), err))
             continue
         base = os.path.dirname(path)
         for c in m.get("configs") or []:
-            if c.get("tier") != args.tier:
+            if not isinstance(c, dict) or c.get("tier") != args.tier \
+                    or not isinstance(c.get("cfg"), str):
                 continue
             ran += 1
             tag = "%s: %s" % (_mk_rel(root, path), c.get("cfg"))
@@ -6081,7 +6198,8 @@ def cmd_model_check(args):
                     out = out.decode("utf-8", "replace")
                 timed_out = True
             except OSError as exc:
-                red.append("%s: TLC could not start (%s)" % (tag, exc))
+                red.append("%s: TLC could not start (%s) -- UNMEASURED" % (tag, exc))
+                unmeasured = True
                 continue
             finally:
                 shutil.rmtree(meta, ignore_errors=True)
@@ -6098,12 +6216,13 @@ def cmd_model_check(args):
                            "only that Init exists)")
             ok = got == want and not (args.tier == "ci" and elapsed > args.limit)
             mod = os.path.join(base, m.get("module") or "")
-            records.append({"at": _now(), "manifest": _mk_rel(root, path), "cfg": c["cfg"],
+            records.append(dict({"at": _now(), "manifest": _mk_rel(root, path), "cfg": c["cfg"],
                             "tier": args.tier, "expect": want, "verdict": got, "ok": ok,
-                            "elapsed_s": round(elapsed, 1),
-                            "tlc": "stub" if args.tlc_cmd else _MK_TLC_VERSION,
+                            "elapsed_s": round(elapsed, 1), "runner": runner,
+                            "entry_sha256": _mk_entry_sha(c),
+                            "tlc": _MK_TLC_VERSION if runner == "pinned-jar" else "declared",
                             "inputs_sha256": _mk_inputs_sha256(mod, os.path.join(base, c["cfg"]))
-                            if os.path.isfile(mod) else None})
+                            if os.path.isfile(mod) else None}, **record_extra))
             line = "%s: %s in %.1fs" % (tag, got, elapsed)
             if timed_out:
                 red.append("%s: past the %ds timeout -- tighten the bounds or mark it deep"
@@ -6126,6 +6245,8 @@ def cmd_model_check(args):
         print("MODEL-CHECK: nothing ran -- no %s config in any manifest is not a pass"
               % args.tier)
         sys.exit(1)
+    if unmeasured:
+        sys.exit(2)
     sys.exit(1 if red else 0)
 
 
@@ -13898,9 +14019,10 @@ def cmd_readiness(args):
     # ADR-061: the models, only for a project that declared model_check.from_adr
     _mks = _mk_status(ledger, args.ledger)
     if _mks and (_mks["problems"] or _mks["advisories"]):
-        print(f"--- models ({_mks['mode']}, from ADR-{_mks['from_adr']:03d}): "
-              f"{len(_mks['problems'])} problem(s)"
-              + (" -- they BLOCK pr-ready" if _mks["mode"] == "gate" else " -- advisory"))
+        _frm = ("from ADR-%03d" % _mks["from_adr"]) if _mks["from_adr"] else "no boundary"
+        print(f"--- models ({_mks['mode']}, {_frm}): {len(_mks['problems'])} problem(s)"
+              + ((" -- they BLOCK pr-ready" if _mks["mode"] == "gate" else " -- advisory")
+                 if _mks["problems"] else ""))
         for p_ in _mks["problems"][:6]:
             print(f"  ! {p_}")
         for a_ in _mks["advisories"][:3]:
@@ -16912,7 +17034,9 @@ def cmd_doctor(args):
         _mkc = _mk_config(getattr(args, "ledger", None))
     except Exception:
         _mkc = None
-    if not (_mkc or {}).get("from_adr"):
+    if _mkc and _mk_block_problems(_mkc):
+        warn("model_check cannot be read (ADR-061)", "; ".join(_mk_block_problems(_mkc)))
+    elif not (_mkc or {}).get("from_adr"):
         _nums = _mk_adr_numbers(os.getcwd())
         if _nums:
             warn("model_check.from_adr not declared (ADR-061)",
@@ -17077,6 +17201,10 @@ def build_parser():
     pmk.add_argument("--tlc-cmd", default=None)
     pmk.add_argument("--timeout", type=int, default=120)
     pmk.add_argument("--limit", type=int, default=60)
+    pmk.add_argument("--strict-names", action="store_true",
+                     help="refuse a file in docs/adr not named ADR-NNN-<slug>.md")
+    pmk.add_argument("--suite-pattern", default=None,
+                     help="regex a replayed id must match in --suite; {id} is the escaped id")
     pmk.add_argument("--no-record", action="store_true",
                      help="run without recording in the ledger (the repo's CI wrapper)")
     pmk.set_defaults(func=cmd_model_check)
