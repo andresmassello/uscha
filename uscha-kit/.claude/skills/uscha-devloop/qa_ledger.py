@@ -15831,6 +15831,47 @@ _AO_ID_RX = re.compile(r"^[\s>*+-]*(?:\[[ xX]\]\s*)?(?:\d+[.)]\s*)?[*_]*"
                        r"(?P<id>[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)")
 _AO_INLINE_CODE_RX = re.compile(r"`[^`]*`")
 _AO_HTML_COMMENT_RX = re.compile(r"<!--.*?-->")
+# A line that starts a new BLOCK ends the paragraph an inline code span lives in (CommonMark: block
+# structure wins over inline): a list item, a table row, a heading or a thematic break. A blank line and
+# a fence line (even one that never closes) end it too.
+_AO_BLOCK_START_RX = re.compile(r"^\s*(?:[-*+]|\d{1,9}[.)])\s|^\s*\|")
+# a heading is one line and a thematic break closes the paragraph above it: each is a block of its own
+_AO_SINGLE_LINE_RX = re.compile(r"^\s{0,3}#{1,6}(?:\s|$)|^\s{0,3}([-*_])(?:\s*\1){2,}\s*$")
+
+
+def _ao_blank_code_spans(lines, fenced):
+    """The lines with every inline code span removed, line numbering kept. A span may open on one
+    line and close on a later one WITHIN a paragraph (a record shape quoted across a wrap is
+    documentation, not a decision); it never crosses a blank line, a fence line, a heading, a thematic
+    break or a block start. A span
+    that crosses lines leaves one newline per line it crossed, so the text before it stays on its
+    opening line, the text after it on its closing line, and the line of a real hit is exact."""
+    out, seg = list(lines), []
+
+    def flush():
+        if seg:
+            text = "\n".join(lines[j] for j in seg)
+            text = _AO_INLINE_CODE_RX.sub(lambda m: "\n" * m.group().count("\n"), text)
+            for j, piece in zip(seg, text.split("\n")):
+                out[j] = piece
+            del seg[:]
+
+    for idx, raw in enumerate(lines):
+        if fenced[idx] or not raw.strip() or raw.strip().startswith(("```", "~~~")):
+            flush()
+        elif _AO_SINGLE_LINE_RX.match(raw):
+            flush()
+            seg.append(idx)
+            flush()
+        elif seg and _AO_BLOCK_START_RX.match(raw):
+            flush()
+            seg.append(idx)
+        else:
+            seg.append(idx)
+    flush()
+    return out
+
+
 
 
 def _agent_origin_scan_text(text, label):
@@ -15855,10 +15896,11 @@ def _agent_origin_scan_text(text, label):
         for idx in range(opener, len(lines)):
             fenced[idx] = False
     unconfirmed, confirmed = [], 0
-    for i, raw in enumerate(lines, 1):
+    stripped = _ao_blank_code_spans(lines, fenced)
+    for i in range(1, len(lines) + 1):
         if fenced[i - 1]:
             continue
-        line = _AO_HTML_COMMENT_RX.sub("", _AO_INLINE_CODE_RX.sub("", raw))
+        line = _AO_HTML_COMMENT_RX.sub("", stripped[i - 1])
         idm = _AO_ID_RX.match(line)
         item = idm.group("id") if idm else "line %d" % i
         # every marker on the line, not the first: a confirmation appended after the

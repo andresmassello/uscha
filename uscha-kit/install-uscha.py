@@ -1437,6 +1437,33 @@ def next_steps(target):
                     "Learn the method: https://uscha.dev"]
 
 
+def warn_reason(status):
+    """WHY a target is WARN, from what target_status already collected (text output only; the JSON
+    carries the same data and is unchanged). "not installed" only when there is no readable marker
+    AND no kit skill on disk; a marker that is unreadable or names another target reads as such; a
+    marker naming another version gives the two versions; then the failing pieces, in check order."""
+    installed, source = status.get("installed_version"), status.get("source_version")
+    checks = status.get("checks", {})
+    present = checks.get("skills_present", [])
+    if installed is None and not present:
+        return "not installed"
+    parts = []
+    if installed is None or (installed == source and not checks.get("marker")):
+        parts.append("install marker unreadable or mismatched")
+    elif installed != source:
+        try:
+            order = tuple(int(x) for x in installed.split(".")) < tuple(int(x) for x in str(source).split("."))
+        except (ValueError, AttributeError):
+            order = None
+        parts.append("installed %s %s kit %s" % (installed, {True: "<", False: ">", None: "!="}[order], source))
+    missing = ["skill " + skill for skill in SKILLS if skill not in present]
+    missing += [key for key, value in checks.items()
+                if key not in ("skills_present", "marker", "source_version_match") and value is not True]
+    if missing:
+        parts.append("missing: " + ", ".join(missing))
+    return "; ".join(parts) or "install marker unreadable or mismatched"
+
+
 def emit(data, as_json):
     if as_json:
         print(json.dumps(data, indent=2, ensure_ascii=False)); return
@@ -1451,7 +1478,9 @@ def emit(data, as_json):
     elif ("targets" in data and isinstance(data["targets"], dict)
             and all(isinstance(v, dict) and "healthy" in v for v in data["targets"].values())):
         print("Uscha %s" % data.get("source_version"))
-        for name, status in data["targets"].items(): print("  %s %s" % ("OK" if status["healthy"] else "WARN", name))
+        for name, status in data["targets"].items():
+            why = "" if status["healthy"] else warn_reason(status)
+            print("  %s %s%s" % ("OK" if status["healthy"] else "WARN", name, " -- " + why if why else ""))
     elif "operations" in data:
         print("Uscha %s: %s (%s operations)" % (data.get("source_version", source_version()), data["status"], len(data["operations"])))
         for operation in data["operations"][:20]: print("  - {action}: {path}".format(**operation))

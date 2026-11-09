@@ -13846,6 +13846,88 @@ def measure():
     why["AC-OA-07"] = "; ".join(p[:3]) or ("unclosed fence hides nothing, appended confirmation "
                                            "read, HTML comment skipped")
 
+    # --- AC-OA-08..10 (2.15.1): an inline code span may cross a line break, never a paragraph --
+    # ADR-058 documents a record shape in a span that opens on one line and closes on the next;
+    # the per-line scan read its second line as a decision. The tick is BUILT (chr(96)): a literal
+    # one inside this heredoc is a bash 3.2 trap.
+    BT = chr(96)
+
+    def unconfirmed_of(lines):
+        d = project(marked=False, handoff=False)
+        write(os.path.join(d, "ACCEPTANCE.md"), chr(10).join(lines))
+        ao = origin_json(spec_check(d, ["--json"]).stdout) or {}
+        return [(x.get("id"), x.get("line")) for x in ao.get("unconfirmed") or []]
+
+    got = unconfirmed_of([
+        "# ACCEPTANCE", "",
+        "- [ ] AC-40 - when x then y. Shape: " + BT + "pr-opened {repo, at,",
+        "  note, origin: agent}" + BT + " is documented here.",
+        "- [ ] AC-41 - when x then y. (origin: agent)", ""])
+    p = []
+    if got != [("AC-41", 5)]:
+        p.append("unconfirmed %r, expected only AC-41 at line 5: the multi-line span must hide "
+                 "its marker and the real claim must keep its line" % (got,))
+    res["AC-OA-08"] = not p
+    why["AC-OA-08"] = "; ".join(p[:3]) or "multi-line span hides its marker, the next claim keeps its line"
+
+    got = unconfirmed_of([
+        "# ACCEPTANCE", "",
+        "- [ ] AC-50 - see " + BT + "x {a,",
+        "  origin: agent}" + BT + " then a real claim. (origin: agent)",
+        "- [ ] AC-51 - when x then y. (origin: agent)", ""])
+    p = []
+    if got != [("line 4", 4), ("AC-51", 5)]:
+        p.append("unconfirmed %r, expected the claim after the closing tick (line 4) and AC-51 "
+                 "(line 5)" % (got,))
+    res["AC-OA-09"] = not p
+    why["AC-OA-09"] = "; ".join(p[:3]) or "a claim after the closing backtick is counted on its own line"
+
+    got = unconfirmed_of([
+        "# ACCEPTANCE", "",
+        "- [ ] AC-60 - an unmatched " + BT + "tick opens here",
+        "",
+        "- [ ] AC-61 - when x then y. (origin: agent)",
+        "",
+        "- [ ] AC-62 - another unmatched " + BT + "tick",
+        "- [ ] AC-63 - when x then y. (origin: agent)",
+        "- [ ] AC-64 - the closer " + BT + " sits in a later item", ""])
+    p = []
+    if got != [("AC-61", 5), ("AC-63", 8)]:
+        p.append("unconfirmed %r, expected AC-61 (line 5) and AC-63 (line 8): a span must not "
+                 "cross a blank line or a new list item" % (got,))
+    res["AC-OA-10"] = not p
+    why["AC-OA-10"] = "; ".join(p[:3]) or "a span stops at a blank line and at a new list item"
+
+    # AC-OA-11: an unclosed bare fence opener is not prose that can pair with a later tick
+    got = unconfirmed_of([
+        "# ACCEPTANCE", "",
+        BT * 3,
+        "AC-1 - x (origin: agent) " + BT + "code" + BT, ""])
+    p = []
+    if got != [("AC-1", 4)]:
+        p.append("unconfirmed %r, expected AC-1 at line 4: the fence opener must not pair with the "
+                 "tick after it" % (got,))
+    res["AC-OA-11"] = not p
+    why["AC-OA-11"] = "; ".join(p[:3]) or "an unclosed fence opener hides nothing"
+
+    # AC-OA-12: a heading or a thematic break ends the paragraph a span lives in
+    got_h = unconfirmed_of([
+        "# ACCEPTANCE", "",
+        "# H " + BT,
+        "AC-2 - x (origin: agent) " + BT + "z" + BT, ""])
+    got_t = unconfirmed_of([
+        "# ACCEPTANCE", "",
+        "AC-1 " + BT + "a",
+        "---",
+        "AC-2 - x (origin: agent) " + BT + "b" + BT, ""])
+    p = []
+    if got_h != [("AC-2", 4)]:
+        p.append("after a heading: %r, expected AC-2 at line 4" % (got_h,))
+    if got_t != [("AC-2", 5)]:
+        p.append("after a thematic break: %r, expected AC-2 at line 5" % (got_t,))
+    res["AC-OA-12"] = not p
+    why["AC-OA-12"] = "; ".join(p[:3]) or "a heading and a thematic break end the span"
+
 
 try:
     measure()
@@ -13860,7 +13942,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T160" in
-  OK*) PASS=$((PASS+1)); echo "  ok   agent-origin markers (AC-OA-01..07): $T160";;
+  OK*) PASS=$((PASS+1)); echo "  ok   agent-origin markers (AC-OA-01..12): $T160";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T160";;
 esac
 }
@@ -18795,6 +18877,92 @@ def measure():
         res["AC-IX-10"] = not p10
         why["AC-IX-10"] = "; ".join(p10[:3]) or "%s had no extras report" % PREV_TAG
 
+    # --- AC-IX-11..14 (2.15.1): the doctor TEXT says WHY a target is WARN. The reason is built
+    #     only from what target_status already collected; OK lines and the JSON stay as they were.
+    kit_version = read(os.path.join(kit, "VERSION")).strip().split()[-1]
+    # (a) AC-IX-11: an outdated install names both versions
+    p11 = []
+    h11 = tmp("uscha-ix-home-")
+    if install(h11).returncode != 0:
+        p11.append("setup install failed")
+    mk = os.path.join(h11, ".claude", "uscha-install.json")
+    mdata = json.loads(read(mk))
+    mdata["version"] = "2.0.0"
+    write(mk, json.dumps(mdata))
+    d11 = inst(["doctor", "--target", "claude", "--home", h11], h11)
+    want11 = "  WARN claude -- installed 2.0.0 < kit %s" % kit_version
+    if want11 not in d11.stdout.splitlines():
+        p11.append("outdated line %r absent from %r" % (want11, d11.stdout[:200]))
+    if d11.returncode != 1:
+        p11.append("outdated doctor exit %s, expected 1" % d11.returncode)
+    res["AC-IX-11"] = not p11
+    why["AC-IX-11"] = "; ".join(p11[:3]) or "outdated install reads installed X < kit Y"
+    # (b) AC-IX-12: a current install with a piece missing names the piece
+    p12 = []
+    h12 = tmp("uscha-ix-home-")
+    if install(h12).returncode != 0:
+        p12.append("setup install failed")
+    os.remove(os.path.join(h12, ".claude", "hooks", "block-approved-writes.py"))
+    shutil.rmtree(os.path.join(h12, ".claude", "skills", "uscha-status"))
+    d12 = inst(["doctor", "--target", "claude", "--home", h12], h12)
+    want12 = "  WARN claude -- missing: skill uscha-status, hook_file"
+    if want12 not in d12.stdout.splitlines():
+        p12.append("missing line %r absent from %r" % (want12, d12.stdout[:200]))
+    d12b = inst(["doctor", "--target", "claude", "--home", h12], h12)
+    if d12b.stdout.splitlines()[:3] != d12.stdout.splitlines()[:3]:
+        p12.append("the reason is not deterministic across runs")
+    res["AC-IX-12"] = not p12
+    why["AC-IX-12"] = "; ".join(p12[:3]) or "missing pieces are named, in a fixed order"
+    # (c) AC-IX-13: a never-installed target reads not installed, not a list of failing checks
+    p13 = []
+    h13 = tmp("uscha-ix-home-")
+    for tgt in ("claude", "codex", "cursor"):
+        d13 = inst(["doctor", "--target", tgt, "--home", h13], h13)
+        want13 = "  WARN %s -- not installed" % tgt
+        if want13 not in d13.stdout.splitlines():
+            p13.append("%s: %r absent from %r" % (tgt, want13, d13.stdout[:200]))
+        if "missing:" in d13.stdout:
+            p13.append("%s: a never-installed target lists failing checks" % tgt)
+    res["AC-IX-13"] = not p13
+    why["AC-IX-13"] = "; ".join(p13[:3]) or "never-installed targets read not installed"
+    # (d) AC-IX-14: a healthy target keeps its bare OK line, exit 0, and the JSON gains no key
+    p14 = []
+    h14 = tmp("uscha-ix-home-")
+    if install(h14).returncode != 0:
+        p14.append("setup install failed")
+    d14 = inst(["doctor", "--target", "claude", "--home", h14], h14)
+    if "  OK claude" not in d14.stdout.splitlines():
+        p14.append("OK line changed: %r" % d14.stdout[:200])
+    if d14.returncode != 0:
+        p14.append("healthy doctor exit %s" % d14.returncode)
+    keys14 = set(["healthy", "installed", "install_root", "installed_version", "source_version",
+                  "version_match", "checks", "golden_guard", "pr_guard", "content_integrity"])
+    for hh in (h14, h11):
+        tj = (as_json(inst(["doctor", "--target", "claude", "--home", hh, "--json"], hh))
+              .get("targets") or {}).get("claude") or {}
+        if set(tj) != keys14:
+            p14.append("JSON target keys changed: %r" % sorted(set(tj) ^ keys14))
+    res["AC-IX-14"] = not p14
+    # (e) AC-IX-15: a marker that EXISTS but is unreadable or mismatched is not "not installed"
+    p15 = []
+    for label, mutate in (("corrupt JSON", lambda m: "{not json"),
+                          ("no version key", lambda m: json.dumps(dict((k, v) for k, v in m.items() if k != "version"))),
+                          ("wrong target", lambda m: json.dumps(dict(m, target="codex")))):
+        h15 = tmp("uscha-ix-home-")
+        if install(h15).returncode != 0:
+            p15.append("setup install failed")
+        mk15 = os.path.join(h15, ".claude", "uscha-install.json")
+        write(mk15, mutate(json.loads(read(mk15))))
+        d15 = inst(["doctor", "--target", "claude", "--home", h15], h15)
+        want15 = "  WARN claude -- install marker unreadable or mismatched"
+        if want15 not in d15.stdout.splitlines():
+            p15.append("%s: %r absent from %r" % (label, want15, d15.stdout[:160]))
+        if "not installed" in d15.stdout:
+            p15.append("%s: read as not installed" % label)
+    res["AC-IX-15"] = not p15
+    why["AC-IX-15"] = "; ".join(p15[:3]) or "a bad marker is named, not read as not installed"
+    why["AC-IX-14"] = "; ".join(p14[:3]) or "OK line, exit codes and JSON shape unchanged"
+
 
 try:
     measure()
@@ -18810,7 +18978,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T170" in
-  OK*) PASS=$((PASS+1)); echo "  ok   installer extras report (AC-IX-01..10): $T170";;
+  OK*) PASS=$((PASS+1)); echo "  ok   installer extras report + doctor WARN reasons (AC-IX-01..15): $T170";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T170";;
 esac
 }
@@ -23085,7 +23253,7 @@ FAMILIES = (
     # AC-OA-05 and AC-OA-06 run the v2.1.0 engine out of git -- without it (no git, a shallow
     # clone, an extracted kit) they report None = UNMEASURED, never a silent pass.
     (".oa-cases.json", "agent-origin", "T160",                       # ADR-044, 2.2.0
-     _seq("AC-OA", 1, 7)),
+     _seq("AC-OA", 1, 12)),
     # AC-FF-10 is the RED PROBE: it runs the v2.1.0 engine out of git -- without it (no git, a
     # shallow clone, an extracted kit) it reports None = UNMEASURED, never a silent pass.
     (".ff-cases.json", "field-fixes", "T161",                        # 2.2.0
@@ -23134,7 +23302,7 @@ FAMILIES = (
     # of git, so without git (a shallow clone, an extracted kit) it reports None = UNMEASURED,
     # never a silent pass. Every case runs under an isolated empty HOME with an empty PATH.
     (".ix-cases.json", "installer-extras", "T170",                    # ADR-052, 2.7.0
-     _seq("AC-IX", 1, 10)),
+     _seq("AC-IX", 1, 15)),
     # AC-PJ-05 is the RED PROBE (one unit's result file dropped -> the tallies diverge);
     # AC-PJ-06 is the SHIPPED PROBE -- it reads the v2.7.0 suite out of git, so without git it
     # reports None = UNMEASURED, never a silent pass. AC-PJ-02/05 need two cores to exercise the

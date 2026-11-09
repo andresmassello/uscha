@@ -1175,6 +1175,20 @@ CONTROL, the same ledger with no markers at all, rather than asserting it.
   lines after it scanned as prose (every other fence still hides its body); a confirmation
   appended after the original tag on the same line is read, so the item counts as confirmed;
   a marker inside an HTML comment is documentation and is skipped, like a fenced block.
+- [ ] AC-OA-08 - an inline code span that opens on one line and closes on the next is
+  documentation, not a decision (2.15.1): a marker inside it is NOT counted, and a real claim on
+  the line after is still counted with its own `file:line`.
+- [ ] AC-OA-09 - a real marker that follows the closing backtick of a multi-line span, on the same
+  line, IS counted, on the line it sits on.
+- [ ] AC-OA-10 - a span stops where its paragraph does: an unmatched backtick followed by a blank
+  line, or by a new list item, does not pair with a backtick further down and swallow the real
+  claim between them.
+- [ ] AC-OA-11 - an unclosed bare fence opener hides nothing: the line of three backticks that never
+  closes is read as prose, so its backticks do not pair with a tick on the next line and a real claim
+  there is still counted with its line.
+- [ ] AC-OA-12 - a heading and a thematic break (`---`, `***`, `___`) end the paragraph a span lives
+  in: an unmatched backtick on a heading line, or above a thematic break, does not pair with one
+  below it and swallow a real claim.
 
 ## Four field fixes from a live monorepo (2.2.0) - closes on green `AC-FF-nn` smoke assertions
 
@@ -1702,6 +1716,18 @@ HOME/USERPROFILE with `CLAUDE_CONFIG_DIR` dropped and PATH at an empty directory
   turns the AC-IX-01 contract red on the same empty home - proof the contract is load-bearing.
 - [ ] AC-IX-10 - SHIPPED PROBE: the v2.6.0 installer out of git prints no extras report and carries
   no `extras` key; without git this reports UNMEASURED, never a silent pass.
+- [ ] AC-IX-11 - the `doctor` text names the reason a target is WARN (2.15.1): an install whose marker
+  carries another version reads `WARN claude -- installed 2.0.0 < kit X.Y.Z`, the exit code stays 1.
+- [ ] AC-IX-12 - a current install with a piece missing names it, in a fixed order and identically
+  across runs: `WARN claude -- missing: skill uscha-status, hook_file`.
+- [ ] AC-IX-13 - a target with no readable install marker and no kit skill on disk reads `WARN <target> -- not installed` (claude, codex
+  and an Agent-Skills target alike), never a list of every failing check.
+- [ ] AC-IX-14 - nothing else moved: a healthy target keeps the bare `OK claude` line and exit 0, and
+  the `--json` target object carries exactly the keys it carried before (no `reason` field).
+- [ ] AC-IX-15 - a marker that exists but is unreadable or mismatched (corrupt JSON, no `version`
+  key, a marker naming another target) reads `WARN claude -- install marker unreadable or mismatched`,
+  never `not installed`; that phrase is reserved for a target with no readable marker and no kit skill
+  on disk.
 
 ## The parallel smoke suite is equivalent to the serial one (ADR-053) - closes on green `AC-PJ-nn` smoke assertions
 
