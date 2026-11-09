@@ -40,4 +40,4 @@ Two small instrument fixes, both found while dogfooding 2.15.0. No new subcomman
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 470 checks · 0 fail; acceptance 488/489.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="486" failures="0" errors="0" skipped="0" timestamp="2026-11-09T15:39:53.664091Z">
+<testsuite name="uscha-acceptance" tests="489" failures="0" errors="0" skipped="1" timestamp="2026-11-09T16:03:25.639196Z">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -546,6 +546,10 @@
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-OA-10_agent-origin">
   </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-11_agent-origin">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-OA-12_agent-origin">
+  </testcase>
   <testcase classname="uscha.acceptance" name="AC-FF-01_field-fixes">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-FF-02_field-fixes">
@@ -745,6 +749,8 @@
   <testcase classname="uscha.acceptance" name="AC-IX-13_installer-extras">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-IX-14_installer-extras">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-IX-15_installer-extras">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-PJ-01_parallel-suite">
   </testcase>
@@ -971,5 +977,6 @@
   <testcase classname="uscha.acceptance" name="AC-TP-03_skill-templates">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
+    <skipped message="shallow clone or no git: ancestry unmeasurable"/>
   </testcase>
 </testsuite>
