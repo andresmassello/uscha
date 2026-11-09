@@ -109,3 +109,10 @@ java -cp tla2tools.jar tlc2.TLC -config shipped-2.11.0.cfg -workers 2 GatedDebt.
 
 The chart comes from the `statechart` skill of `cursor/plugins` (pstack, MIT), run with
 `TLA2TOOLS=<jar> JAVA=java statechart GatedDebt.tla --config as-specified.cfg --view view.mjs`.
+It was a manual exploration and nothing checks it: `models.json` does not reference `view.mjs`
+or `chart-as-specified.mmd`. The view labels only the actions on the as-specified path. Run
+against `ci-vacuity.cfg` it stops with exit 2, because `LogUnwitnessedGated` has no label. Above
+500 TLC states the skill draws only the paths to broken rules, so a passing config such as
+`ci-shipped.cfg` (2,936,010 states) gets no chart. The skill needs a POSIX shell (`/bin/sh`), so
+on Windows it runs under WSL. Measured on 2026-11-09 with TLC 1.7.4 and `cursor/plugins` at
+`6b0300214a09fd6029cfb7077043125758cd1fd2`.
