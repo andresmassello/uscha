@@ -463,7 +463,7 @@ run; acceptance, the workflow state and the seal honor only a report born of a
 recorded, still-current run. Since 2.11.0 a QA review is witnessed when it
 starts: the ledger records the tree the review began on, convergence requires
 each tool's latest review to have seen the source now on disk, and a gated
-finding closes only through measured movement. The design of the latter was
+finding closes only through measured movement or, since 2.14.0, a human-confirmed deferral of its id. The design of the latter was
 model-checked (TLA+/TLC, bounded to three code versions, one tool, one repo),
 and the check broke the first draft. Provenance proves that a command ran at a
 tree and wrote bytes, not that it tests anything; the engine does not run the
@@ -472,7 +472,19 @@ reviewer and cannot prove a review took place.</p>
 <p><b class="rh">Declared human acts.</b> Since 2.12.0 the commands that lift the escalated
 phase require a declared name and reason, record them, and refuse when the
 process carries a known agent-shell marker; re-initialising a ledger over an
-open human gate is refused too (ADR-058).</p>
+open human gate is refused too (ADR-058). Since 2.14.0 confirming the deferral of a gated finding is one of these acts: the finding is deferred by its id, and only a recorded confirmation closes its debt (ADR-060).</p>
+
+<p><b class="rh">Model-checked designs.</b> Since 2.15.0 (ADR-061) a project may name an
+ADR from which every design records whether it needs a TLA+ model. The engine
+validates those declarations and each model's manifest &mdash; a vacuity
+configuration that must break, and the red test case each counterexample
+replays &mdash; and runs TLC from a pinned jar, recording the verdict against the
+hashes of the module, its configuration and its manifest entry. Without Java
+the models read unmeasured, never passed; it advises unless the project
+declares a gate. Two of the kit's own designs were checked this way: one
+model found three holes the code and a fresh reviewer had passed, and the
+other missed a hole a fresh review then found, which became a configuration
+that must break.</p>
 
 <p><b class="rh">Structured guesses (advise).</b> The advisory layer includes
 regression capture (closing findings without adding a single non-blank test
@@ -876,7 +888,8 @@ a tiny greenfield repository and no hooks, so the golden write guard is advisory
 there (ADR-049). A declared human name is not identity: an agent can unset the marker, other
 harnesses expose none, and the pull-request hook reads text, so an API call or a
 browser passes it. The only authenticated human act is the forge&rsquo;s own
-ready-for-review or merge.</p>
+ready-for-review or merge. A green model shows that TLC found no violation of the model within its
+bounds, not that the code matches it; the replayed red cases are the only link.</p>
 
 <h2>8&nbsp;&nbsp;Future Work</h2>
 

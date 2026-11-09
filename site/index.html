@@ -328,12 +328,19 @@
         ran, only what tree it claimed.
       </p>
       <p class="ev-note">
-        Human acts stay human. Lifting an escalation requires a declared name and reason, and those
+        Human acts stay human. Lifting an escalation, or confirming that a blocking finding may wait, requires a declared name and reason, and those
         commands refuse inside Claude Code's shell; there, a hook also keeps a pull request a draft while
         the gate is red. Both limits are on the record: a declared name is not proof of identity, an agent
         can unset the marker, other harnesses expose none, and the hook reads the tool call as text, so
         <code>gh api</code> or a browser get through. The one authenticated human act is the forge's own
         "ready for review" or merge.
+      </p>
+      <p class="ev-note">
+        Designs with state are checked before they are built. From the ADR a project names on, every design
+        records whether it needs a TLA+ model; <code>model-check --run</code> runs TLC from a pinned jar and records
+        the verdict, and without Java the models read UNMEASURED, never passed. It advises unless the project
+        declares a gate. A green model means TLC found no violation of the model within its bounds; the red
+        test each counterexample replays is the only link to the code.
       </p>
 
       <div class="field">

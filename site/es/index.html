@@ -328,12 +328,19 @@
         motor no puede probar que una revisión se hizo, solo sobre qué árbol dice haberse hecho.
       </p>
       <p class="ev-note">
-        Los actos humanos siguen siendo humanos. Levantar una escalación exige declarar un nombre y un motivo,
+        Los actos humanos siguen siendo humanos. Levantar una escalación, o confirmar que un hallazgo bloqueante puede esperar, exige declarar un nombre y un motivo,
         y esos comandos se niegan a correr dentro del shell de Claude Code; ahí, además, un hook mantiene el
         pull request en draft mientras el gate está en rojo. Los dos límites están a la vista: un nombre
         declarado no prueba identidad, un agente puede borrar la marca, otros harnesses no exponen ninguna, y
         el hook lee la llamada como texto, así que <code>gh api</code> o un navegador pasan igual. El único acto
         humano autenticado es el "ready for review" o el merge en la propia forja.
+      </p>
+      <p class="ev-note">
+        Los diseños con estado se verifican antes de construirse. Desde el ADR que el proyecto elige, cada diseño
+        deja escrito si necesita un modelo TLA+; <code>model-check --run</code> corre TLC desde un jar fijado por hash y
+        registra el veredicto, y sin Java los modelos quedan UNMEASURED, nunca aprobados. Es advisory salvo que el
+        proyecto declare un gate. Un modelo en verde significa que TLC no encontró violaciones del modelo dentro de
+        sus límites; el test rojo que reproduce cada contraejemplo es el único vínculo con el código.
       </p>
 
       <div class="field">
