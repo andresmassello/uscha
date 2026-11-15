@@ -87,7 +87,13 @@ def events(led):
         t = ts(r.get("started_at"))
         if t:
             ev.append((t, "test-run", r.get("repo"), r))
-    for key in ("escalations", "production_findings", "spec_doubts", "spec_change_requests"):
+    # the engine also logs these as steps (kind "production-finding", "escalation", ...): read the
+    # top-level list only when no such step exists, or every one is counted twice
+    step_kinds = {(s.get("kind") or "") for s in led.get("steps") or []}
+    for key, kind in (("escalations", "escalation"), ("production_findings", "production-finding"),
+                      ("spec_doubts", "spec-doubt"), ("spec_change_requests", "spec-change-request")):
+        if kind in step_kinds:
+            continue
         for x in led.get(key) or []:
             t = ts(x.get("at") or x.get("created_at") or x.get("opened_at"))
             if t:
@@ -307,7 +313,9 @@ def main(argv=None):
 
     print("\n".join(P))
     if a.json:
-        with open(a.json, "w", encoding="utf-8") as fh:
+        # %TEMP% (cmd) and $env:TEMP (PowerShell) both reach here; expand what the shell did not
+        target = os.path.expanduser(os.path.expandvars(a.json))
+        with open(target, "w", encoding="utf-8") as fh:
             json.dump(out, fh, indent=2, default=str)
     return 0
 
