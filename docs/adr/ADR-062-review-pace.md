@@ -9,7 +9,7 @@ model_manifest: docs/review-pace/models/models.json
 ---
 # ADR-062: Review effort follows the change's risk, and the QA loop converges on the diff -- a fix does not buy a full re-cycle of every tool
 
-## Status: Accepted (to ship as 2.16.0) — decided by the owner on 2026-11-15 (an `adr-refine` interview, two batches). The model (repo rule 12) is written before any engine code.
+## Status: Accepted (to ship as 2.16.0) — decided by the owner on 2026-11-15 (an `adr-refine` interview, two batches; decision 2 amended after the model the same day). The model (repo rule 12) is written before any engine code.
 
 ## Context
 
