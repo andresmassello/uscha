@@ -8,7 +8,7 @@ model: not-needed -- SUPERSEDED by the interview (2026-11-15, answer 2a): decisi
 ---
 # ADR-062: Review effort follows the change's risk, and the QA loop converges on the diff -- a fix does not buy a full re-cycle of every tool
 
-## Status: Proposed — drafted 2026-11-15 from field data; `adr-refine` interview in progress: batch 1 (decisions 1, 2, 3, 7) decided by the owner on 2026-11-15, batch 2 open.
+## Status: Accepted (to ship as 2.16.0) — decided by the owner on 2026-11-15 (an `adr-refine` interview, two batches). The model (repo rule 12) is written before any engine code.
 
 ## Context
 
@@ -76,17 +76,26 @@ reviewer kept flagging was code older than its first pass.
 4. **A finding is counted once.** A gated finding already logged by id (`--gated-ids`, ADR-060) is a
    REPEAT in a later round: logged as such, never counted as new yield. `--gated-ids` becomes
    mandatory for gated steps of agent tools (it is already required to defer one).
+   **Decided (4):** mandatory only in a project that declares `review_tiers`; elsewhere unchanged.
 5. **What the author did with each finding is recorded.** `log-step` gains `--rejected N` (the tool
    was wrong) next to fixed / deferred / suppressed, so each tool's precision is measured. `readiness`
    prints a per-tool yield line (rounds, distinct gated findings, rejected) -- advisory, so a project
    can see which tool is pure cost before it removes one.
+   **Decided (5):** `--rejected` is optional and the yield line is advisory only -- it never blocks.
 6. **An escape says which layer should have caught it.** `production-finding` gains
    `--should-have-caught <layer>` (`test`, `static`, `review`, `model`, `human`, `none`). Readiness
    counts escapes per layer.
+   **Decided (6):** optional.
 7. **Option P, pre-existing findings** (not proposed yet, listed for the interview): a gated finding
    in lines the change did not touch (by `git blame` against the base) is tagged `pre-existing`, goes
    to the backlog and opens no debt. Fewer rounds, but it changes ADR-056's debt rule -> a model first.
    **Decided (3): not now.** Re-counted findings are handled by decision 4; the debt rule stays.
+8. **Adoption.** **Decided (7):** everything is switched on by `review_tiers` in `uscha.config.json`;
+   without it a project reads exactly as in 2.15 (the posture of ADR-061). `uscha init` writes a
+   default block for a new project -- `default: standard`, `quick: ["docs/**", "**/*.md"]`, an empty
+   `deep` list; `doctor` proposes it to an existing project; `adr-refine` asks which paths are `deep`.
+9. **Version.** **Decided (8):** 2.16.0 (new opt-in behavior). Order: the model, then the RED cases,
+   then the code.
 
 ## Reasons
 
