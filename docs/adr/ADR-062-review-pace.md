@@ -71,6 +71,12 @@ reviewer kept flagging was code older than its first pass.
    expensive code loses nothing. This changes what convergence means -> a model first (repo rule 12),
    extending GatedDebt with tiers and diff-scoped re-review; the model must show that no gated
    finding the ledger knows ships, under both rules.
+   **Refined by the owner with the RED cases (2026-11-15):** "only the tools that flagged" is not
+   enough once a tier has two tools. The model's SameTool rule (below) also re-runs every tier tool
+   whose clean pass the fix outdated -- still over the fix's diff only, never a full re-cycle. A tool
+   with no clean pass yet reviews the whole change; its diff saving starts after its first clean
+   pass. The scope of each review is assigned by the engine at `review-start`, not narrated by the
+   agent.
    **Amended after the model (2026-11-15, decided by the owner):** as first written, decision 2 lets
    a known gated finding reach `pr-ready`, even with an honest agent (TLC, shortest trace 7 states,
    `tooth-as-written-honest`): tool 1 starts a review of `a` alone; the agent edits `b`; a test-run
