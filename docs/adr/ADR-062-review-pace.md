@@ -4,7 +4,8 @@ governs:
   - uscha-kit/skills/uscha-devloop/qa_ledger.py
   - uscha-kit/.claude/skills/uscha-devloop/SKILL.md
   - uscha-kit/skills/uscha-devloop/SKILL.md
-model: not-needed -- SUPERSEDED by the interview (2026-11-15, answer 2a): decision 2 changes what convergence means, so a model IS required. The field flips to `required` in the commit that adds docs/review-pace/models/ (GatedDebt extended), before any engine code (origin: agent)
+model: required
+model_manifest: docs/review-pace/models/models.json
 ---
 # ADR-062: Review effort follows the change's risk, and the QA loop converges on the diff -- a fix does not buy a full re-cycle of every tool
 
@@ -48,7 +49,7 @@ every incident turned into an eval case. After the convergence work their mean r
 from 2.08 to 1.32 and PRs needing five or more rounds from 8.9% to 1.5%; about 59% of what a
 reviewer kept flagging was code older than its first pass.
 
-## Decision (proposed)
+## Decision
 
 1. **A review tier per change, set by the change.** `uscha.config.json` gains `review_tiers`:
    path globs mapped to `quick` / `standard` / `deep`, each tier naming its tools (default:
@@ -69,6 +70,38 @@ reviewer kept flagging was code older than its first pass.
    expensive code loses nothing. This changes what convergence means -> a model first (repo rule 12),
    extending GatedDebt with tiers and diff-scoped re-review; the model must show that no gated
    finding the ledger knows ships, under both rules.
+   **Amended after the model (2026-11-15, decided by the owner):** as first written, decision 2 lets
+   a known gated finding reach `pr-ready`, even with an honest agent (TLC, shortest trace 7 states,
+   `tooth-as-written-honest`): tool 1 starts a review of `a` alone; the agent edits `b`; a test-run
+   stamps the tree; the gated step is logged (it reviewed `a` with the old `b`); tool 1 reviews `b`
+   alone on the new tree, honestly clean. The debt closes and Memory stays silent, because both
+   compare whole trees and the two trees differ in `b`. Comparing whole trees was sound only while
+   every review covered every file. Three rules are added (`docs/review-pace/models/`):
+   - **Locate.** A gated finding records the file it is in: the gated id (decision 4) carries the
+     path.
+   - **CoverFix.** The debt of a gated step closes only on a clean step that **covered those files**
+     and in which **those files** moved (or that saw a deferral, the 2.11.0 rule). Memory compares
+     only those files: a clean step that covered them unmoved contradicts the record. (The debt and
+     Memory are already read per tool in the engine; that part is not new.)
+   - **SameTool.** A file changed after a tool's clean pass is re-reviewed clean **by that tool**,
+     not by any agent tool -- a tool that cannot see a finding's class cannot clear a file of it.
+   **What the model shows, and at which bounds.** Necessary -- one counterexample each when it is
+   dropped: CoverFix (one tool, `MaxLog = 3`), Locate and the re-review clause C2 (one tool,
+   `MaxLog = 4`), SameTool (two tools, `MaxLog = 4`; the trace is in the quick tier, where the
+   second tool is not even in the tier yet satisfies C2 and is the step Anchor reads). Checked
+   sufficient -- no error -- only with ONE tool: `MaxLog = 3` in CI, `MaxLog = 4` and deferrals
+   by hand; with one tool SameTool is inert, and the two-tool no-error run did not finish
+   (UNMEASURED). **CI today checks only CoverFix and the as-written break**: at its bound
+   (`MaxLog = 3`) dropping Locate or C2 still reads no error; the teeth that catch them enter CI
+   with their AC-RP ids. Lowering the tier by reverting a deep-glob file is reachable, and the rule
+   holds on it (measured); the bug in the model is only ever in a quick file. **Open, not decided
+   by the model:** (1) should convergence verify each tool's whole-change first pass? Decision 2
+   says the first cycle covers the whole change, but as modelled convergence never checks it, and
+   a change can converge with a file no tool reviewed; (2) should C2's re-review and the
+   latest-step check count only tools of the tier; (3) may a revert lower the tier. **A limit the
+   engine adds:** the model takes a finding's file and a step's scope from the ground truth; in the
+   engine the agent narrates the path -- and the scope, if `log-step` carries it -- like every count
+   in `log-step` (today's review-start records only a whole-tree stamp, not a scope).
 3. **A round cap that stops the loop, not a ceiling it grinds to.** After `review_round_cap` cycles
    (default 3) without convergence, the engine refuses another cycle and asks for an escalation
    ("reconsider the approach", the existing `escalate`), instead of running to `max_iterations`.
@@ -128,7 +161,8 @@ reviewer kept flagging was code older than its first pass.
 
 - Affected paths: `qa_ledger.py` (both twins: `review_tiers`, `_converged`, the round cap, repeats,
   `--rejected`, `--should-have-caught`, the readiness lines), the devloop SKILL twins, the command
-  references, `ACCEPTANCE.md`; a GatedDebt model extension if decision 2 or option P is adopted.
+  references, `ACCEPTANCE.md`; the model is `docs/review-pace/models/` (GatedDebt extended), and
+  decision 2's amendment adds Locate, CoverFix and SameTool to the engine's debt and convergence.
 - Measured first: `tools/ledger-pace.py` on the project's ledger before and after, rounds-to-converge
   and escapes per layer as the guardrail.
 - Tests: RED cases first, against 2.15.0.
@@ -137,7 +171,9 @@ reviewer kept flagging was code older than its first pass.
 
 - A docs-only change runs the `quick` tier; a change touching a `deep` glob runs the full list; the
   agent cannot lower a tier.
-- A one-line fix after a clean first cycle re-runs only the tools that flagged it (if decision 2).
+- A one-line fix after a clean first cycle re-runs only the tools that flagged it.
+- Each of the model's counterexamples (`tooth-*.cfg`) is replayed as a RED case against the engine:
+  a clean step over other files, or by another tool, does not close a located finding's debt.
 - A fourth cycle without convergence is refused, naming the escalation.
 - A gated id logged again is a repeat, not new yield; the per-tool yield line counts distinct ids.
 - `--rejected` and `--should-have-caught` are recorded and read by `readiness`.

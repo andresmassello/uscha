@@ -1,0 +1,68 @@
+{
+  "schema": "uscha/models@1",
+  "adr": "ADR-062",
+  "note": "ADR-062 decisions 1-2 (review tiers, diff-scoped re-review), GatedDebt extended (copied at a9ea294). The tooth-*.cfg counterexamples enter this manifest with their AC-RP RED cases.",
+  "module": "ReviewPace.tla",
+  "configs": [
+    {
+      "cfg": "ci-shipped.cfg",
+      "tier": "ci",
+      "expect": "no-error"
+    },
+    {
+      "cfg": "ci-baseline.cfg",
+      "tier": "ci",
+      "expect": "no-error"
+    },
+    {
+      "cfg": "ci-vacuity.cfg",
+      "tier": "ci",
+      "expect": "violated: NeverFixedAndReady",
+      "vacuity": true
+    },
+    {
+      "cfg": "ci-lowering.cfg",
+      "tier": "ci",
+      "expect": "no-error"
+    },
+    {
+      "cfg": "ci-lowering-vacuity.cfg",
+      "tier": "ci",
+      "expect": "violated: NeverLoweredAndReady",
+      "vacuity": true
+    },
+    {
+      "cfg": "deep-shipped-maxlog4.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-15",
+        "distinct_states": 12761372,
+        "tlc": "1.7.4",
+        "inputs_sha256": "dbba856b4de20e314f2608c215dbb736e50a3f1123369d47d50e5f2c875caa0b"
+      }
+    },
+    {
+      "cfg": "deep-lowering-maxlog4.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-15",
+        "distinct_states": 12761372,
+        "tlc": "1.7.4",
+        "inputs_sha256": "aa7b3b0b79daab6048cf59cbc1757aab0484c2151eba69b5a70d687c66dca4b6"
+      }
+    },
+    {
+      "cfg": "deep-shipped-defers.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-15",
+        "distinct_states": 52299000,
+        "tlc": "1.7.4",
+        "inputs_sha256": "e1dd8a9c44c824847271cd5a8ce5f3832c8234fb441c283fd969bd3d27ee3700"
+      }
+    }
+  ]
+}
