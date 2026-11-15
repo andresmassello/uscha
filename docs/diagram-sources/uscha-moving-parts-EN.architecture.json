@@ -1,0 +1,391 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "How uscha works: the moving parts",
+    "subtitle": "Read it left to right: the method governs · the tool executes · evidence decides · the human approves"
+  },
+  "components": [
+    {
+      "id": "you",
+      "type": "external",
+      "label": "You",
+      "sublabel": "the idea",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "spec",
+      "type": "frontend",
+      "label": "Spec skills",
+      "sublabel": "discovery · adr-refine",
+      "pos": [
+        250,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "brown",
+      "type": "frontend",
+      "label": "Old system?",
+      "sublabel": "reverse-discovery",
+      "tag": "+ characterize",
+      "pos": [
+        250,
+        470
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "contract",
+      "type": "database",
+      "label": "The contract",
+      "sublabel": "ADR + ACCEPTANCE",
+      "pos": [
+        460,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "model",
+      "type": "security",
+      "label": "model-check",
+      "sublabel": "TLA+ for designs",
+      "tag": "with state",
+      "pos": [
+        460,
+        130
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "Agent + devloop",
+      "sublabel": "builds and reviews",
+      "tag": "Claude · Codex · pi",
+      "pos": [
+        670,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "tools",
+      "type": "external",
+      "label": "Review tools",
+      "sublabel": "code-review · judgment",
+      "tag": "+ linters",
+      "pos": [
+        670,
+        130
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "hooks",
+      "type": "security",
+      "label": "Hooks",
+      "sublabel": "never writes goldens",
+      "tag": "PR gate guard",
+      "pos": [
+        670,
+        470
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "engine",
+      "type": "backend",
+      "label": "qa_ledger.py",
+      "sublabel": "the engine",
+      "tag": "counts, never narrates",
+      "pos": [
+        880,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "ledger",
+      "type": "database",
+      "label": "QA-LEDGER.json",
+      "sublabel": "the evidence",
+      "pos": [
+        1090,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "views",
+      "type": "frontend",
+      "label": "Readouts",
+      "sublabel": "status · mirador",
+      "tag": "statusline",
+      "pos": [
+        1090,
+        470
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "gate",
+      "type": "security",
+      "label": "pr-ready gate",
+      "sublabel": "readiness",
+      "tag": "check-terminado",
+      "pos": [
+        1300,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "approve",
+      "type": "external",
+      "label": "You approve",
+      "sublabel": "the merge",
+      "pos": [
+        1100,
+        620
+      ],
+      "size": [
+        140,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "1 · The method governs",
+      "wraps": [
+        "spec",
+        "brown",
+        "contract",
+        "model"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "2 · The tool executes",
+      "wraps": [
+        "agent",
+        "tools",
+        "hooks"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "3 · Evidence decides",
+      "wraps": [
+        "engine",
+        "ledger",
+        "views",
+        "gate"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "4 · The human approves",
+      "wraps": [
+        "approve"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "you",
+      "to": "spec",
+      "label": "idea",
+      "variant": "emphasis",
+      "labelDy": -14
+    },
+    {
+      "from": "spec",
+      "to": "contract",
+      "label": "writes",
+      "variant": "emphasis",
+      "labelDy": -14
+    },
+    {
+      "from": "brown",
+      "to": "contract",
+      "label": "goldens",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "route": "orthogonal-h"
+    },
+    {
+      "from": "model",
+      "to": "contract",
+      "label": "checks",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        564,
+        247
+      ]
+    },
+    {
+      "from": "contract",
+      "to": "agent",
+      "label": "builds on",
+      "variant": "emphasis",
+      "labelDy": -14
+    },
+    {
+      "from": "tools",
+      "to": "agent",
+      "label": "findings",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        774,
+        247
+      ]
+    },
+    {
+      "from": "hooks",
+      "to": "agent",
+      "label": "blocks",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelDx": 28
+    },
+    {
+      "from": "agent",
+      "to": "engine",
+      "label": "logs",
+      "variant": "emphasis",
+      "labelDy": -14
+    },
+    {
+      "from": "engine",
+      "to": "ledger",
+      "label": "records",
+      "variant": "emphasis",
+      "labelDy": -14
+    },
+    {
+      "from": "ledger",
+      "to": "views",
+      "label": "reads",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        1192,
+        417
+      ]
+    },
+    {
+      "from": "ledger",
+      "to": "gate",
+      "label": "derives",
+      "variant": "emphasis",
+      "labelDy": -14
+    },
+    {
+      "from": "gate",
+      "to": "approve",
+      "label": "ready",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "labelAt": [
+        1392,
+        610
+      ],
+      "via": [
+        [
+          1370,
+          652
+        ]
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "1 · The method governs",
+      "items": [
+        "Before code, a spec skill interviews you and writes the contract: ADRs + ACCEPTANCE (the criteria).",
+        "New idea: discovery. Known feature: adr-refine. Old system: reverse-discovery + characterize.",
+        "A design with state and rules is model-checked first (TLA+)."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "2 · The tool executes",
+      "items": [
+        "The agent builds against the contract and runs the review loop (devloop).",
+        "Review tools find problems; the agent fixes them and logs every step.",
+        "Hooks stop what the agent must never do, like writing an approved golden."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "3 · Evidence decides",
+      "items": [
+        "The engine records only measured runs; it never takes the agent's word.",
+        "The gate reads the ledger: tests current, acceptance green, no known finding open.",
+        "Readouts show the same numbers; they never compute their own."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "4 · The human approves",
+      "items": [
+        "You decide the spec, approve the goldens, and approve the merge.",
+        "Only a human lowers a review tier or confirms a deferral.",
+        "The agent cannot declare 'done': the gate does, from evidence."
+      ]
+    }
+  ]
+}
