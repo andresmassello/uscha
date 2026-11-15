@@ -476,7 +476,7 @@ recorded, still-current run. Since 2.11.0 a QA review is witnessed when it
 starts: the ledger records the tree the review began on, convergence requires
 each tool's latest review to have seen the source now on disk, and a gated
 finding closes only through measured movement or, since 2.14.0, a human-confirmed deferral of its id. The design of the latter was
-model-checked (TLA+/TLC, bounded to three code versions, one tool, one repo),
+model-checked (TLA+/TLC [23, 24], bounded to three code versions, one tool, one repo),
 and the check broke the first draft. Provenance proves that a command ran at a
 tree and wrote bytes, not that it tests anything; the engine does not run the
 reviewer and cannot prove a review took place.</p>
@@ -487,7 +487,9 @@ process carries a known agent-shell marker; re-initialising a ledger over an
 open human gate is refused too (ADR-058). Since 2.14.0 confirming the deferral of a gated finding is one of these acts: the finding is deferred by its id, and only a recorded confirmation closes its debt (ADR-060).</p>
 
 <p><b class="rh">Model-checked designs.</b> Since 2.15.0 (ADR-061) a project may name an
-ADR from which every design records whether it needs a TLA+ model. The engine
+ADR from which every design records whether it needs a TLA+ model. Model
+checking entered the method through pstack [25], whose formal-verification and
+statechart skills run TLC over TLA+ models. The engine
 validates those declarations and each model's manifest &mdash; a vacuity
 configuration that must break, and the red test case each counterexample
 replays &mdash; and runs TLC from a pinned jar, recording the verdict against the
@@ -1058,6 +1060,10 @@ infoq.com/articles/when-spec-driven-development-pays-off/</p>
 infoq.com/news/2026/09/cloudflare-adlc-agents/</p>
 <p>[22] A. Osmani, M. W. Lunt, and Q. Wang, &ldquo;How the Claude Code team does code review,&rdquo; claude.dev, 15 October 2026.
 claude.dev/blog/solving-code-review-at-anthropic/</p>
+<p>[23] L. Lamport, <i>Specifying Systems: The TLA+ Language and Tools for Hardware and Software Engineers</i>. Addison-Wesley, 2002.</p>
+<p>[24] Y. Yu, P. Manolios, and L. Lamport, &ldquo;Model Checking TLA+ Specifications,&rdquo; in <i>Correct Hardware Design and Verification Methods (CHARME)</i>, LNCS 1703, Springer, 1999, pp. 54&ndash;66.</p>
+<p>[25] L. Tan, &ldquo;pstack,&rdquo; MIT-licensed agent skills (create-formal-verification-skill, statechart), October 2026.
+github.com/cursor/plugins/tree/main/pstack</p>
 </div>
 
 </body>
