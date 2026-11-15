@@ -25,11 +25,12 @@
 (*   NTools    tool 1 may flag; tool 2 (NTools = 2) never flags.           *)
 (*   Tiers     decision 1: the tier is the highest glob tier of the files  *)
 (*             the change touches (a -> quick, b -> GlobB) or the tier the *)
-(*             agent raised it to (up to RaiseTo). No action lowers the    *)
-(*             raised tier, but the touched set is derived from the tree,  *)
-(*             so reverting the file b lowers the computed tier (GlobB=2   *)
-(*             configs). quick = {tool 1}; standard = deep = every tool.   *)
-(*             FALSE: every change is deep.                                *)
+(*             agent raised it to (up to RaiseTo). quick = {tool 1};       *)
+(*             standard = deep = every tool. FALSE: every change is deep.  *)
+(*   TierHighWater  the tier is the highest the change ever reached: an    *)
+(*             edit that touches a higher-glob file raises `raised` too,   *)
+(*             so reverting it does not lower the tier. FALSE: the tier is *)
+(*             computed from the files touched NOW (a revert lowers it).   *)
 (*   DiffScope decision 2: a review may cover any non-empty subset of the  *)
 (*             files (the agent picks; the engine only reads the log). In  *)
 (*             quick/standard convergence is C1 /\ C2; in deep it is       *)
@@ -38,7 +39,11 @@
 (*   Rereview  clause C2 of decision 2.                                    *)
 (*   SameTool  C2's re-review must come from the tool whose clean pass the *)
 (*             change outdated. FALSE: "by at least one agent tool", as    *)
-(*             the ADR words it.                                           *)
+(*             the ADR first worded it.                                    *)
+(*   TierTools C2's re-review and the latest step Anchor reads count only  *)
+(*             tools of the tier. FALSE: any tool.                         *)
+(*   WholeFirstPass  in quick/standard every tool of the tier must have a  *)
+(*             witnessed review whose scope was the whole change.          *)
 (*   CoverFix  the fix TLC forced (README): a gated step's debt and Memory *)
 (*             read the files it covers -- a clean step closes the debt    *)
 (*             only if it covered them and they moved, and contradicts the *)
@@ -53,7 +58,7 @@ EXTENDS Naturals, Sequences, FiniteSets
 
 CONSTANTS MaxLog, Anchor, Lies, Witness, Memory,
           Wide, NTools, Tiers, GlobB, RaiseTo, DiffScope, Rereview, SameTool, CoverFix, Locate,
-          Defers
+          Defers, TierHighWater, TierTools, WholeFirstPass
 
 Files == IF Wide THEN {"a", "b"} ELSE {"a"}
 Tools == 1..NTools
@@ -72,8 +77,9 @@ VARIABLES tree, deferred, log, pending, flagged, raised
 vars == <<tree, deferred, log, pending, flagged, raised>>
 
 MaxOf(S) == CHOOSE m \in S : \A k \in S : k <= m
-Touched == {"a"} \cup {f \in Files : tree[f] /= T0[f]}
-Tier == IF Tiers THEN MaxOf({Glob(f) : f \in Touched} \cup {raised}) ELSE 2
+TouchedIn(t) == {"a"} \cup {f \in Files : t[f] /= T0[f]}
+GlobTier(t) == MaxOf({Glob(f) : f \in TouchedIn(t)})
+Tier == IF Tiers THEN MaxOf({GlobTier(tree), raised}) ELSE 2
 DiffMode == DiffScope /\ Tier < 2
 
 Init ==
@@ -96,7 +102,9 @@ Match(k, t) == \A f \in k.files : t[f] = k.tree[f]
 Edit(f, v) ==
   /\ v /= tree[f]
   /\ tree' = [tree EXCEPT ![f] = v]
-  /\ UNCHANGED <<deferred, log, pending, flagged, raised>>
+  \* TierHighWater: the highest tier the change reached stays (only a human lowers it)
+  /\ raised' = IF Tiers /\ TierHighWater THEN MaxOf({raised, GlobTier(tree')}) ELSE raised
+  /\ UNCHANGED <<deferred, log, pending, flagged>>
 
 \* decision 1: the agent may raise the tier, never lower it
 Raise(k) ==
@@ -227,6 +235,12 @@ C2 == \A c \in Steps :
             \E d \in Steps : d > c /\ Clean(d) /\ f \in log[d].scope
                              /\ log[d].tree[f] = tree[f]
                              /\ (SameTool => log[d].tool = log[c].tool)
+                             /\ (TierTools => log[d].tool \in ToolsOf(Tier))
+
+\* WholeFirstPass: every tool of the tier had a witnessed review of the whole change
+WholePass == \A t \in ToolsOf(Tier) : \E c \in StepsOf(t) : log[c].wit /\ log[c].scope = Files
+\* the step Anchor reads (TierTools: the latest step of a tool of the tier)
+AnchorSteps == IF TierTools THEN {i \in Steps : log[i].tool \in ToolsOf(Tier)} ELSE Steps
 
 \* Anchor and the 2.11.0 clauses, on one step
 LatestOk(L) == L.gated = 0 /\ L.wit /\ L.def = deferred /\ (Anchor => L.tree = tree)
@@ -237,8 +251,10 @@ Converged ==
   /\ (Memory => \A t \in Tools : HasStep(t) => ~(Clean(Last(t)) /\ Contradicts(Last(t))))
   /\ IF DiffMode
        \* the latest step stands for the latest cycle (Anchor reads the tools of the cycle)
-       THEN /\ LatestOk(log[Max(Steps)])
+       THEN /\ AnchorSteps /= {}
+            /\ LatestOk(log[Max(AnchorSteps)])
             /\ C1
+            /\ (WholeFirstPass => WholePass)
             /\ (Rereview => C2)
        \* today's rule: the last step of every tool of the tier is clean, on the tree on disk
        ELSE \A t \in ToolsOf(Tier) :
@@ -263,10 +279,21 @@ NoFlaggedBugShips == PrReady => ~(deferred = 0 /\ \E k \in flagged : Match(k, tr
 NeverFixedAndReady == ~(PrReady /\ flagged /= {}
                         /\ (Tiers => Tier = 0)
                         /\ (DiffScope => \E i \in Steps : log[i].scope /= Files))
-\* lowering control (GlobB = 2): MUST be violated -- the change touched the deep file b, the
-\* agent reverted it, the tier fell back to quick, and a known finding was fixed to pr-ready
-NeverLoweredAndReady == ~(PrReady /\ flagged /= {} /\ Tier = 0
-                          /\ \E i \in 1..Len(log) : log[i].tree["b"] /= T0["b"])
+\* lowering control (GlobB = 2): MUST be violated -- the change touched the deep file b, the agent
+\* reverted it, and a known finding was legitimately fixed to pr-ready
+NeverRevertedAndReady == ~(PrReady /\ flagged /= {} /\ tree["b"] = T0["b"]
+                           /\ \E i \in 1..Len(log) : log[i].tree["b"] /= T0["b"])
+\* TierHighWater's property (GlobB = 2): a change that once touched the deep file b converges only
+\* on the deep rule -- never on the quick tool list after a revert
+LoweredNeverReady == (PrReady /\ \E i \in 1..Len(log) : log[i].tree["b"] /= T0["b"]) => Tier = GlobB
+\* TierTools's property: in quick/standard at pr-ready, the latest step of a tool OF THE TIER saw
+\* the tree on disk (a step of a tool outside the tier does not stand in for it)
+TierAnchored == (PrReady /\ DiffMode) =>
+                  LET A == {i \in Steps : log[i].tool \in ToolsOf(Tier)}
+                  IN A /= {} /\ log[Max(A)].tree = tree
+\* WholeFirstPass's property: at pr-ready every tool of the tier has reviewed every file
+EveryFileReviewed == PrReady => \A t \in ToolsOf(Tier) : \A f \in Files :
+                       \E i \in StepsOf(t) : log[i].wit /\ f \in log[i].scope
 \* the same, in the standard tier and with a step of the second tool (two-tool configs)
 NeverFixedAndReadyStandard == ~(PrReady /\ flagged /= {} /\ Tier = 1
                                 /\ \E i \in Steps : log[i].tool = 2)

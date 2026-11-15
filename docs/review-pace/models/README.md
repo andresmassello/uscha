@@ -29,14 +29,17 @@ only that THOSE files, at that content, hold a gated finding -- so that is what 
 - Tool 1 flags what it sees in its scope. Every no-error config has only tool 1; two `.cfg` files
   (a tooth and a vacuity probe) add tool 2, which never flags.
 - Tiers: the tier is the highest glob tier of the files the change touches (`b` matches `GlobB`),
-  or the tier the agent raised it to. No action lowers the raised tier, but the touched set is
-  derived from the tree, so **reverting `b` lowers the computed tier** (`GlobB = 2`). quick runs
-  tool 1; standard and deep run every tool.
+  or the tier the agent raised it to. With `TierHighWater` (the owner's decision, on in every
+  fixed config) it is the highest tier the change EVER reached, so reverting `b` does not lower
+  it; without it the touched set is derived from the tree now and a revert lowers the tier.
+  quick runs tool 1; standard and deep run every tool.
 - Diff scope: the agent picks the files of every review (the engine does not stop it; it only
   reads what was logged). In quick/standard, convergence is C1 (every tool of the tier has had one
   clean pass) and C2 (every file changed after a tool's clean pass has been reviewed clean again);
-  the latest step must be clean and on the tree on disk (Anchor). In deep it is today's rule, plus
-  "each tool's last review covered the whole change".
+  the latest step must be clean and on the tree on disk (Anchor); with `WholeFirstPass`, every tool
+  of the tier also had a review of the whole change; with `TierTools`, C2's re-review and the step
+  Anchor reads count only tools of the tier. In deep it is today's rule, plus "each tool's last
+  review covered the whole change".
 - The agent may lie (`Lies = TRUE`): it can log 0 gated findings for a review that found some.
 - Bounds: see "Why these bounds". The `ci` configs of the new design run `MaxLog = 3` (records,
   runs and steps together), one tool, no deferral moves; `ci-baseline` keeps GatedDebt's own
@@ -76,106 +79,148 @@ clean. Memory compares whole trees, and the two trees differ in `b`.
   model in every config.
 - **`SameTool`**: C2's re-review must come from the tool whose clean pass the change outdated.
 
-### 3. Necessary vs checked sufficient -- at which bounds
+### 3. The owner's three rules after the model (2026-11-15)
 
-Necessary (each one's absence is a counterexample; the teeth, `-workers 1`):
+- **`WholeFirstPass`**: in quick/standard, every tool of the tier must have a witnessed review
+  whose scope was the whole change, in addition to C1 and C2.
+- **`TierTools`**: C2's re-review and the latest step Anchor reads count only tools of the tier.
+- **`TierHighWater`**: the tier is the highest the change ever reached; reverting a deep-glob file
+  does not lower it (only a human lowers a tier).
+
+All three are on in `ci-shipped`, the lowering configs and the deep configs. **None of them is
+needed for `NoFlaggedBugShips` at the bounds checked**, so none has a safety tooth. Their value is
+coverage and policy, and each gets a property that shows the difference:
+
+| rule | safety with it OFF | property | with it ON | with it OFF |
+|---|---|---|---|---|
+| `WholeFirstPass` | no error, 1,740,180 states (`ci-shipped` shape) | `EveryFileReviewed`: at `pr-ready` every tool of the tier reviewed every file | `ci-every-file`: no error, 1,740,180 states | `tooth-without-whole-pass`: violated, 4 states |
+| `TierHighWater` | no error, 580,060 states (`ci-lowering` shape) | `LoweredNeverReady`: a change that touched the deep file converges only on the deep rule | `ci-lowering-policy`: no error, 600,556 states | `tooth-without-highwater`: violated, 7 states |
+| `TierTools` | with `SameTool` on: no violation found, UNMEASURED (two tools, `MaxLog = 4`, stopped at 53 M states / 240 s) | `TierAnchored`: the latest step of a tool OF THE TIER saw the tree on disk | -- | no violation found, UNMEASURED (stopped at 16.6 M states / 300 s, one worker) |
+
+- **without-whole-pass** (4 states): tool 1 reviews `a` alone (truly gated), a test-run, and the
+  review is logged clean: `pr-ready` with `b` never reviewed by any tool. (No finding is known to
+  the ledger, so `NoFlaggedBugShips` has nothing to say.)
+- **without-highwater** (7 states): the agent edits `b` (deep), a test-run, reverts `b` (quick
+  again), a whole-change review (truly gated) is logged clean, a test-run: `pr-ready` on the quick
+  rule for a change that touched a deep file.
+- **TierTools adds nothing measured beyond `SameTool`.** With `SameTool` off, it moves the
+  shortest counterexample from the quick tier (9 states, tool 2 outside the tier clears the file)
+  to the standard tier (10 states, tool 2 inside the tier clears it): `SameTool` stays necessary.
+  With `SameTool` on, neither `NoFlaggedBugShips` nor `TierAnchored` broke without `TierTools` in
+  the runs that could be afforded; those runs did not finish, so this is not a proof of
+  redundancy.
+
+### 4. Necessary vs checked sufficient -- at which bounds
+
+Necessary for `NoFlaggedBugShips` (each one's absence is a counterexample; `-workers 1`):
 
 | dropped | config | bound | shortest trace |
 |---|---|---|---|
 | `CoverFix` (with `Locate`) | `tooth-without-cover` | `MaxLog = 3`, 1 tool | 6 states, lying agent |
 | `Locate` (with `CoverFix`) | `tooth-without-locate` | `MaxLog = 4`, 1 tool | 8 states, lying agent |
 | C2 (with both) | `tooth-without-rereview` | `MaxLog = 4`, 1 tool | 9 states, no lie |
-| `SameTool` (C2 as worded) | `tooth-any-tool-rereview` | `MaxLog = 4`, 2 tools | 9 states, no lie |
+| `SameTool` (C2 as first worded) | `tooth-any-tool-rereview` | `MaxLog = 4`, 2 tools | 10 states, no lie |
+
+The three owner rules stay on in these teeth; the as-written teeth turn everything new off.
 
 Checked sufficient (no error), and only at these bounds:
 
-- `CoverFix` + `Locate` + C2 + `SameTool`, **one tool**: `MaxLog = 3` with raises to deep
-  (`ci-shipped`, `ci`), `MaxLog = 4` (`deep-shipped-maxlog4`, by hand), `MaxLog = 3` with
-  deferrals (`deep-shipped-defers`, by hand), and with the tier lowered by a revert (`ci-lowering`
-  at `MaxLog = 3`, `deep-lowering-maxlog4` by hand).
-- **With one tool `SameTool` is inert** (there is no other tool to re-review). **With two tools
-  nothing is checked sufficient**: the no-error run at `MaxLog = 4` was stopped past 134 million
-  distinct states / 16 min -- UNMEASURED.
+- every rule on, **one tool**: `MaxLog = 3` with raises to deep (`ci-shipped`, `ci`), `MaxLog = 4`
+  (`deep-shipped-maxlog4`, by hand), `MaxLog = 3` with deferrals (`deep-shipped-defers`, by hand),
+  and with a deep-glob `b` (`ci-lowering` at `MaxLog = 3`, `deep-lowering-maxlog4` by hand).
+- **With one tool `SameTool` and `TierTools` are inert** (there is no other tool). **With two tools
+  nothing is checked sufficient**: the no-error run at `MaxLog = 4` (before the owner's rules) was
+  stopped past 134 million distinct states / 16 min -- UNMEASURED.
 
 **What CI checks today.** `ci-shipped` (`MaxLog = 3`) cannot see the `Locate`, C2 and `SameTool`
 paths: with `Locate = FALSE` or `Rereview = FALSE` it still prints no error, 1,740,180 distinct
-states, measured. A `MaxLog = 4` no-error config does not fit the 60 s limit: 54-64 s on this
-16-core machine across runs, and a 2-4-core CI runner is slower. **Until the teeth enter the manifest with their AC ids, CI checks
-only `CoverFix` and the as-written break**; `Locate` and C2 are checked sufficient only by hand
-(`deep-shipped-maxlog4`). The teeth themselves stop in 2-5 s, so as `ci` entries they will make CI
-see each rule's necessity.
+states, measured on the final module. A `MaxLog = 4` no-error config does not fit the 60 s limit:
+54-64 s on this 16-core machine across runs, and a 2-4-core CI runner is slower. **Until the teeth
+enter the manifest with their AC ids, CI checks only `CoverFix` and the as-written break** for the
+safety rule, plus the two policy properties (`ci-every-file`, `ci-lowering-policy`); `Locate` and
+C2 are checked sufficient only by hand (`deep-shipped-maxlog4`). The teeth stop in 1-17 s, so as
+`ci` entries they will make CI see each rule's necessity.
 
-The tooth stories:
+The tooth stories (final module, `-workers 1`):
 
 - **without-cover** (6): an unwitnessed gated step on `(a0, b0)` (an honest count) is located in
-  `a`. The agent edits `b`, a review of `a` starts on `(a0, b1)`, a test-run, and that review
+  `a`. The agent edits `b`, a whole-change review starts on `(a0, b1)`, a test-run, and that review
   (truly gated) is logged clean. Whole-tree debt and Memory see different trees.
 - **without-locate** (8): a whole-change review starts on `(a0, b0)`. The agent edits `b`, a
   test-run, and an unwitnessed gated step is logged on `(a0, b1)`, covering its whole scope. The
   pending review (truly gated) is logged clean: it covered both files and `b` moved, so the debt
   closes. Tool 1 then reviews only `b` (clean). Memory does not fire: that review did not cover
   every file the gated step covered.
-- **without-rereview** (9): the agent fixes `a`, a review of `a` starts on `(a1, b0)`. The agent
-  reverts `a`, a test-run, and an unwitnessed gated step is logged on `(a0, b0)`, located in `a`.
-  The stale review is logged clean: it covers `a`, and `a` moved, so the debt closes. Tool 1
+- **without-rereview** (9): the agent fixes `a`, a whole-change review starts on `(a1, b0)`. The
+  agent reverts `a`, a test-run, and an unwitnessed gated step is logged on `(a0, b0)`, located in
+  `a`. The stale review is logged clean: it covers `a`, and `a` moved, so the debt closes. Tool 1
   reviews only `b` (clean). Anchor holds and Memory does not fire. `a` changed after its clean pass
   and nothing re-reviewed it: C2 refuses exactly this.
-- **any-tool-rereview** (9): the same first seven steps, then **tool 2** reviews the reverted `a`,
-  honestly clean (tool 2 never flags). That satisfies C2 "by at least one agent tool", and Memory
-  (per tool) does not fire for tool 2. **The trace is in the QUICK tier: tool 2 is outside the tier**,
-  yet it satisfies C2 and it is the latest step, the one Anchor reads. A possible extra rule: C2's
-  re-review and the latest-step check count only tools of the tier. Not modelled.
+- **any-tool-rereview** (10): the agent raises the tier to standard; the same run as above, then
+  **tool 2** (in the tier) reviews the whole reverted change, honestly clean -- tool 2 never flags.
+  That satisfies C2 "by at least one agent tool", and Memory (per tool) does not fire for tool 2.
 
-### 4. Lowering the tier by a revert (measured, `GlobB = 2`)
+### 5. Lowering the tier by a revert (`GlobB = 2`)
 
-With `b` on a deep glob, touching `b` makes the change deep; reverting `b` makes it quick again --
-no human act involved. `ci-lowering-vacuity` breaks `NeverLoweredAndReady` in **8 states**
-(`-workers 1`): the agent edits `b` (deep), an unwitnessed gated step is logged on `(a0, b1)`, the
-agent fixes `a` and reverts `b` (quick), tool 1 reviews `a` alone clean, a test-run: `pr-ready` in
-quick, with a known finding fixed. So the path is reachable. `NoFlaggedBugShips` holds on it:
-`ci-lowering` (`MaxLog = 3`, 580,060 distinct states) and `deep-lowering-maxlog4` (`MaxLog = 4`)
-give no error. The debt and Memory are read for every tool that ever logged, so a lower tier
-removes reviews, not knowledge. What it loses is coverage of bugs NO tool has reported -- and in
-this model the bug is in `a`, a quick file, so a finding inside the deep file is not checked.
-Whether a revert should be allowed to lower the tier is a question for decision 1, not settled
-here.
+With `b` on a deep glob, touching `b` makes the change deep. Without `TierHighWater`, reverting `b`
+made it quick again, and `NoFlaggedBugShips` still held (580,060 states, `MaxLog = 3`): the debt
+and Memory are read for every tool that ever logged, so a lower tier removes reviews, not
+knowledge. With `TierHighWater` the tier stays deep: `ci-lowering` (600,556 states) and
+`deep-lowering-maxlog4` read no error, and `ci-lowering-policy` shows the change never converges on
+the quick rule. The lowering vacuity control is now `NeverRevertedAndReady`, which MUST break and
+does (`ci-lowering-vacuity`, 8 states): the agent edits `b` (deep), an unwitnessed gated step, the
+agent fixes `a` and reverts `b`, tool 1 reviews the whole change clean, a test-run: `pr-ready`, on
+the deep rule. In this model the bug is in `a`, a quick file, so a finding inside the deep file is
+not checked.
 
 ## Configs and measurements
 
-TLC v1.7.4, 16-core Windows box, 2026-11-15, times are wall time including JVM start. No-error
-configs ran with `-workers auto`; counterexample configs with `-workers 1`, so the printed trace
-is the shortest one.
+TLC v1.7.4, 16-core Windows box, 2026-11-15, final module, times are wall time including JVM
+start. No-error configs ran with `-workers auto`; counterexample configs with `-workers 1`, so the
+printed trace is the shortest one.
 
 | config | tier | expect | distinct states | seconds | result |
 |---|---|---|---|---|---|
-| `ci-shipped.cfg` | ci | no-error | 1,740,180 | 9.7 | no error |
-| `ci-baseline.cfg` (GatedDebt shape, `MaxLog = 4`, deferrals) | ci | no-error | 2,936,010 | 14.7 | no error (= GatedDebt `ci-shipped`) |
-| `ci-vacuity.cfg` | ci | violated: NeverFixedAndReady | 5,285 | 1.5 | violated, 6 states |
-| `ci-lowering.cfg` (`GlobB = 2`) | ci | no-error | 580,060 | 5.9 | no error |
-| `ci-lowering-vacuity.cfg` | ci | violated: NeverLoweredAndReady | 22,430 | 2.2 | violated, 8 states |
-| `deep-shipped-maxlog4.cfg` (`MaxLog = 4`, no raise) | deep | no-error | 12,761,372 | 53.7 | no error |
-| `deep-lowering-maxlog4.cfg` (`GlobB = 2`, `MaxLog = 4`) | deep | no-error | 12,761,372 | 55.7 | no error |
-| `deep-shipped-defers.cfg` (`Defers = TRUE`) | deep | no-error | 52,299,000 | 213.8 | no error |
-| two tools, fix on, `MaxLog = 4` (no `.cfg` kept) | -- | no-error | -- | -- | **UNMEASURED**: stopped past 134 M states / 16 min |
-| `deep-two-tools-vacuity.cfg` | -- | violated: NeverFixedAndReadyStandard | 561,514 | 8.8 | violated, 9 states |
-| `tooth-as-written-honest.cfg` | -- | violated | 10,796 | 1.7 | violated, 7 states |
-| `tooth-as-written.cfg` | -- | violated | 14,346 | 1.8 | violated, 7 states |
-| `tooth-without-cover.cfg` | -- | violated | 5,326 | 1.4 | violated, 6 states |
-| `tooth-without-locate.cfg` (`MaxLog = 4`) | -- | violated | 48,723 | 2.5 | violated, 8 states |
-| `tooth-without-rereview.cfg` (`MaxLog = 4`) | -- | violated | 69,467 | 2.6 | violated, 9 states |
-| `tooth-any-tool-rereview.cfg` (two tools, `MaxLog = 4`) | -- | violated | 266,312 | 5.3 | violated, 9 states |
-| `ci-shipped` with `Locate = FALSE` (not kept) | -- | -- | 1,740,180 | 10.3 | no error |
-| `ci-shipped` with `Rereview = FALSE` (not kept) | -- | -- | 1,740,180 | 10.7 | no error |
+| `ci-shipped.cfg` | ci | no-error | 1,740,180 | 9.9 | no error |
+| `ci-baseline.cfg` (GatedDebt shape, `MaxLog = 4`, deferrals) | ci | no-error | 2,936,010 | 9.6 | no error (= GatedDebt `ci-shipped`) |
+| `ci-vacuity.cfg` | ci | violated: NeverFixedAndReady | 14,193 | 1.7 | violated, 7 states |
+| `ci-every-file.cfg` | ci | no-error (EveryFileReviewed) | 1,740,180 | 10.1 | no error |
+| `ci-lowering.cfg` (`GlobB = 2`) | ci | no-error | 600,556 | 4.6 | no error |
+| `ci-lowering-policy.cfg` | ci | no-error (LoweredNeverReady) | 600,556 | 4.6 | no error |
+| `ci-lowering-vacuity.cfg` | ci | violated: NeverRevertedAndReady | 23,901 | 1.8 | violated, 8 states |
+| `deep-shipped-maxlog4.cfg` (`MaxLog = 4`, no raise) | deep | no-error | 12,761,372 | 58.6 | no error |
+| `deep-lowering-maxlog4.cfg` (`GlobB = 2`, `MaxLog = 4`) | deep | no-error | 12,986,842 | 57.6 | no error |
+| `deep-shipped-defers.cfg` (`Defers = TRUE`) | deep | no-error | 52,299,000 | 253.9 | no error |
+| `deep-two-tools-vacuity.cfg` | -- | violated: NeverFixedAndReadyStandard | 561,986 | 9.0 | violated, 9 states |
+| `tooth-as-written-honest.cfg` | -- | violated | 10,796 | 1.4 | violated, 7 states |
+| `tooth-as-written.cfg` | -- | violated | 14,346 | 1.4 | violated, 7 states |
+| `tooth-without-cover.cfg` | -- | violated | 5,368 | 1.3 | violated, 6 states |
+| `tooth-without-locate.cfg` (`MaxLog = 4`) | -- | violated | 48,723 | 2.2 | violated, 8 states |
+| `tooth-without-rereview.cfg` (`MaxLog = 4`) | -- | violated | 76,029 | 2.6 | violated, 9 states |
+| `tooth-any-tool-rereview.cfg` (two tools, `MaxLog = 4`) | -- | violated | 1,070,972 | 16.6 | violated, 10 states |
+| `tooth-without-whole-pass.cfg` | -- | violated: EveryFileReviewed | 186 | 1.0 | violated, 4 states |
+| `tooth-without-highwater.cfg` | -- | violated: LoweredNeverReady | 6,350 | 1.3 | violated, 7 states |
+| `ci-shipped` with `Locate = FALSE` (not kept) | -- | -- | 1,740,180 | 9.8 | no error |
+| `ci-shipped` with `Rereview = FALSE` (not kept) | -- | -- | 1,740,180 | 10.1 | no error |
+| `ci-shipped` with `WholeFirstPass = FALSE` (not kept) | -- | -- | 1,740,180 | 10.1 | no error |
+| `ci-lowering` with `TierHighWater = FALSE` (not kept) | -- | -- | 580,060 | 4.1 | no error |
+| two tools, `SameTool` on, `TierTools = FALSE`, `MaxLog = 4` (not kept) | -- | -- | -- | -- | UNMEASURED: stopped at 53 M states / 240 s |
+| the same, invariant `TierAnchored`, one worker (not kept) | -- | -- | -- | -- | UNMEASURED: stopped at 16.6 M states / 300 s |
+| two tools, fix on, `MaxLog = 4`, before the owner's rules (not kept) | -- | -- | -- | -- | UNMEASURED: stopped past 134 M states / 16 min |
 
-**Vacuity** (`ci-vacuity`, 6 states): an unwitnessed gated step (an honest count, located in `a`),
-the agent fixes `a`, tool 1 reviews only `a` (clean), a test-run: `pr-ready`, in the quick tier,
-through a diff-scoped review. The green is not green because nothing can happen.
+`ci-every-file` and `ci-lowering-policy` expect no error on a policy property
+(`EveryFileReviewed`, `LoweredNeverReady`), not on the safety rule.
 
-**Two-tool vacuity** (`deep-two-tools-vacuity`, 9 states): in the standard tier, an unwitnessed
-gated step, the agent fixes `a`, tool 1 and tool 2 each review only `a`, clean, a test-run:
-`pr-ready`. At `MaxLog = 3` the two-tool shape cannot reach `pr-ready` after a gated step (a
-clean step per tool, a run and the gated step are four records), which is why no two-tool
-no-error config exists at that bound.
+**Vacuity** (`ci-vacuity`, 7 states): tool 1 reviews `a` alone (gated), the agent fixes `a`, a
+test-run, the gated step is logged, tool 1 reviews the whole change (clean): `pr-ready`, in the
+quick tier. The old 6-state trace (no whole-change review) is no longer reachable, as expected with
+`WholeFirstPass`; the new legitimate path includes the whole-change pass, and the diff-scoped
+review is the gated one.
+
+**Two-tool vacuity** (`deep-two-tools-vacuity`, 9 states): the agent raises the tier to standard,
+an unwitnessed gated step, the agent fixes `a`, tool 1 and tool 2 each review the whole change,
+clean, a test-run: `pr-ready`. At `MaxLog = 3` the two-tool shape cannot reach `pr-ready` after a
+gated step, which is why no two-tool no-error config exists at that bound.
 
 **Why these bounds.** The no-error checks of the richer shapes are past the 60 s `ci` limit on this
 machine: deferrals on and `MaxLog = 4` (see the table); two tools did not finish at all. A CI
@@ -185,28 +230,18 @@ model-checked in gate-integrity and unchanged here.
 
 ### Pending: the teeth enter the manifest with their RED cases
 
-The six `tooth-*.cfg` files MUST break `NoFlaggedBugShips`, and they do. They are not in
-`models.json` yet, because the validator refuses a counterexample config that replays no AC id,
-and the AC-RP ids arrive in the next commit with the RED cases:
+The six safety `tooth-*.cfg` files MUST break `NoFlaggedBugShips`, and the two policy teeth MUST
+break their property; they do. They are not in `models.json` yet, because the validator refuses a
+counterexample config that replays no AC id, and the AC-RP ids arrive in the next commit with the
+RED cases:
 
 - `tooth-as-written-honest` and `tooth-as-written` -> pending AC-RP-nn (a clean pass over other
   files closes a finding; a lie on a tree that differs in an unrelated file escapes Memory);
-- `tooth-without-cover` -> pending AC-RP-nn;
-- `tooth-without-locate` -> pending AC-RP-nn;
-- `tooth-without-rereview` -> pending AC-RP-nn;
-- `tooth-any-tool-rereview` -> pending AC-RP-nn.
+- `tooth-without-cover`, `tooth-without-locate`, `tooth-without-rereview`,
+  `tooth-any-tool-rereview` -> pending AC-RP-nn;
+- `tooth-without-whole-pass`, `tooth-without-highwater` -> pending AC-RP-nn.
 
 `deep-two-tools-vacuity` should join them as the two-tool vacuity control.
-
-## Open questions for the ADR
-
-- **Should convergence verify the whole-change first pass, per tool?** Decision 2 says the first
-  cycle runs every tool of the tier over the whole change. As modelled, convergence never checks
-  that it happened: C1 accepts any clean pass, and `ci-vacuity` converges with no whole-change
-  review at all (`b` is never reviewed). The stricter rule was not checked.
-- **Should C2 and the latest-step check count only tools of the tier?** (finding 3,
-  any-tool-rereview.)
-- **Should a revert be allowed to lower the tier?** (finding 4.)
 
 ## Limits of the abstraction
 

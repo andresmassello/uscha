@@ -21,14 +21,24 @@
       "vacuity": true
     },
     {
+      "cfg": "ci-every-file.cfg",
+      "tier": "ci",
+      "expect": "no-error"
+    },
+    {
       "cfg": "ci-lowering.cfg",
+      "tier": "ci",
+      "expect": "no-error"
+    },
+    {
+      "cfg": "ci-lowering-policy.cfg",
       "tier": "ci",
       "expect": "no-error"
     },
     {
       "cfg": "ci-lowering-vacuity.cfg",
       "tier": "ci",
-      "expect": "violated: NeverLoweredAndReady",
+      "expect": "violated: NeverRevertedAndReady",
       "vacuity": true
     },
     {
@@ -39,7 +49,7 @@
         "date": "2026-11-15",
         "distinct_states": 12761372,
         "tlc": "1.7.4",
-        "inputs_sha256": "dbba856b4de20e314f2608c215dbb736e50a3f1123369d47d50e5f2c875caa0b"
+        "inputs_sha256": "04a673d03d7c38453e4c3f30b48d36a563cfa79156b0ee7433ae71efcd978ab4"
       }
     },
     {
@@ -48,9 +58,9 @@
       "expect": "no-error",
       "measured": {
         "date": "2026-11-15",
-        "distinct_states": 12761372,
+        "distinct_states": 12986842,
         "tlc": "1.7.4",
-        "inputs_sha256": "aa7b3b0b79daab6048cf59cbc1757aab0484c2151eba69b5a70d687c66dca4b6"
+        "inputs_sha256": "020806cd9ed718cc1416e669bfeac0e37aa4d316d7b980dfe6a6c151f7cc3781"
       }
     },
     {
@@ -61,7 +71,7 @@
         "date": "2026-11-15",
         "distinct_states": 52299000,
         "tlc": "1.7.4",
-        "inputs_sha256": "e1dd8a9c44c824847271cd5a8ce5f3832c8234fb441c283fd969bd3d27ee3700"
+        "inputs_sha256": "47a617019939e9f1491dc133b41b86590c1e27c7cef0e76d59eb2fbf899be3ee"
       }
     }
   ]

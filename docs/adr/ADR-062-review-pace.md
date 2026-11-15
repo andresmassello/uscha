@@ -54,9 +54,10 @@ reviewer kept flagging was code older than its first pass.
 1. **A review tier per change, set by the change.** `uscha.config.json` gains `review_tiers`:
    path globs mapped to `quick` / `standard` / `deep`, each tier naming its tools (default:
    `quick` = code-review; `standard` = code-review + judgment-day; `deep` = the profile's full list).
-   The engine computes the tier from the files the change touches (the highest tier any touched path
-   reaches; a path no glob matches gets `standard`). The agent may RAISE the tier; lowering it is a
-   human act (ADR-058). `risk_profile` keeps owning the project's defaults and the deep list.
+   The engine computes the tier as the HIGHEST tier the change has ever reached: the highest tier
+   any path it touched reaches (a path no glob matches gets `standard`), kept when that file is
+   reverted (decided after the model, 2026-11-15: `TierHighWater`). The agent may RAISE the tier;
+   lowering it is a human act (ADR-058). `risk_profile` keeps owning the project's defaults and the deep list.
    **Decided (1a, 1b, 1c):** the tier comes from declared path globs only -- deterministic, no
    classifier; `quick` = one code-review pass plus the linters run once as a gate, never as rounds;
    `standard` adds judgment-day; `deep` = the profile's full list, improve included (the field data
@@ -87,18 +88,32 @@ reviewer kept flagging was code older than its first pass.
      not by any agent tool -- a tool that cannot see a finding's class cannot clear a file of it.
    **What the model shows, and at which bounds.** Necessary -- one counterexample each when it is
    dropped: CoverFix (one tool, `MaxLog = 3`), Locate and the re-review clause C2 (one tool,
-   `MaxLog = 4`), SameTool (two tools, `MaxLog = 4`; the trace is in the quick tier, where the
-   second tool is not even in the tier yet satisfies C2 and is the step Anchor reads). Checked
+   `MaxLog = 4`), SameTool (two tools, `MaxLog = 4`; with TierTools on, the trace is in the
+   standard tier, where the second tool is in the tier and honestly clears the reverted file). Checked
    sufficient -- no error -- only with ONE tool: `MaxLog = 3` in CI, `MaxLog = 4` and deferrals
    by hand; with one tool SameTool is inert, and the two-tool no-error run did not finish
    (UNMEASURED). **CI today checks only CoverFix and the as-written break**: at its bound
    (`MaxLog = 3`) dropping Locate or C2 still reads no error; the teeth that catch them enter CI
-   with their AC-RP ids. Lowering the tier by reverting a deep-glob file is reachable, and the rule
-   holds on it (measured); the bug in the model is only ever in a quick file. **Open, not decided
-   by the model:** (1) should convergence verify each tool's whole-change first pass? Decision 2
-   says the first cycle covers the whole change, but as modelled convergence never checks it, and
-   a change can converge with a file no tool reviewed; (2) should C2's re-review and the
-   latest-step check count only tools of the tier; (3) may a revert lower the tier. **A limit the
+   with their AC-RP ids. The bug in the model is only ever in a quick file.
+   **Decided by the owner after the model (2026-11-15):**
+   - **WholeFirstPass.** Convergence verifies that every tool of the tier had a review whose scope
+     was the whole change, in addition to C1 and C2.
+   - **TierTools.** C2's re-review and the latest step Anchor reads count only tools of the tier.
+   - **TierHighWater.** The tier is the highest the change ever reached; reverting a deep-glob file
+     does not lower it (decision 1).
+   What the model shows for each (one tool unless said; `-workers 1` for the counterexamples).
+   None of the three is needed for `NoFlaggedBugShips` at the bounds checked: with each one off,
+   the rule still reads no error (`MaxLog = 3`; WholeFirstPass on the shipped shape, TierHighWater
+   on the lowering shape). Their value is coverage and policy, each shown by its own property:
+   WholeFirstPass -- without it a change reaches `pr-ready` with a file no tool of the tier ever
+   reviewed (`EveryFileReviewed` broken, 4 states); TierHighWater -- without it a change that
+   touched a deep file converges on the quick rule after a revert (`LoweredNeverReady` broken, 7
+   states); TierTools -- with SameTool off, it removes the quick-tier path in which a tool outside
+   the tier clears the file (the shortest counterexample moves to the standard tier, 10 states), but
+   with SameTool on, no violation was found without it (two tools, `MaxLog = 4`, runs stopped
+   unfinished at 53 M and 17 M states: UNMEASURED); so SameTool stays necessary and TierTools adds
+   nothing measured beyond it. With all three on, the shipped and lowering shapes read no error in
+   CI (`MaxLog = 3`) and by hand (`MaxLog = 4`, deferrals). **A limit the
    engine adds:** the model takes a finding's file and a step's scope from the ground truth; in the
    engine the agent narrates the path -- and the scope, if `log-step` carries it -- like every count
    in `log-step` (today's review-start records only a whole-tree stamp, not a scope).
