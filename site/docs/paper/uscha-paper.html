@@ -288,7 +288,19 @@ attribution and time, not regeneration under a withheld oracle &mdash; and is
 not presented here as validation of it; the confound the source itself
 names, that part of the effect attributed to &ldquo;specifying first&rdquo;
 may be a reasoning effect rather than the specification, is stated as the
-source states it.</p>
+source states it.
+A practitioner report from the review stage, on the cost side rather than the
+detection side, comes from the Claude Code team [22]: human review time is the
+target and revert and incident rates are the guardrail, and review is made to
+converge &mdash; after three rounds the reviewer asks the author to reconsider
+the approach, later passes re-review only the new diff, findings already
+posted are not repeated, and the class of a bug is flagged rather than each
+instance. Their internal before-and-after figure reports mean reviews to pass
+falling from 2.08 to 1.32 and pull requests needing five or more rounds from
+8.9% to 1.5%. It is an engineering report with no control group, and it
+measures review rounds, not correctness; it motivates a review-pace change
+accepted for the kit but not yet shipped, and is not presented here as
+validation of it.</p>
 <p>Industry work on running many agents at once builds the agent &ldquo;factory&rdquo;:
 orchestration, continuous integration, tracing, and access control. Cursor&rsquo;s
 report [19] is one instance, and Cloudflare&rsquo;s proposed Agent Development Lifecycle,
@@ -1044,6 +1056,8 @@ cursor.com/blog/self-driving-codebases</p>
 infoq.com/articles/when-spec-driven-development-pays-off/</p>
 <p>[21] O. Pop, &ldquo;Cloudflare Introduces the Agent Development Lifecycle Stack to Replace Traditional SDLC,&rdquo; InfoQ, 21 September 2026.
 infoq.com/news/2026/09/cloudflare-adlc-agents/</p>
+<p>[22] A. Osmani, M. W. Lunt, and Q. Wang, &ldquo;How the Claude Code team does code review,&rdquo; claude.dev, 15 October 2026.
+claude.dev/blog/solving-code-review-at-anthropic/</p>
 </div>
 
 </body>

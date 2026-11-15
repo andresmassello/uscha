@@ -255,6 +255,18 @@ presented here as validation of it; the confound the source itself names,
 that part of the effect attributed to ``specifying first'' may be a
 reasoning effect rather than the specification, is stated as the source
 states it.
+A practitioner report from the review stage, on the cost side rather than the
+detection side, comes from the Claude Code team~\cite{osmani2026review}: human
+review time is the target and revert and incident rates are the guardrail, and
+review is made to converge --- after three rounds the reviewer asks the author
+to reconsider the approach, later passes re-review only the new diff, findings
+already posted are not repeated, and the class of a bug is flagged rather than
+each instance. Their internal before-and-after figure reports mean reviews to
+pass falling from 2.08 to 1.32 and pull requests needing five or more rounds
+from 8.9\% to 1.5\%. It is an engineering report with no control group, and it
+measures review rounds, not correctness; it motivates a review-pace change
+accepted for the kit but not yet shipped, and is not presented here as
+validation of it.
 
 Industry work on running many agents at once builds the agent ``factory'':
 orchestration, continuous integration, tracing, and access control. Cursor's
@@ -1070,6 +1082,11 @@ N.~Garg, ``When Spec-Driven Development Pays Off,'' InfoQ, September 2026.
 O.~Pop, ``Cloudflare Introduces the Agent Development Lifecycle Stack to Replace
 Traditional SDLC,'' InfoQ, 21 September 2026.
 \url{https://www.infoq.com/news/2026/09/cloudflare-adlc-agents/}
+
+\bibitem{osmani2026review}
+A.~Osmani, M.~W.~Lunt, and Q.~Wang, ``How the Claude Code team does code
+review,'' claude.dev, 15 October 2026.
+\url{https://claude.dev/blog/solving-code-review-at-anthropic/}
 
 \end{thebibliography}
 
