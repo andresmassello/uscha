@@ -22973,6 +22973,895 @@ esac
 }
 pj_unit T179 pj_t179
 
+pj_t180() {
+echo "== T180 (ADR-062, 2.16.0): review effort follows the change -- a tier per change, the re-review on the diff, a round cap, findings counted once =="
+# The method's QA loop re-ran every tool over the whole change for every one-line fix, and a docs
+# change paid what the riskiest code paid. Each case drives the real engine over temp git repos
+# (branch main, a feature branch carrying the change) under an isolated HOME. AC-RP-18..25 replay
+# the tooth-*.cfg counterexamples of docs/review-pace/models/ against the engine; AC-RP-28/29 are
+# the two vacuity paths, so an engine that refuses everything under review_tiers is red too.
+# AC-RP-16 compares with the v2.15.1 engine (UNMEASURED without the tag in git). The ids start at
+# 07: AC-RP-01..06 are the risk presets (T158), which own .rp-cases.json.
+T180=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+INSTALLER = os.path.join(kit, "install-uscha.py")
+PREV_TAG = "v2.15.1"
+NL, DQ = chr(10), chr(34)
+CR, JD, IM = "code-review", "judgment-day", "improve"
+TOOLS3 = [CR, JD, IM]
+TMPS = []
+res, why = {}, {}
+HOME_ISO = tempfile.mkdtemp(prefix="uscha-rp-home-")
+TMPS.append(HOME_ISO)
+ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
+for _k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "USCHA_JOBS"):
+    ENV.pop(_k, None)
+AGENT = dict(ENV, CLAUDECODE="1")
+XPY = sys.executable.replace(chr(92), "/")
+EMIT = NL.join([
+    "import os, time",
+    "os.makedirs(" + DQ + "reports" + DQ + ", exist_ok=True)",
+    "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit.xml" + DQ + "), " + DQ + "w"
+    + DQ + ").write(" + DQ + "<testsuite tests=" + DQ + " + chr(34) + " + DQ + "1" + DQ
+    + " + chr(34) + " + DQ + " timestamp=" + DQ + " + chr(34) + repr(time.time()) + chr(34) + "
+    + DQ + "><testcase name=" + DQ + " + chr(34) + " + DQ + "t" + DQ + " + chr(34) + " + DQ
+    + "/></testsuite>" + DQ + ")",
+]) + NL
+# the shapes of the model: a and b both quick (GlobB = 0), or b deep (GlobB = 2)
+T_QUICK = {"default": "standard", "quick": ["a.py", "b.py"], "deep": []}
+T_STD = {"default": "standard", "quick": ["docs/**"], "deep": []}
+T_HIGH = {"default": "standard", "quick": ["a.py"], "deep": ["b.py"],
+          "tools": {"deep": [CR, JD]}}
+T_GLOBS = {"default": "standard", "quick": ["docs/**", "**/*.md"], "deep": ["core/**"]}
+BAD = []          # setup commands (git, init, test-run, review-start, log-step) that failed
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix="uscha-rp-" + prefix + "-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def sh(d, *argv):
+    p = subprocess.run(list(argv), cwd=d, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                       text=True, encoding="utf-8", errors="replace", env=ENV)
+    if p.returncode != 0:
+        BAD.append("%s rc=%s %s" % (" ".join(argv[:3]), p.returncode, p.stdout[-120:]))
+    return p
+
+
+def q(d, *argv, **kw):
+    return subprocess.run([sys.executable, kw.get("eng", ENG)] + list(argv), cwd=d,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace", env=kw.get("env", ENV))
+
+
+def must(p, what):
+    if p.returncode != 0:
+        BAD.append("%s rc=%s %s" % (what, p.returncode, p.stdout[-160:]))
+    return p
+
+
+def edit(d, name, body):
+    write(os.path.join(d, "api", name), body + NL)
+
+
+def project(prefix, tiers=None, order=(CR,), change=(("a.py", "v = 1"),), base=None, cfg=None):
+    """A git repo in api/ (branch main, base commit), a feature branch carrying the change, a
+    ledger next to it. tiers=None: a project that never declares review_tiers."""
+    d = tmp(prefix)
+    api = os.path.join(d, "api")
+    files = {"a.py": "v = 0", "b.py": "w = 0"}
+    files.update(base or {})
+    for name, body in files.items():
+        edit(d, name, body)
+    write(os.path.join(api, "run.py"), EMIT)
+    write(os.path.join(api, ".gitignore"), "__pycache__/" + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"], ["git", "add", "-A"],
+                 ["git", "commit", "-qm", "base"], ["git", "branch", "-M", "main"],
+                 ["git", "checkout", "-q", "-b", "feat"]):
+        sh(api, *argv)
+    for name, body in change:
+        edit(d, name, body)
+    conf = {"defaults": {"qa_tools_external": list(TOOLS3), "qa_tools_order": list(order),
+                         "test_command_python": [XPY, "run.py"]},
+            "repos": [{"name": "api", "path": "api", "type": "python"}],
+            "integration": {"enabled": False}}
+    if tiers is not None:
+        conf["review_tiers"] = json.loads(json.dumps(tiers))
+    if cfg:
+        conf["review_tiers"].update(cfg)
+    write(os.path.join(d, "uscha.config.json"), json.dumps(conf, indent=2) + NL)
+    must(q(d, "init", "--config", "uscha.config.json"), "init")
+    tests(d)
+    return d
+
+
+def tests(d):
+    return must(q(d, "test-run", "--repo", "api"), "test-run")
+
+
+def start(d, tool, it, env=None):
+    """review-start --json -> the record (a dict; {} when it did not start)."""
+    r = q(d, "review-start", "--repo", "api", "--tool", tool, "--iteration", str(it), "--json",
+          env=env or ENV)
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        BAD.append("review-start %s it=%s rc=%s %s" % (tool, it, r.returncode, r.stdout[-160:]))
+        return {}
+
+
+def log(d, tool, it, gated, rv=None, ids=None, extra=(), check=True):
+    argv = ["log-step", "--repo", "api", "--tool", tool, "--iteration", str(it), "--reported",
+            str(gated), "--gated-reported", str(gated), "--tests-passed", "true"]
+    if rv:
+        argv += ["--review", rv]
+    if ids is not None:
+        argv += ["--gated-ids", ids]
+    p = q(d, *(argv + list(extra)))
+    return must(p, "log-step %s it=%s" % (tool, it)) if check else p
+
+
+def review(d, tool, it, gated=0, ids=None, extra=()):
+    rec = start(d, tool, it)
+    log(d, tool, it, gated, rec.get("id"), ids, extra)
+    return rec
+
+
+def phase(d, eng=ENG):
+    return q(d, "phase", "--repo", "api", "--require", "pr-ready", eng=eng)
+
+
+def tier_set(d, tier, env=None, human=None):
+    argv = ["review-tier", "--repo", "api", "--tier", tier]
+    if human:
+        argv += ["--human", human, "--note", "docs-only change, reviewed by hand"]
+    return q(d, *argv, env=env or ENV)
+
+
+def ledger(d):
+    with io.open(os.path.join(d, "QA-LEDGER.json"), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def ledger_bytes(d):
+    return io.open(os.path.join(d, "QA-LEDGER.json"), "rb").read()
+
+
+def rjson(d):
+    r = q(d, "readiness", "--json")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {}
+
+
+def scope(rec):
+    return rec.get("scope")
+
+
+def refused(ph, *tokens):
+    """pr-ready refused for the NAMED reason, with tests current (no stale evidence)."""
+    return (ph.returncode == 1 and all(t in ph.stdout for t in tokens)
+            and "stale" not in ph.stdout)
+
+
+def ready(ph):
+    return ph.returncode == 0
+
+
+def git_show(ref_path):
+    try:
+        p = subprocess.run(["git", "-C", root, "show", ref_path], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    return p.stdout if p.returncode == 0 else None
+
+
+def tail(p):
+    return "rc=%s %r" % (p.returncode, p.stdout[-220:])
+
+
+def measure():
+    # ------------------------------------------------------------------ decision 1: the tier
+    # --- AC-RP-07: the tier is the highest any touched path reaches, from the declared globs,
+    # and it is kept when the file that raised it is reverted (seen by a test-run)
+    mark = len(BAD)
+    d = project("globs", T_GLOBS, change=(("docs/guide.md", "# guide v2"), ("NOTES.md", "n2")),
+                base={"docs/guide.md": "# guide", "NOTES.md": "n", "core/x.py": "x = 0"})
+    t_docs = start(d, CR, 1).get("tier")
+    edit(d, "src.py", "s = 1")
+    tests(d)
+    t_std = start(d, CR, 2).get("tier")
+    edit(d, "core/x.py", "x = 1")
+    tests(d)
+    edit(d, "core/x.py", "x = 0")
+    tests(d)
+    t_kept = start(d, CR, 3).get("tier")
+    res["AC-RP-07"] = bool(len(BAD) == mark and t_docs == "quick" and t_std == "standard"
+                           and t_kept == "deep")
+    why["AC-RP-07"] = "docs=%r +src=%r +core,reverted=%r bad=%r" % (t_docs, t_std, t_kept,
+                                                                     BAD[mark:][:2])
+
+    # --- AC-RP-08: the agent may raise the tier; lowering is a human act; no review_tiers, no
+    # review-tier
+    mark = len(BAD)
+    d = project("raise", T_GLOBS, change=(("docs/guide.md", "# guide v2"),),
+                base={"docs/guide.md": "# guide"})
+    up = tier_set(d, "deep", env=AGENT)
+    t_up = start(d, CR, 1).get("tier")
+    b = ledger_bytes(d)
+    down_agent = tier_set(d, "quick", env=AGENT, human="Ana")
+    unchanged = ledger_bytes(d) == b
+    down_human = tier_set(d, "quick", human="Ana")
+    t_down = start(d, CR, 2).get("tier")
+    d2 = project("raise-none")
+    none = tier_set(d2, "deep", env=AGENT)
+    res["AC-RP-08"] = bool(len(BAD) == mark and up.returncode == 0 and t_up == "deep"
+                           and down_agent.returncode == 2 and "CLAUDECODE" in down_agent.stdout
+                           and unchanged and down_human.returncode == 0 and t_down == "quick"
+                           and none.returncode == 2 and "review_tiers" in none.stdout)
+    why["AC-RP-08"] = "up=%s t=%r agent-lower=%s human-lower=%s t=%r none=%s bad=%r" % (
+        tail(up), t_up, tail(down_agent), down_human.returncode, t_down, tail(none),
+        BAD[mark:][:2])
+
+    # --- AC-RP-09: quick = one code-review pass plus the linters once as a gate -- the deep list
+    # (three tools) is not required, and a gated linter still blocks
+    mark = len(BAD)
+    d = project("quick", T_QUICK, order=TOOLS3)
+    rec = review(d, CR, 1)
+    clean = os.path.join(d, "ruff-clean.json")
+    write(clean, "[]" + NL)
+    must(q(d, "ingest-gate", "--repo", "api", "--iteration", "1", "--ruff", clean), "ingest")
+    ok1 = phase(d)
+    dirty = os.path.join(d, "ruff-dirty.json")
+    write(dirty, json.dumps([{"code": None, "filename": "a.py", "location": {"row": 1},
+                              "message": "syntax"}]) + NL)
+    must(q(d, "ingest-gate", "--repo", "api", "--iteration", "2", "--ruff", dirty), "ingest")
+    no2 = phase(d)
+    res["AC-RP-09"] = bool(len(BAD) == mark and rec.get("tier") == "quick" and ready(ok1)
+                           and refused(no2, "static-gate", "ruff"))
+    why["AC-RP-09"] = "tier=%r clean=%s gated=%s bad=%r" % (rec.get("tier"), tail(ok1),
+                                                           tail(no2), BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 2: the scope
+    # --- AC-RP-10: standard -- a tool with a clean pass re-reviews only the diff (and must:
+    # SameTool), a tool with none re-reviews the whole change; deep -- every re-review is whole
+    mark = len(BAD)
+    d = project("diff", T_STD, order=TOOLS3, change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    r1 = review(d, CR, 1, 1, "a.py:R1")
+    j1 = review(d, JD, 1)
+    edit(d, "a.py", "v = 2")
+    tests(d)
+    r2 = review(d, CR, 2)
+    j2 = start(d, JD, 2)
+    mid = phase(d)
+    log(d, JD, 2, 0, j2.get("id"))
+    end = phase(d)
+    dd = project("diff-deep", {"default": "standard", "deep": ["a.py"]}, order=TOOLS3,
+                 change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    review(dd, CR, 1, 1, "a.py:R1")
+    review(dd, JD, 1)
+    review(dd, IM, 1)
+    edit(dd, "a.py", "v = 2")
+    tests(dd)
+    jd2 = start(dd, JD, 2)
+    both = ["a.py", "b.py"]
+    res["AC-RP-10"] = bool(len(BAD) == mark and scope(r1) == both and r1.get("whole") is True
+                           and scope(j1) == both and scope(r2) == both
+                           and scope(j2) == ["a.py"] and j2.get("whole") is False
+                           and refused(mid, JD) and ready(end)
+                           and jd2.get("tier") == "deep" and scope(jd2) == both
+                           and jd2.get("whole") is True)
+    why["AC-RP-10"] = "r1=%r r2=%r j2=%r/%r mid=%s end=%s deep=%r/%r bad=%r" % (
+        scope(r1), scope(r2), scope(j2), j2.get("whole"), tail(mid), tail(end),
+        jd2.get("tier"), scope(jd2), BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 3: the cap
+    # --- AC-RP-11: a fourth cycle without convergence is refused, naming the escalation; after a
+    # human resolves it the loop may go on; review_round_cap moves the cap; no review_tiers, no cap
+    mark = len(BAD)
+    d = project("cap", T_QUICK)
+    for it in (1, 2, 3):
+        review(d, CR, it, 1, "a.py:R1")
+    b = ledger_bytes(d)
+    fourth = q(d, "review-start", "--repo", "api", "--tool", CR, "--iteration", "4")
+    unchanged = ledger_bytes(d) == b
+    must(q(d, "escalate", "--repo", "api", "--reason", "three rounds, reconsider"), "escalate")
+    must(q(d, "resolve-escalation", "--repo", "api", "--human", "Ana", "--note",
+           "new approach agreed"), "resolve")
+    after = q(d, "review-start", "--repo", "api", "--tool", CR, "--iteration", "4")
+    d2 = project("cap-2", T_QUICK, cfg={"review_round_cap": 2})
+    for it in (1, 2):
+        review(d2, CR, it, 1, "a.py:R1")
+    third = q(d2, "review-start", "--repo", "api", "--tool", CR, "--iteration", "3")
+    d3 = project("cap-none")
+    for it in (1, 2, 3):
+        review(d3, CR, it, 1, "R1")
+    free = q(d3, "review-start", "--repo", "api", "--tool", CR, "--iteration", "4")
+    res["AC-RP-11"] = bool(len(BAD) == mark and fourth.returncode == 2
+                           and "escalate" in fourth.stdout
+                           and "review_round_cap" in fourth.stdout and unchanged
+                           and after.returncode == 0 and third.returncode == 2
+                           and "escalate" in third.stdout and free.returncode == 0)
+    why["AC-RP-11"] = "4th=%s after=%s cap2=%s none=%s bad=%r" % (
+        tail(fourth), after.returncode, tail(third), free.returncode, BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 4: ids
+    # --- AC-RP-12: under review_tiers a gated step of an agent tool names its ids, and each id
+    # carries the file it is in (Locate); a path may hold directories; elsewhere unchanged
+    mark = len(BAD)
+    d = project("ids", T_QUICK)
+    rv = start(d, CR, 1).get("id")
+    b = ledger_bytes(d)
+    no_ids = log(d, CR, 1, 1, rv, None, check=False)
+    no_path = log(d, CR, 1, 1, rv, "R1", check=False)
+    unwit = log(d, CR, 1, 1, None, None, check=False)
+    unchanged = ledger_bytes(d) == b
+    good = log(d, CR, 1, 2, rv, "a.py:R1,sub/c.py:R2", check=False)
+    d2 = project("ids-none")
+    rv2 = start(d2, CR, 1).get("id")
+    old_ok = log(d2, CR, 1, 1, rv2, None, check=False)
+    old_path = log(d2, CR, 2, 1, None, "R1", check=False)
+    res["AC-RP-12"] = bool(len(BAD) == mark and no_ids.returncode == 2
+                           and "--gated-ids" in no_ids.stdout and no_path.returncode == 2
+                           and unwit.returncode == 2 and unchanged and good.returncode == 0
+                           and old_ok.returncode == 0 and old_path.returncode == 0)
+    why["AC-RP-12"] = "no-ids=%s no-path=%s unwit=%s good=%s legacy=%s/%s bad=%r" % (
+        tail(no_ids), no_path.returncode, unwit.returncode, tail(good), old_ok.returncode,
+        old_path.returncode, BAD[mark:][:2])
+
+    # --- AC-RP-13: an id logged again in a later round is a REPEAT, never new yield
+    mark = len(BAD)
+    d = project("repeat", T_QUICK)
+    review(d, CR, 1, 1, "a.py:R1")
+    rv = start(d, CR, 2).get("id")
+    again = log(d, CR, 2, 2, rv, "a.py:R1,b.py:R2")
+    y = (rjson(d).get("review_yield") or {}).get(CR) or {}
+    res["AC-RP-13"] = bool(len(BAD) == mark and "repeat" in again.stdout
+                           and y.get("rounds") == 2 and y.get("gated_distinct") == 2
+                           and y.get("repeats") == 1)
+    why["AC-RP-13"] = "log=%r yield=%r bad=%r" % (again.stdout[-160:], y, BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 5
+    # --- AC-RP-14: --rejected is recorded and counted; the per-tool yield line is advisory --
+    # it is printed and pr-ready is not affected by it
+    mark = len(BAD)
+    d = project("rejected", T_QUICK)
+    rv = start(d, CR, 1).get("id")
+    must(q(d, "log-step", "--repo", "api", "--tool", CR, "--iteration", "1", "--reported", "2",
+           "--gated-reported", "1", "--gated-ids", "a.py:R1", "--rejected", "1",
+           "--tests-passed", "true", "--review", rv), "log-step --rejected")
+    edit(d, "a.py", "v = 2")
+    tests(d)
+    review(d, CR, 2)
+    ph = phase(d)
+    st = [s for s in ledger(d)["repos"]["api"]["iterations"] if s.get("review") == rv]
+    y = (rjson(d).get("review_yield") or {}).get(CR) or {}
+    rd = q(d, "readiness")
+    res["AC-RP-14"] = bool(len(BAD) == mark and st and st[0].get("rejected") == 1
+                           and y.get("rejected") == 1 and "review yield" in rd.stdout
+                           and ready(ph))
+    why["AC-RP-14"] = "step=%r yield=%r phase=%s rd=%r bad=%r" % (
+        (st or [{}])[0].get("rejected"), y, tail(ph), rd.stdout[-160:], BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 6
+    # --- AC-RP-15: an escape says which layer should have caught it; readiness counts per layer;
+    # the flag is optional and its value is a known layer
+    mark = len(BAD)
+    d = project("escape", T_QUICK)
+
+    def pf(*extra):
+        return q(d, "production-finding", "--repo", "api", "--severity", "CRITICAL",
+                 "--title", "race on draw", "--evidence", "prod log 42", *extra)
+    a = pf("--should-have-caught", "test")
+    b2 = pf("--should-have-caught", "review")
+    plain = pf()
+    wrong = pf("--should-have-caught", "luck")
+    rows = ledger(d).get("production_findings") or []
+    layers = [r.get("should_have_caught") for r in rows]
+    esc = rjson(d).get("escapes_by_layer")
+    esc = {k: v for k, v in esc.items() if v} if isinstance(esc, dict) else esc
+    res["AC-RP-15"] = bool(len(BAD) == mark and a.returncode == 0 and b2.returncode == 0
+                           and plain.returncode == 0 and wrong.returncode == 2
+                           and layers == ["test", "review", None]
+                           and esc == {"test": 1, "review": 1})
+    why["AC-RP-15"] = "a=%s wrong=%s layers=%r esc=%r bad=%r" % (
+        tail(a), wrong.returncode, layers, esc, BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 8: adoption
+    # --- AC-RP-16: without review_tiers the engine reads and writes exactly as v2.15.1 (a guard,
+    # green by construction against 2.15.1); with it, the same step is read by the new rules
+    mark = len(BAD)
+    prev = git_show(PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py")
+    if prev is None:
+        res["AC-RP-16"] = None
+        why["AC-RP-16"] = PREV_TAG + " engine not reachable (no git, or the tag is absent)"
+    else:
+        pe = os.path.join(tmp("prev-eng"), "qa_ledger.py")
+        write(pe, prev)
+        d = project("optin")
+        r1 = review(d, CR, 1, 1, "R1")
+        edit(d, "a.py", "v = 2")
+        tests(d)
+        review(d, CR, 2)
+        r4 = start(d, CR, 4)
+        same = all(q(d, *a).stdout == q(d, *a, eng=pe).stdout
+                   for a in (["readiness"], ["readiness", "--json"],
+                             ["phase", "--repo", "api", "--require", "pr-ready"],
+                             ["converged", "--repo", "api"]))
+        keys215 = {"id", "repo", "tool", "iteration", "at", "tree", "deferred_sha256", "defers",
+                   "closed_by"}
+        d2 = project("optin-on", T_QUICK)
+        rv = start(d2, CR, 1).get("id")
+        on = log(d2, CR, 1, 1, rv, "R1", check=False)
+        res["AC-RP-16"] = bool(len(BAD) == mark and same and set(r1) == keys215
+                               and set(r4) == keys215 and on.returncode == 2)
+        why["AC-RP-16"] = "same=%s keys=%r on=%s bad=%r" % (same, sorted(set(r1) - keys215),
+                                                            tail(on), BAD[mark:][:2])
+
+    # --- AC-RP-17: uscha init writes the default block (idempotent); doctor proposes it to a
+    # project that has none, and stays quiet when it is declared
+    fresh = tmp("init-new")
+    sh(fresh, "git", "init", "-q")
+    i1 = subprocess.run([sys.executable, INSTALLER, "init", "--repo", fresh], stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT, text=True, encoding="utf-8", env=ENV)
+    try:
+        c1 = json.load(io.open(os.path.join(fresh, "uscha.config.json"), encoding="utf-8"))
+    except (OSError, ValueError):
+        c1 = {}
+    i2 = subprocess.run([sys.executable, INSTALLER, "init", "--repo", fresh, "--json"],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                        encoding="utf-8", env=ENV)
+    try:
+        conflicts = json.loads(i2.stdout).get("conflicts")
+    except ValueError:
+        conflicts = None
+    rt = c1.get("review_tiers") or {}
+    absent = q(project("doctor-absent"), "doctor")
+    present = q(project("doctor-present", T_QUICK), "doctor")
+    res["AC-RP-17"] = bool(i1.returncode == 0 and rt.get("default") == "standard"
+                           and rt.get("quick") == ["docs/**", "**/*.md"] and rt.get("deep") == []
+                           and conflicts == [] and "review_tiers" in absent.stdout
+                           and "ADR-062" in absent.stdout and "ADR-062" not in present.stdout)
+    why["AC-RP-17"] = "init=%s block=%r conflicts=%r doctor=%r" % (
+        i1.returncode, rt, conflicts, absent.stdout[-200:])
+
+    # ------------------------------------------------------------------ the teeth (models/)
+    # Each replays a tooth-*.cfg counterexample against the real engine. The scope is assigned
+    # by the engine (review-start), so a step the model lets the agent narrow is driven as the
+    # closest path the engine allows; an extra unrelated edit of b keeps 2.15.1's whole-tree
+    # Memory from catching the path for a reason that is not the rule under test.
+    # --- AC-RP-18 (tooth-as-written): a clean step on a tree that differs only in an unrelated
+    # file closes nothing -- the finding is located in a.py and a.py did not move
+    mark = len(BAD)
+    d = project("t-written", T_QUICK)
+    rv1 = start(d, CR, 1).get("id")
+    edit(d, "b.py", "w = 1")
+    tests(d)
+    log(d, CR, 1, 1, rv1, "a.py:R1")
+    r2 = review(d, CR, 2)
+    ph = phase(d)
+    res["AC-RP-18"] = bool(len(BAD) == mark and "a.py" in (scope(r2) or [])
+                           and refused(ph, "a.py:R1"))
+    why["AC-RP-18"] = "scope=%r %s bad=%r" % (scope(r2), tail(ph), BAD[mark:][:2])
+
+    # --- AC-RP-19 (tooth-as-written-honest): the review after the gated one cannot exclude the
+    # flagged file -- the engine assigns it every file changed since the tool's last clean pass;
+    # an honest "I reviewed b only" logged clean is refused
+    mark = len(BAD)
+    d = project("t-honest", T_QUICK)
+    review(d, CR, 1)
+    edit(d, "a.py", "v = 2")
+    tests(d)
+    r1 = start(d, CR, 2)
+    edit(d, "b.py", "w = 1")
+    tests(d)
+    log(d, CR, 2, 1, r1.get("id"), "a.py:R1")
+    r2 = review(d, CR, 3)
+    ph = phase(d)
+    res["AC-RP-19"] = bool(len(BAD) == mark and scope(r1) == ["a.py"]
+                           and scope(r2) == ["a.py", "b.py"] and refused(ph, "a.py:R1"))
+    why["AC-RP-19"] = "r1=%r r2=%r %s bad=%r" % (scope(r1), scope(r2), tail(ph), BAD[mark:][:2])
+
+    # --- AC-RP-20 (tooth-without-cover): an unwitnessed gated step located in a.py, then a whole
+    # review on a tree that moved only in b, logged clean: the debt stays open (CoverFix)
+    mark = len(BAD)
+    d = project("t-cover", T_QUICK)
+    log(d, CR, 1, 1, None, "a.py:R1")
+    edit(d, "b.py", "w = 1")
+    r1 = start(d, CR, 2)
+    tests(d)
+    log(d, CR, 2, 0, r1.get("id"))
+    ph = phase(d)
+    res["AC-RP-20"] = bool(len(BAD) == mark and scope(r1) == ["a.py", "b.py"]
+                           and refused(ph, "a.py:R1"))
+    why["AC-RP-20"] = "scope=%r %s bad=%r" % (scope(r1), tail(ph), BAD[mark:][:2])
+
+    # --- AC-RP-21 (tooth-without-locate): the gated id must carry its file; with it, a stale
+    # whole review that saw b move and a diff review of b alone do not close a.py's debt
+    mark = len(BAD)
+    d = project("t-locate", T_QUICK, change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    r1 = start(d, CR, 1)
+    edit(d, "b.py", "w = 2")
+    tests(d)
+    b = ledger_bytes(d)
+    pathless = log(d, CR, 1, 1, None, "R1", check=False)
+    unchanged = ledger_bytes(d) == b
+    log(d, CR, 1, 1, None, "a.py:R1")
+    log(d, CR, 1, 0, r1.get("id"))
+    edit(d, "b.py", "w = 3")
+    tests(d)
+    r2 = review(d, CR, 2)
+    ph = phase(d)
+    res["AC-RP-21"] = bool(len(BAD) == mark and pathless.returncode == 2 and unchanged
+                           and scope(r2) == ["b.py"] and refused(ph, "a.py:R1"))
+    why["AC-RP-21"] = "pathless=%s r2=%r %s bad=%r" % (pathless.returncode, scope(r2), tail(ph),
+                                                       BAD[mark:][:2])
+
+    # --- AC-RP-22 (tooth-without-rereview): a.py reverted to the flagged content after its clean
+    # pass; the next review is assigned a.py (C2), and a clean verdict on it is refused
+    mark = len(BAD)
+    d = project("t-rereview", T_QUICK, change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    edit(d, "a.py", "v = 2")
+    r1 = start(d, CR, 1)
+    edit(d, "a.py", "v = 1")
+    tests(d)
+    log(d, CR, 1, 1, None, "a.py:R1")
+    log(d, CR, 1, 0, r1.get("id"))
+    edit(d, "b.py", "w = 2")
+    tests(d)
+    r2 = review(d, CR, 2)
+    ph = phase(d)
+    res["AC-RP-22"] = bool(len(BAD) == mark and scope(r2) == ["a.py", "b.py"]
+                           and refused(ph, "a.py:R1"))
+    why["AC-RP-22"] = "r2=%r %s bad=%r" % (scope(r2), tail(ph), BAD[mark:][:2])
+
+    # --- AC-RP-23 (tooth-any-tool-rereview, standard): judgment-day's clean whole review does not
+    # clear a file code-review's clean pass no longer covers -- code-review must re-review it
+    mark = len(BAD)
+    d = project("t-anytool", T_STD, order=(CR, JD),
+                change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    edit(d, "a.py", "v = 2")
+    r1 = start(d, CR, 1)
+    edit(d, "a.py", "v = 1")
+    tests(d)
+    log(d, CR, 1, 1, None, "a.py:R1")
+    log(d, CR, 1, 0, r1.get("id"))
+    edit(d, "b.py", "w = 2")
+    tests(d)
+    j1 = review(d, JD, 1)
+    no_cr = phase(d)
+    r2 = review(d, CR, 2)
+    ph = phase(d)
+    res["AC-RP-23"] = bool(len(BAD) == mark and j1.get("tier") == "standard"
+                           and refused(no_cr, CR) and "a.py" in (scope(r2) or [])
+                           and refused(ph, "a.py:R1"))
+    why["AC-RP-23"] = "tier=%r no-cr=%s r2=%r %s bad=%r" % (
+        j1.get("tier"), tail(no_cr), scope(r2), tail(ph), BAD[mark:][:2])
+
+    # --- AC-RP-24 (tooth-without-whole-pass): a tool's first review is the whole change; after a
+    # raise to standard, pr-ready waits for judgment-day's own whole-change review
+    mark = len(BAD)
+    d = project("t-whole", T_QUICK, change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    r1 = review(d, CR, 1)
+    ok1 = phase(d)
+    up = tier_set(d, "standard", env=AGENT)
+    no_jd = phase(d)
+    j1 = review(d, JD, 1)
+    ok2 = phase(d)
+    both = ["a.py", "b.py"]
+    res["AC-RP-24"] = bool(len(BAD) == mark and scope(r1) == both and r1.get("whole") is True
+                           and ready(ok1) and up.returncode == 0 and refused(no_jd, JD)
+                           and scope(j1) == both and j1.get("whole") is True and ready(ok2))
+    why["AC-RP-24"] = "r1=%r ok1=%s up=%s no-jd=%s j1=%r ok2=%s bad=%r" % (
+        scope(r1), ok1.returncode, up.returncode, tail(no_jd), scope(j1), ok2.returncode,
+        BAD[mark:][:2])
+
+    # --- AC-RP-25 (tooth-without-highwater): b.py (deep glob) touched, seen by a test-run, then
+    # reverted: the change stays deep and does not converge on the quick tool list
+    mark = len(BAD)
+    d = project("t-high", T_HIGH)
+    edit(d, "b.py", "w = 1")
+    tests(d)
+    edit(d, "b.py", "w = 0")
+    tests(d)
+    r1 = review(d, CR, 1)
+    ph = phase(d)
+    res["AC-RP-25"] = bool(len(BAD) == mark and r1.get("tier") == "deep"
+                           and refused(ph, JD))
+    why["AC-RP-25"] = "tier=%r %s bad=%r" % (r1.get("tier"), tail(ph), BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ policy properties
+    # --- AC-RP-26 (EveryFileReviewed): at pr-ready every tool of the tier reviewed every file of
+    # the change -- a file changed after code-review's clean pass is assigned to code-review
+    mark = len(BAD)
+    d = project("p-every", T_STD, order=(CR, JD), change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    review(d, CR, 1)
+    edit(d, "b.py", "w = 2")
+    tests(d)
+    review(d, JD, 1)
+    no = phase(d)
+    r2 = review(d, CR, 2)
+    ok = phase(d)
+    res["AC-RP-26"] = bool(len(BAD) == mark and refused(no, CR, "b.py")
+                           and scope(r2) == ["b.py"] and r2.get("whole") is False and ready(ok))
+    why["AC-RP-26"] = "no=%s r2=%r ok=%s bad=%r" % (tail(no), scope(r2), tail(ok), BAD[mark:][:2])
+
+    # --- AC-RP-27 (LoweredNeverReady): a change that reached standard converges only on the
+    # standard rule after the raising file is reverted; the agent cannot lower it back
+    mark = len(BAD)
+    d = project("p-lowered", {"default": "standard", "quick": ["a.py"], "deep": []})
+    edit(d, "b.py", "w = 1")
+    tests(d)
+    edit(d, "b.py", "w = 0")
+    tests(d)
+    r1 = review(d, CR, 1)
+    no = phase(d)
+    down = tier_set(d, "quick", env=AGENT, human="Ana")
+    still = phase(d)
+    review(d, JD, 1)
+    ok = phase(d)
+    res["AC-RP-27"] = bool(len(BAD) == mark and r1.get("tier") == "standard" and refused(no, JD)
+                           and down.returncode == 2 and refused(still, JD) and ready(ok))
+    why["AC-RP-27"] = "tier=%r no=%s down=%s ok=%s bad=%r" % (
+        r1.get("tier"), tail(no), down.returncode, tail(ok), BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ positive controls
+    # --- AC-RP-28 (ci-vacuity): a legitimate fix reaches pr-ready in quick through a diff-scoped
+    # re-review, while qa_tools_order lists three tools
+    mark = len(BAD)
+    d = project("v-quick", T_QUICK, order=TOOLS3, change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    review(d, CR, 1)
+    edit(d, "a.py", "v = 2")
+    tests(d)
+    r1 = review(d, CR, 2, 1, "a.py:R1")
+    edit(d, "a.py", "v = 3")
+    tests(d)
+    r2 = review(d, CR, 3)
+    ph = phase(d)
+    res["AC-RP-28"] = bool(len(BAD) == mark and scope(r1) == ["a.py"]
+                           and scope(r2) == ["a.py"] and ready(ph))
+    why["AC-RP-28"] = "r1=%r r2=%r %s bad=%r" % (scope(r1), scope(r2), tail(ph), BAD[mark:][:2])
+
+    # --- AC-RP-29 (deep-two-tools-vacuity): standard, an unwitnessed gated step, a fix, both tools
+    # review the whole change clean: pr-ready without the deep list's third tool
+    mark = len(BAD)
+    d = project("v-two", T_STD, order=TOOLS3)
+    log(d, CR, 1, 1, None, "a.py:R1")
+    edit(d, "a.py", "v = 2")
+    r1 = review(d, CR, 2)
+    j1 = review(d, JD, 1)
+    tests(d)
+    ph = phase(d)
+    res["AC-RP-29"] = bool(len(BAD) == mark and r1.get("tier") == "standard"
+                           and j1.get("whole") is True and ready(ph))
+    why["AC-RP-29"] = "tier=%r %s bad=%r" % (r1.get("tier"), tail(ph), BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ the 2.16.0 fresh review
+    # --- AC-RP-30: a gated step that names two ids closes them ONE BY ONE -- fixing a.py never
+    # closes b.py:R2 (the model carries a single located finding, so it cannot see this)
+    mark = len(BAD)
+    d = project("i-ids", T_QUICK, change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    review(d, CR, 1, 2, "a.py:R1,b.py:R2")
+    edit(d, "a.py", "v = 2")
+    tests(d)
+    review(d, CR, 2)
+    half = phase(d)
+    edit(d, "b.py", "w = 2")
+    tests(d)
+    r3 = review(d, CR, 3)
+    full = phase(d)
+    res["AC-RP-30"] = bool(len(BAD) == mark and refused(half, "code-review/b.py:R2")
+                           and "code-review/a.py:R1" not in half.stdout
+                           and scope(r3) == ["b.py"] and ready(full))
+    why["AC-RP-30"] = "half=%s full=%s r3=%r bad=%r" % (tail(half), tail(full), scope(r3),
+                                                         BAD[mark:][:2])
+
+    # --- AC-RP-31: prose is review content under review_tiers -- a re-edited docs file closes
+    # its finding on a clean re-review, an edit after a clean pass makes the pass stale, and a
+    # confirmed deferral closes a docs finding
+    mark = len(BAD)
+    T_DOC = {"default": "standard", "quick": ["a.py", "docs/**"], "deep": []}
+    d = project("i-docs", T_DOC, change=(("a.py", "v = 1"), ("docs/g.md", "# g2")),
+                base={"docs/g.md": "# g"})
+    review(d, CR, 1, 1, "docs/g.md:R1")
+    edit(d, "docs/g.md", "# g3")
+    tests(d)
+    review(d, CR, 2)
+    closed = phase(d)
+    edit(d, "docs/g.md", "# g4")
+    tests(d)
+    stale = phase(d)
+    d2 = project("i-docs-defer", T_DOC, change=(("a.py", "v = 1"), ("docs/g.md", "# g2")),
+                 base={"docs/g.md": "# g"})
+    review(d2, CR, 1, 1, "docs/g.md:R1")
+    write(os.path.join(d2, "api", "ISSUES-DEFERRED.md"),
+          "- defers: code-review/docs/g.md:R1 -- accepted for now" + NL)
+    must(q(d2, "confirm-deferral", "--repo", "api", "--id", "code-review/docs/g.md:R1",
+           "--human", "Ana", "--note", "accepted"), "confirm-deferral")
+    review(d2, CR, 2)
+    deferred = phase(d2)
+    res["AC-RP-31"] = bool(len(BAD) == mark and ready(closed) and refused(stale, CR)
+                           and ready(deferred))
+    why["AC-RP-31"] = "closed=%s stale=%s deferred=%s bad=%r" % (tail(closed), tail(stale),
+                                                                 tail(deferred), BAD[mark:][:2])
+
+    # --- AC-RP-32: the base is resolved or the loop refuses -- a branch with commits ahead of a
+    # base nobody can name never reads as an empty change (review-start exits 2, phase refuses)
+    mark = len(BAD)
+    d = tmp("nobase")
+    api = os.path.join(d, "api")
+    for name, body in (("a.py", "v = 0"), ("run.py", EMIT)):
+        write(os.path.join(api, name), body + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"], ["git", "add", "-A"],
+                 ["git", "commit", "-qm", "base"], ["git", "branch", "-M", "develop"]):
+        sh(api, *argv)
+    conf = {"defaults": {"qa_tools_external": list(TOOLS3), "qa_tools_order": [CR],
+                         "test_command_python": [XPY, "run.py"]},
+            "repos": [{"name": "api", "path": "api", "type": "python"}],
+            "integration": {"enabled": False}, "review_tiers": json.loads(json.dumps(T_QUICK))}
+    write(os.path.join(d, "uscha.config.json"), json.dumps(conf, indent=2) + NL)
+    must(q(d, "init", "--config", "uscha.config.json"), "init")
+    one = q(d, "review-start", "--repo", "api", "--tool", CR, "--iteration", "1")
+    edit(d, "a.py", "v = 1")
+    sh(api, "git", "commit", "-qam", "work")
+    tests(d)
+    b = ledger_bytes(d)
+    two = q(d, "review-start", "--repo", "api", "--tool", CR, "--iteration", "2")
+    unchanged = ledger_bytes(d) == b
+    log(d, CR, 2, 0, None)
+    ph = phase(d)
+    cv = q(d, "converged", "--repo", "api")
+    res["AC-RP-32"] = bool(len(BAD) == mark and one.returncode == 0 and two.returncode == 2
+                           and "base" in two.stdout and unchanged
+                           and ph.returncode == 1 and "no base branch resolves" in ph.stdout
+                           and cv.returncode != 0)
+    why["AC-RP-32"] = "one=%s two=%s unchanged=%s phase=%s conv=%s bad=%r" % (
+        one.returncode, tail(two), unchanged, tail(ph), cv.returncode, BAD[mark:][:2])
+
+    # --- AC-RP-33: review_tiers is read LIVE (the ADR-051 precedent) -- a project that adds the
+    # block mid-run keeps its ledger, and doctor does not send it to a re-init
+    mark = len(BAD)
+    d = project("live")
+    steps_before = len(ledger(d).get("steps") or [])
+    off = start(d, CR, 1)
+    cfg_path = os.path.join(d, "uscha.config.json")
+    with io.open(cfg_path, encoding="utf-8") as fh:
+        live = json.load(fh)
+    live["review_tiers"] = json.loads(json.dumps(T_QUICK))
+    write(cfg_path, json.dumps(live, indent=2) + NL)
+    on = start(d, CR, 2)
+    refused_ids = log(d, CR, 2, 1, on.get("id"), None, check=False)
+    kept = len(ledger(d).get("steps") or []) >= steps_before
+    doc_on = q(d, "doctor")
+    with io.open(cfg_path, encoding="utf-8") as fh:
+        live = json.load(fh)
+    live.pop("review_tiers")
+    write(cfg_path, json.dumps(live, indent=2) + NL)
+    doc_off = q(d, "doctor")
+    res["AC-RP-33"] = bool(len(BAD) == mark and "tier" not in off and on.get("tier") == "quick"
+                           and refused_ids.returncode == 2 and kept
+                           and "ADR-062" not in doc_on.stdout
+                           and "ADR-062" in doc_off.stdout and "no re-init" in doc_off.stdout
+                           and "writes a NEW" not in doc_off.stdout)
+    why["AC-RP-33"] = "off=%r on=%r ids=%s kept=%s doctor=%r bad=%r" % (
+        off.get("tier"), on.get("tier"), refused_ids.returncode, kept, doc_off.stdout[-260:],
+        BAD[mark:][:2])
+
+    # --- AC-RP-34: globs, scope and id paths are relative to the repo's configured path, not the
+    # git root -- under a monorepo (git root above api/) docs/**, core/** and a.py:R1 all match
+    mark = len(BAD)
+    d = tmp("mono")
+    api = os.path.join(d, "api")
+    for name, body in (("a.py", "v = 0"), ("docs/g.md", "# g"), ("core/x.py", "x = 0"),
+                       ("run.py", EMIT)):
+        write(os.path.join(api, name), body + NL)
+    write(os.path.join(d, ".gitignore"), "__pycache__/" + NL)
+    for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"], ["git", "add", "-A"],
+                 ["git", "commit", "-qm", "base"], ["git", "branch", "-M", "main"],
+                 ["git", "checkout", "-q", "-b", "feat"]):
+        sh(d, *argv)
+    conf = {"defaults": {"qa_tools_external": list(TOOLS3), "qa_tools_order": [CR],
+                         "test_command_python": [XPY, "run.py"]},
+            "repos": [{"name": "api", "path": "api", "type": "python"}],
+            "integration": {"enabled": False},
+            "review_tiers": json.loads(json.dumps(T_GLOBS))}
+    write(os.path.join(d, "uscha.config.json"), json.dumps(conf, indent=2) + NL)
+    must(q(d, "init", "--config", "uscha.config.json"), "init")
+    edit(d, "docs/g.md", "# g2")
+    tests(d)
+    docs_only = start(d, CR, 1)
+    edit(d, "core/x.py", "x = 1")
+    tests(d)
+    r1 = start(d, CR, 2)
+    log(d, CR, 2, 1, r1.get("id"), "core/x.py:R1")
+    edit(d, "core/x.py", "x = 2")
+    tests(d)
+    review(d, CR, 3)
+    ph = phase(d)
+    res["AC-RP-34"] = bool(len(BAD) == mark and docs_only.get("tier") == "quick"
+                           and r1.get("tier") == "deep"
+                           and scope(r1) == ["core/x.py", "docs/g.md"] and ready(ph))
+    why["AC-RP-34"] = "docs=%r tier=%r scope=%r %s bad=%r" % (
+        docs_only.get("tier"), r1.get("tier"), scope(r1), tail(ph), BAD[mark:][:2])
+
+    # --- AC-RP-35: a confirmed deferral closes its id whatever the scope of the clean review --
+    # here the flagged file was put back to the content of an earlier clean pass, so the next
+    # review is handed nothing, and the human-accepted finding still closes
+    mark = len(BAD)
+    d = project("i-defer", T_QUICK, change=(("a.py", "v = 1"), ("b.py", "w = 1")))
+    review(d, CR, 1)
+    edit(d, "b.py", "w = 2")
+    tests(d)
+    review(d, CR, 2, 1, "b.py:R2")
+    edit(d, "b.py", "w = 1")
+    tests(d)
+    write(os.path.join(d, "api", "ISSUES-DEFERRED.md"),
+          "- defers: code-review/b.py:R2 -- accepted for now" + NL)
+    must(q(d, "confirm-deferral", "--repo", "api", "--id", "code-review/b.py:R2", "--human",
+           "Ana", "--note", "accepted"), "confirm-deferral")
+    r3 = review(d, CR, 3)
+    ph = phase(d)
+    res["AC-RP-35"] = bool(len(BAD) == mark and scope(r3) == [] and ready(ph))
+    why["AC-RP-35"] = "scope=%r %s bad=%r" % (scope(r3), tail(ph), BAD[mark:][:2])
+
+    # --- AC-RP-36: the round cap counts review CYCLES across the tools of the tier, and holds at
+    # log-step too -- gated rounds that alternate between two tools (so neither tool is capped by
+    # its own run) still stop at the cap, and an unwitnessed log-step is no way round it
+    mark = len(BAD)
+    d = project("i-cap", T_STD, order=(CR, JD))
+    review(d, CR, 1, 1, "a.py:R1")
+    review(d, JD, 2, 1, "a.py:R2")
+    review(d, CR, 3, 1, "a.py:R3")
+    b = ledger_bytes(d)
+    nxt = q(d, "review-start", "--repo", "api", "--tool", JD, "--iteration", "4")
+    late = log(d, JD, 5, 0, None, None, check=False)
+    unchanged = ledger_bytes(d) == b
+    same = q(d, "review-start", "--repo", "api", "--tool", JD, "--iteration", "3")
+    res["AC-RP-36"] = bool(len(BAD) == mark and nxt.returncode == 2 and "escalate" in nxt.stdout
+                           and "review_round_cap" in nxt.stdout and late.returncode == 2
+                           and "escalate" in late.stdout and unchanged and same.returncode == 0)
+    why["AC-RP-36"] = "next=%s late=%s unchanged=%s same-cycle=%s bad=%r" % (
+        tail(nxt), tail(late), unchanged, same.returncode, BAD[mark:][:2])
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".pace-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T180" in
+  OK*) PASS=$((PASS+1)); echo "  ok   review pace (AC-RP-07..36): $T180";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T180";;
+esac
+}
+pj_unit T180 pj_t180
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -23344,6 +24233,10 @@ FAMILIES = (
      _seq("AC-MK", 1, 14)),
     (".tp-cases.json", "skill-templates", "T179",                     # 2.15.0
      _seq("AC-TP", 1, 3)),
+    # AC-RP-16 compares with the v2.15.1 engine: without the tag, or from an extracted kit, it
+    # reports None = UNMEASURED. AC-RP-01..06 (risk presets, T158) keep their own sidecar.
+    (".pace-cases.json", "review-pace", "T180",                       # ADR-062, 2.16.0
+     _seq("AC-RP", 7, 36)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

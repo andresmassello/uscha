@@ -27,7 +27,7 @@ artifacts; these can block) and **self-reported** agent counts (log-step — nar
 recorded for the retrospective; a measured red always overrides a narrated green).
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.15.1 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.16.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## First contact (show ONCE, then never again)
 
@@ -461,6 +461,56 @@ ledger, so do not try to work around them:
 - **Memory**: a clean verdict on exactly the content an earlier review flagged contradicts the
   record and does not count. Fix it, or defer it.
 
+**Review pace (kit 2.16.0, ADR-062) -- only when the config declares `review_tiers`.** `uscha init`
+writes the block for a new project and `doctor` proposes it to an existing one; the LIVE
+`uscha.config.json` wins over the ledger's frozen copy (like `qa_tools_external`), so adding the
+block mid-run needs no re-init and keeps the ledger. Without it, the review loop reads as in
+2.15 (output differs only by `doctor`'s advisory, the new help text and the opt-in flags). With
+it, the ENGINE decides how much a review covers, and a fix no longer restarts every tool over
+the whole change. Every path below -- globs, scopes, ids -- is relative to the repo's
+configured `path`, not the git root:
+
+- **Tier.** The change's files (committed since the merge-base with the base branch --
+  `origin/HEAD`, `origin/main`, `main`, `origin/master`, `master`, the first that resolves --
+  plus the working tree; prose files count here and in every review) are matched against the `quick` / `standard` / `deep` globs; the tier is the
+  highest any file reaches, and a file no glob matches gets `default`. It never drops by itself: once
+  a `test-run`, `review-start` or `log-step` has seen a deep file, reverting that file leaves the
+  change `deep`. You may RAISE it (`review-tier --repo <REPO> --tier deep`); lowering it is a human
+  act (`--human <NAME> --note "<why>"`), refused in your shell.
+- **Tools.** `quick` runs code-review; `standard` code-review + judgment-day; `deep` the project's
+  `qa_tools_order` (each overridable in `review_tiers.tools`). Convergence waits for the tools of the
+  tier, not for the whole `qa_tools_order`; the linters still run once and a gated one still blocks.
+- **Scope.** `review-start --json` prints `tier`, `scope` (the files, sorted) and `whole`. Review
+  exactly `scope`. A tool with no clean pass yet is handed the WHOLE change; after its first clean
+  pass, only the files changed since it. In `deep` every review is of the whole change. Do not
+  narrow or widen it: the engine assigned it, and what convergence reads is that assignment.
+  If no base branch resolves while the branch has commits, `review-start` exits 2 and `phase` /
+  `converged` refuse: the change cannot be computed, and an empty scope is never read as clean.
+- **Convergence (`quick` and `standard`).** Every tool of the tier has had a review of the whole
+  change; its latest review is clean on the tree on disk; and every file changed after a tool's
+  clean pass was reviewed clean AGAIN, after it, by THAT tool. A clean pass of another tool does not
+  clear the file, and `phase` names the tool and the file (`code-review: b.py changed after its clean
+  review ...`; a refusal names the tool, and the file when one is the cause). In `deep` it is the rule above over the tier's tools, and each tool's last review
+  must have been of the whole change.
+- **A finding carries its file.** A gated step needs `--gated-ids <path>:<rule>,...` -- the path
+  relative to the repo's `path` (`src/pay.py:R3`; a bare `R3` is refused). Each id closes ON ITS
+  OWN: a later clean review that COVERED its file and in which THAT file changed, or its confirmed
+  deferral (a human accepted it, so no coverage is needed). Fixing one id of a step never closes its
+  siblings, and a clean review that covered a file unchanged contradicts that id. A clean review of
+  OTHER files closes nothing.
+- **A finding is counted once.** An id this tool already logged prints `repeat` and is not new
+  yield. `log-step --rejected N` (optional) records how many of the reported findings you judged the
+  tool wrong about; `readiness` prints a per-tool `review yield` line (rounds, distinct gated ids,
+  repeats, rejected) and `--json` carries `review_yield`. Advisory: it gates nothing.
+- **A round cap.** After `review_round_cap` (default 3) either rounds in which a tool reported gated
+  findings with no clean round of its own between, or review cycles (iteration numbers) across the
+  tier's tools in which something was gated with no clean cycle between, `review-start` AND
+  `log-step` exit 2: do NOT run another cycle -- reconsider the approach and `escalate`. A human's
+  `resolve-escalation` restarts the count. Iteration numbers are narrated: a round that reuses the
+  latest iteration finishes that cycle and is not counted as a new one.
+- **An escape names its layer.** `production-finding --should-have-caught <test|static|review|model|
+  human|none>` (optional) is recorded; `readiness --json` counts `escapes_by_layer`.
+
 After **each** tool pass:
 
 1. Apply only fixes at/above the severity gate. Send the rest to `ISSUES-DEFERRED.md`.
@@ -597,6 +647,11 @@ extra clean steps does not help, and a red snapshot vetoes a narrated green), AN
 latest static-gate run of every linter clean at the gate level, AND every persisted
 fact gate (`gate:*`, `blocker:*` records from log-gate/flag-blocker) clean. A clean
 agent cycle alone does not converge if any measured gate still flags something.
+
+With `review_tiers` declared (see Review pace above) "every tool in `qa_tools_order`" becomes
+"every tool of the change's tier", and in `quick` / `standard` the latest-step rule is replaced by
+the whole-change first review plus the same-tool re-review of every file changed after a clean pass;
+the linters and the fact gates read as before.
 
 - **Converged** → leave the loop for this repo.
 - **Not converged** → next cycle, up to `config.defaults.max_iterations`.

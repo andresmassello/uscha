@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.15.1 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.16.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -249,6 +249,63 @@ the id needs its own. Any other change to the file, or a line inside a code fenc
 comment, closes nothing; a gated step logged without ids closes only by a fix; steps from before 2.14.0 keep the whole-file rule and `readiness` names them. The
 ids are narrated like the counts: what is guaranteed is that the deferred id is the reported one
 and that a human confirmed it.
+
+## Review pace (ADR-062, 2.16.0) - how much review does this change need?
+
+Until 2.15.1 convergence needed the last review of EVERY tool in `qa_tools_order` to be clean on the
+tree on disk, so a one-line fix restarted every tool over the whole change, a docs change paid what
+the riskiest code paid, and the same finding was counted again each round. A project that declares
+`review_tiers` in `uscha.config.json` (`uscha init` writes the block; `doctor` proposes it to an
+existing project) gets the review pace instead. The block is read LIVE, like `qa_tools_external`
+(ADR-051): a project adds it mid-run with no re-init and keeps its ledger. Without it the review
+loop reads as in 2.15.1; output differs only by `doctor`'s advisory, the new help text and the
+opt-in flags.
+
+- **A tier per change.** The change's files (committed since the merge-base with the base branch --
+  `origin/HEAD`, `origin/main`, `main`, `origin/master`, `master`, the first that resolves -- plus the
+  working tree; prose counts here and in every review) are matched against the `quick` / `standard` / `deep` globs;
+  the tier is the highest any file reaches, and a file no glob matches gets `default`. The tier
+  never drops by itself: once a `test-run`, `review-start` or `log-step` has seen a deep file,
+  reverting it leaves the change deep. `review-tier --repo R --tier T` raises it (anyone); lowering
+  it is a human act (`--human`, `--note`, refused in an agent's shell). `quick` runs code-review,
+  `standard` code-review and judgment-day, `deep` the project's `qa_tools_order`; each is
+  overridable in `review_tiers.tools`. Convergence waits for the tools of the tier.
+- **The scope is assigned, not narrated.** `review-start --json` prints `tier`, `scope` (the files)
+  and `whole`. A tool with no clean pass reviews the whole change; afterwards only the files changed
+  since its last clean pass; in `deep` always the whole change. Paths -- globs, scope, ids -- are
+  relative to the repo's configured `path`, not the git root. If no base branch resolves while the
+  branch has commits, `review-start` exits 2 and `phase` / `converged` refuse (fail closed).- **Convergence in `quick` and `standard`**: every tool of the tier had a review of the whole
+  change, its latest review is clean on the tree on disk, and every file changed after a tool's
+  clean pass was reviewed clean again, after it, by THAT tool (a clean pass of another tool clears
+  nothing). In `deep` it is the 2.15.1 rule over the tier's tools, plus each tool's last review
+  covering the whole change. `phase` names the tool in every refusal, and the file whenever a file is
+  the cause.
+- **A finding names its file.** A gated step needs `--gated-ids <path>:<rule>,...` (the path relative
+  to the repo's `path`). Each id closes on its own: a later clean review that covered its file and in
+  which that file changed, or its confirmed deferral (no coverage needed); fixing one id of a step
+  never closes its siblings. A clean review that covered a file unchanged contradicts that id; a
+  clean review of other files closes nothing. The
+  file is narrated like the count: what is guaranteed is that the review which closes it was
+  assigned that file.
+- **Counted once, measured, capped.** An id the tool already logged prints `repeat` and is not new
+  yield. `log-step --rejected N` (optional) records what the author judged the tool wrong about;
+  `readiness` prints an advisory `review yield` line per tool (rounds, distinct gated ids, repeats,
+  rejected; `review_yield` in `--json`) and nothing gates on it. After `review_round_cap` (default
+  3) gated rounds of one tool with no clean round of its own between, or gated review cycles
+  (iteration numbers) across the tier's tools with no clean cycle between, `review-start` and
+  `log-step` exit 2 and ask for an `escalate`; a human's `resolve-escalation` restarts the count.
+  Iteration numbers are narrated: a round that reuses the latest one finishes that cycle.
+  `production-finding --should-have-caught <test|static|review|model|human|none>` (optional) is
+  counted per layer in `readiness --json` (`escapes_by_layer`).
+
+The design was model-checked with TLA+/TLC before the code (`docs/review-pace/models/`): decision 2
+as first written let a flagged finding ship with an honest agent, which is why a finding carries its
+file and the debt reads that file. Every counterexample is replayed against the engine (AC-RP-18..25).
+The model carries a single located finding, so it cannot see two ids of one step: the engine closes
+each id on its own (AC-RP-30), a rule the model does not check.
+A green model proves no violation OF THE MODEL at the bounds checked, not that the engine is
+correct; two tools were checked only where the bound allowed. A fix that breaks a file it did not
+touch is seen only by the tests.
 
 ## Model-checked designs (ADR-061, 2.15.0) - did anyone check the design before the code?
 
@@ -1018,7 +1075,7 @@ python3 $QL readiness
 
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - confirm-deferral - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - model-check - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (63 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - confirm-deferral - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - model-check - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - review-tier - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (64 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

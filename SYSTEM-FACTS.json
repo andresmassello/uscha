@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 63,
+    "count": 64,
     "list": [
       "bench",
       "bench-curate",
@@ -80,6 +80,7 @@
       "regression-check",
       "resolve-escalation",
       "review-start",
+      "review-tier",
       "roundtrip",
       "rubric-ingest",
       "simplicity-check",
@@ -95,5 +96,5 @@
       "waste-check"
     ]
   },
-  "version": "2.15.1"
+  "version": "2.16.0"
 }

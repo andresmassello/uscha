@@ -22,7 +22,7 @@ it, and rigor is a one-way ratchet (a human may force more, never less). Spec-dr
 (ADR-005) flags specs gone stale relative to their code from git dates — advisory,
 it never gates. Neither skips human approval or asserting tests.
 
-Evidence is witnessed (kit 2.10-2.11, ADR-055/056/057): test-run executes the project's declared test command and the gates honor only the reports that run wrote; a QA review is registered when it starts (review-start) and convergence requires each tool's latest review to match the tree on disk. The engine does not run the reviewer and trusts the declared command; smoke-ingest and CI-ref evidence are still read by path. A full dev loop was run once on Codex (2026-09-20, ADR-049); there the golden write guard is advisory (no hooks).
+Evidence is witnessed (kit 2.10-2.11, ADR-055/056/057): test-run executes the project's declared test command and the gates honor only the reports that run wrote; a QA review is registered when it starts (review-start) and convergence requires each tool's latest review to match the tree on disk. Since kit 2.16 (ADR-062), a project that declares review_tiers sets the review effort by the change: a tier from path globs, a review scope the engine assigns, a fix re-reviewed on its diff by the tool it outdated, findings counted once and a round cap. The engine does not run the reviewer and trusts the declared command; smoke-ingest and CI-ref evidence are still read by path. A full dev loop was run once on Codex (2026-09-20, ADR-049); there the golden write guard is advisory (no hooks).
 
 Human acts are declared (kit 2.12, ADR-058): the four commands that lift the escalated phase require --human and --note, record who and why, and refuse inside Claude Code's shell. There, the guard-pr-gate.py hook keeps a pull request a draft while pr-gate reads red. A declared name is not identity, other harnesses expose no marker the engine knows (there the act is declared, not refused), and the hook reads text, so gh api or a browser get through; the only authenticated human act is the forge's ready-for-review or merge. Since 2.14 (ADR-060) a gated finding is deferred by its id, and only a human's recorded confirm-deferral closes its debt; editing ISSUES-DEFERRED.md no longer does.
 
@@ -55,9 +55,9 @@ architecture -- spec-drift compares commit dates and reverse discovery proposes 
 The framing is positioning where it says VISION, a measured mechanism where it says REAL, and a decision on the record where it
 says REJECTED.
 
-The kit (v2.15.1, MIT license) ships 9 skills for 7 coding agents — Claude Code,
+The kit (v2.16.0, MIT license) ships 9 skills for 7 coding agents — Claude Code,
 Codex, Cursor, VS Code / GitHub Copilot, Gemini CLI, Cline and pi (Earendil); only Claude Code and Codex are exercised against a real agent, the other five are verified by placement + read-back only —
-plus a pure-Python engine (qa_ledger.py, 63 subcommands, zero runtime dependencies)
+plus a pure-Python engine (qa_ledger.py, 64 subcommands, zero runtime dependencies)
 that ingests evidence from 11 language stacks. It runs on Windows, macOS and Linux
 (Python 3.8+). Install for one agent, or `--target all`:
 `npx --yes @andresmassello/uscha@latest install --target claude`

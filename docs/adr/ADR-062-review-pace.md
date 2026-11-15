@@ -92,15 +92,19 @@ reviewer kept flagging was code older than its first pass.
      Memory are already read per tool in the engine; that part is not new.)
    - **SameTool.** A file changed after a tool's clean pass is re-reviewed clean **by that tool**,
      not by any agent tool -- a tool that cannot see a finding's class cannot clear a file of it.
+   **What the model cannot see (found by a fresh review of 2.16.0).** It carries one located
+   finding, so it says nothing about two ids of one gated step in different files: as first built,
+   fixing one of them closed the step's debt. The engine now closes each `<path>:<rule>` id on its
+   own (AC-RP-30); that rule is outside the model's bounds and no model checks it.
    **What the model shows, and at which bounds.** Necessary -- one counterexample each when it is
    dropped: CoverFix (one tool, `MaxLog = 3`), Locate and the re-review clause C2 (one tool,
    `MaxLog = 4`), SameTool (two tools, `MaxLog = 4`; with TierTools on, the trace is in the
    standard tier, where the second tool is in the tier and honestly clears the reverted file). Checked
    sufficient -- no error -- only with ONE tool: `MaxLog = 3` in CI, `MaxLog = 4` and deferrals
    by hand; with one tool SameTool is inert, and the two-tool no-error run did not finish
-   (UNMEASURED). **CI today checks only CoverFix and the as-written break**: at its bound
-   (`MaxLog = 3`) dropping Locate or C2 still reads no error; the teeth that catch them enter CI
-   with their AC-RP ids. The bug in the model is only ever in a quick file.
+   (UNMEASURED). **When the model was written CI checked only CoverFix and the as-written break**: at its bound
+   (`MaxLog = 3`) dropping Locate or C2 still reads no error; the teeth that catch them are `ci`
+   entries of the manifest since 2.16.0, each with its AC-RP replay. The bug in the model is only ever in a quick file.
    **Decided by the owner after the model (2026-11-15):**
    - **WholeFirstPass.** Convergence verifies that every tool of the tier had a review whose scope
      was the whole change, in addition to C1 and C2.
@@ -122,7 +126,8 @@ reviewer kept flagging was code older than its first pass.
    CI (`MaxLog = 3`) and by hand (`MaxLog = 4`, deferrals). **A limit the
    engine adds:** the model takes a finding's file and a step's scope from the ground truth; in the
    engine the agent narrates the path -- and the scope, if `log-step` carries it -- like every count
-   in `log-step` (today's review-start records only a whole-tree stamp, not a scope).
+   in `log-step` (until 2.16.0 review-start recorded only a whole-tree stamp; it now records the scope
+   the engine assigns, so the scope is not narrated, while a finding's path still is).
 3. **A round cap that stops the loop, not a ceiling it grinds to.** After `review_round_cap` cycles
    (default 3) without convergence, the engine refuses another cycle and asks for an escalation
    ("reconsider the approach", the existing `escalate`), instead of running to `max_iterations`.

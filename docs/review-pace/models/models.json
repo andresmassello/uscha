@@ -1,7 +1,7 @@
 {
   "schema": "uscha/models@1",
   "adr": "ADR-062",
-  "note": "ADR-062 decisions 1-2 (review tiers, diff-scoped re-review), GatedDebt extended (copied at a9ea294). The tooth-*.cfg counterexamples enter this manifest with their AC-RP RED cases.",
+  "note": "ADR-062 decisions 1-2 (review tiers, diff-scoped re-review), GatedDebt extended (copied at a9ea294). Each tooth-*.cfg counterexample names the AC-RP case that replays it against the engine; the policy properties and the vacuity controls name theirs too.",
   "module": "ReviewPace.tla",
   "configs": [
     {
@@ -18,12 +18,18 @@
       "cfg": "ci-vacuity.cfg",
       "tier": "ci",
       "expect": "violated: NeverFixedAndReady",
-      "vacuity": true
+      "vacuity": true,
+      "replays": [
+        "AC-RP-28"
+      ]
     },
     {
       "cfg": "ci-every-file.cfg",
       "tier": "ci",
-      "expect": "no-error"
+      "expect": "no-error",
+      "replays": [
+        "AC-RP-26"
+      ]
     },
     {
       "cfg": "ci-lowering.cfg",
@@ -33,13 +39,89 @@
     {
       "cfg": "ci-lowering-policy.cfg",
       "tier": "ci",
-      "expect": "no-error"
+      "expect": "no-error",
+      "replays": [
+        "AC-RP-27"
+      ]
     },
     {
       "cfg": "ci-lowering-vacuity.cfg",
       "tier": "ci",
       "expect": "violated: NeverRevertedAndReady",
       "vacuity": true
+    },
+    {
+      "cfg": "tooth-as-written.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-RP-18"
+      ]
+    },
+    {
+      "cfg": "tooth-as-written-honest.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-RP-19"
+      ]
+    },
+    {
+      "cfg": "tooth-without-cover.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-RP-20"
+      ]
+    },
+    {
+      "cfg": "tooth-without-locate.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-RP-21"
+      ]
+    },
+    {
+      "cfg": "tooth-without-rereview.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-RP-22"
+      ]
+    },
+    {
+      "cfg": "tooth-any-tool-rereview.cfg",
+      "tier": "ci",
+      "expect": "violated: NoFlaggedBugShips",
+      "replays": [
+        "AC-RP-23"
+      ]
+    },
+    {
+      "cfg": "tooth-without-whole-pass.cfg",
+      "tier": "ci",
+      "expect": "violated: EveryFileReviewed",
+      "replays": [
+        "AC-RP-24"
+      ]
+    },
+    {
+      "cfg": "tooth-without-highwater.cfg",
+      "tier": "ci",
+      "expect": "violated: LoweredNeverReady",
+      "replays": [
+        "AC-RP-25"
+      ]
+    },
+    {
+      "cfg": "deep-two-tools-vacuity.cfg",
+      "tier": "ci",
+      "expect": "violated: NeverFixedAndReadyStandard",
+      "vacuity": true,
+      "replays": [
+        "AC-RP-29"
+      ]
     },
     {
       "cfg": "deep-shipped-maxlog4.cfg",
@@ -49,7 +131,7 @@
         "date": "2026-11-15",
         "distinct_states": 12761372,
         "tlc": "1.7.4",
-        "inputs_sha256": "04a673d03d7c38453e4c3f30b48d36a563cfa79156b0ee7433ae71efcd978ab4"
+        "inputs_sha256": "97218d963a660582b55de3b6233671cffb6ae5f535344fd249c54cbf30ca9eeb"
       }
     },
     {
@@ -60,7 +142,7 @@
         "date": "2026-11-15",
         "distinct_states": 12986842,
         "tlc": "1.7.4",
-        "inputs_sha256": "020806cd9ed718cc1416e669bfeac0e37aa4d316d7b980dfe6a6c151f7cc3781"
+        "inputs_sha256": "b33b449ba054b265112f08b4eb074ec154e2ca23717950831a4426830f301433"
       }
     },
     {
@@ -71,7 +153,7 @@
         "date": "2026-11-15",
         "distinct_states": 52299000,
         "tlc": "1.7.4",
-        "inputs_sha256": "47a617019939e9f1491dc133b41b86590c1e27c7cef0e76d59eb2fbf899be3ee"
+        "inputs_sha256": "9212a0f9297eac96ac00336958f58375d6b824a1c14ac3612331345db03eb5ba"
       }
     }
   ]

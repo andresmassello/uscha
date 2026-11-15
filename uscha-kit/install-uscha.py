@@ -1010,6 +1010,18 @@ def _existing_model_check(repo):
     return mc if isinstance(mc, dict) and mc else None
 
 
+def _existing_review_tiers(repo):
+    """The `review_tiers` block the project's config already declares, kept as is: the owner's
+    globs are the whole point of the block, so a re-run of `init` never replaces them (and stays
+    byte-identical instead of reporting a conflict)."""
+    try:
+        with open(repo / "uscha.config.json", encoding="utf-8") as fh:
+            rt = json.load(fh).get("review_tiers")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return rt if isinstance(rt, dict) else None
+
+
 def project_config_bytes(repo):
     """The project's uscha.config.json, GENERATED rather than copied (kit 2.0.0).
 
@@ -1060,7 +1072,12 @@ def project_config_bytes(repo):
               # ADR-001 on a repo with no ADRs, the next free number on one that has them, so
               # nothing already written is retrofitted. Advisory unless "mode": "gate".
               "model_check": _existing_model_check(repo) or
-              {"from_adr": "ADR-%03d" % next_adr_number(repo)}}
+              {"from_adr": "ADR-%03d" % next_adr_number(repo)},
+              # ADR-062 (2.16.0): the review effort follows the change -- docs are `quick`,
+              # everything else `standard`, and the paths the owner lists under `deep` run the
+              # full tool list. Declaring the block is what switches the review pace on.
+              "review_tiers": _existing_review_tiers(repo) or
+              {"default": "standard", "quick": ["docs/**", "**/*.md"], "deep": []}}
     # byte-identical across runs on the same repo + kit, so a second `init` reports `unchanged`
     # instead of a conflict; LF explicitly, like every other artifact the kit writes.
     return (json.dumps(config, indent=2, ensure_ascii=False) + "\n").encode("utf-8")

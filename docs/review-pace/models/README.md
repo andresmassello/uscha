@@ -4,7 +4,7 @@ A TLA+ model of `../../adr/ADR-062-review-pace.md` decisions 1 and 2, checked wi
 BEFORE 2.16.0 writes the code (repo rule 12). It is a design artifact: nothing here ships, and
 nothing here is a claim about the engine (repo rule 2). **A green config proves no violation OF
 THE MODEL at its bounds -- not that the engine is correct.** Each counterexample below becomes a
-RED case (AC-RP-nn) once the code exists, and is replayed against the real engine there; a path
+RED case (AC-RP-18..25) in the engine's suite, replayed against the real engine; a path
 the code does not reproduce means the model is wrong until shown otherwise.
 
 `ReviewPace.tla` started as a copy of `../../gate-integrity/models/GatedDebt.tla` at commit
@@ -132,14 +132,15 @@ Checked sufficient (no error), and only at these bounds:
   nothing is checked sufficient**: the no-error run at `MaxLog = 4` (before the owner's rules) was
   stopped past 134 million distinct states / 16 min -- UNMEASURED.
 
-**What CI checks today.** `ci-shipped` (`MaxLog = 3`) cannot see the `Locate`, C2 and `SameTool`
+**What CI checks.** `ci-shipped` (`MaxLog = 3`) cannot see the `Locate`, C2 and `SameTool`
 paths: with `Locate = FALSE` or `Rereview = FALSE` it still prints no error, 1,740,180 distinct
 states, measured on the final module. A `MaxLog = 4` no-error config does not fit the 60 s limit:
-54-64 s on this 16-core machine across runs, and a 2-4-core CI runner is slower. **Until the teeth
-enter the manifest with their AC ids, CI checks only `CoverFix` and the as-written break** for the
-safety rule, plus the two policy properties (`ci-every-file`, `ci-lowering-policy`); `Locate` and
-C2 are checked sufficient only by hand (`deep-shipped-maxlog4`). The teeth stop in 1-17 s, so as
-`ci` entries they will make CI see each rule's necessity.
+54-64 s on this 16-core machine across runs, and a 2-4-core CI runner is slower. So `Locate` and
+C2 are checked sufficient only by hand (`deep-shipped-maxlog4`). What CI does see, since 2.16.0, is
+each rule's NECESSITY: every `tooth-*.cfg` is a `ci` entry that must break its invariant (they stop
+in 1-17 s with one worker, 1-4 s with `-workers auto`, the runner's setting), each naming the
+AC-RP case that replays it against the engine, plus the two policy properties (`ci-every-file`,
+`ci-lowering-policy`) and the two vacuity controls.
 
 The tooth stories (final module, `-workers 1`):
 
@@ -191,15 +192,15 @@ printed trace is the shortest one.
 | `deep-shipped-maxlog4.cfg` (`MaxLog = 4`, no raise) | deep | no-error | 12,761,372 | 58.6 | no error |
 | `deep-lowering-maxlog4.cfg` (`GlobB = 2`, `MaxLog = 4`) | deep | no-error | 12,986,842 | 57.6 | no error |
 | `deep-shipped-defers.cfg` (`Defers = TRUE`) | deep | no-error | 52,299,000 | 253.9 | no error |
-| `deep-two-tools-vacuity.cfg` | -- | violated: NeverFixedAndReadyStandard | 561,986 | 9.0 | violated, 9 states |
-| `tooth-as-written-honest.cfg` | -- | violated | 10,796 | 1.4 | violated, 7 states |
-| `tooth-as-written.cfg` | -- | violated | 14,346 | 1.4 | violated, 7 states |
-| `tooth-without-cover.cfg` | -- | violated | 5,368 | 1.3 | violated, 6 states |
-| `tooth-without-locate.cfg` (`MaxLog = 4`) | -- | violated | 48,723 | 2.2 | violated, 8 states |
-| `tooth-without-rereview.cfg` (`MaxLog = 4`) | -- | violated | 76,029 | 2.6 | violated, 9 states |
-| `tooth-any-tool-rereview.cfg` (two tools, `MaxLog = 4`) | -- | violated | 1,070,972 | 16.6 | violated, 10 states |
-| `tooth-without-whole-pass.cfg` | -- | violated: EveryFileReviewed | 186 | 1.0 | violated, 4 states |
-| `tooth-without-highwater.cfg` | -- | violated: LoweredNeverReady | 6,350 | 1.3 | violated, 7 states |
+| `deep-two-tools-vacuity.cfg` | ci | violated: NeverFixedAndReadyStandard | 561,986 | 9.0 | violated, 9 states |
+| `tooth-as-written-honest.cfg` | ci | violated | 10,796 | 1.4 | violated, 7 states |
+| `tooth-as-written.cfg` | ci | violated | 14,346 | 1.4 | violated, 7 states |
+| `tooth-without-cover.cfg` | ci | violated | 5,368 | 1.3 | violated, 6 states |
+| `tooth-without-locate.cfg` (`MaxLog = 4`) | ci | violated | 48,723 | 2.2 | violated, 8 states |
+| `tooth-without-rereview.cfg` (`MaxLog = 4`) | ci | violated | 76,029 | 2.6 | violated, 9 states |
+| `tooth-any-tool-rereview.cfg` (two tools, `MaxLog = 4`) | ci | violated | 1,070,972 | 16.6 | violated, 10 states |
+| `tooth-without-whole-pass.cfg` | ci | violated: EveryFileReviewed | 186 | 1.0 | violated, 4 states |
+| `tooth-without-highwater.cfg` | ci | violated: LoweredNeverReady | 6,350 | 1.3 | violated, 7 states |
 | `ci-shipped` with `Locate = FALSE` (not kept) | -- | -- | 1,740,180 | 9.8 | no error |
 | `ci-shipped` with `Rereview = FALSE` (not kept) | -- | -- | 1,740,180 | 10.1 | no error |
 | `ci-shipped` with `WholeFirstPass = FALSE` (not kept) | -- | -- | 1,740,180 | 10.1 | no error |
@@ -228,22 +229,29 @@ runner is slower. So the `ci` configs of the new design run `Defers = FALSE`, `M
 tool, and the other shapes are `deep`, run by hand. Deferrals are 2.11.0's rules, already
 model-checked in gate-integrity and unchanged here.
 
-### Pending: the teeth enter the manifest with their RED cases
+### The teeth are in the manifest with their RED cases (2.16.0)
 
 The six safety `tooth-*.cfg` files MUST break `NoFlaggedBugShips`, and the two policy teeth MUST
-break their property; they do. They are not in `models.json` yet, because the validator refuses a
-counterexample config that replays no AC id, and the AC-RP ids arrive in the next commit with the
-RED cases:
+break their property; they do. Each is a `ci` entry of `models.json` that names the AC case
+replaying it against the engine (smoke T180, `.pace-cases.json`):
 
-- `tooth-as-written-honest` and `tooth-as-written` -> pending AC-RP-nn (a clean pass over other
-  files closes a finding; a lie on a tree that differs in an unrelated file escapes Memory);
-- `tooth-without-cover`, `tooth-without-locate`, `tooth-without-rereview`,
-  `tooth-any-tool-rereview` -> pending AC-RP-nn;
-- `tooth-without-whole-pass`, `tooth-without-highwater` -> pending AC-RP-nn.
+- `tooth-as-written` -> AC-RP-18 (a lie on a tree that differs in an unrelated file escapes Memory);
+  `tooth-as-written-honest` -> AC-RP-19 (a clean pass over other files closes a finding);
+- `tooth-without-cover` -> AC-RP-20, `tooth-without-locate` -> AC-RP-21,
+  `tooth-without-rereview` -> AC-RP-22, `tooth-any-tool-rereview` -> AC-RP-23;
+- `tooth-without-whole-pass` -> AC-RP-24, `tooth-without-highwater` -> AC-RP-25;
+- the policy properties `ci-every-file` -> AC-RP-26 and `ci-lowering-policy` -> AC-RP-27, and the
+  vacuity controls `ci-vacuity` -> AC-RP-28 and `deep-two-tools-vacuity` -> AC-RP-29.
 
-`deep-two-tools-vacuity` should join them as the two-tool vacuity control.
+A replay is the closest path the engine allows, not the model's trace: the model lets the agent pick
+a review's files, the engine assigns them, so a case drives the same state through `review-start`.
 
 ## Limits of the abstraction
+
+- **One located finding.** The model carries a single finding (the bug in `a`), so it cannot see
+  two findings of one step in different files. The engine closes each `<path>:<rule>` id on its own
+  (a fix of one id never closes its sibling; AC-RP-30), which is a rule of the engine that no model
+  here checks: a limit of the model's bounds, not a property it proves.
 
 - **A fix that breaks a file it did not touch is seen only by the tests** (the risk the ADR
   states itself). In this model `b` is never buggy, and the rule covers only what a tool reported.
@@ -275,7 +283,7 @@ RED cases:
 python tools/model-check.py check                                   # no Java
 python tools/model-check.py run --tier ci --jar tla2tools.jar       # TLC, pinned sha256
 python tools/model-check.py run --tier deep --jar tla2tools.jar --timeout 600   # by hand
-# the teeth, outside the manifest until their AC ids exist (-workers 1: shortest trace):
+# one tooth by hand (-workers 1: the shortest trace):
 cd docs/review-pace/models
 java -cp tla2tools.jar tlc2.TLC -workers 1 -config tooth-as-written-honest.cfg -metadir <tmp> ReviewPace.tla
 ```

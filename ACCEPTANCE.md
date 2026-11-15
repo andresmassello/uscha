@@ -2155,3 +2155,107 @@ kind of reference. Measured by T179 over a real `install --target claude` into a
   `uscha-kit/templates/`, so the copies cannot drift.
 - [ ] AC-TP-03 - `doctor`, for a declared rubric that is absent, names a template path that exists on
   that install.
+
+## Review pace (ADR-062, 2.16.0) - closes on green `AC-RP-nn` smoke assertions
+
+The gap: convergence needed the last full cycle of EVERY tool of the project's whole risk profile to
+be clean with zero files changed, so a one-line fix restarted every tool over the whole change, a
+docs change paid what the riskiest code paid, and the same finding was counted again every round.
+ADR-062 sets a review tier per change from declared path globs, re-reviews on the diff after the
+first pass, caps the rounds, and counts each finding once. A TLA+ model written before the code
+(`docs/review-pace/models/`) broke decision 2 as first written in 7 states with an honest agent;
+its counterexamples are replayed here as RED cases against the real engine. Measured by T180 over
+temp git repos (branch `main`, a feature branch carrying the change) under an isolated HOME. The
+ids start at 07: `AC-RP-01..06` are the risk presets (ADR-001 amended).
+
+The review scope is ASSIGNED by the engine at `review-start`, never narrated: a tool's scope is the
+whole change while it has no clean pass, then the files changed since its last clean pass (always
+the whole change in `deep`). A finding's file still comes from the gated id (`<path>:<rule>`), a
+narrated field.
+
+- [ ] AC-RP-07 - the tier is the highest one any path the change touched reaches through the
+  `review_tiers` globs: a docs-only change (`docs/**`, `**/*.md`, which matches a top-level file)
+  is `quick`; adding a path no glob matches makes it `standard`; touching a `deep` glob makes it
+  `deep`, and it STAYS `deep` after that file is reverted, once a `test-run` has seen it.
+- [ ] AC-RP-08 - the agent may raise the tier (`review-tier --tier deep` under `CLAUDECODE=1`);
+  lowering it there exits 2 naming the agent's shell with the ledger unchanged; a human lowers it
+  (`--human`, `--note`); a project without `review_tiers` has no `review-tier`.
+- [ ] AC-RP-09 - `quick` converges on one clean code-review pass plus the linters' latest run clean,
+  although `qa_tools_order` lists three tools; a gated linter run still refuses `pr-ready`.
+- [ ] AC-RP-10 - in `standard`, after a fix, a tool with an earlier clean pass is assigned only the
+  fix's diff and MUST re-review it (SameTool: `pr-ready` names it until it does), while the tool
+  that flagged and has no clean pass is assigned the whole change; in `deep` every re-review is
+  assigned the whole change.
+- [ ] AC-RP-11 - a fourth cycle without convergence is refused at `review-start`, naming `escalate`
+  and `review_round_cap`, ledger unchanged; after `escalate` and a human `resolve-escalation` the
+  loop may go on; `review_round_cap: 2` refuses the third; without `review_tiers` there is no cap.
+- [ ] AC-RP-12 - under `review_tiers` a gated step of an agent tool, witnessed or not, without
+  `--gated-ids`, or with an id that carries no file (`R1` instead of `a.py:R1`), exits 2 with the
+  ledger unchanged; a path with directories is accepted (`sub/c.py:R2`); without `review_tiers`
+  both are recorded as in 2.15.
+- [ ] AC-RP-13 - an id already logged by the tool in an earlier round is logged as a REPEAT and is
+  not new yield: `readiness --json` `review_yield` counts 2 rounds, 2 distinct gated ids, 1 repeat.
+- [ ] AC-RP-14 - `log-step --rejected N` is recorded on the step and counted in `review_yield`;
+  `readiness` prints the per-tool "review yield" line, and `pr-ready` is not affected by it.
+- [ ] AC-RP-15 - `production-finding --should-have-caught <layer>` (`test`, `static`, `review`,
+  `model`, `human`, `none`) is recorded; the flag is optional and an unknown layer exits 2;
+  `readiness --json` counts the escapes per layer (`escapes_by_layer`).
+- [ ] AC-RP-16 - without `review_tiers` the engine reads and writes exactly as v2.15.1: `readiness`
+  (text and `--json`), `phase` and `converged` byte-identical, `review-start` records the 2.15 keys
+  only, no round cap; the same path-less gated id is refused once `review_tiers` is declared. The
+  identity half is green against 2.15.1 by construction (a guard); the red is the switch. Without
+  the tag in git this reads UNMEASURED.
+- [ ] AC-RP-17 - `uscha init` writes `review_tiers` with `default: standard`,
+  `quick: ["docs/**", "**/*.md"]` and an empty `deep`, and a second `init` reports no conflict;
+  `doctor` proposes the block (naming ADR-062) to a project that has none, and not to one that has it.
+- [ ] AC-RP-18 - (`tooth-as-written`) a gated step located in `a.py`, then a clean review whose tree
+  differs only in `b.py`: `pr-ready` is refused naming `a.py:R1` (CoverFix: `a.py` did not move).
+- [ ] AC-RP-19 - (`tooth-as-written-honest`) after a clean pass, a gated diff review of `a.py`, then
+  an edit of `b.py`: the next review is assigned `a.py` AND `b.py` (it cannot be "of `b` alone"),
+  and its clean verdict is refused naming `a.py:R1`.
+- [ ] AC-RP-20 - (`tooth-without-cover`) an unwitnessed gated step located in `a.py`, an edit of
+  `b.py`, a whole-change review logged clean: refused naming `a.py:R1`.
+- [ ] AC-RP-21 - (`tooth-without-locate`) the gated id must carry its file (a path-less id exits 2);
+  with it, a stale whole review that saw `b.py` move and a diff review of `b.py` alone do not close
+  `a.py`'s debt: refused naming `a.py:R1`.
+- [ ] AC-RP-22 - (`tooth-without-rereview`) `a.py` reverted to the flagged content after its clean
+  pass: the next review is assigned `a.py` (C2), and its clean verdict is refused naming `a.py:R1`.
+- [ ] AC-RP-23 - (`tooth-any-tool-rereview`, `standard`) judgment-day's clean whole review does not
+  clear a file changed after code-review's clean pass: `pr-ready` names code-review, its next review
+  is assigned `a.py`, and a clean verdict there is refused naming `a.py:R1`.
+- [ ] AC-RP-24 - (`tooth-without-whole-pass`) a tool's first review is assigned the whole change;
+  after a raise to `standard`, `pr-ready` waits for judgment-day's own whole-change review.
+- [ ] AC-RP-25 - (`tooth-without-highwater`) a `deep`-glob file touched, seen by a `test-run`, then
+  reverted: the change stays `deep` and is refused naming the deep tool that never ran.
+- [ ] AC-RP-26 - (policy, `EveryFileReviewed`) at `pr-ready` every tool of the tier reviewed every
+  file: a file changed after code-review's clean pass is refused naming code-review and the file
+  until code-review reviews it, and that review is assigned that file alone.
+- [ ] AC-RP-27 - (policy, `LoweredNeverReady`) a change that reached `standard` converges only on the
+  `standard` rule after the raising file is reverted, and the agent cannot lower it.
+- [ ] AC-RP-28 - (vacuity, `ci-vacuity`) a legitimate fix reaches `pr-ready` in `quick` through
+  diff-scoped reviews (assigned `a.py` alone) while `qa_tools_order` lists three tools.
+- [ ] AC-RP-29 - (vacuity, `deep-two-tools-vacuity`) in `standard`, an unwitnessed gated step, a fix,
+  and a whole-change clean review by each tool of the tier reach `pr-ready` without the third tool.
+- [ ] AC-RP-30 - (fresh review) a gated step that names two ids closes them ONE BY ONE: `a.py:R1,b.py:R2`
+  with only `a.py` fixed and a clean review over both is refused naming `code-review/b.py:R2` and not R1;
+  fixing `b.py` too, reviewed on its diff alone, reaches `pr-ready`. The TLA+ model carries a single
+  located finding, so it cannot see this: a limit of its bounds, said in its README and in the ADR.
+- [ ] AC-RP-31 - (fresh review) prose is review content under `review_tiers`: an edited `docs/g.md` closes
+  `docs/g.md:R1` on a clean re-review, an edit to it after a clean pass makes the pass stale (SameTool),
+  and a confirmed deferral closes a docs finding.
+- [ ] AC-RP-32 - (fresh review) the base fails closed: with no base branch resolving (origin/HEAD,
+  origin/main, main, origin/master, master) and commits on the branch, `review-start` exits 2 naming the
+  base with the ledger unchanged and `phase` / `converged` refuse; a branch with no history is not refused.
+- [ ] AC-RP-33 - (fresh review) `review_tiers` is read LIVE from `uscha.config.json` (the ADR-051
+  `qa_tools_external` precedent): adding the block mid-run switches the pace on and keeps the ledger;
+  `doctor` proposes it without sending the project to a re-init and is quiet once it is declared.
+- [ ] AC-RP-34 - (fresh review) globs, scope paths and id paths are relative to the repo's configured
+  path, not the git root: under a monorepo layout `docs/**`, `core/**` and `core/x.py:R1` all match and
+  the scope lists `core/x.py`, not `api/core/x.py`.
+- [ ] AC-RP-35 - (fresh review) a confirmed deferral closes its id whatever the scope of the clean review:
+  the flagged file put back to an earlier clean content leaves the next review an empty scope, and the
+  human-accepted finding still closes.
+- [ ] AC-RP-36 - (fresh review) the round cap counts review cycles across the tools of the tier and holds
+  at `log-step` too: gated rounds alternating between two tools stop at `review_round_cap`
+  (`review-start` and an unwitnessed `log-step` exit 2 naming `escalate`, ledger unchanged), while a
+  round that finishes the latest cycle is allowed.

@@ -315,7 +315,7 @@
         <span><i style="border-color:#22403f"></i>paso de modelo / skill</span>
       </div>
 
-      <p class="cap">Los tests los corre el motor, no se le reportan: <code>test-run</code> ejecuta el comando declarado y solo cuentan los reportes que escribió. Una pasada de QA se registra cuando arranca (<code>review-start</code>), así cada veredicto queda atado al árbol que revisó — una edición posterior del código manda a esa herramienta de nuevo por el loop.</p>
+      <p class="cap">Los tests los corre el motor, no se le reportan: <code>test-run</code> ejecuta el comando declarado y solo cuentan los reportes que escribió. Una pasada de QA se registra cuando arranca (<code>review-start</code>), así cada veredicto queda atado al árbol que revisó — una edición posterior del código manda a esa herramienta de nuevo por el loop. Con <code>review_tiers</code> (2.16) esa herramienta revisa de nuevo solo lo que cambió la edición, y el motor fija cuánta revisión necesita un cambio según sus paths.</p>
     </section>
 
     <p class="cap" style="margin-top:32px;color:var(--mute);font-size:13px">
@@ -344,7 +344,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../../how/index.html">English version</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v2.15.1</p>
+    <p class="foot-fine">© 2026 Andres Massello · Licencia MIT · uscha-kit v2.16.0</p>
   </div>
 </footer>
 

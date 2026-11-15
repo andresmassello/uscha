@@ -344,7 +344,7 @@
         <span><i style="border-color:#22403f"></i>model / skill step</span>
       </div>
 
-      <p class="cap">Tests are run by the engine, not reported to it: <code>test-run</code> runs the declared command and only the reports it wrote count. A QA pass is registered when it starts (<code>review-start</code>), so a verdict is tied to the tree it reviewed — a later source edit sends that tool back through the loop.</p>
+      <p class="cap">Tests are run by the engine, not reported to it: <code>test-run</code> runs the declared command and only the reports it wrote count. A QA pass is registered when it starts (<code>review-start</code>), so a verdict is tied to the tree it reviewed — a later source edit sends that tool back through the loop. With <code>review_tiers</code> (2.16) that tool re-reviews only what the edit changed, and the engine sets how much review a change needs from its paths.</p>
     </section>
 
     <p class="cap" style="margin-top:32px;color:var(--mute);font-size:13px">
@@ -373,7 +373,7 @@
       <a href="mailto:info@uscha.dev">info@uscha.dev</a>
       <a href="../es/how/index.html">Versión en español</a>
     </div>
-    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v2.15.1</p>
+    <p class="foot-fine">© 2026 Andres Massello · MIT License · uscha-kit v2.16.0</p>
   </div>
 </footer>
 

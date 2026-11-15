@@ -175,6 +175,8 @@ def _load(path, what="ledger", flag="--ledger"):
     if what == "ledger":
         global _LAST_LEDGER_PATH
         _LAST_LEDGER_PATH = path
+        _PATH_IDS[0] = isinstance(data, dict) and _tiers_cfg_from(
+            data.get("config") if isinstance(data.get("config"), dict) else None, path) is not None
     if isinstance(data, dict) and "integrity" in data:
         want = (data.get("integrity") or {}).get("sha256")
         got = _integrity_hash(data)
@@ -2133,6 +2135,36 @@ def _qa_external_shape_ok(ext):
             and len(set(ext)) == len(ext))
 
 
+def _validate_review_tiers(rt):
+    """ADR-062: the review_tiers block, refused at init when it cannot be read -- a block that is
+    present switches the review pace on, so a malformed one must not be silently inert."""
+    if not isinstance(rt, dict):
+        raise SystemExit("[qa_ledger] invalid config: review_tiers must be an object")
+    if "default" in rt and rt["default"] not in TIER_ORDER:
+        raise SystemExit("[qa_ledger] invalid config: review_tiers.default must be one of "
+                         + ", ".join(TIER_ORDER))
+    for tier in TIER_ORDER:
+        if tier in rt and (not isinstance(rt[tier], list)
+                           or any(not _has_text(g) for g in rt[tier])):
+            raise SystemExit("[qa_ledger] invalid config: review_tiers.%s must be a list of "
+                             "nonempty path globs" % tier)
+    if "tools" in rt:
+        tools = rt["tools"]
+        if not isinstance(tools, dict) or set(tools) - set(TIER_ORDER):
+            raise SystemExit("[qa_ledger] invalid config: review_tiers.tools must map tier "
+                             "names (%s) to tool lists" % ", ".join(TIER_ORDER))
+        for tier, names in tools.items():
+            if (not isinstance(names, list) or not names or any(not _has_text(n) for n in names)
+                    or len(set(names)) != len(names)):
+                raise SystemExit("[qa_ledger] invalid config: review_tiers.tools.%s must "
+                                 "contain unique nonempty strings" % tier)
+    if "review_round_cap" in rt:
+        cap = rt["review_round_cap"]
+        if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
+            raise SystemExit("[qa_ledger] invalid config: review_tiers.review_round_cap must be "
+                             "a positive integer")
+
+
 def _validate_init_config(cfg):
     """Validate only the engine's core init contract before creating a ledger."""
     if not isinstance(cfg, dict):
@@ -2208,6 +2240,9 @@ def _validate_init_config(cfg):
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise SystemExit(
                     f"[qa_ledger] invalid config: {key} must be a positive integer")
+
+    if "review_tiers" in cfg:
+        _validate_review_tiers(cfg["review_tiers"])
 
     integration = cfg.get("integration", {})
     if not isinstance(integration, dict):
@@ -2828,7 +2863,11 @@ class _Witness(object):
         """`_review_moved` between two REVIEW stamps (ADR-056 R2'), memoised per pair."""
         key = json.dumps(["review", a, b], sort_keys=True)
         if key not in self._moved:
-            self._moved[key] = _review_moved(self.path, self.rtype, a, b, _LAST_LEDGER_PATH)
+            moved = _review_moved(self.path, self.rtype, a, b, _LAST_LEDGER_PATH)
+            if _PATH_IDS[0] and isinstance(moved, list):
+                # ADR-062: paths are relative to the repo's configured path, not the git root
+                moved = _strip_prefix(moved, _repo_prefix(self.path))
+            self._moved[key] = moved
         return self._moved[key]
 
     def rnow(self):
@@ -2836,6 +2875,13 @@ class _Witness(object):
         if getattr(self, "_rnow", False) is False:
             self._rnow = _review_stamp(self.path, self.rtype, _LAST_LEDGER_PATH)
         return self._rnow
+
+    def changed(self):
+        """The files the change touches against its base (ADR-062), taken once per read."""
+        if getattr(self, "_changed", False) is False:
+            self._changed, self.base_problem = _change_files(self.path, self.rtype,
+                                                             _LAST_LEDGER_PATH)
+        return self._changed
 
     def deferred_now(self):
         if getattr(self, "_dnow", False) is False:
@@ -2918,6 +2964,8 @@ def _evidence_live(ledger, name):
     # the same witness the QA-review checks of `_converged` read (ADR-056 R2', 2.11.0): one
     # tree stamp per read, whatever the test evidence says
     out["wit"] = _Witness(ledger, name)
+    if _tiers_cfg(ledger) is not None and name != "integration":
+        out["tiers"] = _tier_now(ledger, name, out["wit"])
     snaps = node.get("snapshots") or []
     if not snaps:
         return out
@@ -3020,6 +3068,13 @@ DEFERRED_FILE = "ISSUES-DEFERRED.md"
 # ISSUES-DEFERRED.md are `- defers: <tool>/<id> -- <why>`; everything else stays free prose.
 _DEFERS_LINE = re.compile(r"^\s*[-*]\s*defers:\s*(.*?)\s*$", re.I)
 _DEFERS_BODY = re.compile(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.:-]+)\s+--\s+(.*[A-Za-z0-9].*)$")
+# ADR-062: under review_tiers an id is `<path>:<rule>`, so `/`, `@` and `+` are allowed after the
+# tool -- and ONLY there: a project without the block reads a `defers:` line exactly as in 2.15.1
+_DEFERS_BODY_PATH = re.compile(
+    r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.:/@+-]+)\s+--\s+(.*[A-Za-z0-9].*)$")
+# set when a ledger is loaded (or peeked) whose effective config declares review_tiers: under it
+# finding ids may carry a path AND a review's tree counts prose (ADR-062)
+_PATH_IDS = [False]
 CONFIRMATIONS_KEY = "deferral_confirmations"
 
 
@@ -3070,7 +3125,7 @@ def _defers_scan(repo_path, ledger_path=None, known_tools=None):
             if not m:
                 continue
             body = re.sub(r"\(origin:[^)]*\)\s*$", "", m.group(1)).strip()
-            b = _DEFERS_BODY.match(body)
+            b = (_DEFERS_BODY_PATH if _PATH_IDS[0] else _DEFERS_BODY).match(body)
             where = "%s:%d" % (os.path.basename(f), n)
             if not b:
                 malformed.append("%s (expected `- defers: <tool>/<id> -- <why>`)" % where)
@@ -3147,7 +3202,7 @@ def _review_exclusions(repo_path, rtype, ledger_path, work):
 _REVIEW_DOC_EXT = {".md", ".markdown", ".rst", ".txt", ".adoc"}
 
 
-def _review_relevant(path, rtype, tracked, excluded):
+def _review_relevant(path, rtype, tracked, excluded, docs=False):
     """Does a change to this path change what a QA review looked at? Wider than ADR-039's
     `_src_relevant` on purpose (the 2.11.0 fresh review): a reviewer reads templates and config,
     so a TRACKED file counts whatever its extension, and a source-extension file counts wherever
@@ -3165,7 +3220,9 @@ def _review_relevant(path, rtype, tracked, excluded):
     if "reports" in parts[:-1] and not is_src:
         return False
     if not is_src and os.path.splitext(name)[1] in _REVIEW_DOC_EXT:
-        return False
+        # `docs` (ADR-062): the change a tier is read from counts prose too -- a docs-only change
+        # is the `quick` case, so it must be seen -- while a review's own tree still skips it
+        return bool(docs)
     return is_src or tracked
 
 
@@ -3188,7 +3245,7 @@ def _review_stamp(repo_path, rtype, ledger_path):
             continue
         tracked = line[:2] != "??"
         for part in _porcelain_paths(line):
-            if _review_relevant(part, rtype, tracked, excluded):
+            if _review_relevant(part, rtype, tracked, excluded, _PATH_IDS[0]):
                 keep.add(part)
     dirty, present = {}, []
     for pth in sorted(keep):
@@ -3226,9 +3283,336 @@ def _review_moved(repo_path, rtype, a, b, ledger_path):
         if d is None:
             return None
         paths |= {p for p in _git_path_list(d.stdout)
-                  if _review_relevant(p, rtype, True, excluded)}
+                  if _review_relevant(p, rtype, True, excluded, _PATH_IDS[0])}
     return sorted(p for p in paths
                   if _stamp_blob(repo_path, a, p) != _stamp_blob(repo_path, b, p))
+
+
+# --------------------------------------------------------------------------- #
+# ADR-062 (2.16.0): review effort follows the change, and the loop converges on the diff
+# --------------------------------------------------------------------------- #
+# Everything below is switched on by `review_tiers` in the frozen config and is ABSENT without it:
+# a project that never declares the block reads and writes exactly as in 2.15.1. The rules are the
+# ones docs/review-pace/models/ReviewPace.tla checked (Locate, CoverFix, SameTool, WholeFirstPass,
+# TierTools, TierHighWater). The engine reads the ledger only, so a finding's file comes from its
+# id (`<path>:<rule>`, the path as git names it) and a review's scope is ASSIGNED at review-start,
+# never narrated by the agent. A green model proves no violation of the model; the AC-RP cases
+# replay its counterexamples against this code.
+TIER_ORDER = ("quick", "standard", "deep")
+TIER_STATE_KEY = "review_tier"
+TIER_TOOLS_DEFAULT = {"quick": ["code-review"], "standard": ["code-review", "judgment-day"]}
+DEEP_TOOLS_FALLBACK = ["code-review", "judgment-day", "improve"]
+ROUND_CAP_DEFAULT = 3
+SHOULD_HAVE_CAUGHT = ("test", "static", "review", "model", "human", "none")
+_ID_PATH_RX = re.compile(r"^([A-Za-z0-9_.@+/-]+):([A-Za-z0-9_.:-]+)$")
+_GLOB_CACHE = {}
+
+
+_TIERS_LIVE = {}
+
+
+def _tiers_cfg_from(frozen_cfg, ledger_path):
+    """The effective `review_tiers` block, or None (the project never opted in). Like
+    qa_tools_external (ADR-051) a LIVE declaration in uscha.config.json wins over the ledger's
+    frozen copy, so a project adopts the block mid-run with no re-init and keeps its ledger; a live
+    file that omits the key leaves the frozen copy standing. A live block that cannot be read as
+    one refuses, naming it -- reading it as 'none declared' would answer from something other than
+    what the human wrote."""
+    live = _live_project_config(QA_LIVE_CONFIG, ledger_path)
+    if live is not None:
+        key = os.path.realpath(live)
+        if key not in _TIERS_LIVE:
+            rt, declared = None, False
+            try:
+                with open(live, encoding="utf-8") as fh:
+                    doc = json.load(fh)
+                declared = isinstance(doc, dict) and "review_tiers" in doc
+                rt = doc["review_tiers"] if declared else None
+            except (OSError, ValueError):
+                pass
+            if declared:
+                try:
+                    _validate_review_tiers(rt)
+                except SystemExit as exc:
+                    raise SystemExit("%s (in %s)" % (exc, live))
+            _TIERS_LIVE[key] = rt if declared else None
+        if isinstance(_TIERS_LIVE[key], dict):
+            return _TIERS_LIVE[key]
+    rt = (frozen_cfg or {}).get("review_tiers")
+    return rt if isinstance(rt, dict) else None
+
+
+def _tiers_cfg(ledger):
+    return _tiers_cfg_from(ledger.get("config"), _LAST_LEDGER_PATH)
+
+
+def _tier_rank(tier):
+    return TIER_ORDER.index(tier) if tier in TIER_ORDER else -1
+
+
+def _tier_max(a, b):
+    return a if _tier_rank(a) >= _tier_rank(b) else b
+
+
+def _tier_default(rt):
+    return rt.get("default") if rt.get("default") in TIER_ORDER else "standard"
+
+
+def _glob_rx(glob):
+    """A path glob as a regex: `*` stays inside a directory, `**/` is any directories (none
+    included, so `**/*.md` matches a top-level file), a trailing `**` is anything."""
+    rx = _GLOB_CACHE.get(glob)
+    if rx is not None:
+        return rx
+    g = glob.replace("\\", "/")
+    while g.startswith("./"):
+        g = g[2:]
+    out, i = "", 0
+    while i < len(g):
+        if g.startswith("**/", i):
+            out += "(?:.*/)?"
+            i += 3
+            continue
+        if g.startswith("**", i):
+            out += ".*"
+            i += 2
+            continue
+        c = g[i]
+        out += "[^/]*" if c == "*" else ("[^/]" if c == "?" else re.escape(c))
+        i += 1
+    rx = _GLOB_CACHE[glob] = re.compile("^" + out + "$")
+    return rx
+
+
+def _path_tier(rt, path):
+    """The highest tier a glob puts this path in; a path no glob matches gets `default`."""
+    best = None
+    for tier in TIER_ORDER:
+        globs = rt.get(tier)
+        if any(isinstance(g, str) and _glob_rx(g).match(path)
+               for g in (globs if isinstance(globs, list) else [])):
+            best = tier
+    return best or _tier_default(rt)
+
+
+def _tier_of_files(rt, files):
+    """The highest tier any of the files reaches; None when there are no files (or git cannot
+    say), so an empty change never raises the high-water mark by itself."""
+    best = None
+    for p in files or []:
+        best = _tier_max(_path_tier(rt, p), best)
+    return best
+
+
+def _tier_tools(ledger, rt, tier):
+    """The tools a tier runs: `review_tiers.tools[tier]` when declared, else code-review
+    (quick), code-review + judgment-day (standard) and the project's qa_tools_order (deep)."""
+    named = rt.get("tools")
+    named = named.get(tier) if isinstance(named, dict) else None
+    if isinstance(named, list) and named and all(_has_text(x) for x in named):
+        return list(named)
+    if tier == "deep":
+        order = ((ledger.get("config") or {}).get("defaults") or {}).get("qa_tools_order")
+        return list(order) if isinstance(order, list) and order else list(DEEP_TOOLS_FALLBACK)
+    return list(TIER_TOOLS_DEFAULT[tier])
+
+
+def _repo_prefix(repo_path):
+    """The repo's configured path relative to the git root ('' when they are the same). Both
+    sides go through realpath: a Windows temp dir is reported in 8.3 form by one API and long
+    form by another, and relpath between the two reads a path inside the tree as outside it."""
+    work = _repo_git_toplevel(repo_path)
+    if not work:
+        return ""
+    rel = os.path.relpath(os.path.realpath(repo_path), os.path.realpath(work)).replace("\\", "/")
+    return "" if rel in (".", "") or rel.startswith("..") else rel
+
+
+def _strip_prefix(paths, prefix):
+    if not prefix:
+        return list(paths)
+    pre = prefix + "/"
+    return [p[len(pre):] for p in paths if p.startswith(pre)]
+
+
+def _resolve_base(repo_path):
+    """(merge-base commit, ref) of HEAD against the first base that resolves: origin/HEAD, then
+    origin/main, main, origin/master, master -- or (None, None)."""
+    cands = []
+    sym = _seal_git(repo_path, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
+    if sym is not None and sym.stdout.strip():
+        cands.append(sym.stdout.strip())
+    cands += ["origin/main", "main", "origin/master", "master"]
+    for ref in cands:
+        mb = _seal_git(repo_path, "merge-base", "HEAD", ref)
+        if mb is not None and mb.stdout.strip():
+            return mb.stdout.strip(), ref
+    return None, None
+
+
+def _change_files(repo_path, rtype, ledger_path):
+    """(files, problem). files: sorted paths RELATIVE TO THE REPO'S CONFIGURED PATH the change
+    touches -- committed since the merge-base with the base branch (`_resolve_base`) plus
+    everything dirty now, prose included because a docs-only change is the `quick` case; a
+    review's own footprint is excluded; None when git cannot say. problem: text when the base
+    cannot be resolved while the branch has history (committed work then cannot be told from the
+    base), else None -- review-start, phase and converged refuse on it (fail closed)."""
+    work = _repo_git_toplevel(repo_path)
+    head = _seal_git(repo_path, "rev-parse", "HEAD")
+    if not work or head is None or not head.stdout.strip():
+        return None, None
+    excluded = _review_exclusions(repo_path, rtype, ledger_path, work)
+    files, problem = set(), None
+    base, ref = _resolve_base(repo_path)
+    if base is None:
+        n = _seal_git(repo_path, "rev-list", "--count", "HEAD")
+        count = int(n.stdout.strip()) if n is not None and n.stdout.strip().isdigit() else 0
+        if count > 1:
+            problem = ("the change cannot be computed: no base branch resolves (tried origin/HEAD, "
+                       "origin/main, main, origin/master, master) and HEAD has %d commits, so "
+                       "committed work cannot be told from the base -- fetch origin or create the "
+                       "base branch (ADR-062)" % count)
+    elif base != head.stdout.strip():
+        d = _seal_git(repo_path, "-c", "core.quotepath=false", "diff", "--name-only", base,
+                      "HEAD", "--", ".")
+        if d is not None:
+            files |= {p for p in _git_path_list(d.stdout)
+                      if _review_relevant(p, rtype, True, excluded, True)}
+    st = _seal_git(repo_path, "-c", "core.quotepath=false", "status", "--porcelain", "-uall",
+                   "--", ".")
+    if st is None:
+        return None, problem
+    for line in st.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        tracked = line[:2] != "??"
+        for part in _porcelain_paths(line):
+            if _review_relevant(part, rtype, tracked, excluded, True):
+                files.add(part)
+    return sorted(_strip_prefix(sorted(files), _repo_prefix(repo_path))), problem
+
+
+def _tier_now(ledger, name, wit):
+    """The tier of a repo's change now (TierHighWater): the highest the change ever reached, which
+    only a human lowers -- reverting the file that raised it does not. `tools` is what that tier
+    runs; `diff` is False in `deep`, where every review is of the whole change. A change with no
+    files (or no git) reads `default`."""
+    rt = _tiers_cfg(ledger)
+    cur = _tier_of_files(rt, wit.changed())
+    high = ((ledger.get(TIER_STATE_KEY) or {}).get(name) or {}).get("high")
+    tier = _tier_max(cur, high) if (cur or high) else _tier_default(rt)
+    return {"tier": tier, "current": cur, "high": high, "tools": _tier_tools(ledger, rt, tier),
+            "diff": tier != "deep", "problem": getattr(wit, "base_problem", None)}
+
+
+def _tier_raise(ledger, name, tier):
+    st = ledger.setdefault(TIER_STATE_KEY, {}).setdefault(name, {})
+    if _tier_rank(tier) > _tier_rank(st.get("high")):
+        st["high"] = tier
+
+
+def _tier_touch(ledger, name):
+    """Called wherever the ledger is written with the tree in view (test-run, review-start,
+    log-step): the high-water mark follows the change up, never down."""
+    rt = _tiers_cfg(ledger)
+    if rt is None or name == "integration":
+        return
+    cur = _tier_of_files(rt, _Witness(ledger, name).changed())
+    if cur is not None:
+        _tier_raise(ledger, name, cur)
+
+
+def _id_path(finding_id):
+    """The file a finding id names (`<path>:<rule>`), or None for an id that carries none."""
+    m = _ID_PATH_RX.match(finding_id or "")
+    if not m:
+        return None
+    p = m.group(1)
+    while p.startswith("./"):
+        p = p[2:]
+    return p or None
+
+
+def _located_files(ids):
+    """The set of files the ids name (Locate), or None when there are no ids or one carries no
+    file -- the step is then read by the whole-tree rule of 2.15."""
+    if not ids:
+        return None
+    out = set()
+    for i in ids:
+        p = _id_path(i)
+        if p is None:
+            return None
+        out.add(p)
+    return out
+
+
+def _covers(reviewed, files):
+    """CoverFix: did this review's assigned scope include every one of these files? A review with
+    no recorded scope (written before review_tiers) covered everything, as 2.15 read it."""
+    scope = (reviewed or {}).get("scope")
+    return not isinstance(scope, list) or files <= set(scope)
+
+
+def _assign_scope(node, tool, tier_rec, wit, tree):
+    """(scope, whole): the files this review is handed. The whole change while the tool has no
+    clean pass (and always in `deep`); afterwards the files changed since its last clean pass, so
+    a fix is reviewed on its diff. Assigned here, never narrated (the scope CoverFix and C2 read)."""
+    whole_files = list(wit.changed() or [])
+    clean = [s for s in node["iterations"]
+             if s.get("category", "agent") == "agent" and s.get("tool") == tool
+             and isinstance(s.get("reviewed"), dict) and (s.get("gated_reported") or 0) == 0
+             and not s.get("unverified")]
+    if tier_rec["tier"] == "deep" or not clean:
+        return whole_files, True
+    moved = wit.between(clean[-1]["reviewed"].get("tree"), tree)
+    if moved is None:
+        return whole_files, True
+    return sorted(moved), False
+
+
+def _round_cap_refusal(ledger, node, repo, tool, iteration, rt, tools, what):
+    """The refusal text when another round would pass `review_round_cap` without convergence,
+    else None. Two counts, both since the last resolved escalation: the tool's own trailing run of
+    gated rounds (no iteration number to hide behind), and the review CYCLES -- iteration numbers
+    -- across every tool of the tier in which something was gated, ended by a clean cycle. The
+    second refuses only a round that opens a NEW iteration (one that finishes the latest cycle is
+    allowed); the iteration number is narrated, which is the residual limit."""
+    cap = rt.get("review_round_cap", ROUND_CAP_DEFAULT)
+    if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
+        cap = ROUND_CAP_DEFAULT
+    floor = max([s.get("n") or 0 for s in ledger.get("steps") or []
+                 if s.get("kind") == "escalation-resolved" and s.get("repo") == repo] or [0])
+    since = [x for x in node["iterations"]
+             if x.get("category", "agent") == "agent" and (x.get("n") or 0) > floor]
+    run = 0
+    for s in reversed([x for x in since if x.get("tool") == tool]):
+        if (s.get("gated_reported") or 0) <= 0:
+            break
+        run += 1
+    tail = ("Do not run another cycle: reconsider the approach and `escalate` (qa_ledger.py "
+            "escalate --repo %s --reason \"<why the loop does not converge>\"); a human closes "
+            "it with `resolve-escalation`, and the count restarts." % repo)
+    if run >= cap:
+        return ("%s REFUSED: %s reported gated findings in each of its last %d rounds without "
+                "converging (review_round_cap = %d, ADR-062). %s" % (what, tool, run, cap, tail))
+    gated_by_it = {}
+    for x in since:
+        if x.get("tool") in set(tools) | {tool}:
+            it = x.get("iteration") or 0
+            gated_by_it[it] = gated_by_it.get(it, False) or (x.get("gated_reported") or 0) > 0
+    its = sorted(gated_by_it)
+    cycles = 0
+    for it in reversed(its):
+        if not gated_by_it[it]:
+            break
+        cycles += 1
+    if cycles >= cap and its and iteration > its[-1]:
+        return ("%s REFUSED: the last %d review cycles (iterations %s) each had gated findings and "
+                "none converged (review_round_cap = %d, counted across %s, ADR-062). %s"
+                % (what, cycles, ", ".join(str(i) for i in its[-cycles:]), cap,
+                   ", ".join(sorted(set(tools) | {tool})), tail))
+    return None
 
 
 def cmd_review_start(args):
@@ -3241,11 +3625,30 @@ def cmd_review_start(args):
     entry = _scope_entry(ledger, args.repo)
     path, rtype = entry.get("path", "."), entry.get("type", "maven")
     reviews = ledger.setdefault(REVIEWS_KEY, [])
+    rt = _tiers_cfg(ledger) if args.repo != "integration" else None
+    if rt is not None:
+        # ADR-062: the base and the round cap are checked before anything is written
+        wit = _Witness(ledger, args.repo)
+        tier_rec = _tier_now(ledger, args.repo, wit)
+        if tier_rec["problem"]:
+            print("[qa_ledger] review-start REFUSED: " + tier_rec["problem"], file=sys.stderr)
+            sys.exit(2)
+        refusal = _round_cap_refusal(ledger, node, args.repo, args.tool, args.iteration, rt,
+                                     tier_rec["tools"], "review-start")
+        if refusal:
+            print("[qa_ledger] " + refusal, file=sys.stderr)
+            sys.exit(2)
     rec = {"id": "RV-%d" % (len(reviews) + 1), "repo": args.repo, "tool": args.tool,
            "iteration": args.iteration, "at": _now(),
            "tree": _review_stamp(path, rtype, args.ledger),
            "deferred_sha256": _deferred_sha(path, args.ledger),
            "defers": sorted(_defers_scan(path, args.ledger)[0]), "closed_by": None}
+    if rt is not None:
+        # ADR-062: the tier and the scope this review is handed, assigned by the engine
+        if tier_rec["current"] is not None:
+            _tier_raise(ledger, args.repo, tier_rec["current"])
+        rec["scope"], rec["whole"] = _assign_scope(node, args.tool, tier_rec, wit, rec["tree"])
+        rec["tier"] = tier_rec["tier"]
     reviews.append(rec)
     _save(args.ledger, ledger)
     if args.json:
@@ -3255,6 +3658,50 @@ def cmd_review_start(args):
               "`log-step ... --review %s`"
               % (rec["id"], args.repo, args.tool, args.iteration,
                  ((rec["tree"] or {}).get("commit") or "no git")[:8], rec["id"]))
+        if rt is not None:
+            print("[qa_ledger] tier %s, scope (%s): %s"
+                  % (rec["tier"], "whole change" if rec["whole"] else "changed since this "
+                     "tool's last clean pass", ", ".join(rec["scope"]) or "(no files)"))
+
+
+def cmd_review_tier(args):
+    """ADR-062: set the review tier of a change. Raising it is open to anyone (the agent may ask
+    for more review); lowering it is a human act (ADR-058 §5). The tier is the highest the change
+    ever reached, so lowering moves the high-water mark; a file the change still touches keeps
+    reaching its own glob tier."""
+    ledger = _load(args.ledger)
+    rt = _tiers_cfg(ledger)
+    if rt is None:
+        print("[qa_ledger] review-tier: this project declares no `review_tiers` block in its "
+              "config (neither the live uscha.config.json nor the ledger's frozen copy), so there is "
+              "no tier to set (ADR-062). Declare it in uscha.config.json: it takes effect on "
+              "the next command and the ledger is kept.", file=sys.stderr)
+        sys.exit(2)
+    _repo_node(ledger, args.repo)
+    wit = _Witness(ledger, args.repo)
+    now = _tier_now(ledger, args.repo, wit)
+    if _tier_rank(args.tier) == _tier_rank(now["tier"]):
+        print("[qa_ledger] %s: the tier is already %s" % (args.repo, now["tier"]))
+        return
+    st = ledger.setdefault(TIER_STATE_KEY, {}).setdefault(args.repo, {})
+    if _tier_rank(args.tier) > _tier_rank(now["tier"]):
+        st["high"] = args.tier
+        _touch_event(ledger, "review-tier", args.tier, args.repo)
+        _save(args.ledger, ledger)
+        print("[qa_ledger] %s: review tier raised %s -> %s" % (args.repo, now["tier"], args.tier))
+        return
+    actor = _human_act(args, "review-tier (lowering)",
+                       "qa_ledger.py review-tier --repo %s --tier %s --human <NAME> --note "
+                       "\"<why this change needs less review>\"" % (args.repo, args.tier))
+    st["high"] = args.tier
+    st["lowered_by"] = actor
+    st["lowered_note"] = args.note
+    _touch_event(ledger, "review-tier", args.tier, args.repo)
+    _save(args.ledger, ledger)
+    eff = _tier_now(ledger, args.repo, wit)["tier"]
+    print("[qa_ledger] %s: review tier lowered %s -> %s by %s%s"
+          % (args.repo, now["tier"], eff, actor,
+             "" if eff == args.tier else " (the files the change touches still reach %s)" % eff))
 
 
 def _review_link(ledger, args):
@@ -3274,7 +3721,7 @@ def _review_link(ledger, args):
     return rv, None
 
 
-def _review_verdicts(agent, cycle_tools, wit):
+def _review_verdicts(agent, cycle_tools, wit, tiers=None):
     """(reasons, info) of ADR-056 R2'. Anchor reads the tools of the cycle; the debt and Memory
     read EVERY tool that ever logged a step (the 2.11.0 fresh review: a tool outside the window,
     or not listed in qa_tools_order, used to take its debt out of sight). A gated step opens a
@@ -3351,6 +3798,47 @@ def _review_verdicts(agent, cycle_tools, wit):
                 # ADR-060: a 2.14 step -- closes by a FIX (the reviewed source moved) or by the
                 # confirmed, present deferral of EVERY one of its ids; never by the file's hash
                 ids = g.get("gated_ids") or None
+                if tiers and _located_files(ids) is not None:
+                    # ADR-062 Locate + CoverFix, PER ID: each `<path>:<rule>` closes on its own --
+                    # a clean step that COVERED its file and in which THAT file moved, or the
+                    # confirmed deferral of THAT id (a deferral needs no coverage: a human
+                    # accepted the finding). Fixing one id of a step never closes its siblings.
+                    open_ids = []
+                    for x in ids:
+                        f_, done = _id_path(x), False
+                        for c in later:
+                            cs = c["reviewed"]
+                            if not isinstance(gs.get("tree"), dict) or \
+                                    not isinstance(cs.get("tree"), dict):
+                                done = True
+                                info["no_tree_closures"] += 1
+                                break
+                            if _covers(cs, {f_}):
+                                m = wit.between(gs.get("tree"), cs.get("tree"))
+                                if m and f_ in m:
+                                    done = True
+                                    break
+                            if not missing_at(t, [x], c, g):
+                                done = True
+                                info["deferred_not_fixed"] += 1
+                                break
+                        if not done:
+                            open_ids.append(x)
+                    if open_ids:
+                        keys = ["%s/%s" % (t, x) for x in open_ids]
+                        waiting = [k for k in keys if k in defers_now
+                                   and not _confirmed_for(confirmed, k, g.get("n"))]
+                        info["awaiting_confirmation"] += waiting
+                        reasons.append("%s: gated finding(s) %s from step #%s (%s) still open -- "
+                                       "fix each one in its file and review it again, or defer "
+                                       "each with a `- defers: <tool>/<id> -- <why>` line and a "
+                                       "human `confirm-deferral`%s (ADR-062: a finding closes on "
+                                       "its own file, never with its siblings)"
+                                       % (t, ", ".join(keys), g.get("n"),
+                                          g.get("review") or "unwitnessed",
+                                          (" (awaiting human confirmation: %s)"
+                                           % ", ".join(waiting)) if waiting else ""))
+                    continue
                 closed, last_missing = False, None
                 for c in later:
                     cs = c["reviewed"]
@@ -3434,6 +3922,23 @@ def _review_verdicts(agent, cycle_tools, wit):
                         not isinstance(gs.get("tree"), dict):
                     continue
                 if is_new(g):
+                    if tiers and _located_files(g.get("gated_ids")) is not None:
+                        # ADR-062, per id: a clean step that covered a finding's file and left it
+                        # unmoved contradicts THAT finding (a step that did not cover the file
+                        # says nothing about it), unless that id is accepted
+                        m = wit.between(gs.get("tree"), latest["reviewed"].get("tree"))
+                        hit = [x for x in g.get("gated_ids")
+                               if m is not None and _covers(latest["reviewed"], {_id_path(x)})
+                               and _id_path(x) not in m
+                               and missing_at(t, [x], latest, g)]
+                        if hit:
+                            reasons.append("%s: step #%s reports 0 gated findings on the file(s) "
+                                           "step #%s flagged, unchanged -- %s -- the record "
+                                           "contradicts itself; fix, or defer each id"
+                                           % (t, latest.get("n"), g.get("n"),
+                                              ", ".join("%s/%s" % (t, x) for x in hit)))
+                            break
+                        continue
                     # ADR-060: on the same source, a clean verdict contradicts the gated one
                     # unless every id is accepted (confirmed, present then and now)
                     m = wit.between(gs.get("tree"), latest["reviewed"].get("tree"))
@@ -3458,6 +3963,65 @@ def _review_verdicts(agent, cycle_tools, wit):
                                       DEFERRED_FILE))
                     break
     return reasons, info
+
+
+def _tier_verdicts(agent, tiers, wit):
+    """ADR-062: what a tier adds to convergence, read off the reviewed trees and the scopes the
+    engine assigned. Names the tool and the file in every reason.
+      deep (today's rule, over the tier's tools): each tool's last review covered the whole change.
+      quick / standard: WholeFirstPass -- every tool of the tier had a review of the whole change;
+      and C2 with SameTool -- a file changed after a tool's clean pass was reviewed clean again,
+      after it, at its current content, by THAT tool (a clean pass of another tool does not clear
+      it: a tool that cannot see a finding's class cannot clear a file of it)."""
+    reasons = []
+    if wit is None:
+        return reasons
+    now = wit.rnow()
+    for t in tiers["tools"]:
+        steps = [s for s in agent if s.get("tool") == t]
+        wsteps = [s for s in steps if isinstance(s.get("reviewed"), dict)]
+        if not wsteps:
+            continue            # never ran / unwitnessed: the cycle checks already name it
+        if not tiers["diff"]:
+            last = steps[-1]
+            if isinstance(last.get("reviewed"), dict) and last["reviewed"].get("whole") is False:
+                reasons.append("%s: deep tier -- the last review (%s, step #%s) covered only %s, "
+                               "not the whole change: run the review again over everything"
+                               % (t, last.get("review"), last.get("n"),
+                                  ", ".join(last["reviewed"].get("scope") or []) or "no files"))
+            continue
+        if not any(s["reviewed"].get("whole", True) for s in wsteps):
+            reasons.append("%s: no review of the whole change yet -- the first review of a tool "
+                           "covers everything; later ones only the diff (ADR-062)" % t)
+        if not isinstance(now, dict):
+            continue
+        stale, first = [], None
+        for i, c in enumerate(wsteps):
+            if (c.get("gated_reported") or 0) != 0:
+                continue
+            moved = wit.between(c["reviewed"].get("tree"), now)
+            for f in moved or []:
+                again = False
+                for d in wsteps[i + 1:]:
+                    if (d.get("gated_reported") or 0) != 0:
+                        continue
+                    scope = d["reviewed"].get("scope")
+                    mv = wit.between(d["reviewed"].get("tree"), now)
+                    if (not isinstance(scope, list) or f in scope) and mv is not None \
+                            and f not in mv:
+                        again = True
+                        break
+                if not again and f not in stale:
+                    stale.append(f)
+                    first = first or c
+        if stale:
+            reasons.append("%s: %s changed after its clean review (step #%s) and %s not reviewed "
+                           "clean again by %s -- review %s (ADR-062 SameTool)"
+                           % (t, ", ".join(sorted(stale)[:4]) + (" +%d more" % (len(stale) - 4)
+                                                                 if len(stale) > 4 else ""),
+                              first.get("n"), "was" if len(stale) == 1 else "were", t,
+                              "it" if len(stale) == 1 else "them"))
+    return reasons
 
 
 def cmd_test_run(args):
@@ -3520,6 +4084,7 @@ def cmd_test_run(args):
     if status in ("FAILED", "TIMEOUT") and tail:
         rec["output_tail"] = tail
     ledger.setdefault(TEST_RUNS_KEY, []).append(rec)
+    _tier_touch(ledger, name)           # ADR-062: the high-water mark follows the change up
     _save(args.ledger, ledger)
     snap = _snapshot(ledger, name)
     ledger["step_counter"] += 1
@@ -3904,15 +4469,42 @@ def cmd_log_step(args):
     # Refused before anything is written; WITHOUT ids the step is recorded, and its debt can
     # close only by a fix (gated_ids: None).
     gated_ids = None
+    rt = _tiers_cfg(ledger) if args.repo != "integration" else None
+    rejected = getattr(args, "rejected", None)
+    if rejected is not None and (rejected < 0 or rejected > args.reported):
+        print("[qa_ledger] log-step REFUSED: --rejected must be between 0 and --reported (%d); "
+              "got %d (ADR-062)" % (args.reported, rejected), file=sys.stderr)
+        sys.exit(2)
+    if rt is not None and args.gated_reported > 0 and getattr(args, "gated_ids", None) is None:
+        # ADR-062 decision 4: under review_tiers a gated step names its findings, so a finding
+        # is counted once and its debt is read on its file
+        print("[qa_ledger] log-step REFUSED: a gated step needs --gated-ids <path>:<rule>,... "
+              "(exactly --gated-reported of them) under review_tiers -- each finding names the "
+              "file it is in, as git names the path (ADR-062)", file=sys.stderr)
+        sys.exit(2)
     if getattr(args, "gated_ids", None) is not None:
         gated_ids = [x.strip() for x in args.gated_ids.split(",") if x.strip()]
-        bad = [x for x in gated_ids if not re.match(r"^[A-Za-z0-9_.:-]+$", x)]
+        id_rx = r"^[A-Za-z0-9_.:/@+-]+$" if rt is not None else r"^[A-Za-z0-9_.:-]+$"
+        bad = [x for x in gated_ids if not re.match(id_rx, x)]
+        if rt is not None:
+            bad += [x for x in gated_ids if x not in bad and _id_path(x) is None]
         if bad or len(set(gated_ids)) != len(gated_ids) or len(gated_ids) != args.gated_reported:
             print("[qa_ledger] log-step REFUSED: --gated-ids must name exactly --gated-reported "
                   "(%d) DISTINCT ids [A-Za-z0-9_.:-]; got %r (ADR-060)"
                   % (args.gated_reported, gated_ids), file=sys.stderr)
+            if rt is not None:
+                print("[qa_ledger] under review_tiers each id is <path>:<rule> (a file, then the "
+                      "rule or finding), e.g. src/pay.py:R3 (ADR-062)", file=sys.stderr)
             sys.exit(2)
         gated_ids = sorted(gated_ids)
+    if rt is not None:
+        # ADR-062: the round cap holds here too -- an unwitnessed log-step is no way round it
+        wit_ = _Witness(ledger, args.repo)
+        refusal = _round_cap_refusal(ledger, node, args.repo, args.tool, args.iteration, rt,
+                                     _tier_now(ledger, args.repo, wit_)["tools"], "log-step")
+        if refusal:
+            print("[qa_ledger] " + refusal, file=sys.stderr)
+            sys.exit(2)
     ledger["step_counter"] += 1
     fp = None
     ids = None
@@ -3959,6 +4551,19 @@ def cmd_log_step(args):
         record["source_origin"] = ext["origin"]
     if res["source"] == "MISSING":
         record["unverified"] = True
+    if rejected is not None:
+        record["rejected"] = rejected
+    repeats = []
+    if rt is not None and gated_ids:
+        # ADR-062 decision 4: an id this tool already logged is a REPEAT, never new yield
+        seen = {}
+        for s_ in node["iterations"]:
+            if s_.get("category", "agent") == "agent" and s_.get("tool") == args.tool:
+                for x in s_.get("gated_ids") or []:
+                    seen.setdefault(x, s_.get("n"))
+        repeats = [(x, seen[x]) for x in gated_ids if x in seen]
+        if repeats:
+            record["repeat_ids"] = [x for x, _ in repeats]
     # ADR-056 R2' (2.11.0): the step carries the tree the tool REVIEWED, from its review-start
     rv, rv_problem = _review_link(ledger, args)
     entry_ = _scope_entry(ledger, args.repo)
@@ -3975,6 +4580,9 @@ def cmd_log_step(args):
         record["reviewed"] = {"tree": rv.get("tree"),
                               "deferred_sha256": rv.get("deferred_sha256"),
                               "defers": rv.get("defers")}
+        if "scope" in rv:               # ADR-062: the scope the engine assigned at review-start
+            record["reviewed"]["scope"] = rv["scope"]
+            record["reviewed"]["whole"] = rv.get("whole")
         rv["closed_by"] = record["n"]
     else:
         record["unwitnessed"] = rv_problem
@@ -3982,6 +4590,7 @@ def cmd_log_step(args):
     ledger["steps"].append({"n": record["n"], "at": record["at"], "kind": "qa-step",
                             "repo": args.repo, "tool": args.tool,
                             "iteration": args.iteration})
+    _tier_touch(ledger, args.repo)      # ADR-062: the high-water mark follows the change up
     _save(args.ledger, ledger)
     print(f"[qa_ledger] step #{record['n']} logged: {args.repo}/{args.tool} "
           f"iter={args.iteration} reported={args.reported} "
@@ -3993,6 +4602,9 @@ def cmd_log_step(args):
           # witnessed steps name their review; an unwitnessed one prints exactly what 2.10 printed
           # (the human-approved devloop-entry golden pins stdout AND stderr of a clean one)
           + (" review=%s" % rv["id"] if rv is not None else ""))
+    if repeats:
+        print("[qa_ledger] repeat: %s -- already logged by %s -- a repeat, not new yield (ADR-062)"
+              % (", ".join("%s (step #%s)" % (x, n) for x, n in repeats), args.tool))
     if rv is None and (record.get("gated_reported") or 0) > 0:
         # a GATED unwitnessed step opens a debt on the state it was logged at: said now, on
         # stderr; a clean one is named by `converged` and `phase`
@@ -4324,6 +4936,8 @@ def cmd_production_finding(args):
            "repo": args.repo, "severity": sev, "source": args.source,
            "title": args.title, "evidence": args.evidence,
            "note": args.note, "resolved_at": None}
+    if getattr(args, "should_have_caught", None):
+        row["should_have_caught"] = args.should_have_caught
     rows.append(row)
     _touch_event(ledger, "production-finding", row["id"], args.repo)
     _save(args.ledger, ledger)
@@ -5164,6 +5778,12 @@ def _converged(node, k, qa_order=None, live=None):
     agent = [s for s in node["iterations"] if s.get("category", "agent") == "agent"]
     reasons = []
     k = max(1, k)
+    # ADR-062: under review_tiers the cycle is the tier's tools, whatever qa_tools_order lists
+    tiers = (live or {}).get("tiers")
+    if tiers:
+        qa_order = list(tiers["tools"])
+        if tiers.get("problem"):
+            reasons.append(tiers["problem"])
     if qa_order:
         # ADR-051: a listed tool is satisfied only by a step that both EXISTS and RESOLVED. A
         # step whose tool was MISSING at log time (unverified) ran a QA tool that is not
@@ -5229,8 +5849,10 @@ def _converged(node, k, qa_order=None, live=None):
                            + ",".join(sorted(stale_tools)))
     # 2.11.0 (ADR-056 R2'): Anchor, the debt on reviewed trees, Memory
     r2_reasons, r2_info = _review_verdicts(agent, sorted({s.get("tool") for s in cycle}),
-                                           (live or {}).get("wit"))
+                                           (live or {}).get("wit"), tiers)
     reasons.extend(r2_reasons)
+    if tiers:
+        reasons.extend(_tier_verdicts(agent, tiers, (live or {}).get("wit")))
     if live is not None:
         live["r2"] = r2_info
     gated = sum((s.get("gated_reported") or 0) for s in cycle)
@@ -5627,7 +6249,15 @@ def cmd_confirm_deferral(args):
     """A HUMAN act (ADR-060 + ADR-058): confirm the deferral of ONE gated finding id. Recorded in
     the ledger, refused in a known agent shell, and only for an id some gated step of this repo
     reported. The `defers:` line in ISSUES-DEFERRED.md says what and why; this says who decided."""
-    m = re.match(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.:-]+)$", args.id or "")
+    try:
+        with open(args.ledger, encoding="utf-8") as fh:        # ADR-062: ids may carry a path
+            _cfg = (json.load(fh) or {}).get("config")         # only under review_tiers
+        _PATH_IDS[0] = _tiers_cfg_from(_cfg if isinstance(_cfg, dict) else None,
+                                       args.ledger) is not None
+    except (OSError, ValueError, AttributeError):
+        _PATH_IDS[0] = False
+    m = re.match(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.:/@+-]+)$" if _PATH_IDS[0]
+                 else r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.:-]+)$", args.id or "")
     if not m:
         print("[qa_ledger] confirm-deferral: --id must be <tool>/<id> (got %r)" % args.id,
               file=sys.stderr)
@@ -13474,6 +14104,43 @@ def cmd_top(args):
           % (out["project"] or "?", done, total, pct, unmeasured))
 
 
+def _review_yield(ledger):
+    """ADR-062 decision 5: per QA tool, over every repo, what its rounds produced -- rounds
+    (logged steps), DISTINCT gated finding ids, repeats (an id the tool had logged before) and
+    what the author rejected. Advisory: nothing gates on it."""
+    out = {}
+    for node in list((ledger.get("repos") or {}).values()):
+        seen = {}
+        for s in node.get("iterations") or []:
+            if s.get("category", "agent") != "agent":
+                continue
+            y = out.setdefault(s["tool"], {"rounds": 0, "gated_distinct": 0, "repeats": 0,
+                                           "rejected": 0})
+            known = seen.setdefault(s["tool"], set())
+            y["rounds"] += 1
+            y["rejected"] += s.get("rejected") or 0
+            for x in s.get("gated_ids") or []:
+                if x in known:
+                    y["repeats"] += 1
+                else:
+                    known.add(x)
+                    y["gated_distinct"] += 1
+    return out
+
+
+def _escapes_by_layer(ledger):
+    """ADR-062 decision 6: production findings per layer that should have caught them. None
+    (nothing emitted) unless the project declares review_tiers or an escape names a layer."""
+    rows = ledger.get("production_findings") or []
+    if _tiers_cfg(ledger) is None and not any(r.get("should_have_caught") for r in rows):
+        return None
+    out = {k: 0 for k in SHOULD_HAVE_CAUGHT}
+    for r in rows:
+        if r.get("should_have_caught") in out:
+            out[r["should_have_caught"]] += 1
+    return out
+
+
 def cmd_readiness(args):
     ledger = _load(args.ledger)
     defaults = ledger["config"].get("defaults", {})
@@ -13835,6 +14502,14 @@ def cmd_readiness(args):
         out["agent_origin"] = {"unconfirmed": _ao["unconfirmed"],
                                "confirmed": _ao["confirmed"],
                                "files_scanned": _ao["files_scanned"]}
+    # review pace (ADR-062): advisory and CONDITIONAL like the blocks above -- a project that
+    # declares no review_tiers (and logs no escape layer) keeps the exact prior payload and text
+    _yield = _review_yield(ledger) if _tiers_cfg(ledger) is not None else None
+    if _yield is not None:
+        out["review_yield"] = _yield
+    _esc = _escapes_by_layer(ledger)
+    if _esc is not None:
+        out["escapes_by_layer"] = _esc
     if args.json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return
@@ -13965,6 +14640,14 @@ def cmd_readiness(args):
               f"rising for {STALL_WINDOW} cycles: iterating more is not getting "
               f"closer. Likely a design/SPEC problem — go back to the ADR / "
               f"re-plan with the human (advisory)")
+    if _yield:
+        print("  · review yield (advisory, ADR-062): " + "; ".join(
+            "%s %d round(s), %d distinct gated, %d repeat(s), %d rejected"
+            % (t, y["rounds"], y["gated_distinct"], y["repeats"], y["rejected"])
+            for t, y in sorted(_yield.items())))
+    if _esc and any(_esc.values()):
+        print("  · escapes by layer that should have caught them (ADR-062): " + ", ".join(
+            "%s %d" % (k, v) for k, v in _esc.items() if v))
     if _lc["declared"]:
         print("  · " + _lifecycle_summary(_lc))
     # rubrica (1.23.0): el ultimo grade por repo, siempre visible — guess
@@ -16922,6 +17605,7 @@ def cmd_doctor(args):
     qa_order = ["code-review", "judgment-day", "improve"]   # default del kit
     qa_external = []                                          # ADR-051, declared by the human
     effective, risk_profile = None, None
+    tiers_absent = False                                      # ADR-062, set when a config is read
     cfg_path = args.config or "uscha.config.json"
     # ADR-051 / S1: qa_tools_external through the SAME function the gate and log-step use --
     # a live declaration wins over the ledger's frozen copy, per key -- so doctor and
@@ -16944,6 +17628,8 @@ def cmd_doctor(args):
             cfg = _load(cfg_path)
             defaults = cfg.get("defaults", {})
             repos = cfg.get("repos", [])
+            tiers_absent = (isinstance(cfg, dict) and "review_tiers" not in cfg
+                            and not isinstance((frozen_cfg or {}).get("review_tiers"), dict))
             ok(f"project: {cfg_path} v{cfg.get('version', '?')} ({len(repos)} repo(s))")
             acc = defaults.get("acceptance_file")
             if acc and os.path.isfile(acc):
@@ -17097,6 +17783,16 @@ def cmd_doctor(args):
                  "needs a model, add \"model_check\": {\"from_adr\": \"ADR-%03d\"} to "
                  "uscha.config.json (advisory unless \"mode\": \"gate\")"
                  % (_nums[-1], _nums[-1] + 1))
+    # ADR-062: propose the review pace to a project whose config declares no review_tiers
+    if tiers_absent:
+        warn("review_tiers not declared (ADR-062)",
+             "every change pays the same review today: a one-line fix restarts every QA tool over "
+             "the whole change. To set the review effort by the change's risk, add "
+             "\"review_tiers\": {\"default\": \"standard\", \"quick\": [\"docs/**\", "
+             "\"**/*.md\"], \"deep\": []} to uscha.config.json (list the risky paths under "
+             "deep). The live uscha.config.json wins over the ledger's frozen copy, so this "
+             "takes effect on the next command and the ledger is kept -- no re-init. "
+             "Advisory: nothing changes until you do")
     n_ok = sum(1 for lv, _, _ in checks if lv == "ok")
     n_warn = sum(1 for lv, _, _ in checks if lv == "warn")
     n_err = sum(1 for lv, _, _ in checks if lv == "error")
@@ -17218,6 +17914,10 @@ def build_parser():
                     help="the ids of the gated findings, comma-separated, exactly "
                          "--gated-reported of them (ADR-060); without them the debt closes "
                          "only by a fix")
+    pl.add_argument("--rejected", type=int, default=None,
+                    help="how many of --reported the author judged the tool WRONG about "
+                         "(ADR-062): next to fixed / deferred / suppressed, it measures a "
+                         "tool's precision; optional")
     pl.add_argument("--fixed", type=int, default=0)
     pl.add_argument("--deferred", type=int, default=0)
     pl.add_argument("--suppressed", type=int, default=0)
@@ -17239,6 +17939,15 @@ def build_parser():
     prv.add_argument("--iteration", type=int, required=True)
     prv.add_argument("--json", action="store_true")
     prv.set_defaults(func=cmd_review_start)
+
+    prt = sub.add_parser("review-tier", help="ADR-062: raise (anyone) or lower (a human act) the "
+                         "review tier of a change; needs review_tiers in the config")
+    add_ledger(prt)
+    prt.add_argument("--repo", required=True)
+    prt.add_argument("--tier", required=True, choices=list(TIER_ORDER))
+    prt.add_argument("--human", default=None, help="NAME -- required to LOWER the tier")
+    prt.add_argument("--note", default=None, help="why -- required to LOWER the tier")
+    prt.set_defaults(func=cmd_review_tier)
 
     pmk = sub.add_parser("model-check", help="ADR-061: check every ADR from model_check.from_adr "
                          "and every models.json manifest (no Java); --run runs TLC and records it")
@@ -17737,6 +18446,9 @@ def build_parser():
     ppf.add_argument("--evidence", default=None,
                      help="short evidence pointer; do not paste secrets or PII")
     ppf.add_argument("--note", default=None)
+    ppf.add_argument("--should-have-caught", default=None, choices=list(SHOULD_HAVE_CAUGHT),
+                     help="which layer should have caught it (ADR-062): test, static, review, "
+                          "model, human or none; optional, counted per layer by readiness")
     ppf.add_argument("--human", default=None,
                     help="with --resolve: who decided (required; refused from an agent's shell)")
     ppf.add_argument("--resolve", action="store_true")
