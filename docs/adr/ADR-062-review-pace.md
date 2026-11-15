@@ -4,11 +4,11 @@ governs:
   - uscha-kit/skills/uscha-devloop/qa_ledger.py
   - uscha-kit/.claude/skills/uscha-devloop/SKILL.md
   - uscha-kit/skills/uscha-devloop/SKILL.md
-model: not-needed -- PROVISIONAL until the interview: decisions 1, 3, 4, 5 and 6 only choose which tools run, cap the loop and record more; they add no state to the gated-debt rule. If the interview adopts decision 2 (re-review on the diff) or option P (pre-existing findings open no debt), this flips to `required` and the GatedDebt model is extended BEFORE any code (origin: agent)
+model: not-needed -- SUPERSEDED by the interview (2026-11-15, answer 2a): decision 2 changes what convergence means, so a model IS required. The field flips to `required` in the commit that adds docs/review-pace/models/ (GatedDebt extended), before any engine code (origin: agent)
 ---
 # ADR-062: Review effort follows the change's risk, and the QA loop converges on the diff -- a fix does not buy a full re-cycle of every tool
 
-## Status: Proposed — drafted 2026-11-15 from field data; awaits an `adr-refine` interview with the owner. Every decision below is a proposal with the open question it needs answered.
+## Status: Proposed — drafted 2026-11-15 from field data; `adr-refine` interview in progress: batch 1 (decisions 1, 2, 3, 7) decided by the owner on 2026-11-15, batch 2 open.
 
 ## Context
 
@@ -56,16 +56,23 @@ reviewer kept flagging was code older than its first pass.
    The engine computes the tier from the files the change touches (the highest tier any touched path
    reaches; a path no glob matches gets `standard`). The agent may RAISE the tier; lowering it is a
    human act (ADR-058). `risk_profile` keeps owning the project's defaults and the deep list.
-   *Open: the default tool list per tier, and whether `quick` needs an agent review at all.*
+   **Decided (1a, 1b, 1c):** the tier comes from declared path globs only -- deterministic, no
+   classifier; `quick` = one code-review pass plus the linters run once as a gate, never as rounds;
+   `standard` adds judgment-day; `deep` = the profile's full list, improve included (the field data
+   showed improve and spotbugs yielding nothing outside deep work); only a human lowers a tier.
 2. **Re-review on the diff after the first full cycle.** The first cycle runs every tool of the tier
    over the whole change. A later cycle runs only the tools that found something gated in the previous
    one, over the files changed since. Convergence = every tool of the tier has had one clean pass, and
    every file changed after a tool's clean pass has been reviewed clean by at least one agent tool.
-   *Open: whether "at least one" is enough or it must be the tool whose finding the fix answered.
-   This decision changes what convergence means -> a model (repo rule 12).*
+   **Decided (2a):** in `quick` and `standard`, only the tools that flagged something re-run, over
+   the fix's diff; in `deep`, a fix still re-runs every tool over the whole change (as today), so
+   expensive code loses nothing. This changes what convergence means -> a model first (repo rule 12),
+   extending GatedDebt with tiers and diff-scoped re-review; the model must show that no gated
+   finding the ledger knows ships, under both rules.
 3. **A round cap that stops the loop, not a ceiling it grinds to.** After `review_round_cap` cycles
    (default 3) without convergence, the engine refuses another cycle and asks for an escalation
    ("reconsider the approach", the existing `escalate`), instead of running to `max_iterations`.
+   **Decided (2b):** cap 3, configurable as `review_round_cap`.
 4. **A finding is counted once.** A gated finding already logged by id (`--gated-ids`, ADR-060) is a
    REPEAT in a later round: logged as such, never counted as new yield. `--gated-ids` becomes
    mandatory for gated steps of agent tools (it is already required to defer one).
@@ -79,6 +86,7 @@ reviewer kept flagging was code older than its first pass.
 7. **Option P, pre-existing findings** (not proposed yet, listed for the interview): a gated finding
    in lines the change did not touch (by `git blame` against the base) is tagged `pre-existing`, goes
    to the backlog and opens no debt. Fewer rounds, but it changes ADR-056's debt rule -> a model first.
+   **Decided (3): not now.** Re-counted findings are handled by decision 4; the debt rule stays.
 
 ## Reasons
 
