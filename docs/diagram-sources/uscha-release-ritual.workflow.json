@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "El ritual de release",
+    "subtitle": "Un script, seis pasos, ocho invariantes: rechaza en vez de avisar · el tag solo publica si el CI está en verde"
+  },
+  "lanes": [
+    {
+      "id": "human",
+      "label": "Humano"
+    },
+    {
+      "id": "exc",
+      "label": "Rechazo",
+      "variant": "exception"
+    },
+    {
+      "id": "a",
+      "label": "Preparar 1-3"
+    },
+    {
+      "id": "b",
+      "label": "Probar + sellar 4-6"
+    },
+    {
+      "id": "c",
+      "label": "Tras el tag"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "human",
+      "lane": "human",
+      "col": 1,
+      "type": "external",
+      "label": "Humano",
+      "sublabel": "changelog + correr",
+      "width": 92,
+      "tag": "release.py"
+    },
+    {
+      "id": "refuse",
+      "lane": "exc",
+      "col": 3,
+      "type": "security",
+      "label": "REFUSED",
+      "sublabel": "exit 2",
+      "width": 92,
+      "tag": "nombra I1..I8"
+    },
+    {
+      "id": "s1",
+      "lane": "a",
+      "col": 1,
+      "type": "frontend",
+      "label": "1 Preflight",
+      "sublabel": "rama + changelog",
+      "width": 92,
+      "tag": "I1 I2"
+    },
+    {
+      "id": "s2",
+      "lane": "a",
+      "col": 3,
+      "type": "backend",
+      "label": "2 Bump",
+      "sublabel": "6 superficies + facts",
+      "width": 92,
+      "tag": "I3"
+    },
+    {
+      "id": "s3",
+      "lane": "a",
+      "col": 5,
+      "type": "backend",
+      "label": "3 Commit X",
+      "sublabel": "código + bump",
+      "width": 92,
+      "tag": "un commit"
+    },
+    {
+      "id": "s4",
+      "lane": "b",
+      "col": 5,
+      "type": "backend",
+      "label": "4 Suite en X",
+      "sublabel": "test-run",
+      "width": 92,
+      "tag": "I4"
+    },
+    {
+      "id": "s5",
+      "lane": "b",
+      "col": 3,
+      "type": "database",
+      "label": "5 Evidencia",
+      "sublabel": "registro, commit X+1",
+      "width": 92,
+      "tag": "I5 I6"
+    },
+    {
+      "id": "s6",
+      "lane": "b",
+      "col": 1,
+      "type": "security",
+      "label": "6 Sello + tag",
+      "sublabel": "SEALED, push, tag",
+      "width": 92,
+      "tag": "I7 I8"
+    },
+    {
+      "id": "ci",
+      "lane": "c",
+      "col": 1,
+      "type": "cloud",
+      "label": "CI en el tag",
+      "sublabel": "smoke de 6 celdas",
+      "width": 92,
+      "tag": "rojo = espera"
+    },
+    {
+      "id": "pub",
+      "lane": "c",
+      "col": 3,
+      "type": "security",
+      "label": "publish.yml",
+      "sublabel": "espera, rechaza rojo",
+      "width": 92,
+      "tag": "gate"
+    },
+    {
+      "id": "npm",
+      "lane": "c",
+      "col": 5,
+      "type": "external",
+      "label": "npm",
+      "sublabel": "publicado",
+      "width": 92
+    }
+  ],
+  "edges": [
+    {
+      "from": "human",
+      "to": "s1",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight"
+    },
+    {
+      "from": "s1",
+      "to": "s2",
+      "variant": "emphasis"
+    },
+    {
+      "from": "s2",
+      "to": "s3",
+      "variant": "emphasis"
+    },
+    {
+      "from": "s3",
+      "to": "s4",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight"
+    },
+    {
+      "from": "s4",
+      "to": "s5",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "from": "s5",
+      "to": "s6",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "from": "s6",
+      "to": "ci",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight"
+    },
+    {
+      "from": "ci",
+      "to": "pub",
+      "variant": "emphasis"
+    },
+    {
+      "from": "pub",
+      "to": "npm",
+      "variant": "emphasis",
+      "label": "solo en verde"
+    },
+    {
+      "from": "s2",
+      "to": "refuse",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight",
+      "label": "falla un invariante"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "El camino",
+      "items": [
+        "Preflight, bump, commit X, suite, commit de evidencia X+1, sello, tag",
+        "X lleva el código y el bump; X+1 lleva solo evidencia",
+        "El tag se crea solo sobre X+1, justo después del push"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Los rechazos",
+      "items": [
+        "Cada paso protege invariantes I1..I8 y rechaza, nunca avisa",
+        "Un rechazo nombra el invariante y sale con código distinto de cero",
+        "Un tag en rojo es una espera: nada llega a npm"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Por qué dos commits",
+      "items": [
+        "La suite mide X y la evidencia se registra después",
+        "Nunca amendar X tras el registro: huerfanaría el snapshot",
+        "El humano escribe el changelog; el script impone el orden"
+      ]
+    }
+  ]
+}
