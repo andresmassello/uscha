@@ -93,4 +93,4 @@ the output differs only by `doctor`'s advisory, the new `--help` text and the op
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 471 checks · 0 fail; acceptance 518/519.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="489" failures="0" errors="0" skipped="1" timestamp="2026-11-09T16:03:25.639196Z">
+<testsuite name="uscha-acceptance" tests="519" failures="0" errors="0" skipped="1" timestamp="2026-11-16T00:08:11.439565Z">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -975,6 +975,66 @@
   <testcase classname="uscha.acceptance" name="AC-TP-02_skill-templates">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-TP-03_skill-templates">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-07_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-08_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-09_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-10_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-11_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-12_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-13_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-14_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-15_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-16_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-17_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-18_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-19_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-20_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-21_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-22_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-23_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-24_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-25_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-26_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-27_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-28_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-29_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-30_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-31_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-32_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-33_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-34_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-35_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-RP-36_review-pace">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
     <skipped message="shallow clone or no git: ancestry unmeasurable"/>
