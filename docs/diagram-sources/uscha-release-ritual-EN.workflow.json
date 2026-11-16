@@ -36,7 +36,7 @@
       "type": "external",
       "label": "Human",
       "sublabel": "changelog + run",
-      "width": 92,
+      "width": 118,
       "tag": "release.py"
     },
     {
@@ -46,7 +46,7 @@
       "type": "security",
       "label": "REFUSED",
       "sublabel": "exit 2",
-      "width": 92,
+      "width": 118,
       "tag": "names I1..I8"
     },
     {
@@ -56,7 +56,7 @@
       "type": "frontend",
       "label": "1 Preflight",
       "sublabel": "branch + changelog",
-      "width": 92,
+      "width": 118,
       "tag": "I1 I2"
     },
     {
@@ -66,7 +66,7 @@
       "type": "backend",
       "label": "2 Bump",
       "sublabel": "6 surfaces + facts",
-      "width": 92,
+      "width": 118,
       "tag": "I3"
     },
     {
@@ -96,7 +96,7 @@
       "type": "database",
       "label": "5 Evidence",
       "sublabel": "record, commit X+1",
-      "width": 92,
+      "width": 118,
       "tag": "I5 I6"
     },
     {
@@ -106,7 +106,7 @@
       "type": "security",
       "label": "6 Seal + tag",
       "sublabel": "SEALED, push, tag",
-      "width": 92,
+      "width": 118,
       "tag": "I7 I8"
     },
     {
@@ -116,7 +116,7 @@
       "type": "cloud",
       "label": "CI on the tag",
       "sublabel": "6-cell smoke run",
-      "width": 92,
+      "width": 118,
       "tag": "red = wait"
     },
     {
@@ -126,7 +126,7 @@
       "type": "security",
       "label": "publish.yml",
       "sublabel": "waits, refuses red",
-      "width": 92,
+      "width": 118,
       "tag": "gate"
     },
     {

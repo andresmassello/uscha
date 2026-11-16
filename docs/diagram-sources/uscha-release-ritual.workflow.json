@@ -36,7 +36,7 @@
       "type": "external",
       "label": "Humano",
       "sublabel": "changelog + correr",
-      "width": 92,
+      "width": 118,
       "tag": "release.py"
     },
     {
@@ -46,7 +46,7 @@
       "type": "security",
       "label": "REFUSED",
       "sublabel": "exit 2",
-      "width": 92,
+      "width": 118,
       "tag": "nombra I1..I8"
     },
     {
@@ -56,7 +56,7 @@
       "type": "frontend",
       "label": "1 Preflight",
       "sublabel": "rama + changelog",
-      "width": 92,
+      "width": 118,
       "tag": "I1 I2"
     },
     {
@@ -66,7 +66,7 @@
       "type": "backend",
       "label": "2 Bump",
       "sublabel": "6 superficies + facts",
-      "width": 92,
+      "width": 118,
       "tag": "I3"
     },
     {
@@ -96,7 +96,7 @@
       "type": "database",
       "label": "5 Evidencia",
       "sublabel": "registro, commit X+1",
-      "width": 92,
+      "width": 118,
       "tag": "I5 I6"
     },
     {
@@ -106,7 +106,7 @@
       "type": "security",
       "label": "6 Sello + tag",
       "sublabel": "SEALED, push, tag",
-      "width": 92,
+      "width": 118,
       "tag": "I7 I8"
     },
     {
@@ -116,7 +116,7 @@
       "type": "cloud",
       "label": "CI en el tag",
       "sublabel": "smoke de 6 celdas",
-      "width": 92,
+      "width": 118,
       "tag": "rojo = espera"
     },
     {
@@ -126,7 +126,7 @@
       "type": "security",
       "label": "publish.yml",
       "sublabel": "espera, rechaza rojo",
-      "width": 92,
+      "width": 118,
       "tag": "gate"
     },
     {

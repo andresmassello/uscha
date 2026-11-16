@@ -3,7 +3,7 @@
   "diagram_type": "dataflow",
   "meta": {
     "title": "Cómo una medición se convierte en una decisión de merge",
-    "subtitle": "Leelo de izquierda a derecha: las herramientas producen archivos · el motor los registra · el ledger decide · el humano hace el merge",
+    "subtitle": "Se lee de izquierda a derecha: las herramientas producen archivos · el motor los registra · el ledger decide · el humano hace el merge",
     "viewBox": [
       1120,
       780
