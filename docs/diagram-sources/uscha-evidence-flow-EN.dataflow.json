@@ -139,7 +139,7 @@
       "id": "prg",
       "type": "security",
       "label": "pr-ready gate",
-      "sublabel": "hook keeps PR in draft",
+      "sublabel": "PR stays draft",
       "stage": 4,
       "row": 1,
       "tag": "blocks"

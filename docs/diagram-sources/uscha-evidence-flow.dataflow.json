@@ -139,7 +139,7 @@
       "id": "prg",
       "type": "security",
       "label": "gate de pr-ready",
-      "sublabel": "hook mantiene el PR en borrador",
+      "sublabel": "PR en borrador",
       "stage": 4,
       "row": 1,
       "tag": "bloquea"
