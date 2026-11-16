@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "La vida de un cambio",
+    "subtitle": "La fase se deriva del ledger, nunca se declara · el ciclo de review converge o escala · el humano hace el merge"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Fases derivadas por phase"
+    },
+    {
+      "id": "review",
+      "label": "Ritmo de review"
+    },
+    {
+      "id": "terminal",
+      "label": "Actos solo humanos"
+    }
+  ],
+  "states": [
+    {
+      "id": "plan",
+      "type": "start",
+      "label": "plan",
+      "sublabel": "nada medido aún",
+      "tag": "ledger vacío",
+      "lane": "main",
+      "col": 0,
+      "step": "01"
+    },
+    {
+      "id": "build",
+      "type": "active",
+      "label": "build",
+      "sublabel": "snapshots, sin QA aún",
+      "tag": "medido",
+      "lane": "main",
+      "col": 1,
+      "step": "02"
+    },
+    {
+      "id": "qa",
+      "type": "active",
+      "label": "qa",
+      "sublabel": "ciclo de review activo",
+      "tag": "sin converger",
+      "lane": "main",
+      "col": 2,
+      "step": "03"
+    },
+    {
+      "id": "prready",
+      "type": "decision",
+      "label": "pr-ready",
+      "sublabel": "el PR puede salir de borrador",
+      "tag": "derivada, no declarada",
+      "lane": "main",
+      "col": 3,
+      "step": "04"
+    },
+    {
+      "id": "merged",
+      "type": "success",
+      "label": "Merge",
+      "sublabel": "lo hace el humano",
+      "tag": "terminal",
+      "lane": "main",
+      "col": 4,
+      "step": "05"
+    },
+    {
+      "id": "tier",
+      "type": "active",
+      "label": "Nivel por rutas",
+      "sublabel": "según globs",
+      "tag": "quick/std/deep",
+      "lane": "review",
+      "col": 0,
+      "width": 104
+    },
+    {
+      "id": "scope",
+      "type": "active",
+      "label": "Alcance motor",
+      "sublabel": "todo, luego diff",
+      "tag": "asignado",
+      "lane": "review",
+      "col": 1,
+      "width": 104
+    },
+    {
+      "id": "cap",
+      "type": "decision",
+      "label": "Tope rondas",
+      "sublabel": "rondas con hallazgos",
+      "tag": "por defecto 3",
+      "lane": "review",
+      "col": 2,
+      "width": 104
+    },
+    {
+      "id": "lowered",
+      "type": "waiting",
+      "label": "Nivel bajado",
+      "sublabel": "solo humano",
+      "tag": "review-tier",
+      "lane": "terminal",
+      "col": 0
+    },
+    {
+      "id": "defer",
+      "type": "waiting",
+      "label": "Diferimiento",
+      "sublabel": "defers: + OK humano",
+      "tag": "confirm-deferral",
+      "lane": "terminal",
+      "col": 1
+    },
+    {
+      "id": "esc",
+      "type": "failure",
+      "label": "escalated",
+      "sublabel": "bloquea pr-ready",
+      "tag": "resolve-escalation",
+      "lane": "terminal",
+      "col": 2
+    }
+  ],
+  "transitions": [
+    {
+      "from": "plan",
+      "to": "build",
+      "variant": "emphasis"
+    },
+    {
+      "from": "build",
+      "to": "qa",
+      "variant": "emphasis"
+    },
+    {
+      "from": "qa",
+      "to": "prready",
+      "variant": "emphasis"
+    },
+    {
+      "from": "prready",
+      "to": "merged",
+      "variant": "emphasis"
+    },
+    {
+      "from": "qa",
+      "to": "tier",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "label": "review-start",
+      "labelAt": [
+        450,
+        233
+      ]
+    },
+    {
+      "from": "tier",
+      "to": "scope"
+    },
+    {
+      "from": "scope",
+      "to": "cap"
+    },
+    {
+      "from": "cap",
+      "to": "esc",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "label": "tope",
+      "labelAt": [
+        750,
+        393
+      ]
+    },
+    {
+      "from": "lowered",
+      "to": "tier",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight"
+    },
+    {
+      "from": "defer",
+      "to": "scope",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Camino principal",
+      "items": [
+        "plan, build, qa, pr-ready: cada fase se lee de hechos medidos",
+        "qa se repite hasta que cada herramienta del nivel queda limpia sobre el árbol actual",
+        "Un humano hace el merge; el agente nunca"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Ritmo de review",
+      "items": [
+        "Las rutas cambiadas fijan el nivel; el nivel elige las herramientas",
+        "El motor asigna el alcance de cada review, nunca el agente",
+        "Los arreglos se re-revisan sobre su diff, no sobre todo el cambio"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Paradas que piden a una persona",
+      "items": [
+        "Tope de rondas alcanzado: escalar, no correr otro ciclo",
+        "Una duda de spec o hallazgo abierto también se lee como escalated",
+        "Solo un humano cierra una escalación, confirma un diferimiento o baja el nivel"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "The life of a change",
+    "subtitle": "The phase is derived from the ledger, never declared · the review loop converges or escalates · the human merges"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Phases derived by phase"
+    },
+    {
+      "id": "review",
+      "label": "Review pace"
+    },
+    {
+      "id": "terminal",
+      "label": "Human-only acts"
+    }
+  ],
+  "states": [
+    {
+      "id": "plan",
+      "type": "start",
+      "label": "plan",
+      "sublabel": "nothing measured yet",
+      "tag": "empty ledger",
+      "lane": "main",
+      "col": 0,
+      "step": "01"
+    },
+    {
+      "id": "build",
+      "type": "active",
+      "label": "build",
+      "sublabel": "snapshots, no QA yet",
+      "tag": "measured",
+      "lane": "main",
+      "col": 1,
+      "step": "02"
+    },
+    {
+      "id": "qa",
+      "type": "active",
+      "label": "qa",
+      "sublabel": "review loop running",
+      "tag": "not converged",
+      "lane": "main",
+      "col": 2,
+      "step": "03"
+    },
+    {
+      "id": "prready",
+      "type": "decision",
+      "label": "pr-ready",
+      "sublabel": "PR may leave draft",
+      "tag": "derived, not declared",
+      "lane": "main",
+      "col": 3,
+      "step": "04"
+    },
+    {
+      "id": "merged",
+      "type": "success",
+      "label": "Merged",
+      "sublabel": "the human owns it",
+      "tag": "terminal",
+      "lane": "main",
+      "col": 4,
+      "step": "05"
+    },
+    {
+      "id": "tier",
+      "type": "active",
+      "label": "Tier by paths",
+      "sublabel": "from changed globs",
+      "tag": "quick/std/deep",
+      "lane": "review",
+      "col": 0,
+      "width": 104
+    },
+    {
+      "id": "scope",
+      "type": "active",
+      "label": "Engine scope",
+      "sublabel": "whole, then diff",
+      "tag": "assigned",
+      "lane": "review",
+      "col": 1,
+      "width": 104
+    },
+    {
+      "id": "cap",
+      "type": "decision",
+      "label": "Round cap",
+      "sublabel": "gated rounds",
+      "tag": "default 3",
+      "lane": "review",
+      "col": 2,
+      "width": 104
+    },
+    {
+      "id": "lowered",
+      "type": "waiting",
+      "label": "Tier lowered",
+      "sublabel": "human only",
+      "tag": "review-tier",
+      "lane": "terminal",
+      "col": 0
+    },
+    {
+      "id": "defer",
+      "type": "waiting",
+      "label": "Deferral",
+      "sublabel": "defers: + human OK",
+      "tag": "confirm-deferral",
+      "lane": "terminal",
+      "col": 1
+    },
+    {
+      "id": "esc",
+      "type": "failure",
+      "label": "escalated",
+      "sublabel": "blocks pr-ready",
+      "tag": "resolve-escalation",
+      "lane": "terminal",
+      "col": 2
+    }
+  ],
+  "transitions": [
+    {
+      "from": "plan",
+      "to": "build",
+      "variant": "emphasis"
+    },
+    {
+      "from": "build",
+      "to": "qa",
+      "variant": "emphasis"
+    },
+    {
+      "from": "qa",
+      "to": "prready",
+      "variant": "emphasis"
+    },
+    {
+      "from": "prready",
+      "to": "merged",
+      "variant": "emphasis"
+    },
+    {
+      "from": "qa",
+      "to": "tier",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "label": "review-start",
+      "labelAt": [
+        450,
+        233
+      ]
+    },
+    {
+      "from": "tier",
+      "to": "scope"
+    },
+    {
+      "from": "scope",
+      "to": "cap"
+    },
+    {
+      "from": "cap",
+      "to": "esc",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "label": "round cap",
+      "labelAt": [
+        750,
+        393
+      ]
+    },
+    {
+      "from": "lowered",
+      "to": "tier",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight"
+    },
+    {
+      "from": "defer",
+      "to": "scope",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Main path",
+      "items": [
+        "plan, build, qa, pr-ready: each phase is read from measured facts",
+        "qa repeats until every tool of the tier is clean on the tree on disk",
+        "A human merges; the agent never does"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Review pace",
+      "items": [
+        "The changed paths set the tier; the tier picks the review tools",
+        "The engine assigns each review its scope, never the agent",
+        "Fixes are re-reviewed on their diff, not the whole change"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Stops that need a person",
+      "items": [
+        "Round cap reached: escalate, do not run another cycle",
+        "An open spec-doubt or finding also reads as escalated",
+        "Only a human closes an escalation, confirms a deferral or lowers the tier"
+      ]
+    }
+  ]
+}
