@@ -500,6 +500,15 @@ model found three holes the code and a fresh reviewer had passed, and the
 other missed a hole a fresh review then found, which became a configuration
 that must break.</p>
 
+<p><b class="rh">Review pace.</b> Since 2.16.0 (ADR-062) a project may declare review
+tiers by path. The engine keeps the highest tier a change reached, assigns
+each review its scope, re-reviews a fix on its diff with every tool whose
+clean pass it outdated, closes each located finding on its own, and caps
+gated rounds before asking for an escalation; lowering a tier is a declared
+human act. Its model found that the diff-scoped re-review as first written
+let a known finding ship with an honest agent; the shipped rule is the
+amended one.</p>
+
 <p><b class="rh">Structured guesses (advise).</b> The advisory layer includes
 regression capture (closing findings without adding a single non-blank test
 line is flagged as <i>narrated closure</i>; the failing test goes before the
@@ -903,7 +912,9 @@ there (ADR-049). A declared human name is not identity: an agent can unset the m
 harnesses expose none, and the pull-request hook reads text, so an API call or a
 browser passes it. The only authenticated human act is the forge&rsquo;s own
 ready-for-review or merge. A green model shows that TLC found no violation of the model within its
-bounds, not that the code matches it; the replayed red cases are the only link.</p>
+bounds, not that the code matches it; the replayed red cases are the only link. The diff-scoped re-review trades exposure for speed: a fix that breaks a
+file it did not touch is seen only by the tests, which is why the deep tier
+keeps the whole-change review.</p>
 
 <h2>8&nbsp;&nbsp;Future Work</h2>
 
@@ -1030,11 +1041,14 @@ Agents,&rdquo; martinfowler.com, 2025.
 martinfowler.com/articles/sensors-for-coding-agents.html</p>
 
 <p>[12] A. Osmani, &ldquo;Agentic Code Review&rdquo; and &ldquo;Loop
-Engineering,&rdquo; addyosmani.com, 2024&ndash;2025.</p>
+Engineering,&rdquo; 2024&ndash;2025.
+addyosmani.com/blog/agentic-code-review,
+addyosmani.com/blog/loop-engineering</p>
 
 <p>[13] J. Maeda, <i>The Laws of Simplicity</i>. MIT Press, 2006.</p>
 
-<p>[14] G. Huntley, &ldquo;The Ralph Wiggum Loop,&rdquo; blog post, 2025.</p>
+<p>[14] G. Huntley, &ldquo;The Ralph Wiggum Loop,&rdquo; blog post, 2025.
+ghuntley.com/ralph</p>
 
 <p>[15] Anthropic, &ldquo;Building Effective Agents&rdquo; (the
 evaluator-optimizer workflow), 2024.
@@ -1060,7 +1074,8 @@ infoq.com/articles/when-spec-driven-development-pays-off/</p>
 infoq.com/news/2026/09/cloudflare-adlc-agents/</p>
 <p>[22] A. Osmani, M. W. Lunt, and Q. Wang, &ldquo;How the Claude Code team does code review,&rdquo; claude.dev, 15 October 2026.
 claude.dev/blog/solving-code-review-at-anthropic/</p>
-<p>[23] L. Lamport, <i>Specifying Systems: The TLA+ Language and Tools for Hardware and Software Engineers</i>. Addison-Wesley, 2002.</p>
+<p>[23] L. Lamport, <i>Specifying Systems: The TLA+ Language and Tools for Hardware and Software Engineers</i>. Addison-Wesley, 2002.
+lamport.azurewebsites.net/tla/book.html</p>
 <p>[24] Y. Yu, P. Manolios, and L. Lamport, &ldquo;Model Checking TLA+ Specifications,&rdquo; in <i>Correct Hardware Design and Verification Methods (CHARME)</i>, LNCS 1703, Springer, 1999, pp. 54&ndash;66.</p>
 <p>[25] L. Tan, &ldquo;pstack,&rdquo; MIT-licensed agent skills (create-formal-verification-skill, statechart), October 2026.
 github.com/cursor/plugins/tree/main/pstack</p>

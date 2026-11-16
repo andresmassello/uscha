@@ -28,6 +28,8 @@ Human acts are declared (kit 2.12, ADR-058): the four commands that lift the esc
 
 Designs with state are model-checked (kit 2.13-2.15, ADR-059/061): from the ADR a project names in model_check.from_adr on, every design declares model: required or not-needed; model-check validates the declarations and each model's manifest (a vacuity config that must break, the red AC each counterexample replays), and model-check --run runs TLC from a sha256-pinned jar and records the verdict against the hashes of the module, its config and its manifest entry. Without Java the models read UNMEASURED. Advisory unless the project declares a gate. A green model proves no violation of the model within its bounds, not that the code matches it.
 
+Review effort follows the change (kit 2.16, ADR-062): a project that declares review_tiers maps path globs to quick, standard or deep review; the engine keeps the highest tier a change reached, assigns each review tool its scope, re-reviews a fix on its diff with every tool whose clean pass it outdated, closes each located finding (path:rule) on its own, and caps gated rounds before asking for an escalation. Lowering a tier is a human act. The diff-scoped re-review trades exposure for speed: a fix that breaks a file it did not touch is seen only by the tests, which is why deep keeps the whole-change review.
+
 For existing systems, Reverse Discovery (kit 1.64+, ADR-009) extracts facts (a
 system map and a mechanically captured golden), then authors CANDIDATE claims about
 behavior in quarantine (discovery/*.md, each with typed evidence and confidence).
@@ -67,6 +69,7 @@ that ingests evidence from 11 language stacks. It runs on Windows, macOS and Lin
 - [Home](https://uscha.dev): landing page — the method, the five rules, the nine skills, the engine's numbers
 - [Why uscha exists](https://uscha.dev/why): essay — open loop vs. measured graph, who answers the gates, why the loop is caged
 - [How it works](https://uscha.dev/how): four diagrams — greenfield discovery, brownfield reverse discovery, the curation mechanism (one human verdict, everything else measured), and the forward leg (compile, certify, round-trip)
+- [Component map](https://uscha.dev/docs/diagrams/uscha-moving-parts-EN.html): every moving part of the kit on one interactive page -- the method governs, the tool executes, evidence decides, the human approves
 - [The diamond](https://uscha.dev/diamond): the thesis — specs as source code, code as build artifact, with the REAL vs VISION vs REJECTED truth-pass table
 - [2-day developer course](https://uscha.dev/docs/uscha-dev-course-EN.html): from zero to production — day 1 greenfield (discovery), day 2 migration (characterize, reverse-discovery)
 - [Complete documentation](https://uscha.dev/docs/uscha-claude-code-doc-EN.html): the whole method in one place — rules, phases, every skill, gates and the ledger

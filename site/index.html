@@ -274,6 +274,11 @@
           <h3>How it works</h3>
           <p>Four diagrams: greenfield discovery, brownfield reverse discovery, the curation mechanism where a single human verdict is the only judgment in the loop, and the forward leg they feed (compile, certify, round-trip).</p>
         </a>
+        <a class="lib-card" href="docs/diagrams/uscha-moving-parts-EN.html">
+          <span class="lk">diagram <span class="fmt">interactive</span></span>
+          <h3>Component map</h3>
+          <p>Every moving part of the kit on one page, left to right: the method governs, the tool executes, evidence decides, the human approves.</p>
+        </a>
         <a class="lib-card" href="docs/uscha-dev-course-EN.html">
           <span class="lk">course <span class="fmt">html</span></span>
           <h3>2-day developer course</h3>
@@ -341,6 +346,13 @@
         the verdict, and without Java the models read UNMEASURED, never passed. It advises unless the project
         declares a gate. A green model means TLC found no violation of the model within its bounds; the red
         test each counterexample replays is the only link to the code.
+      </p>
+      <p class="ev-note">
+        Review effort follows the change. A project that declares <code>review_tiers</code> maps paths to a
+        quick, standard or deep review; the engine keeps the highest tier any file of the change reached, hands
+        each review tool its scope, and re-reviews a fix on its diff with every tool whose clean pass it outdated.
+        Lowering a tier is a human act. The design was model-checked first, and the model forced a change: the
+        rule as first written let a known finding ship with an honest agent.
       </p>
 
       <div class="field">

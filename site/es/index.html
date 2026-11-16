@@ -274,6 +274,11 @@
           <h3>Cómo funciona</h3>
           <p>Cuatro diagramas: discovery greenfield, reverse discovery brownfield, el mecanismo de curación donde un único veredicto humano es el único juicio del loop, y la ida que alimentan (compilar, certificar, round-trip).</p>
         </a>
+        <a class="lib-card" href="../docs/diagrams/uscha-moving-parts.html">
+          <span class="lk">diagrama <span class="fmt">interactivo</span></span>
+          <h3>Mapa de componentes</h3>
+          <p>Todas las piezas del kit en una página, de izquierda a derecha: el método gobierna, la herramienta ejecuta, la evidencia decide, el humano aprueba.</p>
+        </a>
         <a class="lib-card" href="../docs/uscha-dev-course.html">
           <span class="lk">curso <span class="fmt">html</span></span>
           <h3>Curso de 2 días para developers</h3>
@@ -341,6 +346,14 @@
         registra el veredicto, y sin Java los modelos quedan UNMEASURED, nunca aprobados. Es advisory salvo que el
         proyecto declare un gate. Un modelo en verde significa que TLC no encontró violaciones del modelo dentro de
         sus límites; el test rojo que reproduce cada contraejemplo es el único vínculo con el código.
+      </p>
+      <p class="ev-note">
+        El esfuerzo de revisión sigue al cambio. Un proyecto que declara <code>review_tiers</code> asigna a cada
+        ruta una revisión quick, standard o deep; el motor se queda con el tier más alto que alcanzó cualquier archivo
+        del cambio, le asigna a cada herramienta de revisión su alcance, y un fix se revisa de nuevo sobre su diff con
+        cada herramienta cuyo paso limpio quedó viejo. Bajar un tier es un acto humano. El diseño se verificó antes con
+        un modelo, y el modelo obligó a un cambio: la regla tal como se escribió primero dejaba pasar un hallazgo
+        conocido aun con un agente honesto.
       </p>
 
       <div class="field">

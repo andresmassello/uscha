@@ -489,6 +489,15 @@ model found three holes the code and a fresh reviewer had passed, and the
 other missed a hole a fresh review then found, which became a configuration
 that must break.
 
+\textbf{Review pace.} Since 2.16.0 (ADR-062) a project may declare review
+tiers by path. The engine keeps the highest tier a change reached, assigns
+each review its scope, re-reviews a fix on its diff with every tool whose
+clean pass it outdated, closes each located finding on its own, and caps
+gated rounds before asking for an escalation; lowering a tier is a declared
+human act. Its model found that the diff-scoped re-review as first written
+let a known finding ship with an honest agent; the shipped rule is the
+amended one.
+
 \textbf{Structured guesses (advise).} The advisory layer includes regression
 capture (closing findings without adding a single non-blank test line is
 flagged as \emph{narrated closure}; the failing test goes before the fix);
@@ -908,7 +917,9 @@ and no hooks, so the golden write guard is advisory there (ADR-049). A declared 
 harnesses expose none, and the pull-request hook reads text, so an API call or a
 browser passes it. The only authenticated human act is the forge's own
 ready-for-review or merge. A green model shows that TLC found no violation of the model within its
-bounds, not that the code matches it; the replayed red cases are the only link.
+bounds, not that the code matches it; the replayed red cases are the only link. The diff-scoped re-review trades exposure for speed: a fix that breaks a
+file it did not touch is seen only by the tests, which is why the deep tier
+keeps the whole-change review.
 
 \section{Future Work}\label{sec:future}
 
@@ -993,7 +1004,6 @@ the npm package \texttt{@andresmassello/uscha} with its repository at
 \url{https://github.com/andresmassello/uscha}.
 
 \begin{thebibliography}{9}
-
 \bibitem{ji2026guessing}
 Z.~Ji, Z.~Zhang, C.~Xu, Z.~Li, Y.~Gao, S.~Wang, and S.-C.~Cheung,
 ``Coding Agents Are Guessing: Measuring Action-Boundary Violations in
@@ -1019,25 +1029,6 @@ Edition. Addison-Wesley, 2019.
 M.~Nygard, ``Documenting Architecture Decisions,'' blog post, 2011.
 \url{https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions}
 
-\bibitem{boeckeler2025sensors}
-B.~B\"ockeler, ``Maintainability Sensors for Coding Agents,''
-martinfowler.com, 2025.
-\url{https://martinfowler.com/articles/sensors-for-coding-agents.html}
-
-\bibitem{osmani2025agentic}
-A.~Osmani, ``Agentic Code Review'' and ``Loop Engineering,'' addyosmani.com,
-2024--2025.
-
-\bibitem{maeda2006simplicity}
-J.~Maeda, \emph{The Laws of Simplicity}. MIT Press, 2006.
-
-\bibitem{huntley2025ralph}
-G.~Huntley, ``The Ralph Wiggum Loop,'' blog post, 2025.
-
-\bibitem{anthropic2024agents}
-Anthropic, ``Building Effective Agents'' (the evaluator-optimizer workflow),
-2024. \url{https://www.anthropic.com/research/building-effective-agents}
-
 \bibitem{fowler2023exploring}
 M.~Fowler et al., ``Exploring Generative AI,'' memo series,
 martinfowler.com, 2023--2026.
@@ -1057,6 +1048,27 @@ Development: From Concept to Cash}. Addison-Wesley, 2006.
 \bibitem{gitclear2026gap}
 GitClear, ``AI Copilot Code Quality / The Maintainability Gap,'' industry
 research report, 2024--2026. \url{https://www.gitclear.com}
+
+\bibitem{boeckeler2025sensors}
+B.~B\"ockeler, ``Maintainability Sensors for Coding Agents,''
+martinfowler.com, 2025.
+\url{https://martinfowler.com/articles/sensors-for-coding-agents.html}
+
+\bibitem{osmani2025agentic}
+A.~Osmani, ``Agentic Code Review'' and ``Loop Engineering,'' 2024--2025.
+\url{https://addyosmani.com/blog/agentic-code-review/},
+\url{https://addyosmani.com/blog/loop-engineering/}.
+
+\bibitem{maeda2006simplicity}
+J.~Maeda, \emph{The Laws of Simplicity}. MIT Press, 2006.
+
+\bibitem{huntley2025ralph}
+G.~Huntley, ``The Ralph Wiggum Loop,'' blog post, 2025.
+\url{https://ghuntley.com/ralph}.
+
+\bibitem{anthropic2024agents}
+Anthropic, ``Building Effective Agents'' (the evaluator-optimizer workflow),
+2024. \url{https://www.anthropic.com/research/building-effective-agents}
 
 \bibitem{alvanakis2026assistance}
 S.~Alvanakis Apostolou, J.~Bosch, and H.~Holmstr\"om Olsson,
@@ -1093,6 +1105,7 @@ review,'' claude.dev, 15 October 2026.
 \bibitem{lamport2002specifying}
 L.~Lamport, \emph{Specifying Systems: The TLA+ Language and Tools for Hardware
 and Software Engineers}. Addison-Wesley, 2002.
+\url{https://lamport.azurewebsites.net/tla/book.html}.
 
 \bibitem{yu1999tlc}
 Y.~Yu, P.~Manolios, and L.~Lamport, ``Model Checking TLA+ Specifications,'' in

@@ -14,6 +14,11 @@ cp docs/uscha-claude-code-doc.html docs/uscha-claude-code-doc-EN.html \
 
 cp -r docs/paper site/docs/paper
 
+# The component map (archify, self-contained) is authored in docs/diagram-sources/.
+mkdir -p site/docs/diagrams
+cp docs/diagram-sources/uscha-moving-parts.html docs/diagram-sources/uscha-moving-parts-EN.html \
+   site/docs/diagrams/
+
 # Field notes: docs/field-notes/*.md are canonical; the site pages are rendered from them.
 "${PYTHON:-python}" site/build-field-notes.py
 

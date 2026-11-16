@@ -61,7 +61,8 @@
       a human verdict the engine can check. These four diagrams show the greenfield flow, the
       brownfield flow, the curation mechanism (kit 1.64–1.65) where a single human decision is
       the only judgment in the loop — and the diamond leg (1.72–1.90) they all feed: compile,
-      certify under a withheld oracle, round-trip.
+      certify under a withheld oracle, round-trip. Every piece of the kit on one page is in the
+      <a href="../docs/diagrams/uscha-moving-parts-EN.html">component map</a>.
     </p>
 
     <!-- ============ DIAGRAM 1 — DISCOVERY ============ -->
@@ -344,7 +345,7 @@
         <span><i style="border-color:#22403f"></i>model / skill step</span>
       </div>
 
-      <p class="cap">Tests are run by the engine, not reported to it: <code>test-run</code> runs the declared command and only the reports it wrote count. A QA pass is registered when it starts (<code>review-start</code>), so a verdict is tied to the tree it reviewed — a later source edit sends that tool back through the loop. With <code>review_tiers</code> (2.16) that tool re-reviews only what the edit changed, and the engine sets how much review a change needs from its paths.</p>
+      <p class="cap">Tests are run by the engine, not reported to it: <code>test-run</code> runs the declared command and only the reports it wrote count. A QA pass is registered when it starts (<code>review-start</code>), so a verdict is tied to the tree it reviewed — a later source edit sends that tool back through the loop. With <code>review_tiers</code> declared, the effort follows the change: the tier the changed paths reach picks the tools, and a fix is re-reviewed on its diff. With <code>review_tiers</code> (2.16) that tool re-reviews only what the edit changed, and the engine sets how much review a change needs from its paths.</p>
     </section>
 
     <p class="cap" style="margin-top:32px;color:var(--mute);font-size:13px">
