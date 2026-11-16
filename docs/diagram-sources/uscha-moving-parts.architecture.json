@@ -97,7 +97,7 @@
       "id": "tools",
       "type": "external",
       "label": "Revisores",
-      "sublabel": "code-review · judgment",
+      "sublabel": "nivel según rutas",
       "tag": "+ linters",
       "pos": [
         670,
@@ -365,7 +365,7 @@
       "title": "2 · La herramienta ejecuta",
       "items": [
         "El agente construye contra el contrato y corre el loop de revisión (devloop).",
-        "Los revisores encuentran problemas; el agente los arregla y registra cada paso.",
+        "Las rutas tocadas fijan un nivel de revisión (quick · standard · deep) que elige los revisores; el motor le asigna a cada uno su alcance, y cada hallazgo nombra ruta:regla.",
         "Los hooks frenan lo que el agente nunca debe hacer, como escribir un golden aprobado."
       ]
     },
@@ -374,7 +374,7 @@
       "title": "3 · La evidencia decide",
       "items": [
         "El motor guarda solo corridas medidas; nunca le cree al agente.",
-        "El gate lee el ledger: tests al día, aceptación en verde, ningún hallazgo conocido abierto.",
+        "El gate lee el ledger: tests al día, aceptación en verde, cada hallazgo localizado arreglado o diferido, el pase limpio de cada revisor del nivel vigente.",
         "Las lecturas muestran los mismos números; nunca calculan los suyos."
       ]
     },

@@ -97,7 +97,7 @@
       "id": "tools",
       "type": "external",
       "label": "Review tools",
-      "sublabel": "code-review · judgment",
+      "sublabel": "tier set by paths",
       "tag": "+ linters",
       "pos": [
         670,
@@ -365,7 +365,7 @@
       "title": "2 · The tool executes",
       "items": [
         "The agent builds against the contract and runs the review loop (devloop).",
-        "Review tools find problems; the agent fixes them and logs every step.",
+        "A review tier set by the changed paths (quick · standard · deep) picks the review tools; the engine hands each one its scope, and every finding names path:rule.",
         "Hooks stop what the agent must never do, like writing an approved golden."
       ]
     },
@@ -374,7 +374,7 @@
       "title": "3 · Evidence decides",
       "items": [
         "The engine records only measured runs; it never takes the agent's word.",
-        "The gate reads the ledger: tests current, acceptance green, no known finding open.",
+        "The gate reads the ledger: tests current, acceptance green, every located finding fixed or deferred, every tier tool's clean pass current.",
         "Readouts show the same numbers; they never compute their own."
       ]
     },

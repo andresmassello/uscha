@@ -619,7 +619,7 @@
         <rect x="670" y="130" width="140" height="64" rx="6" class="c-mask"/>
         <rect x="670" y="130" width="140" height="64" rx="6" class="c-external" stroke-width="1.5"/>
         <text x="740" y="160" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Review tools</text>
-        <text x="740" y="176" class="t-muted" font-size="9" text-anchor="middle">code-review · judgment</text>
+        <text x="740" y="176" class="t-muted" font-size="9" text-anchor="middle">tier set by paths</text>
         <text x="740" y="186" class="t-external" font-size="7" text-anchor="middle">+ linters</text>
 
         <rect x="670" y="470" width="140" height="64" rx="6" class="c-mask"/>
@@ -718,7 +718,7 @@
         </div>
         <ul>
           <li>&bull; The agent builds against the contract and runs the review loop (devloop).</li>
-          <li>&bull; Review tools find problems; the agent fixes them and logs every step.</li>
+          <li>&bull; A review tier set by the changed paths (quick · standard · deep) picks the review tools; the engine hands each one its scope, and every finding names path:rule.</li>
           <li>&bull; Hooks stop what the agent must never do, like writing an approved golden.</li>
         </ul>
       </div>
@@ -730,7 +730,7 @@
         </div>
         <ul>
           <li>&bull; The engine records only measured runs; it never takes the agent&#39;s word.</li>
-          <li>&bull; The gate reads the ledger: tests current, acceptance green, no known finding open.</li>
+          <li>&bull; The gate reads the ledger: tests current, acceptance green, every located finding fixed or deferred, every tier tool&#39;s clean pass current.</li>
           <li>&bull; Readouts show the same numbers; they never compute their own.</li>
         </ul>
       </div>
