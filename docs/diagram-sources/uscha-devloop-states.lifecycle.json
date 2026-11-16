@@ -54,7 +54,7 @@
       "id": "prready",
       "type": "decision",
       "label": "pr-ready",
-      "sublabel": "el PR puede salir de borrador",
+      "sublabel": "sale de borrador",
       "tag": "derivada, no declarada",
       "lane": "main",
       "col": 3,

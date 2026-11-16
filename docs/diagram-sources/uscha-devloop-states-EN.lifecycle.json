@@ -54,7 +54,7 @@
       "id": "prready",
       "type": "decision",
       "label": "pr-ready",
-      "sublabel": "PR may leave draft",
+      "sublabel": "leaves draft",
       "tag": "derived, not declared",
       "lane": "main",
       "col": 3,
