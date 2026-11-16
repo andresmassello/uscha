@@ -1,0 +1,291 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Cómo una medición se convierte en una decisión de merge",
+    "subtitle": "Leelo de izquierda a derecha: las herramientas producen archivos · el motor los registra · el ledger decide · el humano hace el merge",
+    "viewBox": [
+      1120,
+      780
+    ]
+  },
+  "stages": [
+    {
+      "label": "Fuentes"
+    },
+    {
+      "label": "Motor"
+    },
+    {
+      "label": "Ledger"
+    },
+    {
+      "label": "Derivado"
+    },
+    {
+      "label": "Lecturas"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "runner",
+      "type": "frontend",
+      "label": "Test runner",
+      "sublabel": "JUnit XML + cobertura",
+      "stage": 0,
+      "row": 0
+    },
+    {
+      "id": "pit",
+      "type": "frontend",
+      "label": "PIT",
+      "sublabel": "mutations.xml",
+      "stage": 0,
+      "row": 1
+    },
+    {
+      "id": "rev",
+      "type": "external",
+      "label": "Revisores",
+      "sublabel": "code-review · judgment-day",
+      "stage": 0,
+      "row": 2
+    },
+    {
+      "id": "mc",
+      "type": "security",
+      "label": "Modelos",
+      "sublabel": "diseños TLA+",
+      "stage": 0,
+      "row": 3
+    },
+    {
+      "id": "testrun",
+      "type": "backend",
+      "label": "test-run",
+      "sublabel": "corre el comando declarado",
+      "stage": 1,
+      "row": 0
+    },
+    {
+      "id": "pitc",
+      "type": "backend",
+      "label": "pit-check",
+      "sublabel": "+ log-gate",
+      "stage": 1,
+      "row": 1
+    },
+    {
+      "id": "logstep",
+      "type": "backend",
+      "label": "log-step",
+      "sublabel": "review-start da fe",
+      "stage": 1,
+      "row": 2
+    },
+    {
+      "id": "mchk",
+      "type": "backend",
+      "label": "model-check",
+      "sublabel": "corridas de TLC",
+      "stage": 1,
+      "row": 3
+    },
+    {
+      "id": "ledger",
+      "type": "database",
+      "label": "QA-LEDGER.json",
+      "sublabel": "la única verdad",
+      "stage": 2,
+      "row": 0,
+      "height": 430,
+      "width": 130,
+      "tag": "hechos append-only"
+    },
+    {
+      "id": "readiness",
+      "type": "cloud",
+      "label": "readiness",
+      "sublabel": "puntaje con topes",
+      "stage": 3,
+      "row": 0
+    },
+    {
+      "id": "phase",
+      "type": "cloud",
+      "label": "phase",
+      "sublabel": "¿convergió?",
+      "stage": 3,
+      "row": 1,
+      "tag": "el veredicto"
+    },
+    {
+      "id": "term",
+      "type": "cloud",
+      "label": "check-terminado",
+      "sublabel": "sellado al código",
+      "stage": 3,
+      "row": 2
+    },
+    {
+      "id": "status",
+      "type": "messagebus",
+      "label": "status",
+      "sublabel": "statusline · mirador",
+      "stage": 4,
+      "row": 0
+    },
+    {
+      "id": "prg",
+      "type": "security",
+      "label": "gate de pr-ready",
+      "sublabel": "hook mantiene el PR en borrador",
+      "stage": 4,
+      "row": 1,
+      "tag": "bloquea"
+    },
+    {
+      "id": "rel",
+      "type": "messagebus",
+      "label": "ritual de release",
+      "sublabel": "SEALED en X+1",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "from": "runner",
+      "to": "testrun",
+      "label": "reportes",
+      "classification": "medido",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "pit",
+      "to": "pitc",
+      "label": "mutantes",
+      "classification": "medido",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "rev",
+      "to": "logstep",
+      "label": "conteos",
+      "classification": "narrado",
+      "variant": "dashed",
+      "route": "straight"
+    },
+    {
+      "from": "mc",
+      "to": "mchk",
+      "label": "modelos",
+      "classification": "medido",
+      "variant": "default",
+      "route": "straight"
+    },
+    {
+      "from": "testrun",
+      "to": "ledger",
+      "label": "tests",
+      "classification": "medido",
+      "variant": "emphasis"
+    },
+    {
+      "from": "pitc",
+      "to": "ledger",
+      "label": "veredicto",
+      "classification": "medido",
+      "variant": "emphasis"
+    },
+    {
+      "from": "logstep",
+      "to": "ledger",
+      "label": "pasos",
+      "classification": "narrado",
+      "variant": "dashed"
+    },
+    {
+      "from": "mchk",
+      "to": "ledger",
+      "label": "corridas",
+      "classification": "medido",
+      "variant": "default"
+    },
+    {
+      "from": "ledger",
+      "to": "readiness",
+      "label": "hechos",
+      "classification": "derivado",
+      "variant": "default"
+    },
+    {
+      "from": "ledger",
+      "to": "phase",
+      "label": "hechos",
+      "classification": "derivado",
+      "variant": "emphasis"
+    },
+    {
+      "from": "ledger",
+      "to": "term",
+      "label": "hechos",
+      "classification": "derivado",
+      "variant": "default"
+    },
+    {
+      "from": "readiness",
+      "to": "status",
+      "label": "puntaje",
+      "classification": "solo lectura",
+      "variant": "default"
+    },
+    {
+      "from": "phase",
+      "to": "prg",
+      "label": "fase",
+      "classification": "solo lectura",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "term",
+      "to": "rel",
+      "label": "sello",
+      "classification": "solo lectura",
+      "variant": "default",
+      "route": "straight"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "El camino principal",
+      "items": [
+        "Una herramienta escribe un archivo; el motor lo lee y registra un hecho",
+        "Cada veredicto se deriva del ledger, nunca se declara",
+        "La decisión de merge se lee, no se discute"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Medido vs narrado",
+      "items": [
+        "Medido: el motor lo corrió o parseó el reporte él mismo",
+        "Narrado: los conteos del propio agente en log-step",
+        "Un rojo medido siempre anula un verde narrado"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Lo que conserva el humano",
+      "items": [
+        "Cerrar una escalación y confirmar un diferimiento son actos humanos",
+        "pr-ready solo mantiene el PR en borrador",
+        "El merge nunca lo hace el agente"
+      ]
+    }
+  ]
+}

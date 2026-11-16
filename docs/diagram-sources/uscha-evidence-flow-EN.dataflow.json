@@ -1,0 +1,291 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "How a measurement becomes a merge decision",
+    "subtitle": "Read it left to right: the tools produce files · the engine records them · the ledger decides · the human merges",
+    "viewBox": [
+      1120,
+      780
+    ]
+  },
+  "stages": [
+    {
+      "label": "Sources"
+    },
+    {
+      "label": "Engine"
+    },
+    {
+      "label": "Ledger"
+    },
+    {
+      "label": "Derived"
+    },
+    {
+      "label": "Readouts"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "runner",
+      "type": "frontend",
+      "label": "Test runner",
+      "sublabel": "JUnit XML + coverage",
+      "stage": 0,
+      "row": 0
+    },
+    {
+      "id": "pit",
+      "type": "frontend",
+      "label": "PIT",
+      "sublabel": "mutations.xml",
+      "stage": 0,
+      "row": 1
+    },
+    {
+      "id": "rev",
+      "type": "external",
+      "label": "Review tools",
+      "sublabel": "code-review · judgment-day",
+      "stage": 0,
+      "row": 2
+    },
+    {
+      "id": "mc",
+      "type": "security",
+      "label": "Models",
+      "sublabel": "TLA+ designs",
+      "stage": 0,
+      "row": 3
+    },
+    {
+      "id": "testrun",
+      "type": "backend",
+      "label": "test-run",
+      "sublabel": "runs the declared command",
+      "stage": 1,
+      "row": 0
+    },
+    {
+      "id": "pitc",
+      "type": "backend",
+      "label": "pit-check",
+      "sublabel": "+ log-gate",
+      "stage": 1,
+      "row": 1
+    },
+    {
+      "id": "logstep",
+      "type": "backend",
+      "label": "log-step",
+      "sublabel": "review-start witness",
+      "stage": 1,
+      "row": 2
+    },
+    {
+      "id": "mchk",
+      "type": "backend",
+      "label": "model-check",
+      "sublabel": "TLC runs",
+      "stage": 1,
+      "row": 3
+    },
+    {
+      "id": "ledger",
+      "type": "database",
+      "label": "QA-LEDGER.json",
+      "sublabel": "the only truth",
+      "stage": 2,
+      "row": 0,
+      "height": 430,
+      "width": 130,
+      "tag": "append-only facts"
+    },
+    {
+      "id": "readiness",
+      "type": "cloud",
+      "label": "readiness",
+      "sublabel": "score with caps",
+      "stage": 3,
+      "row": 0
+    },
+    {
+      "id": "phase",
+      "type": "cloud",
+      "label": "phase",
+      "sublabel": "converged?",
+      "stage": 3,
+      "row": 1,
+      "tag": "the verdict"
+    },
+    {
+      "id": "term",
+      "type": "cloud",
+      "label": "check-terminado",
+      "sublabel": "sealed to the code",
+      "stage": 3,
+      "row": 2
+    },
+    {
+      "id": "status",
+      "type": "messagebus",
+      "label": "status",
+      "sublabel": "statusline · mirador",
+      "stage": 4,
+      "row": 0
+    },
+    {
+      "id": "prg",
+      "type": "security",
+      "label": "pr-ready gate",
+      "sublabel": "hook keeps PR in draft",
+      "stage": 4,
+      "row": 1,
+      "tag": "blocks"
+    },
+    {
+      "id": "rel",
+      "type": "messagebus",
+      "label": "release ritual",
+      "sublabel": "SEALED at X+1",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "from": "runner",
+      "to": "testrun",
+      "label": "reports",
+      "classification": "measured",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "pit",
+      "to": "pitc",
+      "label": "mutants",
+      "classification": "measured",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "rev",
+      "to": "logstep",
+      "label": "counts",
+      "classification": "narrated",
+      "variant": "dashed",
+      "route": "straight"
+    },
+    {
+      "from": "mc",
+      "to": "mchk",
+      "label": "models",
+      "classification": "measured",
+      "variant": "default",
+      "route": "straight"
+    },
+    {
+      "from": "testrun",
+      "to": "ledger",
+      "label": "tests",
+      "classification": "measured",
+      "variant": "emphasis"
+    },
+    {
+      "from": "pitc",
+      "to": "ledger",
+      "label": "verdict",
+      "classification": "measured",
+      "variant": "emphasis"
+    },
+    {
+      "from": "logstep",
+      "to": "ledger",
+      "label": "steps",
+      "classification": "narrated",
+      "variant": "dashed"
+    },
+    {
+      "from": "mchk",
+      "to": "ledger",
+      "label": "runs",
+      "classification": "measured",
+      "variant": "default"
+    },
+    {
+      "from": "ledger",
+      "to": "readiness",
+      "label": "facts",
+      "classification": "derived",
+      "variant": "default"
+    },
+    {
+      "from": "ledger",
+      "to": "phase",
+      "label": "facts",
+      "classification": "derived",
+      "variant": "emphasis"
+    },
+    {
+      "from": "ledger",
+      "to": "term",
+      "label": "facts",
+      "classification": "derived",
+      "variant": "default"
+    },
+    {
+      "from": "readiness",
+      "to": "status",
+      "label": "score",
+      "classification": "read-only",
+      "variant": "default"
+    },
+    {
+      "from": "phase",
+      "to": "prg",
+      "label": "phase",
+      "classification": "read-only",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "term",
+      "to": "rel",
+      "label": "seal",
+      "classification": "read-only",
+      "variant": "default",
+      "route": "straight"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "The main path",
+      "items": [
+        "A tool writes a file; the engine reads it and records a fact",
+        "Every verdict is derived from the ledger, never declared",
+        "The merge decision is read, not argued"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Measured vs narrated",
+      "items": [
+        "Measured: the engine ran it or parsed the report itself",
+        "Narrated: the agent's own counts from log-step",
+        "A measured red always overrides a narrated green"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "What the human keeps",
+      "items": [
+        "Closing an escalation and confirming a deferral are human acts",
+        "pr-ready only keeps the PR in draft",
+        "The merge itself is never the agent's"
+      ]
+    }
+  ]
+}
