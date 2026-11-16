@@ -128,7 +128,7 @@
       "type": "backend",
       "label": "qa_ledger.py",
       "sublabel": "the engine",
-      "tag": "counts, never narrates",
+      "tag": "tests · coverage · mutation",
       "pos": [
         880,
         300
@@ -374,6 +374,7 @@
       "title": "3 · Evidence decides",
       "items": [
         "The engine records only measured runs; it never takes the agent's word.",
+        "Coverage says a line ran; mutation testing (PIT, pit-check) says whether a test would catch it changing.",
         "The gate reads the ledger: tests current, acceptance green, every located finding fixed or deferred, every tier tool's clean pass current.",
         "Readouts show the same numbers; they never compute their own."
       ]

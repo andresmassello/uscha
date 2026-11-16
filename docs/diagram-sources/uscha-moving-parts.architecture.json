@@ -128,7 +128,7 @@
       "type": "backend",
       "label": "qa_ledger.py",
       "sublabel": "el motor",
-      "tag": "cuenta, no narra",
+      "tag": "tests · cobertura · mutación",
       "pos": [
         880,
         300
@@ -374,6 +374,7 @@
       "title": "3 · La evidencia decide",
       "items": [
         "El motor guarda solo corridas medidas; nunca le cree al agente.",
+        "La cobertura dice que una línea corrió; la mutación (PIT, pit-check) dice si un test la atraparía cambiando.",
         "El gate lee el ledger: tests al día, aceptación en verde, cada hallazgo localizado arreglado o diferido, el pase limpio de cada revisor del nivel vigente.",
         "Las lecturas muestran los mismos números; nunca calculan los suyos."
       ]

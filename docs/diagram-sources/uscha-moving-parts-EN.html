@@ -632,7 +632,7 @@
         <rect x="880" y="300" width="140" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
         <text x="950" y="330" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">qa_ledger.py</text>
         <text x="950" y="346" class="t-muted" font-size="9" text-anchor="middle">the engine</text>
-        <text x="950" y="356" class="t-backend" font-size="7" text-anchor="middle">counts, never narrates</text>
+        <text x="950" y="356" class="t-backend" font-size="7" text-anchor="middle">tests · coverage · mutation</text>
 
         <rect x="1090" y="300" width="140" height="64" rx="6" class="c-mask"/>
         <rect x="1090" y="300" width="140" height="64" rx="6" class="c-database" stroke-width="1.5"/>
@@ -730,6 +730,7 @@
         </div>
         <ul>
           <li>&bull; The engine records only measured runs; it never takes the agent&#39;s word.</li>
+          <li>&bull; Coverage says a line ran; mutation testing (PIT, pit-check) says whether a test would catch it changing.</li>
           <li>&bull; The gate reads the ledger: tests current, acceptance green, every located finding fixed or deferred, every tier tool&#39;s clean pass current.</li>
           <li>&bull; Readouts show the same numbers; they never compute their own.</li>
         </ul>
