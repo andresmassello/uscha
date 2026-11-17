@@ -41,4 +41,4 @@ One optional key, found as the limit 2.16.0 named. No new subcommand, no schema 
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 471 checks · 0 fail; acceptance 525/526.
