@@ -23057,8 +23057,9 @@ def edit(d, name, body):
     write(os.path.join(d, "api", name), body + NL)
 
 
-def project(prefix, tiers=None, order=(CR,), change=(("a.py", "v = 1"),), base=None, cfg=None):
-    """A git repo in api/ (branch main, base commit), a feature branch carrying the change, a
+def project(prefix, tiers=None, order=(CR,), change=(("a.py", "v = 1"),), base=None, cfg=None,
+            trunk="main"):
+    """A git repo in api/ (branch trunk, base commit), a feature branch carrying the change, a
     ledger next to it. tiers=None: a project that never declares review_tiers."""
     d = tmp(prefix)
     api = os.path.join(d, "api")
@@ -23070,7 +23071,7 @@ def project(prefix, tiers=None, order=(CR,), change=(("a.py", "v = 1"),), base=N
     write(os.path.join(api, ".gitignore"), "__pycache__/" + NL)
     for argv in (["git", "init", "-q"], ["git", "config", "user.email", "t@t"],
                  ["git", "config", "user.name", "t"], ["git", "add", "-A"],
-                 ["git", "commit", "-qm", "base"], ["git", "branch", "-M", "main"],
+                 ["git", "commit", "-qm", "base"], ["git", "branch", "-M", trunk],
                  ["git", "checkout", "-q", "-b", "feat"]):
         sh(api, *argv)
     for name, body in change:
@@ -23842,6 +23843,131 @@ def measure():
     why["AC-RP-36"] = "next=%s late=%s unchanged=%s same-cycle=%s bad=%r" % (
         tail(nxt), tail(late), unchanged, same.returncode, BAD[mark:][:2])
 
+    # ------------------------------------------------------ 2.16.1: review_tiers.base (ADR-062 amendment)
+    # --- AC-RP-37: a configured base names the ONLY base -- a project whose trunk is develop
+    # (no main, no master, no origin) gets its tier and scope against it instead of a refusal
+    mark = len(BAD)
+    d = project("cb-dev", T_STD, change=(("docs/guide.md", "# g2"),), base={"docs/guide.md": "# g"},
+                cfg={"base": "develop"}, trunk="develop")
+    sh(os.path.join(d, "api"), "git", "commit", "-qam", "work")
+    tests(d)
+    rec = start(d, CR, 1)
+    res["AC-RP-37"] = bool(len(BAD) == mark and rec.get("tier") == "quick"
+                           and scope(rec) == ["docs/guide.md"])
+    why["AC-RP-37"] = "tier=%r scope=%r bad=%r" % (rec.get("tier"), scope(rec), BAD[mark:][:2])
+
+    # --- AC-RP-38: a configured base that does not resolve fails closed and NAMES the ref and the
+    # key -- there is no fallback to main, which exists here -- with the ledger unchanged
+    mark = len(BAD)
+    d = project("cb-miss", T_STD, cfg={"base": "release/9"})
+    sh(os.path.join(d, "api"), "git", "commit", "-qam", "work")
+    tests(d)
+    b = ledger_bytes(d)
+    two = q(d, "review-start", "--repo", "api", "--tool", CR, "--iteration", "1")
+    unchanged = ledger_bytes(d) == b
+    log(d, CR, 1, 0, None, check=False)
+    ph = phase(d)
+    cv = q(d, "converged", "--repo", "api")
+    res["AC-RP-38"] = bool(len(BAD) == mark and two.returncode == 2 and unchanged
+                           and "release/9" in two.stdout and "review_tiers.base" in two.stdout
+                           and ph.returncode == 1 and "release/9" in ph.stdout
+                           and "review_tiers.base" in ph.stdout and cv.returncode != 0)
+    why["AC-RP-38"] = "two=%s unchanged=%s phase=%s conv=%s bad=%r" % (
+        tail(two), unchanged, tail(ph), cv.returncode, BAD[mark:][:2])
+
+    # --- AC-RP-39: the configured base wins over an existing main -- develop carries a.py, the
+    # feature branch only a docs file, so the scope against develop is that docs file alone (the
+    # tier is not asserted: project() ran a test-run while a.py was uncommitted, and it never drops)
+    def two_trunks(prefix, extra):
+        dd = project(prefix, T_STD, cfg=extra)
+        api_ = os.path.join(dd, "api")
+        for argv in (["git", "add", "-A"], ["git", "commit", "-qm", "dev work"],
+                     ["git", "branch", "develop"]):
+            sh(api_, *argv)
+        edit(dd, "docs/guide.md", "# guide")
+        for argv in (["git", "add", "-A"], ["git", "commit", "-qm", "docs"]):
+            sh(api_, *argv)
+        tests(dd)
+        return dd
+
+    mark = len(BAD)
+    d = two_trunks("cb-wins", {"base": "develop"})
+    rec = start(d, CR, 1)
+    res["AC-RP-39"] = bool(len(BAD) == mark and scope(rec) == ["docs/guide.md"])
+    why["AC-RP-39"] = "tier=%r scope=%r bad=%r" % (rec.get("tier"), scope(rec), BAD[mark:][:2])
+
+    # --- AC-RP-40: a base that is not a nonempty string is refused naming review_tiers.base --
+    # live, it also names the file (the way a malformed live block does); init refuses it too
+    mark = len(BAD)
+    d = project("cb-inv", T_STD)
+    cfg_path = os.path.join(d, "uscha.config.json")
+    outs = []
+    for badv in ("", 5, "  "):
+        with io.open(cfg_path, encoding="utf-8") as fh:
+            live = json.load(fh)
+        live["review_tiers"] = dict(T_STD, base=badv)
+        write(cfg_path, json.dumps(live, indent=2) + NL)
+        outs.append(q(d, "review-start", "--repo", "api", "--tool", CR, "--iteration", "1"))
+    ini = q(d, "init", "--config", "uscha.config.json")
+    res["AC-RP-40"] = bool(len(BAD) == mark and all(
+        o.returncode != 0 and "uscha.config.json" in o.stdout and "review_tiers.base" in o.stdout
+        for o in outs) and ini.returncode != 0 and "review_tiers.base" in ini.stdout)
+    why["AC-RP-40"] = "live=%r init=%s bad=%r" % ([tail(o) for o in outs][:2], tail(ini),
+                                                   BAD[mark:][:2])
+
+    # --- AC-RP-41: without the key nothing moves -- the same two-trunk repo resolves against
+    # main (the fixed list), so the change is a.py plus the docs file and the tier is standard
+    mark = len(BAD)
+    d = two_trunks("cb-absent", None)
+    rec = start(d, CR, 1)
+    res["AC-RP-41"] = bool(len(BAD) == mark and rec.get("tier") == "standard"
+                           and scope(rec) == ["a.py", "docs/guide.md"])
+    why["AC-RP-41"] = "tier=%r scope=%r bad=%r" % (rec.get("tier"), scope(rec), BAD[mark:][:2])
+
+    # --- AC-RP-42: a base that git would read as an option is refused, never resolved -- with
+    # --independent git merge-base prints HEAD and exits 0, so the scope would come back empty
+    # and committed work would vanish without a refusal
+    mark = len(BAD)
+    d = project("cb-dash", T_STD)
+    sh(os.path.join(d, "api"), "git", "commit", "-qam", "work")
+    tests(d)
+    cfg_path = os.path.join(d, "uscha.config.json")
+    outs = []
+    for badv in ("--independent", "--octopus", "-x"):
+        with io.open(cfg_path, encoding="utf-8") as fh:
+            live = json.load(fh)
+        live["review_tiers"] = dict(T_STD, base=badv)
+        write(cfg_path, json.dumps(live, indent=2) + NL)
+        outs.append(q(d, "review-start", "--repo", "api", "--tool", CR, "--iteration", "1"))
+    res["AC-RP-42"] = bool(len(BAD) == mark and all(
+        o.returncode != 0 and "uscha.config.json" in o.stdout and "review_tiers.base" in o.stdout
+        and "scope" not in o.stdout for o in outs))
+    why["AC-RP-42"] = "outs=%r bad=%r" % ([tail(o) for o in outs][:2], BAD[mark:][:2])
+
+    # --- AC-RP-43: the ledger's FROZEN review_tiers is validated like the live block -- a frozen
+    # base of "", a number or an option-like string is refused naming the ledger and the key (an
+    # empty one no longer falls back to the 2.16.0 list, a number no longer crashes)
+    mark = len(BAD)
+    outs = []
+    for badv in ("", 5, "--independent"):
+        d = project("cb-frozen", T_STD)
+        sh(os.path.join(d, "api"), "git", "commit", "-qam", "work")
+        tests(d)
+        cfg_path = os.path.join(d, "uscha.config.json")
+        with io.open(cfg_path, encoding="utf-8") as fh:
+            live = json.load(fh)
+        live.pop("review_tiers")
+        write(cfg_path, json.dumps(live, indent=2) + NL)
+        led = ledger(d)
+        led["config"]["review_tiers"]["base"] = badv
+        led.pop("integrity", None)       # the human act that accepts an outside edit
+        write(os.path.join(d, "QA-LEDGER.json"), json.dumps(led, indent=2) + NL)
+        outs.append(q(d, "review-start", "--repo", "api", "--tool", CR, "--iteration", "1"))
+    res["AC-RP-43"] = bool(len(BAD) == mark and all(
+        o.returncode != 0 and "QA-LEDGER.json" in o.stdout and "review_tiers.base" in o.stdout
+        and "Traceback" not in o.stdout for o in outs))
+    why["AC-RP-43"] = "outs=%r bad=%r" % ([tail(o) for o in outs], BAD[mark:][:2])
+
 
 try:
     measure()
@@ -23856,7 +23982,7 @@ print(("OK %d cases" % len(res)) if not bad
 PY
 )
 case "$T180" in
-  OK*) PASS=$((PASS+1)); echo "  ok   review pace (AC-RP-07..36): $T180";;
+  OK*) PASS=$((PASS+1)); echo "  ok   review pace (AC-RP-07..43): $T180";;
   *)   FAIL=$((FAIL+1)); echo "  FAIL $T180";;
 esac
 }
@@ -24236,7 +24362,7 @@ FAMILIES = (
     # AC-RP-16 compares with the v2.15.1 engine: without the tag, or from an extracted kit, it
     # reports None = UNMEASURED. AC-RP-01..06 (risk presets, T158) keep their own sidecar.
     (".pace-cases.json", "review-pace", "T180",                       # ADR-062, 2.16.0
-     _seq("AC-RP", 7, 36)),
+     _seq("AC-RP", 7, 43)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

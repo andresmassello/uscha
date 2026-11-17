@@ -153,6 +153,19 @@ reviewer kept flagging was code older than its first pass.
    without it a project reads exactly as in 2.15 (the posture of ADR-061). `uscha init` writes a
    default block for a new project -- `default: standard`, `quick: ["docs/**", "**/*.md"]`, an empty
    `deep` list; `doctor` proposes it to an existing project; `adr-refine` asks which paths are `deep`.
+   **Amended (2026-11-15, decided by the owner; ships as 2.16.1): `review_tiers.base`.** The fixed
+   base list (origin/HEAD, origin/main, main, origin/master, master) left a project whose trunk is
+   `develop`, `trunk` or a release branch unable to use the pace (2.16.0's "Honest limits"). The block
+   gains an optional `base`: a git ref string such as `develop` or `origin/develop`. When set it is the
+   ONLY base -- no fallback list -- and one that does not resolve fails closed exactly as an unresolved
+   list does (`review-start` exits 2; `phase` and `converged` refuse), naming the ref and
+   `review_tiers.base`. When absent, the list and the fail-closed rule are unchanged. A value that is
+   not a nonempty string, or that starts with a dash (git would read it as an option), is refused
+   naming the file, like any malformed live block; the ledger's frozen copy is validated the same way
+   (naming the ledger). The ref is resolved to a commit before `merge-base` sees it. The key is read
+   live like the rest of the block (ADR-051); `init` does not write it. Base resolution is outside
+   ReviewPace.tla's abstraction (the model takes a change, not how its files are computed): no model
+   change (AC-RP-37..41 replay the cases against the engine).
 9. **Version.** **Decided (8):** 2.16.0 (new opt-in behavior). Order: the model, then the RED cases,
    then the code.
 

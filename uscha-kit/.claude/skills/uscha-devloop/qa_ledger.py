@@ -2158,6 +2158,10 @@ def _validate_review_tiers(rt):
                     or len(set(names)) != len(names)):
                 raise SystemExit("[qa_ledger] invalid config: review_tiers.tools.%s must "
                                  "contain unique nonempty strings" % tier)
+    if "base" in rt and (not _has_text(rt["base"]) or rt["base"].lstrip().startswith("-")):
+        raise SystemExit("[qa_ledger] invalid config: review_tiers.base must be a nonempty git "
+                         "ref string such as develop or origin/develop, never one starting "
+                         "with a dash")
     if "review_round_cap" in rt:
         cap = rt["review_round_cap"]
         if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
@@ -2879,8 +2883,9 @@ class _Witness(object):
     def changed(self):
         """The files the change touches against its base (ADR-062), taken once per read."""
         if getattr(self, "_changed", False) is False:
-            self._changed, self.base_problem = _change_files(self.path, self.rtype,
-                                                             _LAST_LEDGER_PATH)
+            rt = _tiers_cfg(self.ledger)
+            self._changed, self.base_problem = _change_files(
+                self.path, self.rtype, _LAST_LEDGER_PATH, rt["base"] if rt and "base" in rt else None)
         return self._changed
 
     def deferred_now(self):
@@ -3339,7 +3344,13 @@ def _tiers_cfg_from(frozen_cfg, ledger_path):
         if isinstance(_TIERS_LIVE[key], dict):
             return _TIERS_LIVE[key]
     rt = (frozen_cfg or {}).get("review_tiers")
-    return rt if isinstance(rt, dict) else None
+    if not isinstance(rt, dict):
+        return None
+    try:
+        _validate_review_tiers(rt)       # the frozen copy is read like the live one (2.16.1)
+    except SystemExit as exc:
+        raise SystemExit("%s (in the frozen config of %s)" % (exc, ledger_path or "the ledger"))
+    return rt
 
 
 def _tiers_cfg(ledger):
@@ -3435,9 +3446,22 @@ def _strip_prefix(paths, prefix):
     return [p[len(pre):] for p in paths if p.startswith(pre)]
 
 
-def _resolve_base(repo_path):
+def _resolve_base(repo_path, configured=None):
     """(merge-base commit, ref) of HEAD against the first base that resolves: origin/HEAD, then
-    origin/main, main, origin/master, master -- or (None, None)."""
+    origin/main, main, origin/master, master -- or (None, None). `configured`
+    (review_tiers.base, 2.16.1) is the ONLY candidate when set: no fallback list."""
+    if configured is not None:
+        # a value git could read as an option (--independent prints HEAD and exits 0) never
+        # reaches it; the ref is resolved to a commit first, and its SHA is what merge-base gets
+        if not isinstance(configured, str) or not configured.strip()                 or configured.lstrip().startswith("-"):
+            return None, None
+        rv = _seal_git(repo_path, "rev-parse", "--verify", "-q", configured + "^{commit}")
+        if rv is None or not rv.stdout.strip():
+            return None, None
+        mb = _seal_git(repo_path, "merge-base", "HEAD", rv.stdout.strip())
+        if mb is not None and mb.stdout.strip():
+            return mb.stdout.strip(), configured
+        return None, None
     cands = []
     sym = _seal_git(repo_path, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
     if sym is not None and sym.stdout.strip():
@@ -3450,7 +3474,7 @@ def _resolve_base(repo_path):
     return None, None
 
 
-def _change_files(repo_path, rtype, ledger_path):
+def _change_files(repo_path, rtype, ledger_path, configured=None):
     """(files, problem). files: sorted paths RELATIVE TO THE REPO'S CONFIGURED PATH the change
     touches -- committed since the merge-base with the base branch (`_resolve_base`) plus
     everything dirty now, prose included because a docs-only change is the `quick` case; a
@@ -3463,11 +3487,16 @@ def _change_files(repo_path, rtype, ledger_path):
         return None, None
     excluded = _review_exclusions(repo_path, rtype, ledger_path, work)
     files, problem = set(), None
-    base, ref = _resolve_base(repo_path)
+    base, ref = _resolve_base(repo_path, configured)
     if base is None:
         n = _seal_git(repo_path, "rev-list", "--count", "HEAD")
         count = int(n.stdout.strip()) if n is not None and n.stdout.strip().isdigit() else 0
-        if count > 1:
+        if count > 1 and configured is not None:
+            problem = ("the change cannot be computed: the configured base %r (review_tiers.base) "
+                       "does not resolve and HEAD has %d commits, so committed work cannot be "
+                       "told from the base -- fetch it, create that branch or fix "
+                       "review_tiers.base (ADR-062)" % (configured, count))
+        elif count > 1:
             problem = ("the change cannot be computed: no base branch resolves (tried origin/HEAD, "
                        "origin/main, main, origin/master, master) and HEAD has %d commits, so "
                        "committed work cannot be told from the base -- fetch origin or create the "

@@ -83,7 +83,8 @@ the output differs only by `doctor`'s advisory, the new `--help` text and the op
 - A flagged file put back to an earlier clean content is handed no scope, so only a confirmed
   deferral (or a review that covers it) closes its id; the engine never closes it by itself.
 - The base is the first branch of a fixed list; a project whose base is named otherwise is refused
-  (fail closed) until one of those names resolves.
+  (fail closed) until one of those names resolves. **Lifted in 2.16.1:** an optional
+  `review_tiers.base` names the one ref to use.
 - The round cap's cycle count reads the iteration numbers the agent logs: a round that reuses the
   latest iteration finishes that cycle and is not counted as a new one (the per-tool count has no
   such escape). A tool that alternates gated and clean rounds is never capped.

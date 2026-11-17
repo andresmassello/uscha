@@ -2259,3 +2259,20 @@ narrated field.
   at `log-step` too: gated rounds alternating between two tools stop at `review_round_cap`
   (`review-start` and an unwitnessed `log-step` exit 2 naming `escalate`, ledger unchanged), while a
   round that finishes the latest cycle is allowed.
+- [ ] AC-RP-37 - (fresh review) a configured `review_tiers.base` is the only base: on a repo whose trunk is
+  `develop` (no main, master or origin) `review-start` computes the tier and scope against it instead of
+  refusing.
+- [ ] AC-RP-38 - (fresh review) a configured base that does not resolve fails closed with no fallback to an
+  existing main: `review-start` exits 2 naming the ref and `review_tiers.base` with the ledger unchanged, and
+  `phase` / `converged` refuse.
+- [ ] AC-RP-39 - (fresh review) the configured base wins over an existing main: the scope is the change against
+  the configured ref, not against main.
+- [ ] AC-RP-40 - (fresh review) a `review_tiers.base` that is not a nonempty string (`""`, a number, blanks) is
+  refused naming `review_tiers.base`, and, read live, the config file; `init` refuses it too.
+- [ ] AC-RP-41 - (fresh review) without the key nothing moves: the same repo resolves against main from the
+  fixed list, as in 2.16.0.
+- [ ] AC-RP-42 - (fresh review) a `review_tiers.base` that starts with a dash (`--independent`, `--octopus`,
+  `-x`) is refused naming `review_tiers.base` and the config file; the scope is never silently empty.
+- [ ] AC-RP-43 - (fresh review) the ledger's frozen `review_tiers` is validated like the live block: a frozen
+  base of `""`, a number or a dash-led string is refused naming `review_tiers.base` and the ledger (no fallback
+  to the fixed list, no crash).

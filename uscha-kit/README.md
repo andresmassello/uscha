@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.16.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.16.1 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -262,7 +262,8 @@ loop reads as in 2.15.1; output differs only by `doctor`'s advisory, the new hel
 opt-in flags.
 
 - **A tier per change.** The change's files (committed since the merge-base with the base branch --
-  `origin/HEAD`, `origin/main`, `main`, `origin/master`, `master`, the first that resolves -- plus the
+  `origin/HEAD`, `origin/main`, `main`, `origin/master`, `master`, the first that resolves, or the one
+  ref `review_tiers.base` names (2.16.1) -- plus the
   working tree; prose counts here and in every review) are matched against the `quick` / `standard` / `deep` globs;
   the tier is the highest any file reaches, and a file no glob matches gets `default`. The tier
   never drops by itself: once a `test-run`, `review-start` or `log-step` has seen a deep file,
@@ -274,7 +275,11 @@ opt-in flags.
   and `whole`. A tool with no clean pass reviews the whole change; afterwards only the files changed
   since its last clean pass; in `deep` always the whole change. Paths -- globs, scope, ids -- are
   relative to the repo's configured `path`, not the git root. If no base branch resolves while the
-  branch has commits, `review-start` exits 2 and `phase` / `converged` refuse (fail closed).- **Convergence in `quick` and `standard`**: every tool of the tier had a review of the whole
+  branch has commits, `review-start` exits 2 and `phase` / `converged` refuse (fail closed). A project
+  whose trunk is `develop`, `trunk` or a release branch sets `review_tiers.base` (a git ref such as
+  `develop` or `origin/develop`): when set it is the ONLY base -- no fallback list -- and one that does
+  not resolve fails closed the same way, naming the ref and the key. A value that is not a nonempty
+  string is refused naming the file; `init` does not write it.- **Convergence in `quick` and `standard`**: every tool of the tier had a review of the whole
   change, its latest review is clean on the tree on disk, and every file changed after a tool's
   clean pass was reviewed clean again, after it, by THAT tool (a clean pass of another tool clears
   nothing). In `deep` it is the 2.15.1 rule over the tier's tools, plus each tool's last review

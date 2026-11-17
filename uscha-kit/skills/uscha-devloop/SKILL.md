@@ -27,7 +27,7 @@ artifacts; these can block) and **self-reported** agent counts (log-step — nar
 recorded for the retrospective; a measured red always overrides a narrated green).
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.16.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.16.1 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## First contact (show ONCE, then never again)
 
@@ -471,7 +471,8 @@ the whole change. Every path below -- globs, scopes, ids -- is relative to the r
 configured `path`, not the git root:
 
 - **Tier.** The change's files (committed since the merge-base with the base branch --
-  `origin/HEAD`, `origin/main`, `main`, `origin/master`, `master`, the first that resolves --
+  `origin/HEAD`, `origin/main`, `main`, `origin/master`, `master`, the first that resolves, or the one
+  ref `review_tiers.base` names (2.16.1) --
   plus the working tree; prose files count here and in every review) are matched against the `quick` / `standard` / `deep` globs; the tier is the
   highest any file reaches, and a file no glob matches gets `default`. It never drops by itself: once
   a `test-run`, `review-start` or `log-step` has seen a deep file, reverting that file leaves the
@@ -486,6 +487,9 @@ configured `path`, not the git root:
   narrow or widen it: the engine assigned it, and what convergence reads is that assignment.
   If no base branch resolves while the branch has commits, `review-start` exits 2 and `phase` /
   `converged` refuse: the change cannot be computed, and an empty scope is never read as clean.
+  A project whose trunk is `develop` or a release branch sets `review_tiers.base` (a git ref such as
+  `develop` or `origin/develop`) in `uscha.config.json`: it is then the ONLY base, with no fallback
+  list, and one that does not resolve fails closed the same way, naming the ref and the key.
 - **Convergence (`quick` and `standard`).** Every tool of the tier has had a review of the whole
   change; its latest review is clean on the tree on disk; and every file changed after a tool's
   clean pass was reviewed clean AGAIN, after it, by THAT tool. A clean pass of another tool does not
