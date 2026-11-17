@@ -1,0 +1,53 @@
+{
+  "schema": "uscha/models@1",
+  "adr": "ADR-063",
+  "note": "ADR-063 (parallel slices) as amended after the model (D1-D4, 2026-11-17): three slices, three files, the agent obeying slice-plan's disjointness but not its `after` column. The tooth-*.cfg files are on disk but NOT in this manifest: a counterexample config must name the AC-SL case that replays it, and those cases do not exist yet (README lists the id each one will replay).",
+  "module": "SlicePlan.tla",
+  "configs": [
+    {
+      "cfg": "ci-shipped.cfg",
+      "tier": "ci",
+      "expect": "no-error"
+    },
+    {
+      "cfg": "ci-vacuity.cfg",
+      "tier": "ci",
+      "expect": "violated: ReviewedContent",
+      "vacuity": true
+    },
+    {
+      "cfg": "ci-reachable.cfg",
+      "tier": "ci",
+      "expect": "violated: NeverDeliveredThroughMerge",
+      "vacuity": true
+    },
+    {
+      "cfg": "ci-all-dropped.cfg",
+      "tier": "ci",
+      "expect": "violated: NeverAllDroppedReady",
+      "vacuity": true
+    },
+    {
+      "cfg": "deep-shipped-maxslice3.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-17",
+        "distinct_states": 1025388,
+        "tlc": "1.7.4",
+        "inputs_sha256": "88c64033a9ec42400f0471f807d11f979290f4c2c9049e50a6967ef195fff900"
+      }
+    },
+    {
+      "cfg": "deep-shipped-maxedits4.cfg",
+      "tier": "deep",
+      "expect": "no-error",
+      "measured": {
+        "date": "2026-11-17",
+        "distinct_states": 6892376,
+        "tlc": "1.7.4",
+        "inputs_sha256": "17fcf32161baf831e39a42fc0c8456636ce3a507119ed2c18ab665e4f77c1857"
+      }
+    }
+  ]
+}
