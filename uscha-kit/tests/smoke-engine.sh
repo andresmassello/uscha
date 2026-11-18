@@ -23988,6 +23988,932 @@ esac
 }
 pj_unit T180 pj_t180
 
+pj_t181() {
+echo "== T181 (ADR-063, 2.17.0): parallel slices -- the engine says which slices can run at once, and the merge decides, not the sum =="
+# RED cases written BEFORE the engine (repo rule 12, step 2). Every case drives the CLI that the
+# 2.17.0 engine WILL have; the engine implements exactly the surface below, no more, no less.
+# AC-SL-04/05/06/09/10/11/15/16 replay the tooth-*.cfg counterexamples of docs/parallel-slices/models/
+# (the README there maps each tooth to its id) and AC-SL-17 the ci-all-dropped control. AC-SL-01
+# compares with the v2.16.1 engine (UNMEASURED without the tag in git) and is green by construction.
+#
+# SLICES.md -- at the project root, beside uscha.config.json. A level-2 heading opens a slice and its
+#   text is the id (letters, digits, - and _). Outside a block, and on any line that is not
+#   key: value, the file is prose and is ignored. Values are comma-separated:
+#       ## s1
+#       paths: src/auth/**, src/session/**   required; globs relative to the slice repo path
+#       acceptance: AC-01, AC-02             optional
+#       after: s0                            optional; slice ids
+#       repo: backend-api                    optional; a repo name of the config; default: the FIRST repo
+#   A project with SLICES.md is a slice project. Config, read live from uscha.config.json:
+#   "slices": {"parallel": "offer" | "auto", "max_parallel": 5}; absent keys take those defaults.
+# GIT AND LEDGERS -- slice S lives on branch slice/S of its repo and keeps its evidence in
+#   QA-LEDGER.S.json beside the main ledger. A ledger named that way IS slice S ledger: every ordinary
+#   command takes it as --ledger, and review-start / log-step on it apply the after refusal. The change
+#   branch is the branch checked out in the slice repo when slice-plan / slice-integrate / slice-drop
+#   run. A slice is RUNNING when it is neither integrated nor dropped and slice/S exists. Merges are
+#   merge commits (--no-ff), so the first merge commit of the tip on the first-parent line of the
+#   change branch is the slice merge M.
+# slice-plan [--json] -- read-only: no ledger write, no branch, no worktree. Exit 2 refusing a bad
+#   SLICES.md (names the slice, and the repo or the after id when that is the cause) or a slice whose
+#   repo is not a git repository (names the repo). JSON:
+#     {"mode", "max_parallel", "startable": [ids], "slices": [{"id", "repo", "paths", "acceptance",
+#       "after", "status", "startable", "mark", "blocked_by", "ledger", "dropped_by", "note"}]}
+#   status is planned | running | integrated | dropped. startable lists, in declaration order and
+#   greedily, the slices that are planned, whose every after is integrated, glob-disjoint (same repo
+#   only) from every running slice AND from those already picked, while running plus picked stay
+#   within max_parallel. Two globs overlap when the literal prefix before the first wildcard of one
+#   is a prefix of the other. mark is "offer" or "launchable" (the mode) for a startable slice and
+#   null for the rest. blocked_by holds tokens: "after:<id>", "overlap:<id>", "cap".
+# slice-integrate --slice S -- run on the change branch with the default ledger. Exit 2, naming S,
+#   and the ledger unchanged, in this order: (1) the slice tip is not an ancestor of HEAD (the word
+#   "ancestor"); (2) the slice ledger has not converged (the word "converge") -- judged by the cycles
+#   it recorded, with tree currency taken at the slice tip, because other slices merging legitimately
+#   move the change tree; (3) the slice OWN diff leaves its paths, and the refusal names the path
+#   relative to the repo path. The slice own diff is merge-base(M^1, M^2)..M^2 (D4: a merge commit
+#   that regenerates a lockfile is not the slice diff). That diff is read WITHOUT rename detection
+#   (a file moved in from outside the paths is a deletion outside them, AC-SL-18) and only the slice
+#   OWN ledger is exempt: a slice whose own diff touches the main ledger is refused, naming the slice
+#   and QA-LEDGER.json (AC-SL-20). Success is exit 0: the main ledger records
+#   the integration (status integrated), and under review_tiers the per-file clean stamps of the
+#   slice ledger carry into the main ledger for every file whose content at HEAD is the reviewed one.
+# slice-drop --slice S --human NAME --note TEXT -- a human act (exit 2 under CLAUDECODE, as the other
+#   human acts). Exit 2, naming S and the word "merge", when the slice content is in the change
+#   branch: its tip is an ancestor of HEAD and at least one file of its own diff still holds the
+#   slice content at HEAD (a reverted merge is not merged: the human can drop it). Also exit 2,
+#   naming S and slice/S, for a slice that STARTED (its ledger is on disk or in the history of HEAD,
+#   or a first-parent merge names slice/S) whose branch was deleted: the engine cannot prove the
+#   content is out, so slice/S is restored first and the check above then applies (AC-SL-19); a slice
+#   that never started drops. Success records status dropped, dropped_by NAME and note.
+# REVIEW STEPS -- review-start and log-step on QA-LEDGER.S.json exit 2, naming S, its after slice and
+#   (for the ancestry) the word "ancestor", when an after slice is not integrated, or is integrated
+#   but its tip is not an ancestor of HEAD (D2); in a slice project (a slices config or integration
+#   records) a slice ledger with no SLICES.md beside it is refused naming S and SLICES.md (AC-SL-21).
+# THE GATE -- phase --repo R --require pr-ready, for ANY repo of a slice project, exits 1 naming
+#   every declared slice that is neither integrated nor dropped; under review_tiers a file the merge
+#   changed is unreviewed and is named; a test-run after the last merge is required as always.
+T181=$(pyin "$KIT" <<'PY'
+import io, json, os, shutil, subprocess, sys, tempfile
+kit = sys.argv[1]
+root = os.path.dirname(kit)
+sys.path.insert(0, os.path.join(kit, "tests"))
+from _harness import sidecar
+ENG = os.path.join(kit, ".claude", "skills", "uscha-devloop", "qa_ledger.py")
+PREV_TAG = "v2.16.1"
+NL, DQ = chr(10), chr(34)
+CR = "code-review"
+TOOLS3 = [CR, "judgment-day", "improve"]
+TMPS = []
+res, why = {}, {}
+HOME_ISO = tempfile.mkdtemp(prefix="uscha-sl-home-")
+TMPS.append(HOME_ISO)
+ENV = dict(os.environ, HOME=HOME_ISO, USERPROFILE=HOME_ISO, PYTHONIOENCODING="utf-8")
+for _k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "USCHA_JOBS"):
+    ENV.pop(_k, None)
+AGENT = dict(ENV, CLAUDECODE="1")
+XPY = sys.executable.replace(chr(92), "/")
+EMIT = NL.join([
+    "import os, time",
+    "os.makedirs(" + DQ + "reports" + DQ + ", exist_ok=True)",
+    "open(os.path.join(" + DQ + "reports" + DQ + ", " + DQ + "junit.xml" + DQ + "), " + DQ + "w"
+    + DQ + ").write(" + DQ + "<testsuite tests=" + DQ + " + chr(34) + " + DQ + "1" + DQ
+    + " + chr(34) + " + DQ + " timestamp=" + DQ + " + chr(34) + repr(time.time()) + chr(34) + "
+    + DQ + "><testcase name=" + DQ + " + chr(34) + " + DQ + "t" + DQ + " + chr(34) + " + DQ
+    + "/></testsuite>" + DQ + ")",
+]) + NL
+# every file of the fixture is quick: one code-review pass converges, as in a project with order [code-review]
+T_QK = {"default": "standard", "quick": ["src/**", "deps.lock"], "deep": []}
+BAD = []          # setup commands (git, init, test-run, review-start, log-step) that failed
+RP = "backend-api/"                  # the repo path inside the monorepo fixture (git root = project)
+BASE = {"src/auth/login.py": "v = 0", "src/auth/token/tok.py": "t = 0",
+        "src/billing/charge.py": "w = 0", "src/reports/rep.py": "r = 0", "deps.lock": "0"}
+
+
+def tmp(prefix):
+    d = tempfile.mkdtemp(prefix="uscha-sl-" + prefix + "-")
+    TMPS.append(d)
+    return d
+
+
+def write(path, body):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with io.open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(body)
+
+
+def git(d, *argv, **kw):
+    p = subprocess.run(["git"] + list(argv), cwd=d, stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+                       env=ENV)
+    if p.returncode != 0 and not kw.get("ok"):
+        BAD.append("git %s rc=%s %s" % (" ".join(argv[:3]), p.returncode, p.stdout[-120:]))
+    return p
+
+
+def q(d, *argv, **kw):
+    return subprocess.run([sys.executable, kw.get("eng", ENG)] + list(argv), cwd=d,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                          encoding="utf-8", errors="replace", env=kw.get("env", ENV))
+
+
+def must(p, what):
+    if p.returncode != 0:
+        BAD.append("%s rc=%s %s" % (what, p.returncode, p.stdout[-160:]))
+    return p
+
+
+def pj(p):
+    try:
+        return json.loads(p.stdout)
+    except ValueError:
+        return {}
+
+
+def lbytes(d, name="QA-LEDGER.json"):
+    with io.open(os.path.join(d, name), "rb") as fh:
+        return fh.read()
+
+
+def tail(p):
+    if "invalid choice" in p.stdout:
+        return "rc=%s UNKNOWN SUBCOMMAND (argparse invalid choice)" % p.returncode
+    return "rc=%s %r" % (p.returncode, p.stdout[-200:])
+
+
+def named(p, rc, *tokens):
+    """A REFUSAL by the engine: the exit code, every token named, no usage error, no traceback."""
+    out = p.stdout
+    return (p.returncode == rc and all(t in out for t in tokens)
+            and "invalid choice" not in out and "Traceback" not in out)
+
+
+# --- SLICES.md builders --------------------------------------------------------------------
+def blk(sid, paths, acc=None, after=None, repo=None):
+    lines = ["## " + sid]
+    if paths:
+        lines.append("paths: " + ", ".join(paths))
+    if acc:
+        lines.append("acceptance: " + ", ".join(acc))
+    if after:
+        lines.append("after: " + ", ".join(after))
+    if repo:
+        lines.append("repo: " + repo)
+    return NL.join(lines) + NL
+
+
+def md(*blocks):
+    return "# Slices of the change" + NL + NL + NL.join(blocks)
+
+
+AUTH, BILL, REP, TOK = ["src/auth/**"], ["src/billing/**"], ["src/reports/**"], ["src/auth/token/**"]
+# the shape of the model: s1 {auth}, s2 {billing} after s1, s3 overlapping s1 with no after
+MD_MODEL = md(blk("s1", AUTH, ["AC-01"]), blk("s2", BILL, ["AC-02"], ["s1"]),
+              blk("s3", TOK, ["AC-03"]))
+MD_TWO = md(blk("s1", AUTH, ["AC-01"]), blk("s2", BILL, ["AC-02"]))
+MD_THREE = md(blk("s1", AUTH, ["AC-01"]), blk("s2", BILL, ["AC-02"]), blk("s3", REP, ["AC-03"]))
+MD_AFTER = md(blk("s1", AUTH, ["AC-01"]), blk("s2", BILL, ["AC-02"], ["s1"]))
+
+
+# --- fixtures ------------------------------------------------------------------------------
+def conf_of(repos, tiers=None, scfg=None):
+    conf = {"defaults": {"qa_tools_external": list(TOOLS3), "qa_tools_order": [CR],
+                         "test_command_python": [XPY, "run.py"]},
+            "repos": repos, "integration": {"enabled": False}}
+    if tiers is not None:
+        conf["review_tiers"] = json.loads(json.dumps(tiers))
+    if scfg is not None:
+        conf["slices"] = json.loads(json.dumps(scfg))
+    return conf
+
+
+def snap(gd, msg):
+    git(gd, "add", "-A")
+    git(gd, "commit", "-q", "--allow-empty", "-m", msg)
+
+
+def on(gd, branch):
+    git(gd, "checkout", "-q", "-f", branch)
+
+
+def mono(prefix, md_text=None, tiers=None, scfg=None):
+    """One git repo at the project root (branch main, then feat), the repo backend-api in a
+    sub-folder. The ledger and the slice ledgers sit at the root and travel with the commits.
+    SLICES.md is written AFTER init, so an init that read it could not mask a parse refusal."""
+    d = tmp(prefix)
+    for name, body in BASE.items():
+        write(os.path.join(d, "backend-api", name), body + NL)
+    write(os.path.join(d, "backend-api", "run.py"), EMIT)
+    write(os.path.join(d, ".gitignore"), "__pycache__/" + NL + "/backend-api/reports/" + NL)
+    conf = conf_of([{"name": "backend-api", "path": "backend-api", "type": "python"}], tiers, scfg)
+    write(os.path.join(d, "uscha.config.json"), json.dumps(conf, indent=2) + NL)
+    for argv in (["init", "-q"], ["config", "user.email", "t@t"], ["config", "user.name", "t"],
+                 ["add", "-A"], ["commit", "-qm", "base"], ["branch", "-M", "main"],
+                 ["checkout", "-q", "-b", "feat"]):
+        git(d, *argv)
+    must(q(d, "init", "--config", "uscha.config.json"), "init")
+    if md_text is not None:
+        write(os.path.join(d, "SLICES.md"), md_text)
+    snap(d, "ledger and slices")
+    return d
+
+
+def multi(prefix, md_text, nongit=False):
+    """No git at the project root: backend-api and mobile-app are two separate git repos (branch
+    main, then feat); with nongit, legacy-web is a plain folder. Ledgers sit at the root."""
+    d = tmp(prefix)
+    names = ["backend-api", "mobile-app"] + (["legacy-web"] if nongit else [])
+    for name in names:
+        for fname, body in BASE.items():
+            write(os.path.join(d, name, fname), body + NL)
+        write(os.path.join(d, name, "run.py"), EMIT)
+        write(os.path.join(d, name, ".gitignore"), "__pycache__/" + NL + "reports/" + NL)
+    repos = [{"name": n, "path": n, "type": "python"} for n in names]
+    write(os.path.join(d, "uscha.config.json"), json.dumps(conf_of(repos), indent=2) + NL)
+    for name in names[:2]:
+        gd = os.path.join(d, name)
+        for argv in (["init", "-q"], ["config", "user.email", "t@t"], ["config", "user.name", "t"],
+                     ["add", "-A"], ["commit", "-qm", "base"], ["branch", "-M", "main"],
+                     ["checkout", "-q", "-b", "feat"]):
+            git(gd, *argv)
+    must(q(d, "init", "--config", "uscha.config.json"), "init")
+    write(os.path.join(d, "SLICES.md"), md_text)
+    return d
+
+
+def fork(gd, s, edits, rp=""):
+    git(gd, "checkout", "-q", "-b", "slice/" + s, "feat")
+    for name, body in edits.items():
+        write(os.path.join(gd, rp + name), body + NL)
+    snap(gd, s + ": work")
+
+
+def led(s):
+    return "QA-LEDGER.%s.json" % s
+
+
+def sl_args(s):
+    return ["--ledger", led(s)] if s else []
+
+
+def passes(d, repo, s=None, it=1, tests=True, review=True):
+    """tests and ONE clean code-review pass, on the main ledger (s=None) or slice s's ledger"""
+    if tests:
+        must(q(d, "test-run", "--repo", repo, *sl_args(s)), "test-run %s" % s)
+    if review:
+        r = q(d, "review-start", "--repo", repo, "--tool", CR, "--iteration", str(it), "--json",
+              *sl_args(s))
+        rec = pj(r)
+        must(r, "review-start %s" % s)
+        must(q(d, "log-step", "--repo", repo, "--tool", CR, "--iteration", str(it), "--reported",
+               "0", "--gated-reported", "0", "--tests-passed", "true", "--review",
+               rec.get("id", "RV-?"), *sl_args(s)), "log-step %s" % s)
+        return rec
+    return {}
+
+
+def slice_ledger(d, s):
+    must(q(d, "init", "--config", "uscha.config.json", "--out", led(s)), "init " + s)
+
+
+def converge(d, gd, s, edits, repo="backend-api", rp="", clean=True):
+    """fork slice s from feat with its work, give it a ledger, run tests and (clean) one clean
+    review, commit the ledger with the slice, return to feat"""
+    fork(gd, s, edits, rp)
+    slice_ledger(d, s)
+    passes(d, repo, s, review=clean)
+    snap(gd, s + ": ledger")
+    on(gd, "feat")
+
+
+def merge(gd, s, extra=None, rp=""):
+    """merge slice s into the checked-out change branch with a merge commit; extra files are
+    written INTO that merge commit (a regenerated lockfile, a conflict resolved by hand)"""
+    git(gd, "merge", "-q", "--no-ff", "--no-commit", "slice/" + s)
+    for name, body in (extra or {}).items():
+        write(os.path.join(gd, rp + name), body + NL)
+    snap(gd, "merge " + s)
+
+
+def integrate(d, s, snapdir=None, **kw):
+    p = q(d, "slice-integrate", "--slice", s, **kw)
+    if snapdir:
+        snap(snapdir, "integrate " + s)
+    return p
+
+
+def drop(d, s, env=None, human="Ana", note="descoped by the owner"):
+    argv = ["slice-drop", "--slice", s]
+    if human:
+        argv += ["--human", human]
+    if note:
+        argv += ["--note", note]
+    return q(d, *argv, env=env or ENV)
+
+
+def plan(d):
+    return pj(q(d, "slice-plan", "--json"))
+
+
+def by_id(j):
+    return dict((s.get("id"), s) for s in j.get("slices", []) if isinstance(s, dict))
+
+
+def bby(j, s):
+    return " ".join(by_id(j).get(s, {}).get("blocked_by", []) or [])
+
+
+def startable(j):
+    return list(j.get("startable", []))
+
+
+def status(d, s):
+    return by_id(plan(d)).get(s, {}).get("status")
+
+
+def mphase(d, repo="backend-api"):
+    return q(d, "phase", "--repo", repo, "--require", "pr-ready")
+
+
+def set_cfg(d, scfg):
+    path = os.path.join(d, "uscha.config.json")
+    with io.open(path, encoding="utf-8") as fh:
+        conf = json.load(fh)
+    conf["slices"] = scfg
+    write(path, json.dumps(conf, indent=2) + NL)
+
+
+def measure():
+    # ------------------------------------------------------------------ decision 1: no slices
+    # --- AC-SL-01: without SLICES.md and a slices config every output is the previous kit's (a
+    # guard, green by construction against the tag; the new commands are not in play)
+    mark = len(BAD)
+    pv = None
+    try:
+        pv = subprocess.run(["git", "-C", root, "show",
+                             PREV_TAG + ":uscha-kit/skills/uscha-devloop/qa_ledger.py"],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            encoding="utf-8", errors="replace")
+        pv = pv.stdout if pv.returncode == 0 else None
+    except OSError:
+        pv = None
+    if pv is None:
+        res["AC-SL-01"] = None
+        why["AC-SL-01"] = PREV_TAG + " engine not reachable (no git, or the tag is absent)"
+    else:
+        pe = os.path.join(tmp("prev-eng"), "qa_ledger.py")
+        write(pe, pv)
+        d = mono("noslices")
+        passes(d, "backend-api")
+        rec = pj(q(d, "review-start", "--repo", "backend-api", "--tool", CR, "--iteration", "2",
+                   "--json"))
+        keys216 = {"id", "repo", "tool", "iteration", "at", "tree", "deferred_sha256", "defers",
+                   "closed_by"}
+        argvs = (["readiness"], ["readiness", "--json"],
+                 ["phase", "--repo", "backend-api", "--require", "pr-ready"],
+                 ["phase", "--repo", "backend-api", "--json"],
+                 ["converged", "--repo", "backend-api"])
+        same = all(q(d, *a).stdout == q(d, *a, eng=pe).stdout for a in argvs)
+        res["AC-SL-01"] = bool(len(BAD) == mark and same and set(rec) == keys216)
+        why["AC-SL-01"] = "same=%s keys=%r bad=%r" % (same, sorted(set(rec) ^ keys216),
+                                                      BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 4: SLICES.md
+    # --- AC-SL-02: SLICES.md refuses (exit 2, naming the slice) a slice with no paths, a duplicate
+    # id, an unknown after, an after cycle and a repo that the config does not declare, on
+    # slice-plan and on slice-integrate alike; a valid file is read in full
+    mark = len(BAD)
+    d = mono("parse")
+    variants = (
+        ("no-paths", md(blk("s1", None, ["AC-01"])), ["s1"]),
+        ("empty-paths", "# Slices" + NL + NL + "## s1" + NL + "paths:" + NL + "acceptance: AC-01"
+         + NL, ["s1"]),
+        ("duplicate", md(blk("s1", AUTH), blk("s1", BILL)), ["s1"]),
+        ("unknown-after", md(blk("s1", AUTH), blk("s2", BILL, None, ["s9"])), ["s2", "s9"]),
+        ("cycle", md(blk("s1", AUTH, None, ["s2"]), blk("s2", BILL, None, ["s1"])), ["s1", "s2"]),
+        ("unknown-repo", md(blk("s1", AUTH, None, None, "ghost-api")), ["s1", "ghost-api"]),
+    )
+    b0 = lbytes(d)
+    got, wrong = [], []
+    for label, text, toks in variants:
+        write(os.path.join(d, "SLICES.md"), text)
+        a = q(d, "slice-plan", "--json")
+        b = q(d, "slice-integrate", "--slice", "s1")
+        ok = named(a, 2, *toks) and named(b, 2, *toks)
+        got.append(label if ok else None)
+        if not ok:
+            wrong.append("%s: plan %s | integrate %s" % (label, tail(a)[:90], tail(b)[:90]))
+    write(os.path.join(d, "SLICES.md"), md(
+        blk("s1", ["src/auth/**", "src/session/**"], ["AC-01", "AC-02"], None, "backend-api"),
+        blk("s2", BILL, ["AC-03"], ["s1"])))
+    okp = q(d, "slice-plan", "--json")
+    jj = pj(okp)
+    e1, e2 = by_id(jj).get("s1", {}), by_id(jj).get("s2", {})
+    parsed = bool(okp.returncode == 0 and e1.get("paths") == ["src/auth/**", "src/session/**"]
+                  and e1.get("acceptance") == ["AC-01", "AC-02"] and e1.get("repo") == "backend-api"
+                  and e2.get("after") == ["s1"] and e2.get("repo") == "backend-api")
+    res["AC-SL-02"] = bool(len(BAD) == mark and not wrong and parsed and lbytes(d) == b0)
+    why["AC-SL-02"] = "refused=%r parsed=%s plan=%s bad=%r" % (
+        wrong[:2], parsed, tail(okp)[:120], BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 3: slice-plan
+    # --- AC-SL-03: slice-plan (text and --json) is a read-only readout of what can start now:
+    # disjoint from every running slice, every after integrated, at most max_parallel running
+    mark = len(BAD)
+    d = mono("plan", MD_THREE)
+    b0, br0, st0 = lbytes(d), git(d, "branch", "--list").stdout, git(d, "status", "--porcelain").stdout
+    j0 = plan(d)
+    txt = q(d, "slice-plan")
+    ro = bool(lbytes(d) == b0 and git(d, "branch", "--list").stdout == br0
+              and git(d, "status", "--porcelain").stdout == st0)
+    set_cfg(d, {"max_parallel": 2})
+    j1 = plan(d)
+    git(d, "branch", "slice/s1", "feat")
+    j2 = plan(d)
+    d2 = mono("plan-after", MD_MODEL)
+    j3 = plan(d2)
+    res["AC-SL-03"] = bool(
+        len(BAD) == mark and ro and txt.returncode == 0 and "s1" in txt.stdout
+        and startable(j0) == ["s1", "s2", "s3"] and j0.get("max_parallel") == 5
+        and startable(j1) == ["s1", "s2"] and "cap" in bby(j1, "s3")
+        and by_id(j2).get("s1", {}).get("status") == "running" and startable(j2) == ["s2"]
+        and startable(j3) == ["s1"] and "s1" in bby(j3, "s2"))
+    why["AC-SL-03"] = "ro=%s text=%s start=%r/%r/%r/%r max=%r bad=%r" % (
+        ro, tail(txt)[:60], startable(j0), startable(j1), startable(j2), startable(j3),
+        j0.get("max_parallel"), BAD[mark:][:2])
+
+    # --- AC-SL-04: two slices with overlapping globs never appear together as startable, and a
+    # running slice keeps the one that overlaps it out (the tooth-without-disjoint replay)
+    mark = len(BAD)
+    d = mono("overlap", MD_MODEL)
+    j0 = plan(d)
+    git(d, "branch", "slice/s1", "feat")
+    j1 = plan(d)
+    both = lambda j: "s1" in startable(j) and "s3" in startable(j)
+    res["AC-SL-04"] = bool(
+        len(BAD) == mark and j0.get("slices") and not both(j0) and "s1" in startable(j0)
+        and "s3" not in startable(j0) and "s1" in bby(j0, "s3")
+        and "s3" not in startable(j1) and "s1" in bby(j1, "s3"))
+    why["AC-SL-04"] = "start=%r running=%r bad=%r" % (startable(j0), startable(j1), BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 4: the refusals
+    # --- AC-SL-05: a slice whose after is not integrated is refused at its first review step,
+    # review-start and log-step alike, naming both slices and leaving the ledger unchanged; once the
+    # after is integrated, and merged into the slice, the same step passes (tooth-without-after)
+    mark = len(BAD)
+    d = mono("after", MD_AFTER)
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    fork(d, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    slice_ledger(d, "s2")
+    snap(d, "s2: ledger")
+    b0 = lbytes(d, led("s2"))
+    rs = q(d, "review-start", "--repo", "backend-api", "--tool", CR, "--iteration", "1",
+           *sl_args("s2"))
+    lg = q(d, "log-step", "--repo", "backend-api", "--tool", CR, "--iteration", "1",
+           "--reported", "0", "--gated-reported", "0", *sl_args("s2"))
+    same = lbytes(d, led("s2")) == b0
+    on(d, "feat")
+    merge(d, "s1")
+    must(integrate(d, "s1"), "integrate s1")
+    snap(d, "integrate s1")
+    on(d, "slice/s2")
+    git(d, "merge", "-q", "feat", "-m", "sync feat")
+    ok = q(d, "review-start", "--repo", "backend-api", "--tool", CR, "--iteration", "1", "--json",
+           *sl_args("s2"))
+    res["AC-SL-05"] = bool(len(BAD) == mark and named(rs, 2, "s1", "s2") and named(lg, 2, "s1", "s2")
+                           and same and ok.returncode == 0 and pj(ok).get("id"))
+    why["AC-SL-05"] = "review-start=%s log-step=%s same=%s after-integrated=%s bad=%r" % (
+        tail(rs)[:90], tail(lg)[:90], same, tail(ok)[:60], BAD[mark:][:2])
+
+    # --- AC-SL-06: slice-integrate refuses a slice whose own diff leaves its declared paths,
+    # naming the slice and the path; a merge commit that rewrites a file outside the paths is NOT
+    # the slice's diff (D4) and does not refuse (tooth-without-path-leak)
+    mark = len(BAD)
+    d = mono("leak", MD_THREE)
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    converge(d, d, "s2", {RP + "src/billing/charge.py": "w = 1", RP + "src/reports/rep.py": "r = 9"})
+    merge(d, "s1", {RP + "deps.lock": "regenerated"})
+    merge(d, "s2")
+    b0 = lbytes(d)
+    leak = integrate(d, "s2")
+    unchanged = lbytes(d) == b0
+    inpath = integrate(d, "s1")
+    res["AC-SL-06"] = bool(len(BAD) == mark and named(leak, 2, "s2", "src/reports/rep.py")
+                           and unchanged and inpath.returncode == 0
+                           and status(d, "s2") != "integrated" and status(d, "s1") == "integrated")
+    why["AC-SL-06"] = "leak=%s same=%s in-path=%s bad=%r" % (tail(leak)[:110], unchanged,
+                                                            tail(inpath)[:90], BAD[mark:][:2])
+
+    # --- AC-SL-07: slice-integrate refuses a slice whose ledger has not converged, naming it
+    mark = len(BAD)
+    d = mono("unconv", MD_TWO)
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"}, clean=False)
+    converge(d, d, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    merge(d, "s1")
+    merge(d, "s2")
+    pre = q(d, "converged", "--repo", "backend-api", *sl_args("s1")).returncode
+    b0 = lbytes(d)
+    no = integrate(d, "s1")
+    unchanged = lbytes(d) == b0
+    yes = integrate(d, "s2")
+    res["AC-SL-07"] = bool(len(BAD) == mark and pre == 1 and named(no, 2, "s1", "converge")
+                           and unchanged and yes.returncode == 0)
+    why["AC-SL-07"] = "pre=%s refused=%s same=%s control=%s bad=%r" % (
+        pre, tail(no)[:110], unchanged, tail(yes)[:70], BAD[mark:][:2])
+
+    # --- AC-SL-08: slice-integrate refuses a slice whose merge is not an ancestor of the change
+    # branch, naming it (the slice ledger is copied in, so only the ancestry rule can refuse)
+    mark = len(BAD)
+    d = mono("anc", MD_TWO)
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    shown = git(d, "show", "slice/s1:" + led("s1"))
+    write(os.path.join(d, led("s1")), shown.stdout)
+    b0 = lbytes(d)
+    no = integrate(d, "s1")
+    unchanged = lbytes(d) == b0
+    res["AC-SL-08"] = bool(len(BAD) == mark and named(no, 2, "s1", "ancestor") and unchanged
+                           and status(d, "s1") != "integrated")
+    why["AC-SL-08"] = "refused=%s same=%s bad=%r" % (tail(no)[:120], unchanged, BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 6: the gate
+    # --- AC-SL-09: under review_tiers a clean slice pass carries into the integration only for the
+    # files whose content is what was reviewed; a file the merge changed is unreviewed, is the whole
+    # of the integration review scope, and blocks pr-ready until reviewed; without review_tiers
+    # nothing carries (tooth-without-hash-carry)
+    mark = len(BAD)
+    d = mono("carry", MD_TWO, tiers=T_QK)
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    converge(d, d, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    merge(d, "s1")
+    merge(d, "s2")
+    i1, i2 = integrate(d, "s1"), integrate(d, "s2")
+    snap(d, "integrate")
+    must(q(d, "test-run", "--repo", "backend-api"), "test-run")
+    clean_ready = mphase(d)
+    d2 = mono("carry-changed", MD_TWO, tiers=T_QK)
+    converge(d2, d2, "s1", {RP + "src/auth/login.py": "v = 1"})
+    converge(d2, d2, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    merge(d2, "s1", {RP + "deps.lock": "regenerated"})
+    merge(d2, "s2", {RP + "src/billing/charge.py": "w = 7"})
+    j1, j2 = integrate(d2, "s1"), integrate(d2, "s2")
+    snap(d2, "integrate")
+    must(q(d2, "test-run", "--repo", "backend-api"), "test-run")
+    blocked = mphase(d2)
+    rec = pj(q(d2, "review-start", "--repo", "backend-api", "--tool", CR, "--iteration", "1",
+               "--json"))
+    scope = rec.get("scope") or []
+    must(q(d2, "log-step", "--repo", "backend-api", "--tool", CR, "--iteration", "1", "--reported",
+           "0", "--gated-reported", "0", "--tests-passed", "true", "--review", rec.get("id", "RV-?")),
+         "log-step")
+    after_review = mphase(d2)
+    d3 = mono("carry-off", MD_TWO)
+    converge(d3, d3, "s1", {RP + "src/auth/login.py": "v = 1"})
+    converge(d3, d3, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    merge(d3, "s1")
+    merge(d3, "s2")
+    k1, k2 = integrate(d3, "s1"), integrate(d3, "s2")
+    snap(d3, "integrate")
+    must(q(d3, "test-run", "--repo", "backend-api"), "test-run")
+    nothing = mphase(d3)
+    res["AC-SL-09"] = bool(
+        len(BAD) == mark and i1.returncode == 0 and i2.returncode == 0 and clean_ready.returncode == 0
+        and j1.returncode == 0 and j2.returncode == 0 and blocked.returncode == 1
+        and "deps.lock" in blocked.stdout and "src/billing/charge.py" in blocked.stdout
+        and "src/auth/login.py" not in blocked.stdout
+        and "deps.lock" in scope and "src/billing/charge.py" in scope
+        and "src/auth/login.py" not in scope and after_review.returncode == 0
+        and k1.returncode == 0 and k2.returncode == 0 and nothing.returncode == 1)
+    why["AC-SL-09"] = "clean=%s blocked=%s scope=%r after=%s off=%s bad=%r" % (
+        tail(clean_ready)[:70], tail(blocked)[:90], scope, after_review.returncode,
+        nothing.returncode, BAD[mark:][:2])
+
+    # --- AC-SL-10: pr-ready requires a test-run on the integration commit: the slices tests, green
+    # in their own ledgers, do not count (tooth-without-integration-suite)
+    mark = len(BAD)
+    d = mono("suite", MD_TWO)
+    passes(d, "backend-api", tests=True, review=False)
+    snap(d, "main ledger: test-run")      # committed before the fork: a slice never carries it
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    converge(d, d, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    merge(d, "s1")
+    merge(d, "s2")
+    i1, i2 = integrate(d, "s1"), integrate(d, "s2")
+    snap(d, "integrate")
+    passes(d, "backend-api", tests=False, review=True)
+    slice_tests_only = mphase(d)
+    must(q(d, "test-run", "--repo", "backend-api"), "test-run")
+    with_suite = mphase(d)
+    res["AC-SL-10"] = bool(len(BAD) == mark and i1.returncode == 0 and i2.returncode == 0
+                           and slice_tests_only.returncode == 1 and with_suite.returncode == 0)
+    why["AC-SL-10"] = "integrate=%s/%s slice-tests-only=%s with-suite=%s bad=%r" % (
+        i1.returncode, i2.returncode, tail(slice_tests_only)[:90], with_suite.returncode,
+        BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 7: whole delivery
+    # --- AC-SL-11: pr-ready requires every declared slice integrated or dropped; slice-drop is a human
+    # act (exit 2 under CLAUDECODE, ledger unchanged) and is recorded (tooth-without-whole-delivery)
+    mark = len(BAD)
+    d = mono("whole", MD_THREE)
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    merge(d, "s1")
+    must(integrate(d, "s1"), "integrate s1")
+    snap(d, "integrate s1")
+    passes(d, "backend-api")
+    partial = mphase(d)
+    b0 = lbytes(d)
+    agent = drop(d, "s2", env=AGENT)
+    nonote = drop(d, "s2", note=None)
+    unchanged = lbytes(d) == b0
+    h2, h3 = drop(d, "s2"), drop(d, "s3", note="not this release")
+    done = mphase(d)
+    ent = by_id(plan(d)).get("s2", {})
+    res["AC-SL-11"] = bool(
+        len(BAD) == mark and partial.returncode == 1 and "s2" in partial.stdout
+        and "s3" in partial.stdout and named(agent, 2, "CLAUDECODE") and nonote.returncode == 2
+        and unchanged and h2.returncode == 0 and h3.returncode == 0 and ent.get("status") == "dropped"
+        and ent.get("dropped_by") == "Ana" and ent.get("note") == "descoped by the owner"
+        and done.returncode == 0)
+    why["AC-SL-11"] = "partial=%s agent=%s no-note=%s same=%s human=%s/%s entry=%r done=%s bad=%r" % (
+        tail(partial)[:80], tail(agent)[:70], nonote.returncode, unchanged, h2.returncode,
+        h3.returncode, ent, done.returncode, BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 8: multi-repo
+    # --- AC-SL-12: a repo slice lives and integrates in its repo (the same glob in two repos is
+    # disjoint), the gate waits for every repo's slices, and a repo that is not a git repository is
+    # refused, naming it
+    mark = len(BAD)
+    mdm = md(blk("s1", AUTH, ["AC-01"], None, "backend-api"),
+             blk("s2", AUTH, ["AC-02"], None, "mobile-app"))
+    d = multi("repos", mdm)
+    pl = plan(d)
+    bg, mg = os.path.join(d, "backend-api"), os.path.join(d, "mobile-app")
+    converge(d, bg, "s1", {"src/auth/login.py": "v = 1"}, "backend-api")
+    converge(d, mg, "s2", {"src/auth/login.py": "v = 2"}, "mobile-app")
+    merge(bg, "s1")
+    merge(mg, "s2")
+    i1 = integrate(d, "s1")
+    passes(d, "backend-api")
+    waiting = mphase(d, "backend-api")
+    i2 = integrate(d, "s2")
+    ready = mphase(d, "backend-api")
+    d2 = multi("repos-nongit", md(blk("s1", AUTH, ["AC-01"], None, "legacy-web")), nongit=True)
+    np_, ni = q(d2, "slice-plan", "--json"), q(d2, "slice-integrate", "--slice", "s1")
+    res["AC-SL-12"] = bool(
+        len(BAD) == mark and startable(pl) == ["s1", "s2"] and i1.returncode == 0
+        and waiting.returncode == 1 and "s2" in waiting.stdout and i2.returncode == 0
+        and ready.returncode == 0 and named(np_, 2, "legacy-web") and named(ni, 2, "legacy-web"))
+    why["AC-SL-12"] = "plan=%r i1=%s waiting=%s i2=%s ready=%s nongit=%s/%s bad=%r" % (
+        startable(pl), tail(i1)[:80], waiting.returncode, tail(i2)[:60], ready.returncode,
+        tail(np_)[:70], tail(ni)[:70], BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 2: offer / auto
+    # --- AC-SL-13: offer or auto is shown per slice in slice-plan (the word offer, the word
+    # launchable), read LIVE from uscha.config.json, default offer; auto marks only what the engine
+    # measured startable
+    mark = len(BAD)
+    d = mono("mode", MD_THREE)
+    j0, t0 = plan(d), q(d, "slice-plan")
+    set_cfg(d, {"parallel": "auto"})
+    j1, t1 = plan(d), q(d, "slice-plan")
+    set_cfg(d, {"parallel": "offer", "max_parallel": 1})
+    j2 = plan(d)
+    d2 = mono("mode-2", MD_MODEL, scfg={"parallel": "auto"})
+    j3 = plan(d2)
+    marks = lambda j: dict((k, v.get("mark")) for k, v in by_id(j).items())
+    res["AC-SL-13"] = bool(
+        len(BAD) == mark and j0.get("mode") == "offer"
+        and set(marks(j0).values()) == {"offer"} and "offer" in t0.stdout
+        and "launchable" not in t0.stdout and j1.get("mode") == "auto"
+        and set(marks(j1).values()) == {"launchable"} and "launchable" in t1.stdout
+        and j2.get("mode") == "offer" and marks(j2) == {"s1": "offer", "s2": None, "s3": None}
+        and j3.get("mode") == "auto" and marks(j3) == {"s1": "launchable", "s2": None, "s3": None})
+    why["AC-SL-13"] = "default=%r auto=%r back=%r model-auto=%r bad=%r" % (
+        marks(j0), marks(j1), marks(j2), marks(j3), BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ decision 5: ledgers
+    # --- AC-SL-14: every slice writes its own QA-LEDGER.<slice>.json on its own branch; the main
+    # ledger is untouched there, the merges do not conflict, and slice-integrate reads each slice
+    # ledger and records the integration in the main one
+    mark = len(BAD)
+    d = mono("ledgers", MD_TWO)
+    main0 = git(d, "rev-parse", "feat:QA-LEDGER.json").stdout.strip()
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    converge(d, d, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    untouched = all(git(d, "rev-parse", "slice/%s:QA-LEDGER.json" % s).stdout.strip() == main0
+                    for s in ("s1", "s2"))
+    m1 = git(d, "merge", "-q", "--no-ff", "-m", "merge s1", "slice/s1", ok=True)
+    m2 = git(d, "merge", "-q", "--no-ff", "-m", "merge s2", "slice/s2", ok=True)
+    tracked = git(d, "ls-files").stdout.split()
+    entries = by_id(plan(d))
+    before = lbytes(d)
+    i1, i2 = integrate(d, "s1"), integrate(d, "s2")
+    res["AC-SL-14"] = bool(
+        len(BAD) == mark and untouched and m1.returncode == 0 and m2.returncode == 0
+        and led("s1") in tracked and led("s2") in tracked
+        and entries.get("s1", {}).get("ledger") == led("s1")
+        and entries.get("s2", {}).get("ledger") == led("s2")
+        and i1.returncode == 0 and i2.returncode == 0 and lbytes(d) != before
+        and status(d, "s1") == "integrated" and status(d, "s2") == "integrated")
+    why["AC-SL-14"] = "untouched=%s merges=%s/%s ledger-field=%r integrate=%s/%s bad=%r" % (
+        untouched, m1.returncode, m2.returncode, entries.get("s1", {}).get("ledger"),
+        tail(i1)[:70], tail(i2)[:70], BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ the amendments (D1-D3)
+    # --- AC-SL-15 (D1, tooth-without-drop-guard): slice-drop refuses a slice whose merge is already
+    # in the change branch, naming it; reverting the merge first lets a human drop it; a slice
+    # that never merged drops as before
+    mark = len(BAD)
+    d = mono("dropguard", MD_TWO)
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    converge(d, d, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    merge(d, "s1")
+    b0 = lbytes(d)
+    no = drop(d, "s1")
+    unchanged = lbytes(d) == b0
+    still = status(d, "s1")
+    free = drop(d, "s2")
+    git(d, "revert", "-m", "1", "--no-edit", "HEAD")
+    reverted = drop(d, "s1")
+    res["AC-SL-15"] = bool(len(BAD) == mark and named(no, 2, "s1", "merge") and unchanged
+                           and still != "dropped" and free.returncode == 0
+                           and status(d, "s2") == "dropped" and reverted.returncode == 0
+                           and status(d, "s1") == "dropped")
+    why["AC-SL-15"] = "merged-drop=%s same=%s free=%s reverted=%s bad=%r" % (
+        tail(no)[:110], unchanged, free.returncode, tail(reverted)[:80], BAD[mark:][:2])
+
+    # --- AC-SL-16 (D2, tooth-without-ancestry): the after refusal is by ancestry. A slice forked
+    # before its after was merged, whose ledger copy says the after is integrated, is refused
+    # naming the ancestry; once the after merge is in the slice branch the step passes
+    mark = len(BAD)
+    d = mono("ancestry", MD_AFTER)
+    fork(d, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    slice_ledger(d, "s2")
+    snap(d, "s2: ledger")
+    on(d, "feat")
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    merge(d, "s1")
+    must(integrate(d, "s1"), "integrate s1")
+    snap(d, "integrate s1")
+    on(d, "slice/s2")
+    git(d, "checkout", "feat", "--", "QA-LEDGER.json")
+    snap(d, "s2: copy of the main ledger")
+    seen = status(d, "s1")
+    b0 = lbytes(d, led("s2"))
+    rs = q(d, "review-start", "--repo", "backend-api", "--tool", CR, "--iteration", "1",
+           *sl_args("s2"))
+    lg = q(d, "log-step", "--repo", "backend-api", "--tool", CR, "--iteration", "1",
+           "--reported", "0", "--gated-reported", "0", *sl_args("s2"))
+    same = lbytes(d, led("s2")) == b0
+    git(d, "merge", "-q", "feat", "-m", "sync feat")
+    ok = q(d, "review-start", "--repo", "backend-api", "--tool", CR, "--iteration", "1", "--json",
+           *sl_args("s2"))
+    res["AC-SL-16"] = bool(len(BAD) == mark and seen == "integrated"
+                           and named(rs, 2, "s1", "s2", "ancestor")
+                           and named(lg, 2, "s1", "s2", "ancestor") and same
+                           and ok.returncode == 0 and pj(ok).get("id"))
+    why["AC-SL-16"] = "after=%r review-start=%s log-step=%s same=%s synced=%s bad=%r" % (
+        seen, tail(rs)[:100], tail(lg)[:70], same, tail(ok)[:60], BAD[mark:][:2])
+
+    # --- AC-SL-17 (D3, ci-all-dropped): a change whose every slice was dropped converges under the
+    # ordinary rules -- a fix on the change branch, a test-run and a clean review reach pr-ready
+    mark = len(BAD)
+    d = mono("alldropped", MD_THREE)
+    ds = [drop(d, s) for s in ("s1", "s2", "s3")]
+    write(os.path.join(d, RP + "src/auth/login.py"), "v = 5" + NL)
+    snap(d, "fix on the change branch")
+    passes(d, "backend-api")
+    fin = mphase(d)
+    pl = plan(d)
+    res["AC-SL-17"] = bool(len(BAD) == mark and all(p.returncode == 0 for p in ds)
+                           and fin.returncode == 0 and startable(pl) == []
+                           and all(v.get("status") == "dropped" for v in by_id(pl).values())
+                           and len(by_id(pl)) == 3)
+    why["AC-SL-17"] = "drops=%r phase=%s plan=%r bad=%r" % (
+        [p.returncode for p in ds], tail(fin)[:100],
+        sorted((k, v.get("status")) for k, v in by_id(pl).items()), BAD[mark:][:2])
+
+    # ------------------------------------------------------------------ review findings (2.17.0)
+    # --- AC-SL-18: the slice's own diff is read WITHOUT rename detection, so moving a file from
+    # outside the slice paths into them is a deletion outside the paths and is refused, naming it
+    mark = len(BAD)
+    d = mono("rename", MD_TWO)
+    write(os.path.join(d, RP + "src/other/o.py"), "o = 0" + NL)
+    snap(d, "feat: a file outside every slice")
+    fork(d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    git(d, "mv", RP + "src/other/o.py", RP + "src/auth/o.py")
+    slice_ledger(d, "s1")
+    passes(d, "backend-api", "s1")
+    snap(d, "s1: ledger")
+    on(d, "feat")
+    merge(d, "s1")
+    b0 = lbytes(d)
+    mv = integrate(d, "s1")
+    res["AC-SL-18"] = bool(len(BAD) == mark and named(mv, 2, "s1", "src/other/o.py")
+                           and lbytes(d) == b0 and status(d, "s1") != "integrated")
+    why["AC-SL-18"] = "rename=%s same=%s bad=%r" % (tail(mv)[:130], lbytes(d) == b0, BAD[mark:][:2])
+
+    # --- AC-SL-19: a merged slice whose branch was deleted cannot be dropped (the branch is gone,
+    # so the engine cannot prove the content is out); a slice that never started still drops
+    mark = len(BAD)
+    d = mono("dropgone", MD_TWO)
+    converge(d, d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    merge(d, "s1")
+    git(d, "branch", "-d", "slice/s1")
+    b0 = lbytes(d)
+    no = drop(d, "s1")
+    unchanged = lbytes(d) == b0
+    free = drop(d, "s2")
+    res["AC-SL-19"] = bool(len(BAD) == mark and named(no, 2, "s1", "slice/s1") and unchanged
+                           and status(d, "s1") != "dropped" and free.returncode == 0)
+    why["AC-SL-19"] = "gone-drop=%s same=%s never-started=%s bad=%r" % (
+        tail(no)[:120], unchanged, tail(free)[:60], BAD[mark:][:2])
+
+    # --- AC-SL-20: only the slice's OWN ledger is exempt from the path check: a slice whose diff
+    # touches the main ledger (forged slice records would travel in it) is refused
+    mark = len(BAD)
+    d = mono("forged", MD_TWO)
+    fork(d, "s1", {RP + "src/auth/login.py": "v = 1"})
+    slice_ledger(d, "s1")
+    passes(d, "backend-api", "s1")
+    must(q(d, "test-run", "--repo", "backend-api"), "main-ledger edit on the slice branch")
+    snap(d, "s1: ledger and an edit of the main ledger")
+    on(d, "feat")
+    merge(d, "s1")
+    b0 = lbytes(d)
+    no = integrate(d, "s1")
+    res["AC-SL-20"] = bool(len(BAD) == mark and named(no, 2, "s1", "QA-LEDGER.json")
+                           and lbytes(d) == b0 and status(d, "s1") != "integrated")
+    why["AC-SL-20"] = "forged=%s same=%s bad=%r" % (tail(no)[:130], lbytes(d) == b0, BAD[mark:][:2])
+
+    # --- AC-SL-21: the after guard does not skip when SLICES.md is missing beside a slice ledger of
+    # a slice project: review-start and log-step refuse, naming the slice and the file
+    mark = len(BAD)
+    d = mono("nofile", MD_AFTER, scfg={"parallel": "offer"})
+    fork(d, "s2", {RP + "src/billing/charge.py": "w = 1"})
+    slice_ledger(d, "s2")
+    snap(d, "s2: ledger")
+    os.remove(os.path.join(d, "SLICES.md"))
+    b0 = lbytes(d, led("s2"))
+    rs = q(d, "review-start", "--repo", "backend-api", "--tool", CR, "--iteration", "1",
+           *sl_args("s2"))
+    lg = q(d, "log-step", "--repo", "backend-api", "--tool", CR, "--iteration", "1",
+           "--reported", "0", "--gated-reported", "0", *sl_args("s2"))
+    res["AC-SL-21"] = bool(len(BAD) == mark and named(rs, 2, "s2", "SLICES.md")
+                           and named(lg, 2, "s2", "SLICES.md") and lbytes(d, led("s2")) == b0)
+    why["AC-SL-21"] = "review-start=%s log-step=%s bad=%r" % (tail(rs)[:110], tail(lg)[:70],
+                                                              BAD[mark:][:2])
+
+    # --- AC-SL-22: two tiers, either integration order: a quick-tier slice (code-review) never
+    # credits judgment-day, a standard-tier tool, with its file; the gate names both
+    mark = len(BAD)
+    T_TWO = {"default": "standard", "quick": ["src/billing/**"], "deep": []}
+    md2 = md(blk("sq", BILL, ["AC-01"]), blk("ss", AUTH, ["AC-02"]))
+    outs, rcs = [], []
+    for order in (("sq", "ss"), ("ss", "sq")):
+        d = mono("twotier-" + order[0], md2, tiers=T_TWO)
+        converge(d, d, "sq", {RP + "src/billing/charge.py": "w = 1"})
+        fork(d, "ss", {RP + "src/auth/login.py": "v = 1"})
+        slice_ledger(d, "ss")
+        passes(d, "backend-api", "ss")
+        rj = pj(q(d, "review-start", "--repo", "backend-api", "--tool", "judgment-day",
+                  "--iteration", "1", "--json", *sl_args("ss")))
+        must(q(d, "log-step", "--repo", "backend-api", "--tool", "judgment-day", "--iteration",
+               "1", "--reported", "0", "--gated-reported", "0", "--tests-passed", "true",
+               "--review", rj.get("id", "RV-?"), *sl_args("ss")), "log-step judgment-day")
+        snap(d, "ss: ledger")
+        on(d, "feat")
+        merge(d, "sq")
+        merge(d, "ss")
+        for s in order:
+            must(integrate(d, s), "integrate " + s)
+        snap(d, "integrate")
+        must(q(d, "test-run", "--repo", "backend-api"), "test-run")
+        g = mphase(d)
+        rcs.append(g.returncode)
+        outs.append(g.stdout)
+    res["AC-SL-22"] = bool(len(BAD) == mark and all(rc != 0 for rc in rcs)
+                           and all("judgment-day" in o and "src/billing/charge.py" in o
+                                   for o in outs))
+    why["AC-SL-22"] = "rc=%r out=%r bad=%r" % (rcs, [o[-170:] for o in outs], BAD[mark:][:2])
+
+
+try:
+    measure()
+finally:
+    for _t in TMPS:
+        shutil.rmtree(_t, ignore_errors=True)
+sidecar(kit, ".slices-cases.json", res)
+bad = [k for k, v in res.items() if v is False]
+print(("OK %d cases" % len(res)) if not bad
+      else "BAD " + ",".join(sorted(bad)) + " | "
+           + " ; ".join(k + ": " + why[k] for k in sorted(bad)))
+PY
+)
+case "$T181" in
+  OK*) PASS=$((PASS+1)); echo "  ok   parallel slices (AC-SL-01..22): $T181";;
+  *)   FAIL=$((FAIL+1)); echo "  FAIL $T181";;
+esac
+}
+pj_unit T181 pj_t181
+
 # Barrier: every post-teardown unit has counted before the acceptance emitter reads $FAIL
 # and before RESULTADO is printed (ADR-053).
 pj_collect
@@ -24363,6 +25289,10 @@ FAMILIES = (
     # reports None = UNMEASURED. AC-RP-01..06 (risk presets, T158) keep their own sidecar.
     (".pace-cases.json", "review-pace", "T180",                       # ADR-062, 2.16.0
      _seq("AC-RP", 7, 43)),
+    # AC-SL-01 compares with the v2.16.1 engine: without the tag, or from an extracted kit, it reads
+    # None = UNMEASURED, never a silent pass.
+    (".slices-cases.json", "parallel-slices", "T181",                 # ADR-063, 2.17.0
+     _seq("AC-SL", 1, 22)),
 )
 
 for _sidecar, _label, _tref, _ids in FAMILIES:

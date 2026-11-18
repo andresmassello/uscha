@@ -1,7 +1,7 @@
 {
   "schema": "uscha/models@1",
   "adr": "ADR-063",
-  "note": "ADR-063 (parallel slices) as amended after the model (D1-D4, 2026-11-17): three slices, three files, the agent obeying slice-plan's disjointness but not its `after` column. The tooth-*.cfg files are on disk but NOT in this manifest: a counterexample config must name the AC-SL case that replays it, and those cases do not exist yet (README lists the id each one will replay).",
+  "note": "ADR-063 (parallel slices) as amended after the model (D1-D4, 2026-11-17): three slices, three files, the agent obeying slice-plan's disjointness but not its `after` column. Each tooth-*.cfg counterexample names the AC-SL case that replays it against the engine (smoke T181); ci-all-dropped names the case of D3.",
   "module": "SlicePlan.tla",
   "configs": [
     {
@@ -25,7 +25,74 @@
       "cfg": "ci-all-dropped.cfg",
       "tier": "ci",
       "expect": "violated: NeverAllDroppedReady",
-      "vacuity": true
+      "vacuity": true,
+      "replays": [
+        "AC-SL-17"
+      ]
+    },
+    {
+      "cfg": "tooth-without-hash-carry.cfg",
+      "tier": "ci",
+      "expect": "violated: ReviewedContent",
+      "replays": [
+        "AC-SL-09"
+      ]
+    },
+    {
+      "cfg": "tooth-without-disjoint.cfg",
+      "tier": "ci",
+      "expect": "violated: NoOverlapRunning",
+      "replays": [
+        "AC-SL-04"
+      ]
+    },
+    {
+      "cfg": "tooth-without-after.cfg",
+      "tier": "ci",
+      "expect": "violated: AfterRespected",
+      "replays": [
+        "AC-SL-05"
+      ]
+    },
+    {
+      "cfg": "tooth-without-ancestry.cfg",
+      "tier": "ci",
+      "expect": "violated: BuiltOnAfter",
+      "replays": [
+        "AC-SL-16"
+      ]
+    },
+    {
+      "cfg": "tooth-without-path-leak.cfg",
+      "tier": "ci",
+      "expect": "violated: NoLeakIntegrated",
+      "replays": [
+        "AC-SL-06"
+      ]
+    },
+    {
+      "cfg": "tooth-without-integration-suite.cfg",
+      "tier": "ci",
+      "expect": "violated: IntegrationTested",
+      "replays": [
+        "AC-SL-10"
+      ]
+    },
+    {
+      "cfg": "tooth-without-whole-delivery.cfg",
+      "tier": "ci",
+      "expect": "violated: WholeDelivered",
+      "replays": [
+        "AC-SL-11"
+      ]
+    },
+    {
+      "cfg": "tooth-without-drop-guard.cfg",
+      "tier": "ci",
+      "expect": "violated: NoLeakShips",
+      "replays": [
+        "AC-SL-15"
+      ]
     },
     {
       "cfg": "deep-shipped-maxslice3.cfg",

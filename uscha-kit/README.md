@@ -1,6 +1,6 @@
 # uscha-kit
 
-**Kit version:** v2.16.1 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
+**Kit version:** v2.17.0 <!-- uscha:version --> · **[uscha.dev](https://uscha.dev)**
 
 Spec-driven orchestrator + multi-repo QA for Claude Code, with a deterministic ledger.
 **Nine skills** (`uscha-discovery`, `uscha-adr-refine`, `uscha-devloop`, `uscha-sysdoc`, `uscha-reverse-discovery`,
@@ -311,6 +311,76 @@ each id on its own (AC-RP-30), a rule the model does not check.
 A green model proves no violation OF THE MODEL at the bounds checked, not that the engine is
 correct; two tools were checked only where the bound allowed. A fix that breaks a file it did not
 touch is seen only by the tests.
+
+## Parallel slices (ADR-063, 2.17.0) - which slices of one change can run at once, and does the merge hold?
+
+A change is often cut into slices that never touch each other, and the devloop built them in series.
+Parallelizing them by hand (one git worktree and one agent session per slice) worked, but the kit
+saw none of it: it did not know the slices were disjoint and did not require the merge of branches
+that never saw each other to be measured. Green per slice does not prove green together. With a
+`SLICES.md` the engine says what can run at once and governs what runs. **The engine never launches
+anything**: no worktree, no session, no merge -- git is only read (`rev-parse`, `merge-base`,
+`rev-list`, `diff`, `diff-tree`). The agent or the platform creates them. A project with no
+`SLICES.md`, no `slices` config and no slice record in its ledger reads and writes as in 2.16.1.
+
+- **Declared in `SLICES.md`**, beside `uscha.config.json`. A level-2 heading is a slice id (letters,
+  digits, `-`, `_`); inside its block `paths:` (required; globs relative to the slice's repo path),
+  `acceptance:`, `after:` (slice ids it needs) and `repo:` (a repo of the config; default the first)
+  are comma-separated; anything else is prose. The file is refused (exit 2, naming the slice) for a
+  slice without paths, a duplicate id, an unknown `after`, an `after` cycle, a `repo` the config
+  does not declare, or an absolute or `..` path. Config, read live: `slices.parallel` (`offer`, the
+  default, or `auto`) and `slices.max_parallel` (default 5).
+- **`slice-plan [--json]`** is read-only. It lists each slice with its status (`planned`,
+  `running` when branch `slice/<id>` exists, `integrated`, `dropped`) and which can start now:
+  `planned`, every `after` integrated, globs disjoint from every running slice of the same repo
+  and from those already picked, at most `max_parallel` running. Each startable slice is marked
+  `offer` (propose it to the human) or, with `auto`, `launchable` (launch it, and ONLY what is
+  marked, never your own reading that slices look independent); `blocked_by` names why not
+  (`after:<id>`, `overlap:<id>`, `cap`). Two globs overlap when the literal prefix before the first
+  wildcard of one is a prefix of the other's: conservative, a false overlap only delays a launch. A
+  slice whose repo is not a git repository is refused, naming the repo.
+- **One ledger per slice.** Slice S works on branch `slice/S` and writes `QA-LEDGER.S.json` beside
+  the main ledger, so slice ledgers never conflict at merge. `review-start` and `log-step` on a slice
+  ledger refuse (exit 2, naming both slices) while an `after` slice is not integrated in the main
+  ledger, or is integrated but its merge is not an ancestor of the slice's branch (the slice was
+  built without the content it depends on; checked when both slices are in the same repo).
+- **`slice-integrate --slice S`**, run on the change branch after the agent merged `slice/S` with
+  `git merge --no-ff`, refuses (exit 2, ledger unchanged) when: the slice tip is not an ancestor of
+  HEAD; the slice ledger has not converged (judged by its recorded cycles with tree currency at the
+  slice tip -- other slices merging legitimately move the change tree); or the slice's OWN diff
+  (merge-base of the merge's parents to the merged tip, never the merge commit's diff, which may
+  regenerate a lockfile) leaves its declared paths, named `S -> path`. That diff is read without
+  rename detection (moving a file in from outside the paths is a deletion outside them), and only the
+  slice's own ledger is exempt: a slice whose diff touches the main ledger is refused. Otherwise it
+  records the integration in the main ledger.
+- **The gate is measured on the integration.** `phase --require pr-ready` needs a `test-run` on the
+  integration commit (slice runs do not count) and every declared slice integrated or dropped, for
+  every repo of a slice project. Under `review_tiers` a slice's clean review carries into the main
+  ledger only for the files whose content (git blob) is the content that slice reviewed: a file the
+  merge regenerated or a conflict the agent resolved stays unreviewed, is named, and is the whole of
+  the next review's scope. A tool is credited only with the files of the slices that carried that
+  tool, and only the tools of the slice's tier carry. Without `review_tiers` nothing carries and the
+  integration converges under the ordinary rules. SLICES.md and the sibling `QA-LEDGER*.json` files are bookkeeping, not
+  review content, in a slice project.
+- **`slice-drop --slice S --human NAME --note TEXT`** is a human act (exit 2 in an agent's shell) and
+  a scope change: it is recorded. It refuses a slice whose merge is already in the change branch (its
+  tip is an ancestor of HEAD and a file of its own diff still holds the slice content): pass
+  `slice-integrate`, or revert the merge first. A slice that started but whose branch was deleted is
+  refused too (the engine cannot prove the content is out): restore `slice/S` first, then the
+  ordinary check applies. A
+  change whose every slice was dropped converges under the ordinary rules. A slice ledger with no
+  `SLICES.md` beside it, in a slice project, is refused at `review-start` / `log-step`.
+
+The design was model-checked with TLA+/TLC before the code (`docs/parallel-slices/models/`); the
+model broke a drop after a merge (the diff shipped without ever passing `slice-integrate`), which is
+why `slice-drop` has its guard. A green model proves no violation OF THE MODEL at its bounds. It does
+not cover the revert path, a slice branch that merges the change branch in again (re-sync),
+multi-repo slices, `offer` versus `auto`, the `SLICES.md` refusals or the path without
+`review_tiers`: the AC-SL cases replay its counterexamples against the engine and are the only link.
+Known limits: convergence is judged at the slice tip and does not read the test-run bytes of a
+shared checkout (the integration suite is the gate for the sum); ancestry of an `after` slice is not
+checked across repos; a slice merged by fast-forward cannot be integrated (the engine looks for the
+merge commit); the carry needs a resolvable base branch.
 
 ## Model-checked designs (ADR-061, 2.15.0) - did anyone check the design before the code?
 
@@ -1080,7 +1150,7 @@ python3 $QL readiness
 
 ## Ledger subcommands
 
-`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - confirm-deferral - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - model-check - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - review-tier - roundtrip - rubric-ingest - simplicity-check - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (64 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
+`bench - bench-curate - bench-r2 - bench-roundtrip - bootstrap-oracle - bootstrap-variance - check-coverage - check-terminado - cleanroom - compile-ingest - compile-validate - confirm-deferral - converged - corpus-run - curate - curation-check - dashboard - discover - doctor - escalate - execution-policy - facts - fastpath-eval - fidelity - flag-blocker - gate-check - golden-coverage - golden-diff - ingest-gate - init - ir-extract - ir-render - lang-compare - log-gate - log-step - model-check - operability - oscillation - phase - pit-check - pr-gate - pr-opened-not-ready - production-finding - promote - qa-tools-check - readiness - rebuild - regression-check - resolve-escalation - review-start - review-tier - roundtrip - rubric-ingest - simplicity-check - slice-drop - slice-integrate - slice-plan - smoke-ingest - snapshot - spec-change-request - spec-check - spec-doubt - spec-drift - summary - test-run - top - waste-check` - the exact current `qa_ledger.py` parser surface (67 subcommands, derived from `SYSTEM-FACTS.json`, itself introspected from `build_parser()`); each supports `--help`.
 
 `gate-check --repo R` SCOPES the diff to `repos[R].path` (2.2.0): in a monorepo one `git diff`
 carries every repo's hunks, and a sibling's findings are neither this repo's report nor this

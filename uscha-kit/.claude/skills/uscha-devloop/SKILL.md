@@ -27,7 +27,7 @@ artifacts; these can block) and **self-reported** agent counts (log-step — nar
 recorded for the retrospective; a measured red always overrides a narrated green).
 
 <!-- uscha:orientation-block:begin -->
-<!-- uscha kit: 2.16.1 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
+<!-- uscha kit: 2.17.0 -- generated region: edit tools/skill-blocks/, then run `python tools/gen-skill-blocks.py` (never this block by hand) -->
 
 ## First contact (show ONCE, then never again)
 
@@ -659,6 +659,60 @@ the linters and the fact gates read as before.
 
 - **Converged** → leave the loop for this repo.
 - **Not converged** → next cycle, up to `config.defaults.max_iterations`.
+
+### Parallel slices (kit 2.17.0, ADR-063) -- only when the project has a `SLICES.md`
+
+A change cut into slices can build the slices that never touch each other at the same time.
+`SLICES.md` (beside `uscha.config.json`) declares them -- a `## <id>` heading per slice with
+`paths:` (required), `acceptance:`, `after:`, `repo:` -- and **the engine never launches anything**:
+you (or the platform) create the worktrees and the sessions; the engine says what may run and
+measures what came back. A project with no `SLICES.md` skips all of this.
+
+```bash
+python3 $QL slice-plan --json            # read-only: what can start NOW, and why the rest cannot
+python3 $QL slice-integrate --slice <S>  # on the change branch, after the merge
+python3 $QL slice-drop --slice <S> --human <NAME> --note "<why>"   # HUMAN act, never yours
+```
+
+1. **Read `slice-plan`.** `startable` lists, in order, the slices that are `planned`, whose every
+   `after` is integrated, whose globs are disjoint from every running slice of the same repo and
+   from each other, within `max_parallel`. Each carries `mark`: `offer` or `launchable`.
+   `blocked_by` says why a slice waits (`after:<id>`, `overlap:<id>`, `cap`). Never decide on your
+   own that two slices "look independent": an overlap you did not see is two sessions editing the
+   same file.
+2. **`offer` (the default) vs `auto`.** With `offer`, propose the launch of the marked slices to the
+   human and wait for the yes. With `slices.parallel: auto` launch without asking, but ONLY the
+   slices marked `launchable` -- never your own reading of the plan. A slice that is not marked
+   waits, in either mode.
+3. **One worktree and one session per slice.** `git worktree add ../<repo>-<S> -b slice/<S> <change
+   branch>`, then a session there. The slice keeps its evidence in its own ledger, so slice ledgers
+   never conflict at merge: `python3 $QL init --config uscha.config.json --out QA-LEDGER.<S>.json`,
+   and every ordinary command takes `--ledger QA-LEDGER.<S>.json`. Run the slice's QA loop on it. A
+   slice with an `after` is refused at its first `review-start` / `log-step` until that slice is
+   integrated AND its merge is in your branch (`git merge <change branch>` into the slice first).
+4. **Merge in `after` order, with `git merge --no-ff slice/<S>`** into the change branch (the engine
+   finds the slice by its merge commit; a fast-forward cannot be integrated). Resolve any textual
+   conflict yourself, with no special path: the files you resolved are re-reviewed by the hash rule.
+5. **`slice-integrate --slice <S>`**, on the change branch. It refuses (exit 2, nothing written)
+   when the slice tip is not an ancestor of HEAD, its ledger has not converged, or its own diff
+   leaves its declared paths (`S -> path`, a file moved in from outside the paths counts as a
+   deletion there): widen the declaration in `SLICES.md` and re-plan, or move the change out of the
+   slice. A slice whose diff touches the main ledger is refused too: commit the main ledger on the
+   change branch BEFORE forking the slice, and never edit it from a slice. Under `review_tiers` its clean review carries into the main
+   ledger for every file whose content is the one reviewed; a file the merge changed (a regenerated
+   lockfile, a conflict you resolved) stays unreviewed and is the scope of the next review. Without
+   `review_tiers` nothing carries.
+6. **The gate is measured on the integration.** After the last integration run
+   `test-run --repo <REPO>` on the integration commit (slice runs do not count), then the ordinary
+   review and `phase --require pr-ready`. It names every declared slice neither integrated nor
+   dropped. Only a human merges to `main`.
+7. **Dropping a slice is a scope change and a human act.** Show the human the `slice-drop` command.
+   It refuses a slice whose merge is already in the change branch (D1), and one that started but
+   whose branch was deleted: restore `slice/<S>` first (from `git reflog`), then the ordinary check
+   applies: revert the merge (`git revert -m 1 <merge>`) and let the human drop it, or integrate it.
+8. **A tree that is not a git repository** (a slice's `repo:`) is refused, naming it: without a commit
+   there is no evidence. The way out is yours or the human's, never the engine's: copy the tree,
+   `git init`, commit a base, then plan again.
 
 ## Phase 4 — Integration / contract pass (multi-repo)
 

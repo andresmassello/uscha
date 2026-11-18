@@ -2834,7 +2834,10 @@ class _Witness(object):
 
     def now(self):
         if self._now is False:
-            self._now = _tree_stamp(self.path, self.rtype)
+            tip = _wit_tip(self.path)
+            # ADR-063: a slice judged at its tip reads the tree AS OF that commit
+            self._now = ({"commit": tip["commit"], "src_dirty": {}} if tip
+                         else _tree_stamp(self.path, self.rtype))
         return self._now
 
     def rel(self, full):
@@ -2877,15 +2880,19 @@ class _Witness(object):
     def rnow(self):
         """The review stamp of the tree now, taken once per read."""
         if getattr(self, "_rnow", False) is False:
-            self._rnow = _review_stamp(self.path, self.rtype, _LAST_LEDGER_PATH)
+            tip = _wit_tip(self.path)
+            self._rnow = ({"commit": tip["commit"], "src_dirty": {}, "scope": "review"} if tip
+                          else _review_stamp(self.path, self.rtype, _LAST_LEDGER_PATH))
         return self._rnow
 
     def changed(self):
         """The files the change touches against its base (ADR-062), taken once per read."""
         if getattr(self, "_changed", False) is False:
             rt = _tiers_cfg(self.ledger)
+            tip = _wit_tip(self.path)
             self._changed, self.base_problem = _change_files(
-                self.path, self.rtype, _LAST_LEDGER_PATH, rt["base"] if rt and "base" in rt else None)
+                self.path, self.rtype, _LAST_LEDGER_PATH, rt["base"] if rt and "base" in rt else None,
+                tip["commit"] if tip else None)
         return self._changed
 
     def deferred_now(self):
@@ -3199,6 +3206,14 @@ def _review_exclusions(repo_path, rtype, ledger_path, work):
         rel = _seal_rel(work, c)
         if rel:
             out.add(rel)
+    if ledger_path and _slices_file(ledger_path):
+        # ADR-063: in a slice project the sibling ledgers and SLICES.md are bookkeeping, never
+        # review content (a merge brings every slice ledger into the change)
+        ldir = os.path.dirname(os.path.abspath(ledger_path))
+        for c in sorted(glob.glob(os.path.join(glob.escape(ldir), "QA-LEDGER*.json"))) +                 [os.path.join(ldir, SLICES_FILE)]:
+            rel = _seal_rel(work, c)
+            if rel:
+                out.add(rel)
     return out
 
 
@@ -3474,7 +3489,7 @@ def _resolve_base(repo_path, configured=None):
     return None, None
 
 
-def _change_files(repo_path, rtype, ledger_path, configured=None):
+def _change_files(repo_path, rtype, ledger_path, configured=None, tip=None):
     """(files, problem). files: sorted paths RELATIVE TO THE REPO'S CONFIGURED PATH the change
     touches -- committed since the merge-base with the base branch (`_resolve_base`) plus
     everything dirty now, prose included because a docs-only change is the `quick` case; a
@@ -3482,7 +3497,7 @@ def _change_files(repo_path, rtype, ledger_path, configured=None):
     cannot be resolved while the branch has history (committed work then cannot be told from the
     base), else None -- review-start, phase and converged refuse on it (fail closed)."""
     work = _repo_git_toplevel(repo_path)
-    head = _seal_git(repo_path, "rev-parse", "HEAD")
+    head = _seal_git(repo_path, "rev-parse", tip or "HEAD")
     if not work or head is None or not head.stdout.strip():
         return None, None
     excluded = _review_exclusions(repo_path, rtype, ledger_path, work)
@@ -3502,11 +3517,13 @@ def _change_files(repo_path, rtype, ledger_path, configured=None):
                        "committed work cannot be told from the base -- fetch origin or create the "
                        "base branch (ADR-062)" % count)
     elif base != head.stdout.strip():
-        d = _seal_git(repo_path, "-c", "core.quotepath=false", "diff", "--name-only", base,
-                      "HEAD", "--", ".")
+        d = _seal_git(repo_path, "-c", "core.quotepath=false", "diff", "--name-only",
+                      "--no-renames", base, tip or "HEAD", "--", ".")
         if d is not None:
             files |= {p for p in _git_path_list(d.stdout)
                       if _review_relevant(p, rtype, True, excluded, True)}
+    if tip:      # ADR-063: a slice judged at its tip has no working tree to add
+        return sorted(_strip_prefix(sorted(files), _repo_prefix(repo_path))), problem
     st = _seal_git(repo_path, "-c", "core.quotepath=false", "status", "--porcelain", "-uall",
                    "--", ".")
     if st is None:
@@ -3647,6 +3664,7 @@ def _round_cap_refusal(ledger, node, repo, tool, iteration, rt, tools, what):
 def cmd_review_start(args):
     """Record the tree a QA review starts on (ADR-056 R2'). Runs nothing, reviews nothing."""
     ledger = _load(args.ledger)
+    _slice_after_guard(args, ledger, "review-start")
     node = _repo_node(ledger, args.repo)
     # the same rule log-step enforces: an older iteration cannot start a review that would
     # supersede newer state (refused before anything is written)
@@ -4491,6 +4509,7 @@ def _effective_qa_external(frozen_cfg, ledger_path, config=QA_LIVE_CONFIG):
 
 def cmd_log_step(args):
     ledger = _load(args.ledger)
+    _slice_after_guard(args, ledger, "log-step")
     node = _repo_node(ledger, args.repo)
     _validate_iteration(node, args.tool, args.iteration)
     _validate_log_step_counts(args)
@@ -6065,6 +6084,11 @@ def _derive_phase(ledger, name, node, k, qa_order):
             reasons.append("falta clean-room verde para %s (evidencia del arbol no "
                            "certifica el commit)" % _head[:8])
             conv = False
+    # ADR-063: a slice project's gate also needs every declared slice integrated or dropped
+    _sg = _slice_gate(ledger, _LAST_LEDGER_PATH)
+    if _sg:
+        reasons.extend(_sg)
+        conv = False
     # ADR-061: a project that declared model_check.mode: gate -- a model problem blocks pr-ready
     _mks = _mk_status(ledger, _LAST_LEDGER_PATH)
     if _mks and _mks["mode"] == "gate" and _mks["problems"]:
@@ -17853,6 +17877,771 @@ def cmd_doctor(args):
 
 
 # --------------------------------------------------------------------------- #
+# ADR-063 (2.17.0): parallel slices -- the engine says which slices of one change can run at once,
+# and the merge decides, not the sum
+# --------------------------------------------------------------------------- #
+# A change is cut into slices declared in SLICES.md (beside the ledger). The engine never launches
+# anything -- no worktree, no session, no merge; git is only READ (rev-parse, merge-base, diff,
+# rev-list, diff-tree). Slice S lives on branch slice/S of its repo and keeps its evidence in
+# QA-LEDGER.S.json; the integration is recorded in the main ledger by `slice-integrate`. A project
+# with no SLICES.md, no `slices` config and no slice records in its ledger reads and writes exactly
+# as in 2.16.1: every key, line and refusal below is conditional on one of those three. The rules
+# are the ones docs/parallel-slices/models/SlicePlan.tla checked (disjointness, after, ancestry,
+# path check, drop guard, hash carry, integration suite, whole delivery); the AC-SL cases replay its
+# counterexamples against this code. A green model proves no violation of the model: the revert
+# path, re-sync, multi-repo and offer/auto are not modelled.
+SLICES_FILE = "SLICES.md"
+SLICES_KEY = "slices"
+SLICE_MAX_DEFAULT = 5
+_SLICE_ID_RX = re.compile(r"^[A-Za-z0-9_-]+$")
+_SLICE_LEDGER_RX = re.compile(r"^QA-LEDGER\.([A-Za-z0-9_-]+)\.json$")
+_SLICE_KEY_RX = re.compile(r"^\s*([A-Za-z_]+)\s*:\s*(.*?)\s*$")
+_SLICE_KEYS = ("paths", "acceptance", "after", "repo")
+# set while a slice ledger is judged AT ITS TIP: {"path": realpath of the repo, "commit": sha}
+_WIT_TIP = [None]
+
+
+class _SliceRefusal(Exception):
+    pass
+
+
+def _wit_tip(path):
+    tip = _WIT_TIP[0]
+    return tip if tip and os.path.realpath(path) == tip["path"] else None
+
+
+def _slice_ledger_name(sid):
+    return "QA-LEDGER.%s.json" % sid
+
+
+def _slices_file(ledger_path):
+    """The SLICES.md beside the ledger (the project root), or None."""
+    base = os.path.dirname(os.path.abspath(ledger_path)) if ledger_path else os.getcwd()
+    cand = os.path.join(base, SLICES_FILE)
+    return cand if os.path.isfile(cand) else None
+
+
+def _slices_declared(ledger, ledger_path):
+    """Does the config (live first, then the frozen copy) carry a `slices` key at all? Quiet: an
+    unreadable file is 'not declared' here -- the commands that need the block read it loudly."""
+    live = _live_project_config(QA_LIVE_CONFIG, ledger_path)
+    if live is not None:
+        try:
+            with open(live, encoding="utf-8") as fh:
+                doc = json.load(fh)
+            if isinstance(doc, dict) and SLICES_KEY in doc:
+                return True
+        except (OSError, ValueError):
+            pass
+    cfg = ledger.get("config") if isinstance(ledger, dict) else None
+    return isinstance(cfg, dict) and SLICES_KEY in cfg
+
+
+def _slices_cfg(ledger, ledger_path):
+    """(parallel, max_parallel) from the `slices` block: the LIVE uscha.config.json wins over the
+    ledger's frozen copy (ADR-051 precedent); absent keys take the defaults (offer, 5). A block that
+    cannot be read as one refuses, naming the key -- reading it as 'none' would answer from
+    something other than what the human wrote."""
+    block, where = None, None
+    live = _live_project_config(QA_LIVE_CONFIG, ledger_path)
+    if live is not None:
+        try:
+            with open(live, encoding="utf-8") as fh:
+                doc = json.load(fh)
+        except (OSError, ValueError):
+            raise _SliceRefusal("%s cannot be read as JSON, so `slices` cannot be read" % live)
+        if isinstance(doc, dict) and SLICES_KEY in doc:
+            block, where = doc[SLICES_KEY], live
+    if where is None:
+        cfg = ledger.get("config") if isinstance(ledger.get("config"), dict) else {}
+        if SLICES_KEY in cfg:
+            block, where = cfg[SLICES_KEY], "the frozen config of the ledger"
+    parallel, mx = "offer", SLICE_MAX_DEFAULT
+    if where is None:
+        return parallel, mx
+    if not isinstance(block, dict):
+        raise _SliceRefusal("%s: `slices` must be an object ({\"parallel\": \"offer\"|\"auto\", "
+                            "\"max_parallel\": N})" % where)
+    if "parallel" in block:
+        if block["parallel"] not in ("offer", "auto"):
+            raise _SliceRefusal("%s: slices.parallel must be \"offer\" or \"auto\", got %r"
+                                % (where, block["parallel"]))
+        parallel = block["parallel"]
+    if "max_parallel" in block:
+        v = block["max_parallel"]
+        if isinstance(v, bool) or not isinstance(v, int) or v < 1:
+            raise _SliceRefusal("%s: slices.max_parallel must be an integer >= 1, got %r"
+                                % (where, v))
+        mx = v
+    return parallel, mx
+
+
+def _split_csv(value):
+    return [x.strip() for x in value.split(",") if x.strip()]
+
+
+def _parse_slices(text, repo_names):
+    """The slices of SLICES.md, in declaration order, or a _SliceRefusal naming the slice. A
+    level-2 heading opens a slice (its text is the id); inside a block only `key: value` lines for
+    paths / acceptance / after / repo are data, everything else (and everything outside a block,
+    and fenced code) is prose and is ignored."""
+    slices, by_id, cur, fence = [], {}, None, False
+    for raw in text.lstrip("\ufeff").splitlines():
+        st = raw.strip()
+        if st.startswith("```") or st.startswith("~~~"):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        head = re.match(r"^##(?!#)\s+(.+?)\s*$", raw)
+        if head:
+            sid = head.group(1)
+            if not _SLICE_ID_RX.match(sid):
+                raise _SliceRefusal("SLICES.md: the heading %r is not a slice id (letters, digits, "
+                                    "- and _): a level-2 heading opens a slice" % sid)
+            if sid in by_id:
+                raise _SliceRefusal("SLICES.md: slice %s is declared twice (ids are unique)" % sid)
+            cur = {"id": sid, "paths": [], "acceptance": [], "after": [], "repo": None,
+                   "_seen": set()}
+            by_id[sid] = cur
+            slices.append(cur)
+            continue
+        if cur is None:
+            continue
+        m = _SLICE_KEY_RX.match(raw)
+        if not m or m.group(1).lower() not in _SLICE_KEYS:
+            continue
+        key = m.group(1).lower()
+        if key in cur["_seen"]:
+            raise _SliceRefusal("SLICES.md: slice %s gives `%s:` twice" % (cur["id"], key))
+        cur["_seen"].add(key)
+        if key == "repo":
+            cur["repo"] = m.group(2).strip() or None
+        else:
+            cur[key] = _split_csv(m.group(2))
+    if not slices:
+        raise _SliceRefusal("SLICES.md declares no slice (one `## <id>` heading per slice)")
+    for sl in slices:
+        sid = sl["id"]
+        if not sl["paths"]:
+            raise _SliceRefusal("SLICES.md: slice %s has no paths (`paths: <glob>, ...` is "
+                                "required)" % sid)
+        for g in sl["paths"]:
+            parts = g.replace("\\", "/").split("/")
+            if g.startswith("/") or g.startswith("\\") or ".." in parts or re.match(r"^[A-Za-z]:", g):
+                raise _SliceRefusal("SLICES.md: slice %s: path %r must be a glob relative to the "
+                                    "slice's repo path" % (sid, g))
+    for sl in slices:
+        for a in sl["after"]:
+            if a not in by_id:
+                raise _SliceRefusal("SLICES.md: slice %s names an unknown `after` slice %s"
+                                    % (sl["id"], a))
+    state = {}
+
+    def visit(sid, chain):
+        if state.get(sid) == 2:
+            return
+        if state.get(sid) == 1:
+            cyc = chain[chain.index(sid):] + [sid]
+            raise _SliceRefusal("SLICES.md: the `after` relation has a cycle: %s"
+                                % " -> ".join(cyc))
+        state[sid] = 1
+        for a in by_id[sid]["after"]:
+            visit(a, chain + [sid])
+        state[sid] = 2
+
+    for sl in slices:
+        visit(sl["id"], [])
+    for sl in slices:
+        if sl["repo"] is None:
+            if not repo_names:
+                raise _SliceRefusal("SLICES.md: slice %s has no repo and the config declares none"
+                                    % sl["id"])
+            sl["repo"] = repo_names[0]
+        elif sl["repo"] not in repo_names:
+            raise _SliceRefusal("SLICES.md: slice %s names repo %s, which uscha.config.json does "
+                                "not declare (declared: %s)"
+                                % (sl["id"], sl["repo"], ", ".join(repo_names) or "none"))
+    for sl in slices:
+        sl.pop("_seen", None)
+    return slices
+
+
+def _slices_read(ledger, ledger_path):
+    """(slices, parallel, max_parallel) of the project whose ledger this is. Raises _SliceRefusal."""
+    sfile = _slices_file(ledger_path)
+    if sfile is None:
+        raise _SliceRefusal("no %s beside the ledger: this is not a slice project (declare the "
+                            "slices there, one `## <id>` block each)" % SLICES_FILE)
+    parallel, mx = _slices_cfg(ledger, ledger_path)
+    try:
+        with open(sfile, encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise _SliceRefusal("%s cannot be read: %s" % (SLICES_FILE, exc))
+    names = [r.get("name") for r in (ledger.get("config") or {}).get("repos", [])
+             if isinstance(r, dict) and r.get("name")]
+    return _parse_slices(text, names), parallel, mx
+
+
+def _slice_refuse(what, exc):
+    print("[qa_ledger] %s REFUSED: %s (ADR-063)" % (what, exc), file=sys.stderr)
+    sys.exit(2)
+
+
+def _sl_git(path, *argv):
+    r = _seal_git(path, *argv)
+    return r.stdout.strip() if r is not None else None
+
+
+def _sl_blob(path, rev, p):
+    r = _seal_git(path, "rev-parse", "%s:%s" % (rev, p))
+    return r.stdout.strip() if r is not None and r.stdout.strip() else "deleted"
+
+
+def _slice_repo(ledger, sl):
+    """(repo_path, rtype) of the repo a slice lives in; refuses when that repo is not a git
+    repository with a commit: without a commit there is no evidence (ADR-007)."""
+    entry = _scope_entry(ledger, sl["repo"])
+    path, rtype = entry.get("path", "."), entry.get("type", "maven")
+    if not os.path.isdir(path) or not _repo_git_toplevel(path) or not _sl_git(path, "rev-parse",
+                                                                              "HEAD"):
+        raise _SliceRefusal("slice %s: repo %s (%s) is not a git repository with a commit -- "
+                            "without a commit there is no evidence (ADR-007). The way out is a "
+                            "copy of the tree, `git init` and a base commit, done by the agent or "
+                            "the human (devloop SKILL, Parallel slices)"
+                            % (sl["id"], sl["repo"], path))
+    return path, rtype
+
+
+def _slice_tip(path, sid):
+    """The tip commit of branch slice/<sid>, or None."""
+    return _sl_git(path, "rev-parse", "--verify", "-q", "refs/heads/slice/%s^{commit}" % sid) or None
+
+
+def _is_ancestor(path, rev, of="HEAD"):
+    return _seal_git(path, "merge-base", "--is-ancestor", rev, of) is not None
+
+
+def _glob_literal(glob_):
+    g = glob_.replace("\\", "/")
+    while g.startswith("./"):
+        g = g[2:]
+    cut = len(g)
+    for ch in "*?[":
+        i = g.find(ch)
+        if i != -1:
+            cut = min(cut, i)
+    return g[:cut]
+
+
+def _globs_overlap(a, b):
+    """Two globs overlap when the literal prefix before the first wildcard of one is a prefix of
+    the other's: conservative on purpose (a false overlap only delays a launch, a missed one
+    puts two slices on the same file)."""
+    la, lb = _glob_literal(a), _glob_literal(b)
+    return la.startswith(lb) or lb.startswith(la)
+
+
+def _slices_overlap(x, y):
+    return x["repo"] == y["repo"] and any(_globs_overlap(a, b) for a in x["paths"]
+                                          for b in y["paths"])
+
+
+def _slice_records(ledger):
+    recs = ledger.get(SLICES_KEY)
+    return recs if isinstance(recs, dict) else {}
+
+
+def _slice_status(recs, sl, path):
+    rec = recs.get(sl["id"])
+    if isinstance(rec, dict) and rec.get("status") in ("integrated", "dropped"):
+        return rec["status"]
+    return "running" if _slice_tip(path, sl["id"]) else "planned"
+
+
+def _slice_merge(path, tip):
+    """The slice merge M: the first merge commit on the first-parent line of HEAD whose ancestry
+    holds the tip (slices are merged with --no-ff), or None."""
+    r = _seal_git(path, "rev-list", "--first-parent", "--merges", "--reverse", "%s..HEAD" % tip)
+    if r is None:
+        return None
+    for c in r.stdout.split():
+        if _is_ancestor(path, tip, c):
+            return c
+    return None
+
+
+def _slice_own_files(path, m):
+    """The slice's OWN diff (D4): merge-base(M^1, M^2)..M^2 -- never the merge commit's diff, which
+    may regenerate a lockfile or resolve a conflict. Git-root-relative paths, or None."""
+    p1, p2 = _sl_git(path, "rev-parse", m + "^1"), _sl_git(path, "rev-parse", m + "^2")
+    if not p1 or not p2:
+        return None
+    mb = _sl_git(path, "merge-base", p1, p2)
+    if not mb:
+        return None
+    d = _seal_git(path, "-c", "core.quotepath=false", "diff", "--name-only", "--no-renames", mb,
+                  p2)
+    return sorted(set(_git_path_list(d.stdout))) if d is not None else None
+
+
+def _is_ancestor_rc(path, rev, of="HEAD"):
+    """True / False for git's answer (exit 0 / 1), None when git cannot answer (any other exit,
+    git absent): the caller decides which way an unknown fails."""
+    try:
+        r = subprocess.run(["git", "merge-base", "--is-ancestor", rev, of], cwd=path,
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return True if r.returncode == 0 else (False if r.returncode == 1 else None)
+
+
+def _slice_content_in(path, tip):
+    """D1: is the slice's content in the change branch? Its tip is an ancestor of HEAD AND at
+    least one file of its own diff still holds the slice content at HEAD (a reverted merge is not
+    merged). A merge the engine cannot find (fast-forwarded), a diff it cannot read or a git call
+    that errors counts as merged: it fails closed."""
+    anc = _is_ancestor_rc(path, tip)
+    if anc is None:
+        return True
+    if not anc:
+        return False
+    m = _slice_merge(path, tip)
+    files = _slice_own_files(path, m) if m else None
+    if files is None:
+        return True
+    return any(_sl_blob(path, tip, p) == _sl_blob(path, "HEAD", p) for p in files)
+
+
+def _slice_plan(ledger, slices, parallel, mx):
+    """The readout: every slice with its status, and (greedily, in declaration order) the ones
+    that can start now. Raises _SliceRefusal for a repo that is not a git repository."""
+    recs = _slice_records(ledger)
+    paths = {}
+    for sl in slices:
+        if sl["repo"] not in paths:
+            paths[sl["repo"]] = _slice_repo(ledger, sl)[0]
+    status = dict((sl["id"], _slice_status(recs, sl, paths[sl["repo"]])) for sl in slices)
+    running = [sl for sl in slices if status[sl["id"]] == "running"]
+    picked, out = [], []
+    for sl in slices:
+        blocked = []
+        if status[sl["id"]] == "planned":
+            blocked += ["after:%s" % a for a in sl["after"] if status.get(a) != "integrated"]
+            blocked += ["overlap:%s" % o["id"] for o in running + picked if _slices_overlap(sl, o)]
+            if len(running) + len(picked) >= mx:
+                blocked.append("cap")
+            if not blocked:
+                picked.append(sl)
+        rec = recs.get(sl["id"]) if isinstance(recs.get(sl["id"]), dict) else {}
+        ok = sl in picked
+        out.append({"id": sl["id"], "repo": sl["repo"], "paths": list(sl["paths"]),
+                    "acceptance": list(sl["acceptance"]), "after": list(sl["after"]),
+                    "status": status[sl["id"]], "startable": ok,
+                    "mark": ("launchable" if parallel == "auto" else "offer") if ok else None,
+                    "blocked_by": blocked, "ledger": _slice_ledger_name(sl["id"]),
+                    "dropped_by": rec.get("dropped_by") if status[sl["id"]] == "dropped" else None,
+                    "note": rec.get("note") if status[sl["id"]] == "dropped" else None})
+    return {"mode": parallel, "max_parallel": mx, "startable": [s["id"] for s in picked],
+            "slices": out}
+
+
+def cmd_slice_plan(args):
+    """Read-only: no ledger write, no branch, no worktree. Exit 2 refusing a bad SLICES.md or a
+    slice whose repo is not a git repository."""
+    ledger = _load(args.ledger)
+    try:
+        slices, parallel, mx = _slices_read(ledger, args.ledger)
+        plan = _slice_plan(ledger, slices, parallel, mx)
+    except _SliceRefusal as exc:
+        _slice_refuse("slice-plan", exc)
+    if args.json:
+        print(json.dumps(plan, indent=2, ensure_ascii=False))
+        return
+    print("[qa_ledger] slice-plan: mode=%s max_parallel=%d startable now: %s"
+          % (plan["mode"], plan["max_parallel"], ", ".join(plan["startable"]) or "none"))
+    for e in plan["slices"]:
+        print("  %-12s %-10s repo=%s paths=%s%s%s%s"
+              % (e["id"], e["status"], e["repo"], ",".join(e["paths"]),
+                 (" after=%s" % ",".join(e["after"])) if e["after"] else "",
+                 (" [%s]" % e["mark"]) if e["mark"] else "",
+                 (" blocked_by=%s" % ",".join(e["blocked_by"])) if e["blocked_by"] else ""))
+    if plan["mode"] == "auto":
+        print("[qa_ledger] auto: launch ONLY the slices marked launchable, never your own reading "
+              "of what looks independent; the engine launches nothing")
+    else:
+        print("[qa_ledger] offer: propose the launch of the marked slices to the human; the "
+              "engine launches nothing")
+
+
+def _slice_conv(led_path, sl, repo_path, tip):
+    """(ok, reasons, slice ledger, tools): has the slice ledger converged -- judged by the cycles it
+    recorded, with tree currency taken AT THE SLICE TIP, because other slices merging legitimately
+    move the change tree? The test-run bytes of a shared checkout are not read: the integration
+    suite is the gate for the sum (ADR-063 decision 6)."""
+    global _LAST_LEDGER_PATH
+    if not os.path.isfile(led_path):
+        return False, ["its ledger %s does not exist: there is no evidence it converged"
+                       % led_path], None, []
+    saved = (_LAST_LEDGER_PATH, _PATH_IDS[0], _WIT_TIP[0])
+    try:
+        try:
+            sled = _load(led_path)
+            if sl["repo"] not in (sled.get("repos") or {}):
+                return False, ["its ledger has no repo %s" % sl["repo"]], None, []
+            _WIT_TIP[0] = {"path": os.path.realpath(repo_path), "commit": tip}
+            node = _repo_node(sled, sl["repo"])
+            qa_order = ((sled.get("config") or {}).get("defaults") or {}).get("qa_tools_order")
+            wit = _Witness(sled, sl["repo"])
+            live = {"wit": wit}
+            if _tiers_cfg(sled) is not None:
+                live["tiers"] = _tier_now(sled, sl["repo"], wit)
+                vouched = list(live["tiers"]["tools"])
+            else:
+                vouched = list(qa_order or [])
+            ok, reasons = _converged(node, 3, qa_order, live)
+        except SystemExit as exc:
+            return False, [str(exc)], None, []
+        return ok, reasons, sled, vouched
+    finally:
+        _LAST_LEDGER_PATH, _PATH_IDS[0], _WIT_TIP[0] = saved
+
+
+def _slice_carry(ledger, ledger_path, sl, rec, sled, repo_path, rtype, tip, own, m, rt, vouched):
+    """ADR-063 decision 6, the hash carry. Under review_tiers a slice's clean pass is appended to
+    the main ledger as a step whose reviewed tree is the BASE of the change with, for every file the
+    slice reviewed (its own diff, plus any file the merge commit itself changed), the content the
+    slice's reviewer saw. Compared with the tree now, a file whose content is not that content --
+    one the merge regenerated or a conflict the agent resolved, one no slice reviewed -- reads as
+    moved, so it is unreviewed and blocks the gate. The stamp accumulates PER TOOL over the repo's
+    integrated slices that carried THAT tool (a tool is never credited with files it did not see),
+    and only the tools the slice's convergence vouched for (`vouched`: the tier's tools) carry.
+    Returns (tools carried, files carried, files left unreviewed)."""
+    work = _repo_git_toplevel(repo_path)
+    head = _sl_git(repo_path, "rev-parse", "HEAD")
+    base, _ref = _resolve_base(repo_path, rt["base"] if "base" in rt else None)
+    if not work or not head or base is None:
+        rec["reviewed"] = {}
+        return [], [], []
+    prefix = _repo_prefix(repo_path)
+    excluded = _review_exclusions(repo_path, rtype, ledger_path, work)
+    dt = _seal_git(repo_path, "-c", "core.quotepath=false", "diff-tree", "-c", "--no-commit-id",
+                   "--name-only", "--no-renames", "-r", m)
+    evil = set(_git_path_list(dt.stdout)) if dt is not None else set()
+    cands = {}
+    for p in sorted(set(own) | evil):
+        if prefix and not p.startswith(prefix + "/"):
+            continue
+        if _review_relevant(p, rtype, True, excluded, True):
+            cands[p] = _sl_blob(repo_path, tip, p)
+    rec["reviewed"] = cands
+
+    def over_for(tool):
+        over = {}
+        for other in _slice_records(ledger).values():
+            if isinstance(other, dict) and other is not rec and other.get("status") == "integrated" \
+                    and other.get("repo") == sl["repo"] and isinstance(other.get("reviewed"), dict) \
+                    and tool in ((other.get("carried") or {}).get("tools") or []):
+                over.update(other["reviewed"])
+        over.update(cands)
+        return over
+
+    strip = (lambda p: p[len(prefix) + 1:] if prefix else p)
+    carried = sorted(strip(p) for p, b in cands.items() if b == _sl_blob(repo_path, head, p))
+    left = sorted(strip(p) for p, b in cands.items() if b != _sl_blob(repo_path, head, p))
+    node = _repo_node(ledger, sl["repo"])
+    latest = {}
+    for s in (sled.get("repos") or {}).get(sl["repo"], {}).get("iterations") or []:
+        if s.get("category", "agent") == "agent":
+            latest[s.get("tool")] = s
+    dsha = _deferred_sha(repo_path, ledger_path)
+    defers = sorted(_defers_scan(repo_path, ledger_path)[0])
+    tools = []
+    for tool, s in sorted(latest.items()):
+        if tool not in vouched:
+            continue
+        if (s.get("gated_reported") or 0) != 0 or s.get("unverified") or s.get("unwitnessed") \
+                or not s.get("tests_passed") or not isinstance(s.get("reviewed"), dict) \
+                or not isinstance(s["reviewed"].get("tree"), dict):
+            continue
+        stamp = {"commit": base, "src_dirty": over_for(tool), "scope": "review"}
+        ledger["step_counter"] += 1
+        n = ledger["step_counter"]
+        it = max([x.get("iteration") or 0 for x in node["iterations"] if x.get("tool") == tool]
+                 + [1])
+        step = {"n": n, "at": _now(), "iteration": it, "tool": tool, "category": "agent",
+                "reported": 0, "gated_reported": 0, "fixed": 0, "deferred": 0, "suppressed": 0,
+                "tests_passed": True, "files_changed": 0, "fingerprint": None,
+                "finding_ids": None, "gated_ids": [],
+                "note": "carried from slice %s (ADR-063 hash carry: %d file(s) at the content "
+                        "that was reviewed)" % (sl["id"], len(carried)),
+                "source": s.get("source"),
+                "carried_from": {"slice": sl["id"], "ledger": _slice_ledger_name(sl["id"]),
+                                 "step": s.get("n"), "tip": tip},
+                "logged": {"tree": stamp, "deferred_sha256": dsha, "defers": defers},
+                "reviewed": {"tree": stamp, "deferred_sha256": dsha, "defers": defers,
+                             "scope": carried, "whole": True}}
+        node["iterations"].append(step)
+        ledger["steps"].append({"n": n, "at": step["at"], "kind": "qa-step", "repo": sl["repo"],
+                                "tool": tool, "iteration": it})
+        tools.append(tool)
+    return tools, carried, left
+
+
+def cmd_slice_integrate(args):
+    """Run on the change branch with the default ledger. Exit 2, naming the slice and leaving the
+    ledger unchanged, in this order: the slice tip is not an ancestor of HEAD; the slice ledger has
+    not converged; the slice's own diff leaves its paths (`S -> path`). Then the main ledger records
+    the integration, and under review_tiers the per-file clean stamps of the slice carry."""
+    what = "slice-integrate"
+    ledger = _load(args.ledger)
+    try:
+        slices, parallel, mx = _slices_read(ledger, args.ledger)
+        sl = next((x for x in slices if x["id"] == args.slice), None)
+        if sl is None:
+            raise _SliceRefusal("slice %s is not declared in %s (declared: %s)"
+                                % (args.slice, SLICES_FILE, ", ".join(x["id"] for x in slices)))
+        recs = _slice_records(ledger)
+        prev = recs.get(sl["id"])
+        if isinstance(prev, dict) and prev.get("status") in ("integrated", "dropped"):
+            raise _SliceRefusal("slice %s is already %s" % (sl["id"], prev["status"]))
+        path, rtype = _slice_repo(ledger, sl)
+        tip = _slice_tip(path, sl["id"])
+        if tip is None:
+            raise _SliceRefusal("slice %s: branch slice/%s does not exist in repo %s, so there is "
+                                "nothing to integrate" % (sl["id"], sl["id"], sl["repo"]))
+        if not _is_ancestor(path, tip):
+            raise _SliceRefusal("slice %s: its tip %s is not an ancestor of HEAD of repo %s -- "
+                                "merge slice/%s into the change branch with `git merge --no-ff` "
+                                "first" % (sl["id"], tip[:8], sl["repo"], sl["id"]))
+        led_path = os.path.join(os.path.dirname(args.ledger), _slice_ledger_name(sl["id"]))
+        ok, reasons, sled, vouched = _slice_conv(led_path, sl, path, tip)
+        if not ok:
+            raise _SliceRefusal("slice %s has not converged (its ledger %s, judged at its tip "
+                                "%s): %s" % (sl["id"], led_path, tip[:8], "; ".join(reasons[:4])))
+        m = _slice_merge(path, tip)
+        own = _slice_own_files(path, m) if m else None
+        if own is None:
+            raise _SliceRefusal("slice %s: no merge commit of slice/%s was found on the first-parent "
+                                "line of HEAD, so its own diff cannot be read -- merge it with "
+                                "`git merge --no-ff`" % (sl["id"], sl["id"]))
+        prefix = _repo_prefix(path)
+        work = _repo_git_toplevel(path)
+        # the slice's OWN ledger is evidence committed with the work, not a path leak -- compared
+        # by its real git path, never by name. The MAIN ledger is not exempt: a slice that edits
+        # it could carry forged integration records into the change, so it is refused by name
+        exempt = set(r for r in (_seal_rel(work, led_path),) if r) if work else set()
+        main_rel = _seal_rel(work, args.ledger) if work else None
+        rxs = [_glob_rx(g) for g in sl["paths"]]
+        for p in own:
+            if p in exempt:
+                continue
+            if main_rel and p == main_rel:
+                raise _SliceRefusal("%s -> %s: the slice's own diff touches the main ledger, which "
+                                    "only the change branch writes (a slice would carry integration "
+                                    "records into the change) -- remove that change from slice/%s"
+                                    % (sl["id"], p, sl["id"]))
+            inside = (not prefix) or p.startswith(prefix + "/")
+            rel = p[len(prefix) + 1:] if (prefix and inside) else p
+            if not inside or not any(rx.match(rel) for rx in rxs):
+                raise _SliceRefusal("%s -> %s: the slice's own diff leaves its declared paths "
+                                    "(%s)" % (sl["id"], rel if inside else p, ", ".join(sl["paths"])))
+    except _SliceRefusal as exc:
+        _slice_refuse(what, exc)
+    rec = {"status": "integrated", "repo": sl["repo"], "tip": tip, "merge": m, "at": _now(),
+           "head": _sl_git(path, "rev-parse", "HEAD"), "files": own}
+    rt = _tiers_cfg(ledger)
+    tools, carried, left = ([], [], [])
+    if rt is not None:
+        tools, carried, left = _slice_carry(ledger, args.ledger, sl, rec, sled, path, rtype, tip,
+                                            own, m, rt, vouched)
+    rec["carried"] = {"tools": tools, "files": carried, "unreviewed": left}
+    ledger.setdefault(SLICES_KEY, {})[sl["id"]] = rec
+    _touch_event(ledger, "slice-integrate", sl["id"], sl["repo"])
+    _save(args.ledger, ledger)
+    print("[qa_ledger] slice-integrate: %s integrated into %s (tip %s, merge %s)"
+          % (sl["id"], sl["repo"], tip[:8], (m or "")[:8]))
+    if rt is None:
+        print("[qa_ledger] no review_tiers: nothing carries -- the integration converges under "
+              "the ordinary rules, and its gate needs a test-run on the integration commit")
+    else:
+        print("[qa_ledger] hash carry (%s): %d file(s) at the content that was reviewed%s"
+              % (", ".join(tools) or "no tool had a clean witnessed pass", len(carried),
+                 ("; unreviewed, the gate waits for them: %s" % ", ".join(left)) if left else ""))
+
+
+def _slice_was_started(path, ledger_path, sid):
+    """Did slice <sid> ever start in this repo, though its branch is gone? Its own ledger is on
+    disk or in the history of HEAD, or a first-parent merge of HEAD names slice/<sid>. A git call that
+    errors counts as started: it fails closed. A slice that never started has neither."""
+    work = _repo_git_toplevel(path)
+    led = os.path.join(os.path.dirname(os.path.abspath(ledger_path)), _slice_ledger_name(sid))
+    if os.path.isfile(led):
+        return True
+    rel = _seal_rel(work, led) if work else None
+    if rel:
+        r = _seal_git(path, "log", "-1", "--format=%H", "HEAD", "--", rel)
+        if r is None or r.stdout.strip():
+            return True
+    r = _seal_git(path, "log", "--first-parent", "--merges", "--format=%s")
+    return r is None or ("slice/%s" % sid) in r.stdout
+
+
+def cmd_slice_drop(args):
+    """A human act: dropping a slice is a scope change. Refused (exit 2) for a slice whose content
+    is already in the change branch (D1): it must pass slice-integrate or have its merge reverted
+    first."""
+    what = "slice-drop"
+    _human_act(args, what, "qa_ledger.py slice-drop --slice %s --human <NAME> --note \"<why this "
+               "slice leaves the change>\"" % args.slice)
+    ledger = _load(args.ledger)
+    try:
+        slices, parallel, mx = _slices_read(ledger, args.ledger)
+        sl = next((x for x in slices if x["id"] == args.slice), None)
+        if sl is None:
+            raise _SliceRefusal("slice %s is not declared in %s (declared: %s)"
+                                % (args.slice, SLICES_FILE, ", ".join(x["id"] for x in slices)))
+        prev = _slice_records(ledger).get(sl["id"])
+        if isinstance(prev, dict) and prev.get("status") in ("integrated", "dropped"):
+            raise _SliceRefusal("slice %s is already %s" % (sl["id"], prev["status"]))
+        path, _rtype = _slice_repo(ledger, sl)
+        tip = _slice_tip(path, sl["id"])
+        if tip is not None and _slice_content_in(path, tip):
+            raise _SliceRefusal("slice %s: its merge is already in the change branch of repo %s, "
+                                "so it is no longer out of scope -- pass slice-integrate, or "
+                                "revert the merge first (`git revert -m 1 <merge>`) and drop it "
+                                "then (D1)" % (sl["id"], sl["repo"]))
+        if tip is None and _slice_was_started(path, args.ledger, sl["id"]):
+            raise _SliceRefusal("slice %s: branch slice/%s of repo %s no longer exists but the "
+                                "slice was started, so the engine cannot prove its content is out "
+                                "of the change branch -- restore slice/%s first (`git branch "
+                                "slice/%s <tip>`, the tip is in `git reflog`); the ordinary D1 "
+                                "check then applies (revert the merge if its content is in)"
+                                % (sl["id"], sl["id"], sl["repo"], sl["id"], sl["id"]))
+    except _SliceRefusal as exc:
+        _slice_refuse(what, exc)
+    ledger.setdefault(SLICES_KEY, {})[sl["id"]] = {
+        "status": "dropped", "repo": sl["repo"], "at": _now(), "dropped_by": args.human.strip(),
+        "note": args.note}
+    _touch_event(ledger, "slice-drop", sl["id"], sl["repo"])
+    _save(args.ledger, ledger)
+    print("[qa_ledger] slice-drop: %s dropped by %s (%s)" % (sl["id"], args.human.strip(),
+                                                              args.note))
+
+
+def _sl_peek(path):
+    """Read a ledger WITHOUT touching the engine's per-ledger globals; the integrity check holds."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        raise _SliceRefusal("the main ledger %s cannot be read, so the slice cannot be placed "
+                            "(fail closed)" % path)
+    if not isinstance(data, dict) or ("integrity" in data and (data.get("integrity") or {}).get(
+            "sha256") != _integrity_hash(data)):
+        raise _SliceRefusal("the main ledger %s is not a valid ledger (integrity)" % path)
+    return data
+
+
+def _slice_after_guard(args, ledger, what):
+    """ADR-063 decision 4 + D2: on a slice ledger (QA-LEDGER.<slice>.json beside a SLICES.md), the
+    first review step of a slice is refused until every `after` slice is integrated in the MAIN
+    ledger AND its merge is an ancestor of this slice's branch (the dependent slice was built on the
+    dependency's content). Exit 2, naming both slices; nothing is written."""
+    m = _SLICE_LEDGER_RX.match(os.path.basename(args.ledger))
+    if not m:
+        return
+    if _slices_file(args.ledger) is None:
+        main_path = os.path.join(os.path.dirname(os.path.abspath(args.ledger)), DEFAULT_LEDGER)
+        in_play = _slices_declared(ledger, args.ledger)
+        if not in_play and os.path.isfile(main_path):
+            try:
+                in_play = bool(_slice_records(_sl_peek(main_path)))
+            except _SliceRefusal:
+                in_play = True       # an unreadable main ledger cannot say it is not a slice project
+        if not in_play:
+            return
+        _slice_refuse(what, _SliceRefusal(
+            "the ledger %s is slice %s's, in a slice project (a `slices` config or integration "
+            "records), but there is no %s beside it, so its `after` slices cannot be read -- "
+            "restore %s in this worktree" % (args.ledger, m.group(1), SLICES_FILE, SLICES_FILE)))
+    try:
+        slices, _parallel, _mx = _slices_read(ledger, args.ledger)
+        sl = next((x for x in slices if x["id"] == m.group(1)), None)
+        if sl is None:
+            raise _SliceRefusal("the ledger %s names slice %s, which %s does not declare"
+                                % (args.ledger, m.group(1), SLICES_FILE))
+        if not sl["after"]:
+            return
+        main = _sl_peek(os.path.join(os.path.dirname(args.ledger), DEFAULT_LEDGER))
+        recs = _slice_records(main)
+        for a in sl["after"]:
+            r = recs.get(a)
+            if not isinstance(r, dict) or r.get("status") != "integrated":
+                raise _SliceRefusal("slice %s cannot start a review step: its `after` slice %s is "
+                                    "not integrated in the main ledger" % (sl["id"], a))
+            a_sl = next(x for x in slices if x["id"] == a)
+            if a_sl["repo"] != sl["repo"]:
+                continue
+            path, _rtype = _slice_repo(ledger, sl)
+            tip = r.get("tip")
+            if not tip or not _is_ancestor(path, tip):
+                raise _SliceRefusal("slice %s cannot start a review step: the merge of its `after` "
+                                    "slice %s (tip %s) is not an ancestor of its branch -- merge "
+                                    "the change branch into slice/%s first"
+                                    % (sl["id"], a, (tip or "?")[:8], sl["id"]))
+    except _SliceRefusal as exc:
+        _slice_refuse(what, exc)
+
+
+def _slice_gate(ledger, ledger_path):
+    """The reasons a slice project's change is not pr-ready on the slices alone: a declared slice
+    neither integrated nor dropped, an integrated slice whose tip is no longer in the change
+    branch, SLICES.md missing or invalid. [] for a project with no SLICES.md, no `slices` config
+    and no slice record -- and for a slice's own ledger, which converges on its own."""
+    sfile = _slices_file(ledger_path)
+    recs = _slice_records(ledger)
+    if sfile is None and not recs and not _slices_declared(ledger, ledger_path):
+        return []
+    if sfile is None:
+        return ["slices: this project declares slices (config or ledger records) but there is no "
+                "%s beside the ledger -- they cannot be measured, so the gate stays closed "
+                "(ADR-063)" % SLICES_FILE]
+    try:
+        slices, _parallel, _mx = _slices_read(ledger, ledger_path)
+    except _SliceRefusal as exc:
+        return ["slices: %s (ADR-063)" % exc]
+    m = _SLICE_LEDGER_RX.match(os.path.basename(ledger_path or ""))
+    if m and any(s["id"] == m.group(1) for s in slices):
+        return []
+    undone, reasons, paths = [], [], {}
+    for sl in slices:
+        rec = recs.get(sl["id"])
+        st = rec.get("status") if isinstance(rec, dict) else None
+        if st == "dropped":
+            continue
+        if st != "integrated":
+            undone.append(sl["id"])
+            continue
+        try:
+            if sl["repo"] not in paths:
+                paths[sl["repo"]] = _slice_repo(ledger, sl)[0]
+        except _SliceRefusal as exc:
+            reasons.append("slices: %s (ADR-063)" % exc)
+            continue
+        if not rec.get("tip") or not _is_ancestor(paths[sl["repo"]], rec["tip"]):
+            reasons.append("slices: %s is recorded integrated but its tip %s is not in the change "
+                           "branch now -- merge it again or drop it (a human act) (ADR-063)"
+                           % (sl["id"], (rec.get("tip") or "?")[:8]))
+    if undone:
+        reasons.insert(0, "slices: %s declared in %s and neither integrated nor dropped -- the "
+                          "change delivers every slice, and dropping one is a human act "
+                          "(`slice-drop`) (ADR-063)" % (", ".join(undone), SLICES_FILE))
+    return reasons
+
+
+# --------------------------------------------------------------------------- #
 # cli
 # --------------------------------------------------------------------------- #
 def build_parser():
@@ -17977,6 +18766,26 @@ def build_parser():
     prt.add_argument("--human", default=None, help="NAME -- required to LOWER the tier")
     prt.add_argument("--note", default=None, help="why -- required to LOWER the tier")
     prt.set_defaults(func=cmd_review_tier)
+
+    psp = sub.add_parser("slice-plan", help="ADR-063: read-only readout of the slices of SLICES.md "
+                         "that can start now (the engine launches nothing)")
+    add_ledger(psp)
+    psp.add_argument("--json", action="store_true")
+    psp.set_defaults(func=cmd_slice_plan)
+
+    psi = sub.add_parser("slice-integrate", help="ADR-063: record that a merged, converged slice "
+                         "is integrated into the change branch (run on the change branch)")
+    add_ledger(psi)
+    psi.add_argument("--slice", required=True)
+    psi.set_defaults(func=cmd_slice_integrate)
+
+    psd_ = sub.add_parser("slice-drop", help="ADR-063: HUMAN act: drop a slice from the change "
+                          "(a scope change); refused for a slice whose merge is in the branch")
+    add_ledger(psd_)
+    psd_.add_argument("--slice", required=True)
+    psd_.add_argument("--human", default=None)
+    psd_.add_argument("--note", default=None)
+    psd_.set_defaults(func=cmd_slice_drop)
 
     pmk = sub.add_parser("model-check", help="ADR-061: check every ADR from model_check.from_adr "
                          "and every models.json manifest (no Java); --run runs TLC and records it")

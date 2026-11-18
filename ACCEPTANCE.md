@@ -2276,3 +2276,92 @@ narrated field.
 - [ ] AC-RP-43 - (fresh review) the ledger's frozen `review_tiers` is validated like the live block: a frozen
   base of `""`, a number or a dash-led string is refused naming `review_tiers.base` and the ledger (no fallback
   to the fixed list, no crash).
+
+## Parallel slices (ADR-063, 2.17.0) - closes on green `AC-SL-nn` smoke assertions
+
+The gap: a change cut into slices was built in series even when several never touch each other, and
+when a human ran them in parallel by hand the kit did not know the slices ran together, did not check
+they stayed disjoint, and did not require the merge of slice branches that never saw each other to be
+measured. ADR-063 declares the slices in `SLICES.md`, has the engine say which can start now
+(`slice-plan`, a read-only readout), refuses at the dangerous points (`slice-integrate`, `slice-drop`,
+the `after` refusal at review), keeps one ledger per slice (`QA-LEDGER.<slice>.json`) and measures the
+gate on the INTEGRATION: a test-run on it, and a clean slice review that carries only for files whose
+content was reviewed. A TLA+ model written before the code (`docs/parallel-slices/models/`) broke the
+first reading of decision 7 (a slice merged and then dropped ships its diff without ever passing
+`slice-integrate`); its counterexamples are replayed here as RED cases against the real engine.
+Measured by T181 over temp git repos (a monorepo with `backend-api` in a sub-folder, or two repos
+`backend-api` and `mobile-app`; branch `main`, a change branch `feat`, a branch `slice/<id>` per slice)
+under an isolated HOME. The CLI surface the cases define (`SLICES.md` syntax, `slice-plan --json`
+fields, the refusal order) is documented at the top of the T181 block, and the engine implements
+exactly that.
+
+- [ ] AC-SL-01 - without `SLICES.md` and without a `slices` config every output is the previous kit's:
+  `readiness` (text and `--json`), `phase` (text and `--json`) and `converged` byte-identical to v2.16.1,
+  and `review-start` records the same keys. A guard, green by construction against the tag; without the
+  tag in git this reads UNMEASURED.
+- [ ] AC-SL-02 - `SLICES.md` refuses, exit 2 naming the slice (and the repo or the `after` id), a slice
+  with no paths (absent or empty), a duplicate id, an unknown `after`, an `after` cycle, and a `repo` that
+  the config does not declare, on `slice-plan` and on `slice-integrate` alike with the ledger unchanged; a
+  valid file is read in full (paths, acceptance, `after`, repo, defaulting to the first repo).
+- [ ] AC-SL-03 - `slice-plan` (text and `--json`) is a read-only readout of the slices that can start
+  now: it writes no ledger and creates no branch, a pending `after` and an exhausted `max_parallel` keep a
+  slice out (`blocked_by`), a running slice (its `slice/<id>` branch exists) takes a slot, and the default
+  `max_parallel` is 5.
+- [ ] AC-SL-04 - (`tooth-without-disjoint`) two slices with overlapping globs never appear together as
+  startable, and a running slice keeps the one that overlaps it out, naming it in `blocked_by`.
+- [ ] AC-SL-05 - (`tooth-without-after`) a slice whose `after` is not integrated is refused at its first
+  review step, `review-start` and `log-step` on its ledger alike (exit 2 naming both slices, ledger
+  unchanged); once the `after` is integrated and its merge is in the slice branch, the same step passes.
+- [ ] AC-SL-06 - (`tooth-without-path-leak`) `slice-integrate` refuses, exit 2 naming the slice and the
+  path, a slice whose own diff leaves its declared paths; a merge commit that rewrites a file outside the
+  paths is not the slice's diff (D4) and does not refuse.
+- [ ] AC-SL-07 - `slice-integrate` refuses, exit 2 naming the slice and the convergence, a slice whose
+  ledger has not converged, with the main ledger unchanged; a converged slice merged beside it integrates.
+- [ ] AC-SL-08 - `slice-integrate` refuses, exit 2 naming the slice and the ancestry, a slice whose tip is
+  not an ancestor of the change branch, even when its converged ledger is present.
+- [ ] AC-SL-09 - (`tooth-without-hash-carry`) under `review_tiers` a clean slice pass carries into the
+  integration only for the files whose content is what was reviewed: a clean merge reaches `pr-ready` with no
+  review of its own; a file the merge changed (a regenerated lockfile, a hand-edited file) is named by the
+  gate, is the whole of the next review's scope, and blocks `pr-ready` until reviewed; without
+  `review_tiers` nothing carries.
+- [ ] AC-SL-10 - (`tooth-without-integration-suite`) `pr-ready` requires a test-run on the integration
+  commit: slices integrated with green tests in their own ledgers and a clean review do not reach it until
+  the main ledger runs the tests on the integrated tree.
+- [ ] AC-SL-11 - (`tooth-without-whole-delivery`) `pr-ready` requires every declared slice integrated or
+  dropped (the gate names each missing slice); `slice-drop --slice S --human NAME --note TEXT` is a human
+  act (exit 2 naming `CLAUDECODE` under an agent shell, and without `--note`, ledger unchanged) and is
+  recorded (`status`, `dropped_by`, `note` in `slice-plan --json`).
+- [ ] AC-SL-12 - a slice with `repo:` lives and integrates in its repo (the same glob in two repos is
+  disjoint), the gate waits for the slices of every repo, and a slice whose repo is not a git repository is
+  refused naming the repo, on `slice-plan` and on `slice-integrate`.
+- [ ] AC-SL-13 - `offer` or `auto` is shown per slice in `slice-plan` (`mark`: `offer` or `launchable`,
+  null for a slice that cannot start), read live from `uscha.config.json` with no re-init, default `offer`;
+  `auto` marks only what the engine measured startable.
+- [ ] AC-SL-14 - every slice writes its own `QA-LEDGER.<slice>.json` on its own branch (the main ledger is
+  untouched there, `slice-plan --json` names each `ledger`), the merges of two slice branches do not
+  conflict, and `slice-integrate` reads each slice ledger and records the integration in the main one.
+- [ ] AC-SL-15 - (D1, `tooth-without-drop-guard`) `slice-drop` refuses, exit 2 naming the slice and the
+  merge, a slice whose merge is already in the change branch, ledger unchanged; a slice that never merged
+  drops as before; after the merge is reverted a human can drop it.
+- [ ] AC-SL-16 - (D2, `tooth-without-ancestry`) the `after` refusal is by ancestry: a slice forked before
+  its `after` was merged, whose ledger copy says the `after` is integrated, is refused at `review-start` and
+  `log-step` naming both slices and the ancestry with the ledger unchanged; once the `after` merge is in the
+  slice branch the step passes.
+- [ ] AC-SL-17 - (D3, `ci-all-dropped`) a change whose every slice was dropped converges under the ordinary
+  rules: a fix on the change branch, a test-run and a clean review reach `pr-ready`, and `slice-plan` shows
+  no slice startable.
+- [ ] AC-SL-18 - `slice-integrate` reads the slice's own diff without rename detection: moving a file from
+  outside the slice paths into them is a deletion outside the paths and is refused (exit 2 naming the slice
+  and the source path), ledger unchanged.
+- [ ] AC-SL-19 - `slice-drop` refuses (exit 2 naming `slice/<id>`), ledger unchanged, a slice whose merge is
+  in the change branch even when its branch was deleted after the merge (the engine cannot prove the content
+  is out); a slice that never started still drops.
+- [ ] AC-SL-20 - only the slice's own ledger is exempt from the path check of `slice-integrate`: a slice whose
+  own diff touches the main ledger is refused (exit 2 naming the slice and `QA-LEDGER.json`), ledger
+  unchanged.
+- [ ] AC-SL-21 - on a slice ledger of a slice project (a `slices` config or integration records), a missing
+  `SLICES.md` refuses `review-start` and `log-step` (exit 2 naming the slice and the file) instead of
+  skipping the `after` guard.
+- [ ] AC-SL-22 - under `review_tiers` with two tiers, in either integration order, a quick-tier slice never
+  credits a standard-tier tool with its file: `phase --require pr-ready` exits non-zero naming
+  `judgment-day` and the file.

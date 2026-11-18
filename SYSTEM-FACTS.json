@@ -28,7 +28,7 @@
     ]
   },
   "subcommands": {
-    "count": 64,
+    "count": 67,
     "list": [
       "bench",
       "bench-curate",
@@ -84,6 +84,9 @@
       "roundtrip",
       "rubric-ingest",
       "simplicity-check",
+      "slice-drop",
+      "slice-integrate",
+      "slice-plan",
       "smoke-ingest",
       "snapshot",
       "spec-change-request",
@@ -96,5 +99,5 @@
       "waste-check"
     ]
   },
-  "version": "2.16.1"
+  "version": "2.17.0"
 }
