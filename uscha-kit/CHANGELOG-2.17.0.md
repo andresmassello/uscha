@@ -113,4 +113,4 @@ byte-identical to 2.16.1 (AC-SL-01 compares the real v2.16.1 engine on a project
 
 ## Evidence
 
-Suite: __SUITE__ checks · 0 fail; acceptance __ACC__.
+Suite: 472 checks · 0 fail; acceptance 547/548.

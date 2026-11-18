@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="uscha-acceptance" tests="526" failures="0" errors="0" skipped="1" timestamp="2026-11-17T19:56:40.499714Z">
+<testsuite name="uscha-acceptance" tests="548" failures="0" errors="0" skipped="1" timestamp="2026-11-18T04:32:04.917645Z">
   <testcase classname="uscha.acceptance" name="AC-01_twins_byte_identical">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-02_version_surfaces_agree">
@@ -1049,6 +1049,50 @@
   <testcase classname="uscha.acceptance" name="AC-RP-42_review-pace">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-RP-43_review-pace">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-01_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-02_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-03_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-04_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-05_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-06_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-07_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-08_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-09_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-10_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-11_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-12_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-13_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-14_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-15_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-16_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-17_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-18_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-19_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-20_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-21_parallel-slices">
+  </testcase>
+  <testcase classname="uscha.acceptance" name="AC-SL-22_parallel-slices">
   </testcase>
   <testcase classname="uscha.acceptance" name="AC-DF-01_dogfood-ledger-fresh">
     <skipped message="shallow clone or no git: ancestry unmeasurable"/>
